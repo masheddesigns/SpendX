@@ -1,0 +1,37 @@
+Resolving dependencies...
+Downloading packages...
+  googleapis_auth 2.0.0 (2.2.0 available)
+  meta 1.17.0 (1.18.1 available)
+  win32 5.15.0 (6.0.0 available)
+Got dependencies!
+3 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing backup_hub_screen.dart...                             
+
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/backup_hub_screen.dart:10:8 • unused_import
+warning • The value of the field '_isCloudLoading' isn't used • lib/screens/settings/backup_hub_screen.dart:30:8 • unused_field
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:87:9 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/settings/backup_hub_screen.dart:154:33 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:180:7 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:186:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:189:27 • use_build_context_synchronously
+   info • Statements in an if should be enclosed in a block • lib/screens/settings/backup_hub_screen.dart:196:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/settings/backup_hub_screen.dart:206:7 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/settings/backup_hub_screen.dart:223:13 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/settings/backup_hub_screen.dart:231:11 • curly_braces_in_flow_control_structures
+warning • The declaration '_switchAccount' isn't referenced • lib/screens/settings/backup_hub_screen.dart:237:16 • unused_element
+warning • The declaration '_resetCloudData' isn't referenced • lib/screens/settings/backup_hub_screen.dart:265:16 • unused_element
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:320:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:452:9 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:542:7 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:572:11 • use_build_context_synchronously
+   info • Statements in an if should be enclosed in a block • lib/screens/settings/backup_hub_screen.dart:579:9 • curly_braces_in_flow_control_structures
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:581:9 • use_build_context_synchronously
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/settings/backup_hub_screen.dart:805:17 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/settings/backup_hub_screen.dart:806:17 • deprecated_member_use
+warning • The declaration '_buildImportTab' isn't referenced • lib/screens/settings/backup_hub_screen.dart:1277:10 • unused_element
+warning • The declaration '_snapshotTile' isn't referenced • lib/screens/settings/backup_hub_screen.dart:1419:10 • unused_element
+warning • A value for optional parameter 'isSync' isn't ever given • lib/screens/settings/backup_hub_screen.dart:1425:10 • unused_element_parameter
+warning • The declaration '_buildEmptyState' isn't referenced • lib/screens/settings/backup_hub_screen.dart:1503:10 • unused_element
+
+25 issues found. (ran in 2.9s)

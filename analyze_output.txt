@@ -1,0 +1,194 @@
+Resolving dependencies...
+Downloading packages...
+  googleapis_auth 2.0.0 (2.2.0 available)
+  meta 1.17.0 (1.18.1 available)
+  win32 5.15.0 (6.0.0 available)
+Got dependencies!
+3 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing SpendX...                                             
+
+   info • The file name 'Widgets.dart' isn't a lower_case_with_underscores identifier • lib/Widgets.dart:1:1 • file_names
+   info • The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' • lib/main.dart:2:8 • unnecessary_import
+warning • Unused import: 'dart:io' • lib/main.dart:3:8 • unused_import
+warning • Unused import: 'package:package_info_plus/package_info_plus.dart' • lib/screens/about_screen.dart:3:8 • unused_import
+warning • Unused import: '../theme/app_theme.dart' • lib/screens/ai_chat_screen.dart:7:8 • unused_import
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/bank/add_bank_account_screen.dart:4:8 • unused_import
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/bank/add_bank_account_screen.dart:153:91 • deprecated_member_use
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/credit_card/add_credit_card_screen.dart:4:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/credit_card/add_credit_card_screen.dart:143:21 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/credit_card/add_credit_card_screen.dart:179:21 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/credit_card/add_credit_card_screen.dart:190:21 • deprecated_member_use
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/credit_card/add_emi_screen.dart:6:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/credit_card/add_emi_screen.dart:173:17 • deprecated_member_use
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/credit_card/emi_detail_screen.dart:4:8 • unused_import
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/credit_card_screen.dart:642:31 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/expense/add_expense_screen.dart:14:8 • unused_import
+warning • Duplicate import • lib/screens/expense/add_expense_screen.dart:18:8 • duplicate_import
+warning • The value of the field '_availableVehicles' isn't used • lib/screens/expense/add_expense_screen.dart:49:17 • unused_field
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/expense/add_expense_screen.dart:487:15 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/screens/expense/add_expense_screen.dart:545:25 • use_build_context_synchronously
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/financial_health_screen.dart:85:41 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/financial_health_screen.dart:130:38 • deprecated_member_use
+warning • Unused import: '../utils/app_format.dart' • lib/screens/gamification_detail_screen.dart:7:8 • unused_import
+warning • The value of the local variable 'cs' isn't used • lib/screens/gamification_detail_screen.dart:16:11 • unused_local_variable
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/home/search_filter_screen.dart:7:8 • unused_import
+warning • Unused import: '../theme/app_theme.dart' • lib/screens/home_screen.dart:12:8 • unused_import
+warning • Unused import: 'settings/profile_settings_screen.dart' • lib/screens/home_screen.dart:23:8 • unused_import
+warning • Unused import: '../widgets/app_button.dart' • lib/screens/home_screen.dart:36:8 • unused_import
+   info • Statements in an if should be enclosed in a block • lib/screens/home_screen.dart:79:36 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/home_screen.dart:80:41 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/home_screen.dart:81:41 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/home_screen.dart:82:41 • curly_braces_in_flow_control_structures
+warning • The value of the local variable 'creditIdx' isn't used • lib/screens/home_screen.dart:362:9 • unused_local_variable
+warning • Unused import: '../theme/app_theme.dart' • lib/screens/import_screen.dart:9:8 • unused_import
+   info • Unnecessary use of string interpolation • lib/screens/import_screen.dart:208:24 • unnecessary_string_interpolations
+   info • Don't use 'BuildContext's across async gaps • lib/screens/import_screen.dart:270:27 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/lending/lending_report_screen.dart:5:8 • unused_import
+   info • The private field _selectedTimeline could be 'final' • lib/screens/lending/lending_report_screen.dart:21:10 • prefer_final_fields
+warning • The value of the field '_selectedTimeline' isn't used • lib/screens/lending/lending_report_screen.dart:21:10 • unused_field
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/lending/lending_screen.dart:5:8 • unused_import
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/lending/lending_screen.dart:315:49 • use_build_context_synchronously
+   info • Unnecessary use of string interpolation • lib/screens/lending/lending_screen.dart:418:46 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/lending/lending_screen.dart:419:45 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/lending/lending_screen.dart:420:41 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/lending/lending_screen.dart:477:24 • unnecessary_string_interpolations
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/net_worth/net_worth_report_screen.dart:4:8 • unused_import
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/net_worth/net_worth_report_screen.dart:128:37 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/net_worth/net_worth_report_screen.dart:158:47 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/net_worth/net_worth_report_screen.dart:160:66 • deprecated_member_use
+warning • The value of the local variable 'isAggregated' isn't used • lib/screens/net_worth/net_worth_report_screen.dart:177:10 • unused_local_variable
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/net_worth/net_worth_report_screen.dart:218:52 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/net_worth/net_worth_report_screen.dart:262:57 • deprecated_member_use
+warning • Duplicate import • lib/screens/net_worth_screen.dart:7:8 • duplicate_import
+warning • Unused import: '../theme/app_theme.dart' • lib/screens/notifications_inbox_screen.dart:4:8 • unused_import
+   info • Don't use 'BuildContext's across async gaps • lib/screens/notifications_inbox_screen.dart:39:49 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/notifications_inbox_screen.dart:39:87 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/notifications_inbox_screen.dart:56:33 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/notifications_inbox_screen.dart:71:31 • use_build_context_synchronously
+warning • The value of the field 'lending' isn't used • lib/screens/notifications_inbox_screen.dart:341:35 • unused_field
+   info • The private field _selectedCategories could be 'final' • lib/screens/onboarding_screen.dart:26:15 • prefer_final_fields
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/onboarding_screen.dart:317:9 • deprecated_member_use
+   info • Unnecessary use of 'toList' in a spread • lib/screens/onboarding_screen.dart:411:16 • unnecessary_to_list_in_spreads
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/screens/privacy_policy_screen.dart:49:73 • deprecated_member_use
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/profile_hub_screen.dart:456:23 • deprecated_member_use
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/profile_hub_screen.dart:543:7 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/profile_hub_screen.dart:545:7 • deprecated_member_use
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/recurring/recurring_payments_screen.dart:5:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/recurring/recurring_payments_screen.dart:77:19 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/recurring/recurring_payments_screen.dart:90:21 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/recurring/recurring_payments_screen.dart:129:48 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/reports/monthly_report_screen.dart:7:8 • unused_import
+warning • Unused import: '../../widgets/animated_widgets.dart' • lib/screens/reports/monthly_report_screen.dart:8:8 • unused_import
+warning • The value of the local variable 'prevMonth' isn't used • lib/screens/reports/monthly_report_screen.dart:37:11 • unused_local_variable
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/backup_hub_screen.dart:10:8 • unused_import
+warning • The value of the field '_isCloudLoading' isn't used • lib/screens/settings/backup_hub_screen.dart:30:8 • unused_field
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:84:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/settings/backup_hub_screen.dart:130:33 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:152:25 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:156:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:159:27 • use_build_context_synchronously
+warning • The declaration '_switchAccount' isn't referenced • lib/screens/settings/backup_hub_screen.dart:198:16 • unused_element
+warning • The declaration '_resetCloudData' isn't referenced • lib/screens/settings/backup_hub_screen.dart:225:16 • unused_element
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:271:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:366:27 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:441:25 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:462:29 • use_build_context_synchronously
+   info • Don't use 'BuildContext's across async gaps • lib/screens/settings/backup_hub_screen.dart:467:27 • use_build_context_synchronously
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/settings/backup_hub_screen.dart:615:17 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/settings/backup_hub_screen.dart:616:17 • deprecated_member_use
+  error • The method '_buildExportTab' isn't defined for the type '_BackupHubScreenState' • lib/screens/settings/backup_hub_screen.dart:681:13 • undefined_method
+warning • Dead code • lib/screens/settings/backup_hub_screen.dart:913:3 • dead_code
+   info • The local variable '_buildImportTab' starts with an underscore • lib/screens/settings/backup_hub_screen.dart:913:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildImportTab' isn't referenced • lib/screens/settings/backup_hub_screen.dart:913:10 • unused_element
+  error • Local variable '_hubCard' can't be referenced before it is declared • lib/screens/settings/backup_hub_screen.dart:917:9 • referenced_before_declaration
+  error • Local variable '_hubCard' can't be referenced before it is declared • lib/screens/settings/backup_hub_screen.dart:925:9 • referenced_before_declaration
+   info • The local variable '_buildExportTab' starts with an underscore • lib/screens/settings/backup_hub_screen.dart:938:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildExportTab' isn't referenced • lib/screens/settings/backup_hub_screen.dart:938:10 • unused_element
+  error • Local variable '_hubCard' can't be referenced before it is declared • lib/screens/settings/backup_hub_screen.dart:942:9 • referenced_before_declaration
+  error • Local variable '_hubCard' can't be referenced before it is declared • lib/screens/settings/backup_hub_screen.dart:950:9 • referenced_before_declaration
+   info • The local variable '_hubCard' starts with an underscore • lib/screens/settings/backup_hub_screen.dart:982:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_snapshotTile' starts with an underscore • lib/screens/settings/backup_hub_screen.dart:1018:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_snapshotTile' isn't referenced • lib/screens/settings/backup_hub_screen.dart:1018:10 • unused_element
+   info • The local variable '_buildEmptyState' starts with an underscore • lib/screens/settings/backup_hub_screen.dart:1068:10 • no_leading_underscores_for_local_identifiers
+warning • The declaration '_buildEmptyState' isn't referenced • lib/screens/settings/backup_hub_screen.dart:1068:10 • unused_element
+  error • Expected to find '}' • lib/screens/settings/backup_hub_screen.dart:1083:1 • expected_token
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/budget_management_screen.dart:5:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/settings/budget_management_screen.dart:89:19 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/settings/budget_management_screen.dart:130:33 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/category_management_screen.dart:4:8 • unused_import
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/settings/category_management_screen.dart:59:19 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/settings/category_management_screen.dart:97:35 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/currency_selection_screen.dart:4:8 • unused_import
+warning • Unused import: 'dart:io' • lib/screens/settings/developer_tools_screen.dart:1:8 • unused_import
+warning • Unused import: 'package:provider/provider.dart' • lib/screens/settings/developer_tools_screen.dart:3:8 • unused_import
+warning • Unused import: '../../widgets/custom_snackbar.dart' • lib/screens/settings/developer_tools_screen.dart:7:8 • unused_import
+warning • Unused import: '../../utils/app_format.dart' • lib/screens/settings/developer_tools_screen.dart:8:8 • unused_import
+   info • The private field _logs could be 'final' • lib/screens/settings/developer_tools_screen.dart:20:16 • prefer_final_fields
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/feature_toggles_screen.dart:4:8 • unused_import
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings/feature_toggles_screen.dart:151:9 • deprecated_member_use
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/notification_settings_screen.dart:4:8 • unused_import
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/settings/notification_settings_screen.dart:331:5 • deprecated_member_use
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/settings/notification_settings_screen.dart:413:13 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/screens/settings/notification_settings_screen.dart:414:13 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/settings/notification_settings_screen.dart:420:31 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/profile_settings_screen.dart:2:8 • unused_import
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/tag_management_screen.dart:5:8 • unused_import
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/settings/tag_management_screen.dart:65:31 • use_build_context_synchronously
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/settings/vehicle_management_screen.dart:4:8 • unused_import
+warning • Unused import: '../../models/transaction.dart' • lib/screens/vehicles/add_fuel_screen.dart:5:8 • unused_import
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/vehicles/add_fuel_screen.dart:9:8 • unused_import
+   info • Statements in an if should be enclosed in a block • lib/screens/vehicles/add_fuel_screen.dart:157:37 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/vehicles/add_fuel_screen.dart:158:41 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/screens/vehicles/add_fuel_screen.dart:159:40 • curly_braces_in_flow_control_structures
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/vehicles/add_fuel_screen.dart:343:17 • deprecated_member_use
+warning • The value of the local variable 'selectedVehicle' isn't used • lib/screens/vehicles/add_fuel_screen.dart:363:23 • unused_local_variable
+warning • The '!' will have no effect because the receiver can't be null • lib/screens/vehicles/add_fuel_screen.dart:446:53 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • lib/screens/vehicles/add_fuel_screen.dart:447:53 • unnecessary_non_null_assertion
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/screens/vehicles/add_fuel_screen.dart:514:63 • use_build_context_synchronously
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/screens/vehicles/add_fuel_screen.dart:554:17 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps • lib/screens/vehicles/add_fuel_screen.dart:610:25 • use_build_context_synchronously
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/vehicles/add_vehicle_screen.dart:70:17 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/screens/vehicles/add_vehicle_screen.dart:82:17 • deprecated_member_use
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/vehicles/fuel_analytics_screen.dart:6:8 • unused_import
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:188:61 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:190:80 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:193:95 • unnecessary_string_interpolations
+warning • The value of the local variable 'logsWithEff' isn't used • lib/screens/vehicles/fuel_analytics_screen.dart:236:11 • unused_local_variable
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:258:16 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:346:47 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:347:58 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:348:70 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles/fuel_analytics_screen.dart:386:24 • unnecessary_string_interpolations
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/vehicles/vehicle_report_screen.dart:7:8 • unused_import
+warning • Unused import: '../../theme/app_theme.dart' • lib/screens/vehicles_screen.dart:5:8 • unused_import
+warning • The value of the local variable 'totalKm' isn't used • lib/screens/vehicles_screen.dart:213:12 • unused_local_variable
+   info • Unnecessary use of string interpolation • lib/screens/vehicles_screen.dart:272:45 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles_screen.dart:274:45 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/screens/vehicles_screen.dart:372:32 • unnecessary_string_interpolations
+   info • The variable name '_BigStatBox' isn't a lowerCamelCase identifier • lib/screens/vehicles_screen.dart:441:10 • non_constant_identifier_names
+   info • Don't invoke 'print' in production code • lib/services/backup_service.dart:76:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/backup_service.dart:92:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/cloud_backup_service.dart:131:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/cloud_backup_service.dart:159:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/cloud_backup_service.dart:166:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/cloud_backup_service.dart:170:7 • avoid_print
+warning • Unused import: 'package:flutter/foundation.dart' • lib/services/developer_service.dart:4:8 • unused_import
+warning • Unused import: '../models/vehicle.dart' • lib/services/developer_service.dart:9:8 • unused_import
+warning • Unused import: '../models/bank_account.dart' • lib/services/developer_service.dart:10:8 • unused_import
+warning • Unused import: '../models/lending.dart' • lib/services/developer_service.dart:11:8 • unused_import
+warning • The value of the field '_random' isn't used • lib/services/developer_service.dart:18:9 • unused_field
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:31:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:41:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:103:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:133:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:168:7 • avoid_print
+   info • Unnecessary 'this.' qualifier • lib/services/dropbox_provider.dart:181:15 • unnecessary_this
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:185:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/dropbox_provider.dart:207:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/services/export_service.dart:160:9 • avoid_print
+   info • Statements in an if should be enclosed in a block • lib/services/financial_health_service.dart:116:31 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/services/financial_health_service.dart:117:12 • curly_braces_in_flow_control_structures
+warning • The value of the field '_isCancelled' isn't used • lib/services/google_drive_provider.dart:21:8 • unused_field
+
+182 issues found. (ran in 5.2s)

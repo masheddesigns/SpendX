@@ -1,0 +1,33 @@
+Resolving dependencies...
+Downloading packages...
+  google_fonts 6.3.3 (8.0.2 available)
+  googleapis_auth 2.0.0 (2.2.0 available)
+  meta 1.17.0 (1.18.1 available)
+  win32 5.15.0 (6.0.0 available)
+Got dependencies!
+4 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleRelease'...                        
+lib/screens/settings/profile_settings_screen.dart:115:88: Error: The method 'NotificationSettingsScreen' isn't defined for the type 'ProfileSettingsScreen'.
+ - 'ProfileSettingsScreen' is from 'package:spend_x/screens/settings/profile_settings_screen.dart' ('lib/screens/settings/profile_settings_screen.dart').
+Try correcting the name to the name of an existing method, or defining a method named 'NotificationSettingsScreen'.
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotificationSettingsScreen())),
+                                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Target kernel_snapshot_program failed: Exception
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildRelease'.
+> Process 'command '/Users/sivek/Documents/develop/flutter/bin/flutter'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 20s
+Running Gradle task 'assembleRelease'...                           21.2s
+Gradle task assembleRelease failed with exit code 1
