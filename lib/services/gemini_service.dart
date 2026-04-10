@@ -1,6 +1,6 @@
+import '../core/logging/app_logger.dart';
 import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -28,11 +28,20 @@ class GeminiService {
     if (!_initialized) init();
     _chatHistory = [];
 
-    String basePrompt = "You are SpendX AI, a helpful personal finance assistant. Keep your answers concise, practical, and conversational.\n"
-        "If the user asks you to log, add, or record an expense or income (e.g. 'I spent 62 rupees on food'), "
-        "you MUST respond ONLY with a JSON object in this exact format: "
-        "{\"action\": \"add_transaction\", \"type\": \"expense\", \"amount\": 62, \"category\": \"Food\", \"notes\": \"\"} \n"
-        "Set type to 'expense' or 'income'. Do NOT include any other text if you output this JSON.";
+    String basePrompt = "You are SpendX AI, a personal finance assistant. Be concise and conversational.\n\n"
+        "TRANSACTION RULES:\n"
+        "When the user wants to add, log, or record expenses or income, respond ONLY with JSON objects.\n"
+        "Format: {\"action\": \"add_transaction\", \"type\": \"expense\", \"amount\": 500, \"category\": \"Food\", \"notes\": \"Lunch\"}\n"
+        "- type: 'expense' or 'income'\n"
+        "- category: Food, Transport, Shopping, Bills, Rent, Health, Entertainment, Education, Travel, Subscriptions, Groceries, Salary, Freelance, Investment, Other\n"
+        "- If user mentions MULTIPLE items, output MULTIPLE JSON objects (one per line).\n"
+        "- Example: '1000 fuel and 500 food' → two JSON objects.\n"
+        "- Do NOT wrap JSON in markdown code blocks. Do NOT add explanatory text around JSON.\n\n"
+        "QUERY RULES:\n"
+        "When the user asks about their spending, balance, or transactions, answer using the context data provided.\n"
+        "Do NOT return gamification data (XP, levels, badges) unless explicitly asked.\n"
+        "If asked 'expense today' or 'how much did I spend', summarize their spending from the context.\n"
+        "If no context data matches, say 'I don't have that data yet.'.\n";
 
     if (contextData != null) {
       basePrompt += "\n\nThe user's current financial context from their local database is:\n\n$contextData\n\nUse this context to accurately answer the user's questions about their spending, budgets, and balances. Do NOT hallucinate data. If the user asks something not in the context, inform them gracefully.";
@@ -159,7 +168,7 @@ If a field is not visible, use null for its value.''';
         result[field] = (val == null || val.isEmpty || val.toLowerCase() == 'null') ? null : val;
       }
     } catch (e) {
-      debugPrint('Gemini JSON Parse Error: $e');
+      AppLogger.d('Gemini JSON Parse Error: $e');
       for (final field in ['merchant', 'amount', 'date', 'category']) {
         final match = RegExp('"$field"\\s*:\\s*"?([^",}\\n]+)"?').firstMatch(jsonStr);
         if (match != null) {
@@ -225,7 +234,7 @@ Do not wrap in markdown blocks or quotes. Just output raw JSON array.''';
               return map;
             }).toList();
           } catch(e) {
-              debugPrint('Gemini Statement JSON Parse Error: $e');
+              AppLogger.d('Gemini Statement JSON Parse Error: $e');
               return [];
           }
         }

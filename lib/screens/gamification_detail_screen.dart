@@ -5,7 +5,6 @@ import '../widgets/animated_widgets.dart';
 import '../widgets/settings_tile.dart';
 import '../widgets/spendx_app_bar.dart';
 
-import '../utils/app_format.dart';
 import 'usage_analytics_screen.dart';
 import '../utils/page_transitions.dart';
 
@@ -14,24 +13,25 @@ class GamificationDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: const SpendXAppBar(
         title: 'Rewards & Activity',
       ),
 
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildLevelCard(context),
-          const SizedBox(height: 16),
-          _sectionHeader(context, '📱 App Activity'),
-          _buildActivityCard(context),
-          const SizedBox(height: 24),
-          _sectionHeader(context, '🏆 Achievements'),
-          _buildAchievementsList(context),
-        ],
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _buildLevelCard(context),
+            const SizedBox(height: 16),
+            _sectionHeader(context, '📱 App Activity'),
+            _buildActivityCard(context),
+            const SizedBox(height: 24),
+            _sectionHeader(context, '🏆 Achievements'),
+            _buildAchievementsList(context),
+          ],
+        ),
       ),
     );
   }

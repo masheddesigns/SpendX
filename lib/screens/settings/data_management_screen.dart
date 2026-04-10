@@ -1,178 +1,303 @@
 import 'package:flutter/material.dart';
-import '../../services/database_helper.dart';
-import '../../widgets/custom_dialog.dart';
-import '../../widgets/custom_snackbar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/config/app_env.dart';
 import '../../widgets/spendx_app_bar.dart';
+import '../../widgets/settings_tile.dart';
+import '../../shared/widgets/app_confirm_dialog.dart';
+import '../../widgets/custom_snackbar.dart';
+import '../../services/drive_service.dart';
+import '../../services/settings_service.dart';
+import '../../features/settings/providers/data_management_providers.dart';
+import '../debug/debug_hub_screen.dart';
 
-
-class DataManagementScreen extends StatefulWidget {
+class DataManagementScreen extends ConsumerStatefulWidget {
   const DataManagementScreen({super.key});
 
   @override
-  State<DataManagementScreen> createState() => _DataManagementScreenState();
+  ConsumerState<DataManagementScreen> createState() =>
+      _DataManagementScreenState();
 }
 
-class _DataManagementScreenState extends State<DataManagementScreen> {
-  bool _isCleaning = false;
-
-  Future<void> _clearData(String type) async {
-    final confirm = await CustomDialog.show(
+class _DataManagementScreenState extends ConsumerState<DataManagementScreen> {
+  Future<void> _confirmClear(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required Future<void> Function() onClear,
+    required String successMessage,
+  }) async {
+    final confirmed = await AppConfirmDialog.show(
       context,
-      type: DialogType.warning,
-      title: 'Warning',
-      message: 'This action will permanently erase selected data from your device.\nThis cannot be undone.',
-      primaryButtonText: 'Erase Data',
-      secondaryButtonText: 'Cancel',
+      title: title,
+      message: message,
+      confirmLabel: 'Erase Now',
+      isDangerous: true,
     );
 
-    if (confirm == true) {
-      setState(() => _isCleaning = true);
-      try {
-        int count = 0;
-        String message = "";
-        
-        switch (type) {
-          case 'imported':
-            count = await DatabaseHelper.instance.deleteImportedTransactions();
-            message = 'Successfully cleared $count imported transactions.';
-            break;
-          case 'expense':
-            count = await DatabaseHelper.instance.deleteExpenseData();
-            message = 'Successfully cleared all expense transactions.';
-            break;
-          case 'income':
-            count = await DatabaseHelper.instance.deleteIncomeData();
-            message = 'Successfully cleared all income transactions.';
-            break;
-          case 'lending':
-            count = await DatabaseHelper.instance.deleteLendingData();
-            message = 'Successfully cleared all lending data.';
-            break;
-          case 'vehicle':
-            count = await DatabaseHelper.instance.deleteVehicleData();
-            message = 'Successfully cleared all vehicle data.';
-            break;
-          case 'credit':
-            count = await DatabaseHelper.instance.deleteCreditData();
-            message = 'Successfully cleared all credit card data.';
-            break;
-          case 'all':
-            await DatabaseHelper.instance.clearAllUserData();
-            message = 'Successfully cleared all app data.';
-            break;
-        }
-
-        if (mounted) {
-          CustomSnackBar.show(context, message: message);
-        }
-      } catch (e) {
-        if (mounted) {
-          CustomSnackBar.show(context, message: 'Error: $e', isError: true);
-        }
-      } finally {
-        if (mounted) setState(() => _isCleaning = false);
+    if (confirmed == true) {
+      await onClear();
+      if (context.mounted) {
+        CustomSnackBar.show(context, message: successMessage);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: const SpendXAppBar(title: 'Data Management'),
-
-      body: _isCleaning
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                _buildSection(
-                  title: 'Data Clearing Options',
-                  description: 'Select specific data to erase from your device.',
-                  icon: Icons.delete_outline,
-                  color: Theme.of(context).colorScheme.error,
+      appBar: const SpendXAppBar(title: 'Clear Data'),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildActionButton('Clear Imported Data', () => _clearData('imported')),
-                    _buildActionButton('Clear Expense Data', () => _clearData('expense')),
-                    _buildActionButton('Clear Income Data', () => _clearData('income')),
-                    _buildActionButton('Clear Lending Data', () => _clearData('lending')),
-                    _buildActionButton('Clear Vehicle Data', () => _clearData('vehicle')),
-                    _buildActionButton('Clear Credit Data', () => _clearData('credit')),
-                    const Divider(height: 32),
-                    _buildActionButton('Clear All App Data', () => _clearData('all'), isPrimary: true),
+                    Text(
+                      'Clear Data',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Erase locally stored records. This cannot be undone.',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                    ),
                   ],
                 ),
-              ],
-            ),
-    );
-  }
+              ),
 
-  Widget _buildActionButton(String label, VoidCallback onTap, {bool isPrimary = false}) {
-    final color = isPrimary ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color.withValues(alpha: 0.1),
-            foregroundColor: color,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          child: Text(label),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color color,
-    required List<Widget> children,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+              // ─────────��── CLEAR DATA ────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                child: Text(
+                  'CLEAR BY TYPE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    color: cs.error,
+                  ),
                 ),
-                child: Icon(icon, color: color, size: 24),
               ),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              SettingsTile(
+                icon: Icons.receipt_long,
+                color: cs.primary,
+                title: 'Clear Expenses',
+                subtitle: 'Delete all expense transactions',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Expenses',
+                  message:
+                      'This action will permanently erase this data from your device. This cannot be undone.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearExpenses(),
+                  successMessage: 'Expense data cleared successfully',
+                ),
               ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.attach_money,
+                color: cs.primary,
+                title: 'Clear Income',
+                subtitle: 'Delete all income transactions',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Income',
+                  message:
+                      'This action will permanently erase this data from your device. This cannot be undone.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearIncome(),
+                  successMessage: 'Income data cleared successfully',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.handshake,
+                color: cs.primary,
+                title: 'Clear Lending Data',
+                subtitle: 'Remove lending and borrowing records',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Lending Data',
+                  message:
+                      'This action will permanently erase this data from your device. This cannot be undone.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearLending(),
+                  successMessage: 'Lending data cleared successfully',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.credit_card,
+                color: cs.primary,
+                title: 'Clear Credit / EMI Data',
+                subtitle: 'Remove credit cards and EMI plans',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Credit / EMI Data',
+                  message:
+                      'This action will permanently erase this data from your device. This cannot be undone.',
+                  onClear: () => ref
+                      .read(dataManagementProvider.notifier)
+                      .clearCreditData(),
+                  successMessage: 'Credit data cleared successfully',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.account_balance,
+                color: cs.primary,
+                title: 'Clear Loans',
+                subtitle: 'Remove all loan records and history',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Loans',
+                  message:
+                      'This action will permanently erase this data from your device. This cannot be undone.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearLoans(),
+                  successMessage: 'Loan data cleared successfully',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.account_balance_wallet,
+                color: cs.primary,
+                title: 'Clear Salary Data',
+                subtitle: 'Remove companies, salary months, payments',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Salary Data',
+                  message: 'This will remove all salary tracking data.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearSalaryData(),
+                  successMessage: 'Salary data cleared',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.flag_rounded,
+                color: cs.primary,
+                title: 'Clear Goals',
+                subtitle: 'Remove all savings goals and logs',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Goals',
+                  message: 'This will remove all goals and progress logs.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearGoals(),
+                  successMessage: 'Goals cleared',
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsTile(
+                icon: Icons.account_balance_rounded,
+                color: cs.primary,
+                title: 'Clear Accounts',
+                subtitle: 'Remove all bank accounts',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear Accounts',
+                  message: 'This will remove all bank accounts and their balances.',
+                  onClear: () =>
+                      ref.read(dataManagementProvider.notifier).clearAccounts(),
+                  successMessage: 'Accounts cleared',
+                ),
+              ),
+              const SizedBox(height: 32),
+              const Divider(),
+              const SizedBox(height: 16),
+              SettingsTile(
+                icon: Icons.delete_forever,
+                color: cs.error,
+                title: 'Clear ALL App Data',
+                subtitle: 'Erase all local data (transactions, accounts, salary, loans, goals, settings)',
+                onTap: () => _confirmClear(
+                  context,
+                  title: 'Clear ALL App Data',
+                  message:
+                      'This will permanently erase ALL your local data. THIS CANNOT BE UNDONE.',
+                  onClear: () async {
+                    await ref.read(dataManagementProvider.notifier).clearAllData();
+                    await SettingsService.instance.setOnboardingComplete(false);
+                  },
+                  successMessage: 'All app data cleared. Restart the app.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (DriveService.instance.isInitialized)
+                SettingsTile(
+                  icon: Icons.cloud_off_rounded,
+                  color: cs.error,
+                  title: 'Delete Cloud Backup',
+                  subtitle: 'Remove backup data from Google Drive',
+                  onTap: () => _confirmClear(
+                    context,
+                    title: 'Delete Cloud Backup',
+                    message:
+                        'This will permanently delete your backup from Google Drive. You cannot undo this.',
+                    onClear: () async {
+                      try {
+                        final files = await DriveService.instance.listBackups();
+                        for (final f in files) {
+                          if (f.id != null) {
+                            await DriveService.instance.api.files.delete(f.id!);
+                          }
+                        }
+                      } catch (e) {
+                        debugPrint('Drive cleanup error: $e');
+                      }
+                    },
+                    successMessage: 'Cloud backup deleted',
+                  ),
+                ),
+              const SizedBox(height: 32),
+
+              if (AppEnv.enableDebugTools) ...[
+                const Divider(),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                  child: Text(
+                    'DEVELOPER TOOLS (DEBUG)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: cs.tertiary,
+                    ),
+                  ),
+                ),
+                SettingsTile(
+                  icon: Icons.developer_mode,
+                  color: cs.tertiary,
+                  title: 'Open Debug Hub',
+                  subtitle: 'Seed data, stress tests, and diagnostics',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DebugHubScreen(),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 40),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            description,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 14,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ...children,
-        ],
+        ),
       ),
     );
   }

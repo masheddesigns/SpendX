@@ -1,139 +1,144 @@
 import 'package:flutter/material.dart';
-import '../../widgets/custom_dialog.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import '../../models/transaction.dart' as spx;
-import '../../models/category.dart';
-import '../../services/database_helper.dart';
-import '../../services/transaction_service.dart';
-import '../../widgets/transaction_tile.dart';
-import '../expense/add_expense_screen.dart';
-import '../vehicles/add_fuel_screen.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/spendx_app_bar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:spend_x/widgets/transaction_tile.dart';
+import 'package:spend_x/screens/expense/add_expense_screen.dart';
+import '../../features/transactions/providers/transaction_providers.dart';
+import '../transaction_detail_screen.dart';
+import '../../theme/app_theme.dart';
+import '../../shared/widgets/primary_button.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import 'search_filter_screen.dart';
 
-class TransactionListScreen extends StatefulWidget {
+class TransactionListScreen extends ConsumerStatefulWidget {
   final bool isFullScreen;
-  const TransactionListScreen({super.key, this.isFullScreen = false});
+  /// If set, only shows transactions with these IDs (audit fix flow).
+  final List<String>? filterIds;
+  /// Title override for filtered views.
+  final String? title;
+  const TransactionListScreen({
+    super.key,
+    this.isFullScreen = false,
+    this.filterIds,
+    this.title,
+  });
 
   @override
-  State<TransactionListScreen> createState() => _TransactionListScreenState();
+  ConsumerState<TransactionListScreen> createState() =>
+      _TransactionListScreenState();
 }
 
-class _TransactionListScreenState extends State<TransactionListScreen> {
-
-  List<spx.Transaction> transactions = [];
-  Map<String, Category> categoriesMap = {};
-  bool isLoading = true;
-  bool isLoadMore = false;
-  bool hasMore = true;
-  int offset = 0;
-  final int limit = 30;
-  final ScrollController _scrollController = ScrollController();
+class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
     _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
-        !isLoadMore &&
-        hasMore) {
-      _loadMoreTransactions();
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent * 0.8) {
+      ref.read(paginatedTransactionsProvider.notifier).loadMore();
     }
   }
 
-  Future<void> _loadInitialData() async {
-    setState(() => isLoading = true);
-    offset = 0;
-    hasMore = true;
-    
-    try {
-      final fetchedTransactions = await TransactionService.instance.getTransactions(limit: limit, offset: offset);
-      
-      Map<String, Category> fetchedCategories = {};
-      if (!kIsWeb) {
-        final db = await DatabaseHelper.instance.database;
-        final catMaps = await db.query(DatabaseHelper.tableCategories);
-        fetchedCategories = { for (var item in catMaps) item['id'] as String : Category.fromMap(item) };
-      }
-
-      if (!mounted) return;
-      setState(() {
-        transactions = fetchedTransactions;
-        categoriesMap = fetchedCategories;
-        isLoading = false;
-        hasMore = fetchedTransactions.length == limit;
-        offset += limit;
-      });
-    } catch (e) {
-      debugPrint('TransactionListScreen load error: $e');
-      if (mounted) setState(() => isLoading = false);
-    }
+  Future<void> _onRefresh() async {
+    await ref.read(paginatedTransactionsProvider.notifier).refresh();
+    ref.invalidate(transactionCategoryMapProvider);
   }
 
-  Future<void> _loadMoreTransactions() async {
-    setState(() => isLoadMore = true);
-    
-    try {
-      final fetched = await TransactionService.instance.getTransactions(limit: limit, offset: offset);
-      
-      if (!mounted) return;
-      setState(() {
-        transactions.addAll(fetched);
-        isLoadMore = false;
-        hasMore = fetched.length == limit;
-        offset += limit;
-      });
-    } catch (e) {
-      debugPrint('Load more error: $e');
-      if (mounted) setState(() => isLoadMore = false);
-    }
-  }
-
-  Future<void> _loadTransactions() async {
-    await _loadInitialData();
-  }
-
-  void _deleteTransaction(String id) async {
-    final confirm = await CustomDialog.show(
+  Future<void> _onAddTransaction() async {
+    final result = await Navigator.push(
       context,
-      type: DialogType.warning,
-      title: 'Delete Transaction?',
-      message: 'This action cannot be undone.',
-      primaryButtonText: 'Delete',
-      secondaryButtonText: 'Cancel',
+      MaterialPageRoute(
+        builder: (_) => const AddExpenseScreen(initialType: 'expense'),
+      ),
     );
-
-    if (confirm == true) {
-      await TransactionService.instance.deleteTransaction(id);
-      _loadInitialData();
+    if (result == true) {
+      ref.read(paginatedTransactionsProvider.notifier).refresh();
+      ref.invalidate(transactionsProvider); // for analytics
     }
   }
 
-  void _handleTransactionTap(spx.Transaction t) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (t.source == 'manual')
-              ListTile(
-                leading: Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
+  @override
+  Widget build(BuildContext context) {
+    final paginatedState = ref.watch(paginatedTransactionsProvider);
+    final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
 
-                title: const Text('Edit Transaction'),
+    return categoryMapAsync.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
+      data: (categoriesMap) {
+        // Filter by IDs if provided (audit fix flow)
+        List transactions;
+        if (widget.filterIds != null) {
+          // Use full transaction list for filtered views
+          final allTxns = ref.watch(transactionsProvider).valueOrNull ?? [];
+          final filterSet = widget.filterIds!.toSet();
+          transactions = allTxns.where((t) => filterSet.contains(t.id)).toList();
+        } else {
+          transactions = paginatedState.items;
+        }
+
+        if (transactions.isEmpty && !paginatedState.hasMore) {
+          return EmptyStateWidget(
+            icon: Icons.account_balance_wallet_outlined,
+            title: "No transactions yet",
+            description: "Start adding transactions to track your spending.",
+            ctaLabel: "+ Add Transaction",
+            onCtaTap: _onAddTransaction,
+          );
+        }
+
+        final content = RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: ListView.separated(
+            controller: _scrollController,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.listHorizontalPadding,
+              vertical: AppSpacing.listHorizontalPadding,
+            ),
+            itemCount: transactions.length + (paginatedState.hasMore ? 1 : 0),
+            separatorBuilder: (_, _) => SizedBox(height: AppSpacing.cardGap),
+            itemBuilder: (context, index) {
+              // Loading indicator at the end
+              if (index >= transactions.length) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(
+                      child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2))),
+                );
+              }
+
+              final t = transactions[index];
+              return TransactionTile(
+                transaction: t,
+                category: categoriesMap[t.categoryId],
                 onTap: () async {
-                  Navigator.pop(context);
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UnifiedTransactionDetailScreen(
+                        transaction: t,
+                        category: categoriesMap[t.categoryId],
+                      ),
+                    ),
+                  );
+                  if (result == true) _onRefresh();
+                },
+                onEdit: () async {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -143,114 +148,47 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                       ),
                     ),
                   );
-                  if (result == true) _loadInitialData();
+                  if (result == true) _onRefresh();
                 },
-              ),
-            if (t.source == 'manual')
-              ListTile(
-                leading: Icon(Icons.delete, color: AppTheme.errorColor),
-                title: Text('Delete', style: TextStyle(color: AppTheme.errorColor)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _deleteTransaction(t.id);
+                onDelete: () async {
+                  await ref.read(deleteTransactionProvider)(t.id);
+                  _onRefresh();
                 },
-              ),
-            if (t.source == 'vehicle')
-              ListTile(
-                leading: Icon(Icons.edit, color: AppTheme.warningColor),
-                title: const Text('Edit Fuel Log'),
-                subtitle: const Text('Managed by Vehicle Module'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  if (t.relatedEntityId != null) {
-                    final log = await DatabaseHelper.instance.getFuelLogById(t.relatedEntityId!);
-                    if (log != null && mounted) {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => AddFuelScreen(existingLog: log)),
-                      );
-                      if (result == true) _loadInitialData();
-                    }
-                  }
-                },
-              ),
-            if (t.source != 'manual' && t.source != 'vehicle')
-              ListTile(
-                leading: Icon(Icons.info_outline, color: AppTheme.warningColor),
-                title: Text('Managed by ${t.source}'),
-                subtitle: const Text('Please edit or delete this entry from its respective module.'),
-                onTap: () => Navigator.pop(context),
-              )
-          ],
-        ),
-      ),
-    );
-  }
+              );
+            },
+          ),
+        );
 
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (transactions.isEmpty) {
-      return EmptyState(
-        icon: Icons.account_balance_wallet_outlined,
-        title: "No transactions yet",
-        description: "Start adding transactions to track your spending.",
-        buttonText: "+ Add Transaction",
-        onButtonPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const AddExpenseScreen(initialType: 'expense'),
+        if (widget.isFullScreen) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(widget.title ?? 'All Transactions'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.search_rounded),
+                  tooltip: 'Search & Filter',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const SearchFilterScreen()),
+                  ),
+                ),
+              ],
             ),
-          );
-          if (result == true) _loadInitialData();
-        },
-      );
-    }
-
-    final content = RefreshIndicator(
-      onRefresh: _loadTransactions,
-      color: Theme.of(context).colorScheme.secondary,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        itemCount: transactions.length + (hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == transactions.length) {
-            return const Center(child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
-            ));
-          }
-          final t = transactions[index];
-          final isEven = index % 2 == 0;
-          
-          return Container(
-            color: isEven ? Colors.transparent : Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.3),
-            child: TransactionTile(
-              transaction: t,
-              category: categoriesMap[t.categoryId],
-              onTap: () => _handleTransactionTap(t),
+            floatingActionButtonLocation:
+                FloatingActionButtonLocation.centerFloat,
+            floatingActionButton: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+              child: PrimaryButton(
+                label: 'Add Transaction',
+                onPressed: _onAddTransaction,
+              ),
             ),
+            body: SafeArea(child: content),
           );
-        },
-      ),
+        }
+        return content;
+      },
     );
-
-    if (widget.isFullScreen) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('All Transactions'),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-        ),
-        body: content,
-      );
-    }
-    return content;
   }
 }

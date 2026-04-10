@@ -43,3 +43,33 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Secrets
+.env
+
+# Build artifacts & logs
+build_output.txt
+build_log.txt
+build_verbose.txt
+build_verbose_2.txt
+build_apk_output.txt
+analyze_output.txt
+analysis_output.txt
+analysis_v*.txt
+analyze_output_*.txt
+analyze_final*.txt
+analyze_queue*.txt
+analyze_stabilize.txt
+analyze_output_v*.txt
+
+# Google services config
+android/app/google-services*.json
+
+# Screenshots (dev only)
+flutter_*.png
+
+# Database snapshots
+assets/spendx.db
+
+# Android build reports
+android/build/

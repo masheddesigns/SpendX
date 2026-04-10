@@ -61,4 +61,22 @@ class Category {
       type: map['type'],
     );
   }
+
+  Category copyWith({
+    String? id,
+    String? userId,
+    String? name,
+    String? icon,
+    String? color,
+    String? type,
+  }) {
+    return Category(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      color: color ?? this.color,
+      type: type ?? this.type,
+    );
+  }
 }

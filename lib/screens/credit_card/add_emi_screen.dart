@@ -170,7 +170,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
 
               _label('Linked Credit Card (optional)'),
               DropdownButtonFormField<String>(
-                value: _selectedCardId,
+                initialValue: _selectedCardId,
                 dropdownColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                 decoration: _dec('No card / Cash EMI'),
                 items: [

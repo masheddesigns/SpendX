@@ -1,129 +1,157 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import '../../models/tag.dart';
-import '../../services/database_helper.dart';
-import '../../theme/app_theme.dart';
-import '../../widgets/custom_dialog.dart';
 
-class TagManagementScreen extends StatefulWidget {
+import '../../data/providers.dart';
+import '../../models/tag.dart';
+import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/spendx_app_bar.dart';
+import '../../shared/widgets/undo_snackbar_listener.dart';
+import '../../widgets/common/spendx_fab.dart';
+
+class TagManagementScreen extends ConsumerStatefulWidget {
   const TagManagementScreen({super.key});
 
   @override
-  State<TagManagementScreen> createState() => _TagManagementScreenState();
+  ConsumerState<TagManagementScreen> createState() =>
+      _TagManagementScreenState();
 }
 
-class _TagManagementScreenState extends State<TagManagementScreen> {
-  List<Tag> _tags = [];
-  bool _isLoading = true;
+class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
+  Future<void> _showAddTagDialog([Tag? existing]) async {
+    final controller = TextEditingController(text: existing?.name ?? '');
 
-  @override
-  void initState() {
-    super.initState();
-    _loadTags();
-  }
-
-  Future<void> _loadTags() async {
-    setState(() => _isLoading = true);
-    final db = await DatabaseHelper.instance.database;
-    final maps = await db.query(DatabaseHelper.tableTags, orderBy: 'name');
-    if (!mounted) return;
-    setState(() {
-      _tags = maps.map((m) => Tag.fromMap(m)).toList();
-      _isLoading = false;
-    });
-  }
-
-  void _showAddTagDialog() {
-    final nameController = TextEditingController();
-    String color = '#4F46E5';
-
-    showDialog(
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("New Tag"),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(existing == null ? 'New Tag' : 'Edit Tag'),
         content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(labelText: "Tag Name", prefixIcon: Icon(Icons.tag)),
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Tag Name'),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              final newTag = Tag(
-                id: const Uuid().v4(),
-                userId: 'offline_user',
-                name: nameController.text.trim().toLowerCase(),
-                color: color,
+              final name = controller.text.trim().toLowerCase();
+              if (name.isEmpty) {
+                return;
+              }
+
+              final tag = Tag(
+                id: existing?.id ?? const Uuid().v4(),
+                userId: existing?.userId ?? 'offline_user',
+                name: name,
+                color: existing?.color ?? '#4F46E5',
               );
-              final db = await DatabaseHelper.instance.database;
-              await db.insert(DatabaseHelper.tableTags, newTag.toMap());
-              if (mounted) {
-                Navigator.pop(context);
-                _loadTags();
+
+              if (existing == null) {
+                await ref.read(tagsProvider.notifier).add(tag);
+              } else {
+                await ref.read(tagsProvider.notifier).replace(tag);
+              }
+
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
               }
             },
-            child: const Text("Save"),
-          )
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
+
+    controller.dispose();
   }
 
-  void _deleteTag(Tag tag) async {
-    final confirm = await CustomDialog.show(
-      context,
-      type: DialogType.warning,
-      title: 'Delete Tag?',
-      message: "Delete '${tag.name}'? This cannot be undone.",
-      primaryButtonText: 'Delete',
-      secondaryButtonText: 'Cancel',
+  Future<void> _deleteTag(Tag tag) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Tag'),
+        content: Text("Delete '${tag.name}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
 
-    if (confirm == true) {
-      final db = await DatabaseHelper.instance.database;
-      await db.delete(DatabaseHelper.tableTags, where: 'id = ?', whereArgs: [tag.id]);
-      _loadTags();
+    if (confirmed == true) {
+      await ref.read(tagsProvider.notifier).remove(tag);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final tagsAsync = ref.watch(tagsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tags'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTagDialog,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.add),
-      ),
-      body: _tags.isEmpty
-          ? const Center(child: Text("No tags found.", style: TextStyle(color: Colors.white54)))
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _tags.length,
-              itemBuilder: (context, index) {
-                final tag = _tags[index];
-                return ListTile(
-                  leading: Icon(Icons.tag, color: Theme.of(context).colorScheme.primary),
-                  title: Text(tag.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.white54),
-                    onPressed: () => _deleteTag(tag),
+    listenForUndoSnackbars(ref, context, matches: (payload) => payload is Tag);
+
+    return tagsAsync.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (error, _) => Scaffold(body: Center(child: Text('Error: $error'))),
+      data: (tags) {
+        final sortedTags = [
+          ...tags,
+        ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+        return Scaffold(
+          appBar: const SpendXAppBar(title: 'Tags'),
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerFloat,
+          floatingActionButton: SpendXFAB(
+            icon: Icons.add_rounded,
+            label: 'Add Tag',
+            onPressed: _showAddTagDialog,
+          ),
+          body: SafeArea(
+            child: sortedTags.isEmpty
+                ? Center(
+                    child: Text(
+                      'No tags found.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.m,
+                      AppSpacing.s,
+                      AppSpacing.m,
+                      AppSpacing.xxl,
+                    ),
+                    itemCount: sortedTags.length,
+                    itemBuilder: (context, index) {
+                      final tag = sortedTags[index];
+                      return ListTile(
+                        leading: Icon(
+                          Icons.tag,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        title: Text(tag.name),
+                        onTap: () => _showAddTagDialog(tag),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteTag(tag),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
+          ),
+        );
+      },
     );
   }
 }

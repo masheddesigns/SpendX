@@ -1,5 +1,5 @@
+import '../services/haptic_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gamification_service.dart';
@@ -34,7 +34,7 @@ class _StreakCardState extends State<StreakCard> {
     final streak = await GamificationService.instance.getCurrentStreak();
     final loggedToday = await GamificationService.instance.hasLoggedToday();
     final lastLog = await GamificationService.instance.getLastLoggedDate();
-    final quote = GamificationService.instance.getDailyQuote();
+    final quote = await GamificationService.instance.getDailyQuote();
 
     final prefs = await SharedPreferences.getInstance();
     final dismissedStr = prefs.getString('streak_dismissed_date');
@@ -54,7 +54,7 @@ class _StreakCardState extends State<StreakCard> {
   }
 
   Future<void> _dismiss() async {
-    HapticFeedback.mediumImpact();
+    HapticService.instance.success();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('streak_dismissed_date', DateFormat('yyyy-MM-dd').format(DateTime.now()));
     setState(() => _isDismissed = true);
@@ -87,8 +87,7 @@ class _StreakCardState extends State<StreakCard> {
     return Stack(
       children: [
         Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(24),
 // ... (rest remains same)
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
@@ -117,7 +116,7 @@ class _StreakCardState extends State<StreakCard> {
                       children: [
                         Text(
                           _streak > 0 ? '🔥' : '⭕',
-                          style: const TextStyle(fontSize: 16),
+                          style: const TextStyle(fontSize: 16, decoration: TextDecoration.none),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -126,6 +125,7 @@ class _StreakCardState extends State<StreakCard> {
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -135,6 +135,7 @@ class _StreakCardState extends State<StreakCard> {
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                       ],
@@ -158,6 +159,7 @@ class _StreakCardState extends State<StreakCard> {
                         fontSize: 11,
                         color: _loggedToday ? Colors.green[400] : Colors.red[400],
                         fontWeight: FontWeight.w800,
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   ),
@@ -173,13 +175,14 @@ class _StreakCardState extends State<StreakCard> {
                   fontStyle: FontStyle.italic,
                   height: 1.4,
                   fontWeight: FontWeight.w500,
+                  decoration: TextDecoration.none,
                 ),
               ),
               if (_lastLogDate != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   'Last logged: ${DateFormat('EEE, MMM d').format(_lastLogDate!)}',
-                  style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11),
+                  style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11, decoration: TextDecoration.none),
                 ),
               ],
             ],

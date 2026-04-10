@@ -25,7 +25,6 @@ class Tag {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
       'name': name,
       'color': color,
     };
@@ -34,7 +33,6 @@ class Tag {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'user_id': userId,
       'name': name,
       'color': color,
     };
@@ -46,6 +44,20 @@ class Tag {
       userId: map['user_id'] ?? '',
       name: map['name'],
       color: map['color'],
+    );
+  }
+
+  Tag copyWith({
+    String? id,
+    String? userId,
+    String? name,
+    String? color,
+  }) {
+    return Tag(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      color: color ?? this.color,
     );
   }
 }

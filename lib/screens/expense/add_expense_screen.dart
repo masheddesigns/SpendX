@@ -1,139 +1,182 @@
-import 'dart:io' as dart_io;
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
-import '../../models/transaction.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../features/accounts/providers/account_providers.dart';
+import '../../features/categories/providers/category_providers.dart';
+import '../../features/merchant_rules/providers/merchant_rule_providers.dart';
+import '../../features/transactions/providers/transaction_providers.dart';
+import '../../core/utils/category_classifier.dart';
+import '../../core/utils/merchant_extractor.dart';
+import '../../data/providers.dart' show cardsProvider;
 import '../../models/bank_account.dart';
+import '../../models/credit_card.dart';
+import '../../models/transaction.dart';
 import '../../models/category.dart';
-import '../../models/tag.dart';
-import '../../services/transaction_service.dart';
-import '../../services/database_helper.dart';
+import '../../services/settings_service.dart';
+import '../../services/haptic_service.dart';
+import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/primary_button.dart';
+import '../../shared/widgets/app_text_field.dart' as shared;
+import '../../shared/widgets/app_amount_field.dart';
+import '../../shared/widgets/app_category_picker.dart';
+import '../../shared/widgets/app_date_selector.dart';
+import '../../shared/widgets/app_section_header.dart';
+import '../../shared/widgets/app_payment_method_picker.dart';
+import '../../shared/widgets/spendx_app_bar.dart';
+import '../../shared/widgets/app_dialog.dart';
+import '../../shared/widgets/custom_snackbar.dart';
+import '../../utils/text_formatter.dart';
 import '../../services/gemini_service.dart';
-import '../../widgets/custom_snackbar.dart';
-import '../vehicles/add_fuel_screen.dart';
-import '../../models/vehicle.dart';
+import '../../widgets/receipt_scan_overlay.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import '../bank/add_bank_account_screen.dart';
+import '../../widgets/form/add_category_sheet.dart';
 
-import '../../utils/app_format.dart';
-import 'package:intl/intl.dart';
-
-class AddExpenseScreen extends StatefulWidget {
+class AddExpenseScreen extends ConsumerStatefulWidget {
   final String initialType; // 'expense' or 'income'
   final Transaction? existingTransaction;
+  final String? initialCategoryId;
   final Map<String, String?>? prefillData; // Data from Gemini AI
 
   const AddExpenseScreen({
     super.key,
     this.initialType = 'expense',
     this.existingTransaction,
+    this.initialCategoryId,
     this.prefillData,
   });
 
   @override
-  State<AddExpenseScreen> createState() => _AddExpenseScreenState();
+  ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
 }
 
-class _AddExpenseScreenState extends State<AddExpenseScreen> {
+class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late String _selectedType;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategoryId;
-  bool _isRecurring = false;
-  
+
   List<Category> _availableCategories = [];
-  List<Tag> _availableTags = [];
-  List<String> _selectedTags = [];
-  List<BankAccount> _availableAccounts = [];
-  String? _selectedAccountId;
-  List<Vehicle> _availableVehicles = [];
-  String? _selectedVehicleId;
+  List<PaymentMethodItem> _availablePaymentMethods = [];
+  List<double> _recentAmounts = [];
+  String? _selectedPaymentMethodId;
+  bool _didExplicitCategorySelection = false;
 
   @override
   void initState() {
     super.initState();
+    _amountController.addListener(() => setState(() {}));
+    _notesController.addListener(() {
+      unawaited(_maybeAutoSelectCategoryFromNotes());
+    });
+    _selectedCategoryId = widget.initialCategoryId;
     if (widget.existingTransaction != null) {
       final txn = widget.existingTransaction!;
       _selectedType = txn.type;
       _amountController.text = txn.amount.toString();
       _notesController.text = txn.notes;
-      _locationController.text = txn.location ?? '';
       _selectedDate = txn.date;
       _selectedCategoryId = txn.categoryId;
-      _selectedTags = List.from(txn.tags);
-      if (txn.source == 'bank_account') _selectedAccountId = txn.relatedEntityId;
-      _selectedVehicleId = txn.vehicleId;
+      _selectedPaymentMethodId = txn.accountId;
     } else {
       _selectedType = widget.initialType;
-      
-      // Apply AI Prefill Data if available
-      if (widget.prefillData != null) {
-        if (widget.prefillData!['amount'] != null) {
-          // AI might return strings with commas/symbols, try to clean it
-          final cleanAmt = widget.prefillData!['amount']!.replaceAll(RegExp(r'[^0-9.]'), '');
-          _amountController.text = cleanAmt;
-        }
-        if (widget.prefillData!['merchant'] != null) {
-          _notesController.text = widget.prefillData!['merchant']!;
-        }
-        if (widget.prefillData!['date'] != null) {
-          try {
-            _selectedDate = DateTime.parse(widget.prefillData!['date']!);
-          } catch (_) {
-            // keep default now() if parsing fails
-          }
-        }
-        // Category will be matched after categories load
-      }
+      _restoreSmartDefaults();
     }
     _loadInitialData();
   }
 
+  void _restoreSmartDefaults() {
+    final settings = SettingsService.instance;
+    final normalizedType = _normalizedType;
+    _recentAmounts = settings.getRecentExpenseAmounts(type: normalizedType);
+    _selectedCategoryId ??= settings.getLastExpenseCategoryId(
+      type: normalizedType,
+    );
+    _selectedPaymentMethodId ??= settings.getLastExpensePaymentSourceId(
+      type: normalizedType,
+    );
+  }
+
   Future<void> _loadInitialData() async {
-    final db = await DatabaseHelper.instance.database;
-    
-    // Load categories
-    final catMaps = await db.query(
-      DatabaseHelper.tableCategories,
-      where: 'type = ?',
-      whereArgs: [_selectedType],
-      orderBy: 'name',
+    final List<Category> categories = await ref.read(categoriesProvider.future);
+    final List<BankAccount> accounts = await ref.read(accountsProvider.future);
+    List<CreditCard> cards = [];
+    try {
+      cards = await ref.read(cardsProvider.future);
+    } catch (_) {
+      // Cards may not exist yet — non-fatal
+    }
+    final settings = SettingsService.instance;
+    final normalizedType = _normalizedType;
+    final storedCategoryId = settings.getLastExpenseCategoryId(
+      type: normalizedType,
     );
-    
-    // Load tags
-    final tagMaps = await db.query(
-      DatabaseHelper.tableTags,
-      orderBy: 'name',
+    final storedPaymentId = settings.getLastExpensePaymentSourceId(
+      type: normalizedType,
     );
-    final accounts = await DatabaseHelper.instance.getAllBankAccounts();
-    final vehicles = await DatabaseHelper.instance.getAllVehicles();
-    
+
     if (!mounted) return;
 
-    final categories = catMaps.map((m) => Category.fromMap(m)).toList();
-    final tags = tagMaps.map((m) => Tag.fromMap(m)).toList();
-    
     setState(() {
-      _availableCategories = categories;
-      _availableTags = tags;
-      _availableAccounts = accounts.where((a) => a.isAsset).toList();
-      _availableVehicles = vehicles;
-      
-      if (_selectedAccountId == null && _availableAccounts.isNotEmpty) {
-        final cash = _availableAccounts.where((a) => a.accountType == 'cash').firstOrNull;
-        _selectedAccountId = cash?.id ?? _availableAccounts.first.id;
+      _recentAmounts = settings.getRecentExpenseAmounts(type: normalizedType);
+      _availableCategories = categories
+          .where((c) => c.type == _selectedType)
+          .toList();
+
+      _availablePaymentMethods = [
+        ...accounts.map(
+          (a) => PaymentMethodItem(
+            id: a.id,
+            name: a.name,
+            type: 'bank',
+            icon: _getAccountIcon(a.accountType),
+          ),
+        ),
+        ...cards.map(
+          (c) => PaymentMethodItem(
+            id: c.id,
+            name: '${c.name} ••${c.last4}',
+            type: 'credit_card',
+            icon: _getCardIcon(c.cardType),
+          ),
+        ),
+      ];
+
+      final hasSelectedPayment = _availablePaymentMethods.any(
+        (method) => method.id == _selectedPaymentMethodId,
+      );
+      if (!hasSelectedPayment) {
+        _selectedPaymentMethodId = null;
       }
-      
-      // Keep existing category if set, or auto-match AI category, or default to first
-      if (_selectedCategoryId == null && _availableCategories.isNotEmpty) {
-        if (widget.prefillData != null && widget.prefillData!['category'] != null) {
-          final aiCatStr = widget.prefillData!['category']!.toLowerCase();
-          final matchedCat = _availableCategories.where((c) => c.name.toLowerCase().contains(aiCatStr)).firstOrNull;
-          _selectedCategoryId = matchedCat?.id ?? _availableCategories.first.id;
+
+      if (_selectedPaymentMethodId == null &&
+          _availablePaymentMethods.isNotEmpty) {
+        final storedPayment = _availablePaymentMethods.where(
+          (method) => method.id == storedPaymentId,
+        );
+        if (storedPayment.isNotEmpty) {
+          _selectedPaymentMethodId = storedPayment.first.id;
         } else {
-          _selectedCategoryId = _availableCategories.first.id;
+          _selectedPaymentMethodId = _availablePaymentMethods.first.id;
         }
+      }
+
+      final hasSelectedCategory = _availableCategories.any(
+        (category) => category.id == _selectedCategoryId,
+      );
+      if (!hasSelectedCategory) {
+        _selectedCategoryId = null;
+      }
+
+      if (_selectedCategoryId == null && _availableCategories.isNotEmpty) {
+        final storedCategory = _availableCategories.where(
+          (category) => category.id == storedCategoryId,
+        );
+        _selectedCategoryId = storedCategory.isNotEmpty
+            ? storedCategory.first.id
+            : _availableCategories.first.id;
       }
     });
   }
@@ -142,96 +185,217 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void dispose() {
     _amountController.dispose();
     _notesController.dispose();
-    _locationController.dispose();
     super.dispose();
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: Theme.of(context).colorScheme.primary,
-              onPrimary: Theme.of(context).colorScheme.onPrimary,
-              surface: Theme.of(context).colorScheme.surfaceContainerHigh,
-              onSurface: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
+  Future<void> _maybeAutoSelectCategoryFromNotes() async {
+    if (_selectedCategoryId != null || _availableCategories.isEmpty) {
+      return;
     }
+
+    final note = _notesController.text;
+    final keyword = MerchantExtractor.extract(note);
+    if (keyword.length >= 3) {
+      final rule = await ref
+          .read(merchantRuleRepoProvider)
+          .getByKeyword(keyword);
+      if (rule != null) {
+        final learned = _availableCategories.where(
+          (c) => c.id == rule.categoryId,
+        );
+        if (learned.isNotEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _selectedCategoryId = learned.first.id;
+          });
+          return;
+        }
+      }
+    }
+
+    final detected = CategoryClassifier.detect(text: note, type: _selectedType);
+
+    if (detected == null) {
+      return;
+    }
+
+    final match = _availableCategories.where((c) => c.name == detected);
+    if (match.isEmpty) {
+      return;
+    }
+
+    final categoryId = match.first.id;
+    if (categoryId == _selectedCategoryId) {
+      return;
+    }
+
+    setState(() {
+      _selectedCategoryId = categoryId;
+    });
   }
 
-  void _saveTransaction() async {
+  bool get _isValid {
+    final amount = double.tryParse(_amountController.text) ?? 0.0;
+    return amount > 0; // Account is optional
+  }
+
+  String get _normalizedType => _selectedType.trim().toLowerCase();
+
+  Future<void> _saveTransaction() async {
     if (_amountController.text.isEmpty) {
-      CustomSnackBar.show(context, message: 'Please enter an amount', isError: true);
+      CustomSnackBar.show(
+        context,
+        message: 'Please enter an amount',
+        isError: true,
+      );
       return;
     }
 
     final double amount = double.tryParse(_amountController.text) ?? 0.0;
-    
+
     if (amount <= 0) {
-      CustomSnackBar.show(context, message: 'Amount must be greater than zero', isError: true);
+      CustomSnackBar.show(
+        context,
+        message: 'Amount must be greater than zero',
+        isError: true,
+      );
       return;
     }
 
-    // TODO: Phase 3 Category Picker. For now, map the name as the ID temporarily.
-    // We will replace this with real Category models in the next step.
+    // Account is optional — transaction can exist without a linked account
+
     final newTransaction = Transaction(
       id: widget.existingTransaction?.id,
       userId: widget.existingTransaction?.userId ?? 'offline_user',
       type: _selectedType,
       categoryId: _selectedCategoryId,
+      accountId: _selectedPaymentMethodId,
       amount: amount,
       date: _selectedDate,
-      notes: _notesController.text.trim(),
-      tags: _selectedTags,
-      source: _selectedAccountId != null ? 'bank_account' : (widget.existingTransaction?.source ?? 'manual'),
-      relatedEntityId: _selectedAccountId ?? widget.existingTransaction?.relatedEntityId,
-      vehicleId: _selectedVehicleId,
-      location: _locationController.text.trim(),
+      notes: TextFormatter.normalizeName(_notesController.text),
+      tags: const [],
+      source: 'manual',
+      relatedEntityId: null,
+      location: null,
       createdAt: widget.existingTransaction?.createdAt,
     );
 
     if (widget.existingTransaction != null) {
-      await TransactionService.instance.updateTransaction(newTransaction);
+      await ref.read(updateTransactionProvider)(
+        oldTransaction: widget.existingTransaction!,
+        newTransaction: newTransaction,
+      );
     } else {
-      await TransactionService.instance.addTransaction(newTransaction);
+      await ref.read(addTransactionProvider)(newTransaction);
     }
 
+    if (_didExplicitCategorySelection &&
+        _selectedCategoryId != null &&
+        _notesController.text.trim().isNotEmpty) {
+      unawaited(
+        ref.read(learnMerchantRuleProvider)(
+          text: _notesController.text,
+          categoryId: _selectedCategoryId!,
+        ),
+      );
+    }
+
+    unawaited(
+      SettingsService.instance.saveExpenseDefaults(
+        type: _normalizedType,
+        categoryId: _selectedCategoryId,
+        amount: amount,
+        paymentSourceId: _selectedPaymentMethodId,
+        paymentSourceType: _selectedPaymentTypeForStorage,
+      ),
+    );
+
     if (mounted) {
-      Navigator.pop(context, true); // true indicates a new record was added
+      Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _scanReceipt() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Pick from Gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await ImagePicker().pickImage(source: source);
+    if (picked == null || !mounted) return;
+
+    // Show scanning overlay
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const ReceiptScanOverlay(),
+    );
+
+    try {
+      final result = await GeminiService.instance.scanReceipt(File(picked.path));
+      if (mounted) Navigator.pop(context); // dismiss overlay
+
+      if (result.containsKey('error')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(result['error'] ?? 'Scan failed')));
+        }
+        return;
+      }
+
+      // Pre-fill fields from scan result
+      if (mounted) {
+        setState(() {
+          if (result['amount'] != null) {
+            _amountController.text = result['amount']!;
+          }
+          if (result['merchant'] != null) {
+            _notesController.text = result['merchant']!;
+          }
+        });
+        if (result['amount'] != null || result['merchant'] != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Receipt scanned successfully')));
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // dismiss overlay on error
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+      }
     }
   }
 
   void _deleteTransaction() async {
-    final confirm = await showDialog<bool>(
+    final confirm = await AppDialog.showConfirm(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Transaction?'),
-        content: const Text('This action cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Delete Transaction?',
+      message:
+          'This will remove the transaction. You can undo this immediately from the dashboard.',
+      confirmLabel: 'Delete',
+      isDestructive: true,
     );
 
-    if (confirm == true) {
-      await TransactionService.instance.deleteTransaction(widget.existingTransaction!.id);
+    if (confirm == true && widget.existingTransaction != null) {
+      await ref.read(deleteTransactionProvider)(widget.existingTransaction!.id);
       if (mounted) {
         Navigator.pop(context, true);
       }
@@ -240,9 +404,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Widget _buildTypeToggle() {
     return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
       ),
       child: Row(
         children: [
@@ -251,21 +416,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               onTap: () {
                 setState(() {
                   _selectedType = 'expense';
-                  _loadInitialData();
+                  _selectedCategoryId = null;
+                  _selectedPaymentMethodId = null;
                 });
+                _loadInitialData();
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
                 decoration: BoxDecoration(
-                  color: _selectedType == 'expense' ? Theme.of(context).colorScheme.error : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
+                  color: _selectedType == 'expense'
+                      ? Theme.of(context).colorScheme.error
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   'Expense',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: _selectedType == 'expense' ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: _selectedType == 'expense'
+                        ? Theme.of(context).colorScheme.onSurface
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -276,46 +447,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               onTap: () {
                 setState(() {
                   _selectedType = 'income';
-                  _loadInitialData();
+                  _selectedCategoryId = null;
+                  _selectedPaymentMethodId = null;
                 });
+                _loadInitialData();
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
                 decoration: BoxDecoration(
-                  color: _selectedType == 'income' ? Theme.of(context).colorScheme.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
+                  color: _selectedType == 'income'
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   'Income',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: _selectedType == 'income' ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddFuelScreen()),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'Fuel',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: _selectedType == 'income'
+                        ? Theme.of(context).colorScheme.onSurface
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -328,300 +480,287 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Color headerColor = _selectedType == 'expense' ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary;
+    final settings = SettingsService.instance;
+    Color headerColor;
+    if (_selectedType == 'expense') {
+      headerColor = Theme.of(context).colorScheme.error;
+    } else {
+      headerColor = Theme.of(context).colorScheme.primary;
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.existingTransaction != null 
-            ? 'Edit ${_selectedType == 'expense' ? 'Expense' : 'Income'}' 
-            : 'Add ${_selectedType == 'expense' ? 'Expense' : 'Income'}'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+      appBar: SpendXAppBar(
+        title: widget.existingTransaction != null
+            ? 'Edit ${_selectedType == 'expense' ? 'Expense' : 'Income'}'
+            : 'Add ${_selectedType == 'expense' ? 'Expense' : 'Income'}',
         actions: [
-          IconButton(
-            icon: Icon(Icons.receipt_long, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            tooltip: 'Scan Receipt',
-            onPressed: _scanReceipt,
-          ),
+          if (widget.existingTransaction == null)
+            IconButton(
+              icon: const Icon(Icons.document_scanner_rounded, size: 20),
+              tooltip: 'Scan Receipt',
+              onPressed: _scanReceipt,
+            ),
           if (widget.existingTransaction != null)
             IconButton(
-              icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+              icon: Icon(
+                Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error,
+                size: 20,
+              ),
               tooltip: 'Delete Transaction',
               onPressed: _deleteTransaction,
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTypeToggle(),
-            const SizedBox(height: 32),
-            
-            // Amount Input
-            Text('Amount', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: TextStyle(fontSize: 48, fontWeight: FontWeight.w600, color: headerColor),
-              decoration: InputDecoration(
-                prefixText: '${AppFormat.currencySymbol} ',
-                prefixStyle: TextStyle(fontSize: 48, fontWeight: FontWeight.w600, color: headerColor.withValues(alpha: 0.5)),
-                border: InputBorder.none,
-                hintText: '0.00',
-                hintStyle: TextStyle(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-            ),
-            
-            const Divider(color: Colors.white10, height: 40),
-            
-            // Category Selector
-            Text('Category', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: _availableCategories.map((cat) {
-                final isSelected = _selectedCategoryId == cat.id;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedCategoryId = cat.id),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? headerColor.withValues(alpha: 0.15) : Theme.of(context).colorScheme.surfaceContainer,
-                      border: Border.all(color: isSelected ? headerColor : Colors.transparent),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      cat.name,
-                      style: TextStyle(
-                        color: isSelected ? headerColor : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            
-            const SizedBox(height: 32),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.m,
+            AppSpacing.m,
+            AppSpacing.m,
+            132,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTypeToggle(),
+              const SizedBox(height: AppSpacing.l),
 
-            // Bank Account Selector
-            if (_availableAccounts.isNotEmpty) ...[
-              Text('Linked Account', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 50,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _availableAccounts.length,
-                  itemBuilder: (context, index) {
-                    final acc = _availableAccounts[index];
-                    final isSelected = _selectedAccountId == acc.id;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedAccountId = isSelected ? null : acc.id),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: isSelected ? headerColor.withValues(alpha: 0.15) : Theme.of(context).colorScheme.surfaceContainer,
-                            border: Border.all(color: isSelected ? headerColor : Colors.transparent),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: Row(
-                            children: [
-                              Icon(Icons.account_balance, size: 16, color: isSelected ? headerColor : Theme.of(context).colorScheme.onSurfaceVariant),
-                              const SizedBox(width: 8),
-                              Text(
-                                acc.name,
-                                style: TextStyle(
-                                  color: isSelected ? headerColor : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+              // Amount Input
+              const AppSectionHeader(
+                title: 'Amount',
+                padding: EdgeInsets.only(bottom: AppSpacing.sm),
+              ),
+              AppAmountField(
+                controller: _amountController,
+                amountColor: headerColor,
+              ),
+              if (_recentAmounts.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.s),
+                Wrap(
+                  spacing: AppSpacing.s,
+                  runSpacing: AppSpacing.s,
+                  children: _recentAmounts.map((amount) {
+                    return ActionChip(
+                      label: Text(
+                        '${settings.currencySymbol}${_formatQuickAmount(amount)}',
+                      ),
+                      onPressed: () => _applyQuickAmount(amount),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHigh,
+                      side: BorderSide(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.16),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
                       ),
                     );
+                  }).toList(),
+                ),
+              ],
+
+              Divider(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1), height: 32),
+
+              // Category Selector
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const AppSectionHeader(title: 'Category'),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final newCat = await showModalBottomSheet<Category>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) =>
+                            AddCategorySheet(initialType: _selectedType),
+                      );
+                      if (newCat != null) {
+                        await _loadInitialData();
+                        setState(() {
+                          _selectedCategoryId = newCat.id;
+                          _didExplicitCategorySelection = true;
+                        });
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.add_circle_outline_rounded,
+                      size: 18,
+                    ),
+                    label: const Text('Add New'),
+                  ),
+                ],
+              ),
+              AppCategoryPicker(
+                availableCategories: _availableCategories,
+                selectedCategoryId: _selectedCategoryId,
+                activeColor: headerColor,
+                onCategorySelected: (id) => setState(() {
+                  _selectedCategoryId = id;
+                  _didExplicitCategorySelection = true;
+                }),
+              ),
+
+              AppSpacing.sectionSpacer,
+
+              // Payment Method Selector
+              if (_availablePaymentMethods.isNotEmpty) ...[
+                const AppSectionHeader(title: 'Payment Method'),
+                AppPaymentMethodPicker(
+                  availableMethods: _availablePaymentMethods,
+                  selectedMethodId: _selectedPaymentMethodId,
+                  activeColor: headerColor,
+                  onMethodSelected: (id) {
+                    setState(() {
+                      _selectedPaymentMethodId = id;
+                    });
                   },
                 ),
-              ),
-              const SizedBox(height: 32),
-            ],
-            
-            // Tags Selector
-            if (_availableTags.isNotEmpty) ...[
-              Text('Tags', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _availableTags.map((tag) {
-                  final isSelected = _selectedTags.contains(tag.id);
-                  return FilterChip(
-                    label: Text(tag.name),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      HapticFeedback.lightImpact();
-                      setState(() {
-                        if (selected) {
-                          _selectedTags.add(tag.id);
-                        } else {
-                          _selectedTags.remove(tag.id);
-                        }
-                      });
-                    },
-                    selectedColor: Theme.of(context).colorScheme.primaryContainer,
-                    checkmarkColor: Theme.of(context).colorScheme.primary,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 32),
-            ],
-            
-            const SizedBox(height: 32),
-            
-            // Date Picker
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Date', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16)),
-              subtitle: Text(DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              trailing: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.primary),
-              onTap: () => _selectDate(context),
-            ),
-            
-            const Divider(color: Colors.white12, height: 16),
-            
-            // Notes
-            TextField(
-              controller: _notesController,
-              decoration: InputDecoration(
-                labelText: 'Notes (Optional)',
-                labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                border: InputBorder.none,
-                prefixIcon: Icon(Icons.notes, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                prefixIconConstraints: const BoxConstraints(minWidth: 40),
-              ),
-            ),
-
-            const Divider(color: Colors.white12, height: 16),
-
-            // Location
-            TextField(
-              controller: _locationController,
-              decoration: InputDecoration(
-                labelText: 'Location (Optional)',
-                labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                border: InputBorder.none,
-                prefixIcon: Icon(Icons.location_on_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                prefixIconConstraints: const BoxConstraints(minWidth: 40),
-              ),
-            ),
-
-            const Divider(color: Colors.white12, height: 16),
-            
-            // Recurring
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Recurring', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16)),
-              subtitle: Text('Repeat this transaction', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              value: _isRecurring,
-              activeColor: Theme.of(context).colorScheme.primary,
-              onChanged: (val) => setState(() => _isRecurring = val),
-            ),
-            
-            const SizedBox(height: 48),
-            
-            // Save Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.mediumImpact();
-                  _saveTransaction();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: headerColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                AppSpacing.sectionSpacer,
+              ] else ...[
+                const AppSectionHeader(title: 'Payment Method'),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.m),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Add an account before saving transactions.',
+                        ),
+                        const SizedBox(height: AppSpacing.s),
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AddBankAccountScreen(),
+                              ),
+                            );
+                            if (result == true) {
+                              await _loadInitialData();
+                            }
+                          },
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Add Account'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: const Text('Save Transaction', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                AppSpacing.sectionSpacer,
+              ],
+
+              AppSpacing.sectionSpacer,
+
+              // Date Picker
+              const AppSectionHeader(title: 'Date'),
+              AppDateSelector(
+                selectedDate: _selectedDate,
+                onDateSelected: (date) => setState(() => _selectedDate = date),
               ),
-            ),
-            const SizedBox(height: 40),
-          ],
+
+              AppSpacing.itemSpacer,
+
+              shared.AppTextField(
+                controller: _notesController,
+                label: 'Notes (Optional)',
+                prefix: const Icon(Icons.notes_rounded),
+              ),
+
+              const SizedBox(height: AppSpacing.m),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: EdgeInsets.fromLTRB(
+          AppSpacing.m,
+          AppSpacing.s,
+          AppSpacing.m,
+          AppSpacing.m + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: PrimaryButton(
+          label: 'Save Transaction',
+          onPressed: _isValid ? _saveTransaction : null,
+          backgroundColor: headerColor,
+          fullWidth: true,
         ),
       ),
     );
   }
 
-  Future<void> _scanReceipt() async {
-    final picker = ImagePicker();
-    final choice = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Column(mainAxisSize: MainAxisSize.min, children: [
-        const SizedBox(height: 16),
-        Text('Scan Receipt', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 16)),
-        const SizedBox(height: 8),
-        ListTile(
-          leading: Icon(Icons.camera_alt, color: Theme.of(context).colorScheme.primary),
-          title: const Text('Take Photo'),
-          onTap: () => Navigator.pop(context, ImageSource.camera),
-        ),
-        ListTile(
-          leading: Icon(Icons.photo_library, color: Theme.of(context).colorScheme.secondary),
-          title: const Text('Choose from Gallery'),
-          onTap: () => Navigator.pop(context, ImageSource.gallery),
-        ),
-        const SizedBox(height: 16),
-      ]),
+  IconData _getCardIcon(String cardType) {
+    switch (cardType) {
+      case 'visa':
+        return Icons.credit_card_rounded;
+      case 'mastercard':
+        return Icons.credit_card_rounded;
+      case 'rupay':
+        return Icons.credit_card_rounded;
+      case 'amex':
+        return Icons.credit_card_rounded;
+      default:
+        return Icons.credit_card_rounded;
+    }
+  }
+
+  IconData _getAccountIcon(String type) {
+    switch (type) {
+      case 'savings':
+        return Icons.account_balance_rounded;
+      case 'current':
+        return Icons.account_balance_wallet_rounded;
+      case 'fd':
+        return Icons.lock_clock_rounded;
+      case 'cash':
+        return Icons.payments_rounded;
+      case 'wallet':
+        return Icons.account_balance_wallet_rounded;
+      case 'ppf':
+        return Icons.savings_rounded;
+      case 'stock':
+        return Icons.trending_up_rounded;
+      case 'mutual_fund':
+        return Icons.pie_chart_rounded;
+      default:
+        return Icons.account_balance_rounded;
+    }
+  }
+
+  String? get _selectedPaymentTypeForStorage {
+    if (_selectedPaymentMethodId == null) {
+      return null;
+    }
+    return 'bank';
+  }
+
+  void _applyQuickAmount(double amount) {
+    HapticService.instance.selection();
+    final formatted = _formatEditableAmount(amount);
+    _amountController.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
+  }
 
-    if (choice == null) return;
-
-    final picked = await picker.pickImage(source: choice, imageQuality: 80);
-    if (picked == null) return;
-
-    CustomSnackBar.show(context, message: 'Reading receipt with AI...');
-
-    GeminiService.instance.init();
-    final result = await GeminiService.instance.scanReceipt(dart_io.File(picked.path));
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    if (result.containsKey('error')) {
-      CustomSnackBar.show(context, message: 'Could not read receipt: ${result['error']}', isError: true);
-      return;
+  String _formatQuickAmount(double amount) {
+    if (amount == amount.roundToDouble()) {
+      return amount.toStringAsFixed(0);
     }
+    return amount.toStringAsFixed(2);
+  }
 
-    // Auto-fill form
-    if (result['amount'] != null) {
-      _amountController.text = result['amount']!;
+  String _formatEditableAmount(double amount) {
+    if (amount == amount.roundToDouble()) {
+      return amount.toStringAsFixed(0);
     }
-    if (result['merchant'] != null) {
-      _notesController.text = result['merchant']!;
-    }
-    // Try to match category
-    if (result['category'] != null) {
-      final matched = _availableCategories.where((c) =>
-        c.name.toLowerCase().contains(result['category']!.toLowerCase()) ||
-        result['category']!.toLowerCase().contains(c.name.toLowerCase())).toList();
-      if (matched.isNotEmpty) {
-        setState(() => _selectedCategoryId = matched.first.id);
-      }
-    }
-
-    CustomSnackBar.show(context, message: '✓ Receipt scanned! Please verify the details.');
+    return amount
+        .toStringAsFixed(2)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 }
-

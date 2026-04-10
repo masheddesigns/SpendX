@@ -1,6 +1,7 @@
+import '../services/haptic_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import '../utils/app_format.dart';
+import 'package:provider/provider.dart';
+import '../services/settings_service.dart';
 import 'animated_widgets.dart';
 
 class BalanceCard extends StatefulWidget {
@@ -31,7 +32,7 @@ class _BalanceCardState extends State<BalanceCard> {
       initialValue: widget.currentPeriod,
       onSelected: (value) {
         if (value != widget.currentPeriod) {
-          HapticFeedback.lightImpact();
+          HapticService.instance.tap();
           widget.onPeriodChanged(value);
         }
       },
@@ -47,7 +48,7 @@ class _BalanceCardState extends State<BalanceCard> {
           children: [
             Text(
               _getPeriodLabel(widget.currentPeriod),
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w600, decoration: TextDecoration.none),
             ),
             const SizedBox(width: 4),
             Icon(Icons.keyboard_arrow_down, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5), size: 14),
@@ -77,6 +78,8 @@ class _BalanceCardState extends State<BalanceCard> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = context.watch<SettingsService>();
+    final currencySymbol = settings.currencySymbol;
     final cs = Theme.of(context).colorScheme;
     return AnimatedScaleWrapper(
       child: Card(
@@ -98,7 +101,7 @@ class _BalanceCardState extends State<BalanceCard> {
                 children: [
                   Text(
                     "Total Balance",
-                    style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                    style: TextStyle(color: cs.primary, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5, decoration: TextDecoration.none),
                   ),
                   _periodSelector(context),
                 ],
@@ -108,22 +111,23 @@ class _BalanceCardState extends State<BalanceCard> {
                 children: [
                   Expanded(
                     child: _hideAmount
-                      ? Text('****', style: TextStyle(color: cs.onSurface, fontSize: 38, fontWeight: FontWeight.w800, letterSpacing: -1))
+                      ? Text('****', style: TextStyle(color: cs.onSurface, fontSize: 38, fontWeight: FontWeight.w800, letterSpacing: -1, decoration: TextDecoration.none))
                       : CountUpText(
                           value: widget.totalBalance,
-                          prefix: AppFormat.currencySymbol,
+                          prefix: currencySymbol,
                           decimalPlaces: 2,
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 38,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -1,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                   ),
                   GestureDetector(
                     onTap: () {
-                      HapticFeedback.lightImpact();
+                      HapticService.instance.tap();
                       setState(() => _hideAmount = !_hideAmount);
                     },
                     child: Icon(_hideAmount ? Icons.visibility_off : Icons.visibility, color: cs.onSurfaceVariant, size: 24),
@@ -197,18 +201,19 @@ class _MiniSummary extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w500)),
+              Text(title, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.w500, decoration: TextDecoration.none)),
               const SizedBox(height: 2),
               isMuted
-                ? Text('---', style: TextStyle(color: cs.onSurface, fontSize: 14, fontWeight: FontWeight.w600))
+                ? Text('---', style: TextStyle(color: cs.onSurface, fontSize: 14, fontWeight: FontWeight.w600, decoration: TextDecoration.none))
                 : CountUpText(
                     value: amount,
-                    prefix: AppFormat.currencySymbol,
+                    prefix: SettingsService.instance.currencySymbol,
                     decimalPlaces: 2,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none,
                     ),
                   ),
             ],

@@ -1,263 +1,269 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/providers.dart' as app_data;
 import '../models/credit_card.dart';
-import '../models/emi_plan.dart';
-import '../services/database_helper.dart';
-import '../services/notification_service.dart';
-import '../widgets/spendx_app_bar.dart';
-import '../widgets/custom_snackbar.dart';
+import '../models/credit_transaction.dart';
+import '../models/credit_emi.dart';
+import '../services/credit_intelligence_service.dart';
+import '../shared/theme/app_theme.dart';
+import '../shared/widgets/empty_state_widget.dart';
+import '../shared/widgets/undo_snackbar_listener.dart';
 import '../utils/app_format.dart';
 import 'credit_card/add_credit_card_screen.dart';
-import 'credit_card/add_emi_screen.dart';
-import 'credit_card/emi_detail_screen.dart';
+import 'credit_card/add_credit_transaction_screen.dart';
+import 'credit_card/pay_credit_card_screen.dart';
+import 'credit_card/credit_emi_detail_screen.dart';
+import '../utils/text_formatter.dart';
+import '../features/liabilities/providers/liabilities_providers.dart';
 
-
-class CreditCardScreen extends StatefulWidget {
+class CreditCardScreen extends ConsumerStatefulWidget {
   const CreditCardScreen({super.key});
 
   @override
-  State<CreditCardScreen> createState() => _CreditCardScreenState();
+  ConsumerState<CreditCardScreen> createState() => _CreditCardScreenState();
 }
 
-class _CreditCardScreenState extends State<CreditCardScreen> {
-  List<CreditCard> _cards = [];
-  List<EmiPlan> _allEmis = [];
+class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   int _selectedCardIndex = 0;
-  bool _isLoading = true;
-  bool _isLoadingMore = false;
-  
-  final ScrollController _scrollController = ScrollController();
-  int _emiOffset = 0;
-  final int _limit = 20;
-  bool _hasMoreEmis = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-        if (!_isLoading && !_isLoadingMore && _hasMoreEmis) _loadMoreEmis();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _emiOffset = 0;
-      _hasMoreEmis = true;
-    });
-    final cards = await DatabaseHelper.instance.getAllCreditCards();
-    final emis = await DatabaseHelper.instance.getAllEmiPlans(activeOnly: true, limit: _limit, offset: 0);
-    if (mounted) {
-      setState(() {
-        _cards = cards;
-        _allEmis = emis;
-        _emiOffset = emis.length;
-        _hasMoreEmis = emis.length >= _limit;
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMoreEmis() async {
-    setState(() => _isLoadingMore = true);
-    final more = await DatabaseHelper.instance.getAllEmiPlans(activeOnly: true, limit: _limit, offset: _emiOffset);
-    if (mounted) {
-      setState(() {
-        _allEmis.addAll(more);
-        _emiOffset += more.length;
-        _hasMoreEmis = more.length >= _limit;
-        _isLoadingMore = false;
-      });
-    }
-  }
-
-  CreditCard? get _selectedCard =>
-      _cards.isNotEmpty ? _cards[_selectedCardIndex.clamp(0, _cards.length - 1)] : null;
-
-  List<EmiPlan> get _emisForSelectedCard =>
-      _selectedCard == null ? [] : _allEmis.where((e) => e.cardId == _selectedCard!.id).toList();
-
-  Color _hexColor(String hex) =>
-      Color(int.parse('FF${hex.replaceAll('#', '')}', radix: 16));
-
-  void _showActionMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.secondary, child: const Icon(Icons.credit_card, color: Colors.white)),
-
-            title: const Text('Add Credit Card'),
-            subtitle: const Text('Track a new card\'s limit and billing'),
-            onTap: () async {
-              Navigator.pop(context);
-              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCreditCardScreen()));
-              if (res == true) _loadData();
-            },
-          ),
-          ListTile(
-            leading: CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primary, child: const Icon(Icons.payment, color: Colors.white)),
-
-            title: const Text('Add EMI Plan'),
-            subtitle: const Text('Auto-calculate instalments and interest'),
-            onTap: () async {
-              Navigator.pop(context);
-              final res = await Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => AddEmiScreen(card: _selectedCard)));
-              if (res == true) _loadData();
-            },
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
+  void _invalidateAll() {
+    ref.invalidate(creditCardsProvider);
+    ref.invalidate(liabilitiesSummaryProvider);
+    // Families will be invalidated by key or automatically if they depend on creditCardsProvider
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final cardsAsync = ref.watch(creditCardsProvider);
 
-    if (_cards.isEmpty) return _buildEmptyState();
-
-    final card = _selectedCard!;
+    listenForUndoSnackbars(
+      ref,
+      context,
+      matches: (payload) => payload is CreditCard,
+      onUndone: (_) => _invalidateAll(),
+    );
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showActionMenu,
-        backgroundColor: Theme.of(context).colorScheme.primary,
+      appBar: AppBar(title: const Text('Credit Cards')),
+      body: cardsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
+        data: (cards) {
+          if (cards.isEmpty) {
+            return EmptyStateWidget(
+              icon: Icons.credit_card_off_rounded,
+              title: 'No credit cards yet',
+              description:
+                  'Add your credit cards to track outstandings, EMIs, and spending intelligence.',
+              ctaLabel: 'Add Credit Card',
+              onCtaTap: _navigateToAddCard,
+            );
+          }
 
-        child: const Icon(Icons.add),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            // ─── App Bar ───
-            SpendXAppBar(
-              title: 'Credit Cards',
-            ),
+          if (_selectedCardIndex >= cards.length) {
+            _selectedCardIndex = 0;
+          }
 
+          final selectedCard = cards[_selectedCardIndex];
+          final outstandingAsync = ref.watch(
+            creditOutstandingProvider(selectedCard.id),
+          );
+          final recentTxnsAsync = ref.watch(
+            creditRecentTransactionsProvider(selectedCard.id),
+          );
+          final activeEmisAsync = ref.watch(
+            creditActiveEmisProvider(selectedCard.id),
+          );
+          final intelligenceAsync = ref.watch(
+            creditIntelligenceProvider(selectedCard),
+          );
 
-            // ─── Card Carousel ───
-            SliverToBoxAdapter(child: _buildCardCarousel()),
-
-            // ─── Utilization & Stats ───
-            SliverToBoxAdapter(child: _buildCardStats(card)),
-
-            // ─── Billing Info ───
-            SliverToBoxAdapter(child: _buildBillingRow(card)),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
-
-            // ─── EMI Plans ───
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  const Text('Emi plans', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-                  if (_cards.isNotEmpty)
-                    TextButton(
-                      onPressed: () async {
-                        final res = await Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => AddEmiScreen(card: card)));
-                        if (res == true) _loadData();
-                      },
-                      child: Text('+ Add', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+          return RefreshIndicator(
+            onRefresh: () async {
+              _invalidateAll();
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildCardSelector(cards),
+                        AppSpacing.sectionSpacer,
+                        outstandingAsync.when(
+                          data: (outstanding) => _buildSummaryCard(
+                            selectedCard,
+                            outstanding,
+                            intelligenceAsync.valueOrNull,
+                          ),
+                          loading: () =>
+                              const Center(child: CircularProgressIndicator()),
+                          error: (err, _) => Text('Error: $err'),
+                        ),
+                        AppSpacing.sectionSpacer,
+                        _buildActionGrid(selectedCard),
+                        AppSpacing.sectionSpacer,
+                        _buildIntelligenceSection(
+                          intelligenceAsync.valueOrNull,
+                        ),
+                        AppSpacing.sectionSpacer,
+                        _buildEMIsSection(activeEmisAsync.valueOrNull ?? []),
+                        AppSpacing.sectionSpacer,
+                        _buildRecentTransactionsHeader(selectedCard),
+                      ],
                     ),
-                ]),
-              ),
+                  ),
+                ),
+                recentTxnsAsync.when(
+                  data: (txns) => _buildRecentTransactionsList(txns),
+                  loading: () => const SliverToBoxAdapter(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (err, _) => SliverToBoxAdapter(
+                    child: Center(child: Text('Error: $err')),
+                  ),
+                ),
+                const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+              ],
             ),
-
-            if (_emisForSelectedCard.isEmpty)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: Text('No EMI plans for this card.\nTap + to add one.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey))),
-                ),
-              )
-            else
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) {
-                    if (i == _emisForSelectedCard.length) {
-                      return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
-                    }
-                    return _buildEmiTile(_emisForSelectedCard[i]);
-                  },
-                  childCount: _emisForSelectedCard.length + (_hasMoreEmis ? 1 : 0),
-                ),
-              ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
+          );
+        },
       ),
+      floatingActionButton: cardsAsync.valueOrNull?.isEmpty ?? true
+          ? FloatingActionButton.extended(
+              onPressed: _navigateToAddCard,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Card'),
+            )
+          : null,
     );
   }
 
-  Widget _buildCardCarousel() {
+
+  Widget _buildCardSelector(List<CreditCard> cards) {
     return SizedBox(
-      height: 210,
-      child: PageView.builder(
-        controller: PageController(viewportFraction: 0.85),
-        onPageChanged: (i) => setState(() => _selectedCardIndex = i),
-        itemCount: _cards.length,
-        itemBuilder: (_, i) {
-          final c = _cards[i];
-          final cardColor = _hexColor(c.color);
-          final isSelected = i == _selectedCardIndex;
-          return AnimatedScale(
-            scale: isSelected ? 1.0 : 0.93,
-            duration: const Duration(milliseconds: 200),
-            child: GestureDetector(
-              onLongPress: () => _showCardMenu(c),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [cardColor, cardColor.withValues(alpha: 0.6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+      height: 160,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: cards.length + 1,
+        itemBuilder: (context, index) {
+          if (index == cards.length) {
+            return _buildAddCardButton();
+          }
+
+          final card = cards[index];
+          final isSelected = _selectedCardIndex == index;
+
+          return GestureDetector(
+            onTap: () => setState(() => _selectedCardIndex = index),
+            child: Container(
+              width: 280,
+              margin: const EdgeInsets.only(right: AppSpacing.md),
+              padding: AppSpacing.cardPadding,
+              decoration: BoxDecoration(
+                gradient: isSelected
+                    ? LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.7),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isSelected
+                    ? null
+                    : Theme.of(context).colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(24),
+                border: isSelected
+                    ? null
+                    : Border.all(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        card.bank,
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white70
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Icon(
+                        Icons.credit_card_rounded,
+                        color: isSelected
+                            ? Colors.white70
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: isSelected
-                      ? [BoxShadow(color: cardColor.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 8))]
-                      : [],
-                ),
-                padding: const EdgeInsets.all(22),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text(c.bank, style: const TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 1.5)),
-                    Text(c.cardType, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12, letterSpacing: 1)),
-                  ]),
+                  const SizedBox(height: 8),
+                  Text(
+                    card.name,
+                    style: TextStyle(
+                      color: isSelected
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const Spacer(),
-                  Text('**** **** **** ${c.last4}', style: const TextStyle(color: Colors.white, fontSize: 17, letterSpacing: 3, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 12),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text(c.name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      const Text('Limit', style: TextStyle(color: Colors.white60, fontSize: 9, letterSpacing: 1)),
-                      Text(AppFormat.currency(c.creditLimit), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                    ]),
-                  ]),
-                ]),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '•••• •••• •••• ${card.last4}',
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.8)
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 14,
+                          letterSpacing: 1.2,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      if (isSelected)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.edit_rounded,
+                            color: Colors.white70,
+                            size: 18,
+                          ),
+                          onPressed: () => _navigateToEditCard(card),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                    ],
+                  ),
+                ],
               ),
             ),
           );
@@ -266,396 +272,548 @@ class _CreditCardScreenState extends State<CreditCardScreen> {
     );
   }
 
-  Widget _buildCardStats(CreditCard card) {
-    final utilPct = card.utilizationPct;
-    final utilColor = utilPct >= 80 ? Theme.of(context).colorScheme.error : utilPct >= 50 ? Colors.orange : Colors.green;
+  Widget _buildAddCardButton() {
+    return GestureDetector(
+      onTap: _navigateToAddCard,
+      child: Container(
+        width: 100,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+            style: BorderStyle.solid,
+          ),
+        ),
+        child: const Icon(Icons.add_rounded, size: 32),
+      ),
+    );
+  }
 
+  Widget _buildSummaryCard(
+    CreditCard card,
+    double outstanding,
+    CreditIntelligenceData? intel,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final hasLimit = card.creditLimit > 0;
+    final usagePercent = hasLimit
+        ? (outstanding / card.creditLimit).clamp(0.0, 1.0)
+        : 0.0;
+    final isUsageHigh = hasLimit && usagePercent > 0.3;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(20),
+      padding: AppSpacing.cardPadding,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(children: [
-        // Utilization Doughnut
-        SizedBox(
-          width: 80,
-          height: 80,
-          child: Stack(
-            alignment: Alignment.center,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SizedBox.expand(
-                child: CircularProgressIndicator(
-                  value: utilPct / 100,
-                  strokeWidth: 8,
-                  backgroundColor: Colors.white12,
-                  valueColor: AlwaysStoppedAnimation<Color>(utilColor),
-                  strokeCap: StrokeCap.round,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Outstanding',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppFormat.currency(outstanding),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: outstanding > 0 ? cs.error : cs.onSurface,
+                    ),
+                  ),
+                ],
               ),
-              Text('${utilPct.toStringAsFixed(0)}%',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14, fontWeight: FontWeight.w600)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    hasLimit ? 'Usage' : 'Limit',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 4),
+                  hasLimit
+                      ? Text(
+                          '${(usagePercent * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isUsageHigh ? cs.error : cs.primary,
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Not set',
+                            style: TextStyle(
+                              color: Color(0xFFF59E0B),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                ],
+              ),
             ],
           ),
-        ),
-        const SizedBox(width: 20),
-        Expanded(child: Column(children: [
-          _statRow('Outstanding', AppFormat.currency(card.outstanding), Theme.of(context).colorScheme.error),
-          const SizedBox(height: 10),
-          _statRow('Available', AppFormat.currency(card.creditLimit - card.outstanding), Colors.green),
-          const SizedBox(height: 10),
-          _statRow('Credit Limit', AppFormat.currency(card.creditLimit), Theme.of(context).colorScheme.onSurfaceVariant),
-
-        ])),
-      ]),
-    );
-  }
-
-  Widget _statRow(String label, String value, Color color) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-      Text(value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600)),
-    ],
-  );
-
-  Widget _buildBillingRow(CreditCard card) {
-    final daysUntilDue = card.daysUntilDue;
-    final isUrgent = daysUntilDue <= 5;
-    final dueColor = daysUntilDue <= 3 ? Theme.of(context).colorScheme.error : daysUntilDue <= 7 ? Colors.orange : Colors.green;
-
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isUrgent ? Colors.red.withValues(alpha: 0.1) : Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isUrgent ? Colors.red.withValues(alpha: 0.4) : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.07)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Top row: icon + due info + days badge
-        Row(children: [
-          Icon(isUrgent ? Icons.warning_amber_rounded : Icons.credit_card,
-              color: dueColor, size: 20),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              isUrgent ? '⚠ Payment Due Soon!' : 'Payment Due',
-              style: TextStyle(color: isUrgent ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 13),
-
-            ),
-            Text(
-              'Due ${DateFormat('MMMM d').format(card.nextDueDate)}',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-            ),
-          ])),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: dueColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: dueColor.withValues(alpha: 0.35)),
-            ),
-            child: Text(
-              '$daysUntilDue days',
-              style: TextStyle(color: dueColor, fontWeight: FontWeight.w600, fontSize: 12),
-            ),
-          ),
-        ]),
-
-        const SizedBox(height: 14),
-
-        // Outstanding amount
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Outstanding Due', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
-            const SizedBox(height: 2),
-            Text(
-              AppFormat.currency(card.outstanding),
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 18),
-            ),
-          ]),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('Billing Day', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
-            const SizedBox(height: 2),
-            Text('Day ${card.billingDay}', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13, fontWeight: FontWeight.w500)),
-          ]),
-        ]),
-
-        const SizedBox(height: 14),
-
-        // Action buttons: Set Reminder + Mark as Paid
-        Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _scheduleReminder(card),
-              icon: const Icon(Icons.notifications_active_outlined, size: 16),
-              label: const Text('Set Reminder', style: TextStyle(fontSize: 12)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onSurface,
-                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          if (hasLimit) ...[
+            const SizedBox(height: 20),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: usagePercent,
+                minHeight: 8,
+                backgroundColor: cs.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isUsageHigh ? cs.error : cs.primary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _showMarkAsPaidDialog(card),
-              icon: const Icon(Icons.check_circle_outline, size: 16),
-              label: const Text('Mark as Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Limit: ${AppFormat.currency(card.creditLimit)}',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+                Text(
+                  'Available: ${AppFormat.currency(card.creditLimit - outstanding)}',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                ),
+              ],
             ),
-          ),
-        ]),
-      ]),
-    );
-  }
-
-  void _scheduleReminder(CreditCard card) async {
-    // Schedule a notification 1 day before the due date
-    final dueDate = card.nextDueDate;
-    final reminderDate = dueDate.subtract(const Duration(days: 1));
-    final notifTime = DateTime(reminderDate.year, reminderDate.month, reminderDate.day, 9, 0);
-
-    if (notifTime.isBefore(DateTime.now())) {
-      CustomSnackBar.show(context, message: 'Due date is too soon — reminder already passed.', isWarning: true);
-      return;
-    }
-
-    try {
-      await NotificationService.instance.scheduleNotification(
-        id: card.id.hashCode.abs() % 100000,
-        title: '💳 ${card.bank} Bill Due Tomorrow!',
-        body: 'Outstanding: ${AppFormat.currency(card.outstanding)} · Due: ${DateFormat('MMM d').format(dueDate)}',
-        scheduledDate: notifTime,
-      );
-      if (mounted) CustomSnackBar.show(context, message: '🔔 Reminder set for ${DateFormat('MMM d, hh:mm a').format(notifTime)}');
-    } catch (e) {
-      if (mounted) CustomSnackBar.show(context, message: 'Failed to set reminder: $e', isError: true);
-    }
-  }
-
-  void _showMarkAsPaidDialog(CreditCard card) {
-    final ctrl = TextEditingController(text: card.outstanding > 0 ? card.outstanding.toStringAsFixed(0) : '');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Pay ${card.bank} Bill', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600)),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Current Outstanding: ${AppFormat.currency(card.outstanding)}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-          const SizedBox(height: 14),
-          TextField(
-            controller: ctrl,
-            keyboardType: TextInputType.number,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-            decoration: InputDecoration(
-              labelText: 'Amount Paid',
-              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              prefixText: '${AppFormat.currencySymbol} ',
-              prefixStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: TextStyle(color: Colors.grey[500]))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              final amt = double.tryParse(ctrl.text);
-              if (amt == null || amt <= 0) return;
-              final newOuts = (card.outstanding - amt).clamp(0.0, double.infinity);
-              await DatabaseHelper.instance.updateCreditCardOutstanding(card.id, newOuts);
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                setState(() {});
-                _loadData();
-                CustomSnackBar.show(context, message: '✅ Payment of ${AppFormat.currency(amt)} recorded!');
-              }
-            },
-            child: const Text('Confirm Payment', style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmiTile(EmiPlan emi) {
-    final remaining = emi.remainingInstalments;
-    final current = emi.currentInstalment;
-    final progress = emi.tenureMonths > 0 ? current / emi.tenureMonths : 0.0;
-
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => EmiDetailScreen(plan: emi))),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Expanded(child: Text(emi.name, style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 15))),
-            Text('${AppFormat.currency(emi.emiAmount)}/mo', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600, fontSize: 14)),
-          ]),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
-              valueColor: AlwaysStoppedAnimation(progress >= 1 ? Colors.green : Theme.of(context).colorScheme.primary),
-              minHeight: 4,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Text('$current / ${emi.tenureMonths} paid', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-            const Spacer(),
-            if (remaining > 0) ...[
-              const Icon(Icons.schedule, size: 12, color: Colors.grey),
-              const SizedBox(width: 4),
-              Text('$remaining left', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-            ] else
-              Text('✓ Complete', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w600)),
-
-          ]),
-        ]),
-      ),
-    );
-  }
-
-  void _showCardMenu(CreditCard card) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 20),
-          ListTile(
-            leading: const Icon(Icons.payment, color: Colors.green),
-            title: const Text('Record Payment'),
-            onTap: () async {
-              Navigator.pop(context);
-              _showPaymentDialog(card);
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.edit, color: Theme.of(context).colorScheme.secondary),
-            title: const Text('Edit Card'),
-            onTap: () async {
-              Navigator.pop(context);
-              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => AddCreditCardScreen(existingCard: card)));
-              if (res == true) _loadData();
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-            title: Text('Delete Card', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            onTap: () async {
-              Navigator.pop(context);
-              await DatabaseHelper.instance.deleteCreditCard(card.id);
-              _loadData();
-            },
-          ),
-
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Credit Cards'), backgroundColor: Colors.transparent, elevation: 0),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showActionMenu,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        child: const Icon(Icons.add),
-      ),
-      body: Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.credit_card_off, size: 80, color: Colors.grey[800]),
-          const SizedBox(height: 16),
-          const Text('No Credit Cards', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text('Add a card to track limit, outstanding\nand manage EMIs', style: TextStyle(color: Colors.grey[500]), textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () async {
-              final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCreditCardScreen()));
-              if (res == true) _loadData();
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Card'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  void _showPaymentDialog(CreditCard card) {
-    final ctrl = TextEditingController(text: card.outstanding > 0 ? card.outstanding.toStringAsFixed(0) : '');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Pay Bill — ${card.bank}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current Outstanding: ${AppFormat.currency(card.outstanding)}', style: TextStyle(color: Colors.grey[400])),
+          ],
+          if (!hasLimit) ...[
             const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount Paid'),
+            GestureDetector(
+              onTap: () => _navigateToEditCard(card),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 14,
+                      color: const Color(0xFFF59E0B)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Set your credit limit to track usage',
+                    style: TextStyle(
+                      color: const Color(0xFFF59E0B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.chevron_right_rounded, size: 16,
+                      color: cs.onSurfaceVariant),
+                ],
+              ),
+            ),
+          ],
+          if (intel != null && intel.upcomingDueDays != null) ...[
+            const Divider(height: 32),
+            Row(
+              children: [
+                Icon(
+                  Icons.event_note_rounded,
+                  size: 20,
+                  color: (intel.upcomingDueDays ?? 0) <= 5
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    (intel.upcomingDueDays ?? 0) <= 0
+                        ? 'Due Today!'
+                        : 'Due in ${intel.upcomingDueDays} days',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: (intel.upcomingDueDays ?? 0) <= 5
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _navigateToPayments(card),
+                  child: const Text('Pay Now'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionGrid(CreditCard card) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildActionButton(
+            'Add Expense',
+            Icons.shopping_bag_outlined,
+            Theme.of(context).colorScheme.primary,
+            () => _navigateToAddTransaction(card),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: _buildActionButton(
+            'Pay Card',
+            Icons.account_balance_wallet_outlined,
+            Theme.of(context).colorScheme.secondary,
+            () => _navigateToPayments(card),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(fontWeight: FontWeight.w600, color: color),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final amt = double.tryParse(ctrl.text);
-              if (amt == null || amt <= 0) return;
-              final newOutstanding = (card.outstanding - amt).clamp(0.0, double.infinity);
-              await DatabaseHelper.instance.updateCreditCardOutstanding(card.id, newOutstanding);
-              if (mounted) {
-                Navigator.pop(ctx);
-                _loadData();
-                CustomSnackBar.show(context, message: 'Credit card payment recorded successfully');
-              }
-            },
-            child: const Text('Record'),
+      ),
+    );
+  }
+
+  Widget _buildIntelligenceSection(CreditIntelligenceData? intel) {
+    if (intel == null) return const SizedBox.shrink();
+
+    // Only build chips that have data — hide entire section if empty
+    final chips = <Widget>[];
+    if (intel.unbilledAmount > 0) {
+      chips.add(_buildIntelChip(
+        'Unbilled: ${AppFormat.currency(intel.unbilledAmount)}',
+        Icons.history_rounded,
+        Colors.orange,
+      ));
+    }
+    if (intel.isOverlimit) {
+      chips.add(_buildIntelChip(
+        'Overlimit!',
+        Icons.warning_rounded,
+        Theme.of(context).colorScheme.error,
+      ));
+    }
+    // Add advice chips
+    for (final advice in intel.advice.take(2)) {
+      chips.add(_buildIntelChip(
+        advice,
+        Icons.lightbulb_outline_rounded,
+        Theme.of(context).colorScheme.primary,
+      ));
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Insights',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: chips,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIntelChip(String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildEMIsSection(List<CreditEMI> emis) {
+    if (emis.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Active EMIs',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${emis.length} Total',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ...emis.map((emi) => _buildEMICard(emi)),
+      ],
+    );
+  }
+
+  Widget _buildEMICard(CreditEMI emi) {
+    final progress = (emi.totalMonths - emi.remainingMonths) / emi.totalMonths;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreditEmiDetailScreen(emi: emi),
+            ),
+          ).then((_) => _invalidateAll());
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: AppSpacing.cardPadding,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          emi.notes ?? 'EMI Purchase',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          '${AppFormat.currency(emi.installmentAmount)} / month',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${emi.remainingMonths} left',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 4,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentTransactionsHeader(CreditCard card) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Recent Activity',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        TextButton(
+          onPressed: () {
+            // Navigate to all transactions filtered by this card
+          },
+          child: const Text('See All'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentTransactionsList(List<CreditTransaction> txns) {
+    if (txns.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text('No transactions yet'),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final tx = txns[index];
+        final isCredit = tx.type == 'credit';
+
+        return ListTile(
+          onTap: () async {
+            // Convert CreditTransaction to LedgerTransaction for detail screen if needed
+            // or navigate to TransactionDetailScreen if it's a regular transaction
+          },
+          leading: CircleAvatar(
+            backgroundColor: isCredit
+                ? Colors.green.withValues(alpha: 0.1)
+                : Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+            child: Icon(
+              isCredit
+                  ? Icons.arrow_downward_rounded
+                  : Icons.shopping_cart_outlined,
+              color: isCredit
+                  ? Colors.green
+                  : Theme.of(context).colorScheme.error,
+              size: 20,
+            ),
+          ),
+          title: Text(
+            tx.note?.isNotEmpty == true
+                ? tx.note!
+                : TextFormatter.toSmartTitleCase(tx.category),
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.date)),
+          trailing: Text(
+            '${isCredit ? "+" : "-"}${AppFormat.currency(tx.amount)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isCredit
+                  ? Colors.green
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        );
+      }, childCount: txns.length),
+    );
+  }
+
+  // --- Navigation Helpers ---
+
+  void _navigateToAddCard() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AddCreditCardScreen()),
+    ).then((result) {
+      if (result == true) _invalidateAll();
+    });
+  }
+
+  void _navigateToEditCard(CreditCard card) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddCreditCardScreen(existingCard: card),
+      ),
+    ).then((result) async {
+      if (result == true) {
+        _invalidateAll();
+        return;
+      }
+
+      if (result == CreditCardFormAction.deleted) {
+        await ref.read(app_data.cardsProvider.notifier).remove(card.id);
+        _invalidateAll();
+      }
+    });
+  }
+
+  void _navigateToAddTransaction(CreditCard card) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddCreditTransactionScreen(card: card),
+      ),
+    ).then((result) {
+      if (result == true) _invalidateAll();
+    });
+  }
+
+  void _navigateToPayments(CreditCard card) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PayCreditCardScreen(
+          card: card,
+          outstanding:
+              ref.read(creditOutstandingProvider(card.id)).valueOrNull ??
+              card.outstanding,
+        ),
+      ),
+    ).then((result) {
+      if (result == true) _invalidateAll();
+    });
   }
 }

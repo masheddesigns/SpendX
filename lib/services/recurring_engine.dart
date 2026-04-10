@@ -5,9 +5,11 @@ import 'database_helper.dart';
 class RecurringEngine {
   RecurringEngine._();
 
-  static Future<void> checkAndGenerate() async {
+  static Future<bool> checkAndGenerate() async {
     final templates = await DatabaseHelper.instance.getAllRecurringTemplates();
     final now = DateTime.now();
+    final transactionsToInsert = <spx.Transaction>[];
+    bool anyChanges = false;
 
     for (var t in templates) {
       if (!t.isActive) continue;
@@ -19,7 +21,7 @@ class RecurringEngine {
       // But we must start the loop carefully
       if (t.lastGeneratedDate == null) {
         if (t.startDate.isBefore(now) || t.startDate.isAtSameMomentAs(now)) {
-          await _generateTransaction(t, t.startDate);
+          transactionsToInsert.add(_buildTransaction(t, t.startDate));
           currentCheckDate = t.startDate;
           updated = true;
         } else {
@@ -31,7 +33,7 @@ class RecurringEngine {
       // Now loop forward according to frequency until we pass 'now' or 'endDate'
       while (true) {
         final nextDate = _calculateNextDate(currentCheckDate, t.frequency);
-        
+
         // If the next calculated date is strictly after now, we stop generating.
         // We only generate if the due date has arrived (or passed).
         // Since we don't care about time of day for recurring triggers, we can compare days.
@@ -41,27 +43,38 @@ class RecurringEngine {
 
         if (t.endDate != null && nextDate.isAfter(t.endDate!)) {
           // Reached end date, deactivate template
-          await DatabaseHelper.instance.updateRecurringTemplate(t.copyWith(isActive: false));
+          await DatabaseHelper.instance.updateRecurringTemplate(
+            t.copyWith(isActive: false),
+          );
           break;
         }
 
         // Generate transaction for this date
-        await _generateTransaction(t, nextDate);
+        transactionsToInsert.add(_buildTransaction(t, nextDate));
         currentCheckDate = nextDate;
         updated = true;
       }
 
       if (updated) {
+        anyChanges = true;
         // Save the latest generated date
         await DatabaseHelper.instance.updateRecurringTemplate(
           t.copyWith(lastGeneratedDate: currentCheckDate),
         );
       }
     }
+
+    if (transactionsToInsert.isNotEmpty) {
+      await DatabaseHelper.instance.batchInsertTransactions(
+        transactionsToInsert,
+      );
+    }
+
+    return anyChanges;
   }
 
-  static Future<void> _generateTransaction(RecurringTemplate t, DateTime date) async {
-    final txn = spx.Transaction(
+  static spx.Transaction _buildTransaction(RecurringTemplate t, DateTime date) {
+    return spx.Transaction(
       userId: t.userId,
       type: t.type,
       categoryId: t.categoryId,
@@ -72,7 +85,6 @@ class RecurringEngine {
       notes: 'Auto-generated from recurring template: ${t.name}',
       relatedEntityId: t.id,
     );
-    await DatabaseHelper.instance.insertTransaction(txn);
   }
 
   static DateTime _calculateNextDate(DateTime from, String frequency) {
@@ -90,8 +102,16 @@ class RecurringEngine {
         return DateTime(nextYear, nextMonth, nextDay, from.hour, from.minute);
       case 'yearly':
         final isLeapYearObj = _isLeapYear(from.year + 1);
-        final nextDay = (from.month == 2 && from.day == 29 && !isLeapYearObj) ? 28 : from.day;
-        return DateTime(from.year + 1, from.month, nextDay, from.hour, from.minute);
+        final nextDay = (from.month == 2 && from.day == 29 && !isLeapYearObj)
+            ? 28
+            : from.day;
+        return DateTime(
+          from.year + 1,
+          from.month,
+          nextDay,
+          from.hour,
+          from.minute,
+        );
       default:
         return from.add(const Duration(days: 30));
     }

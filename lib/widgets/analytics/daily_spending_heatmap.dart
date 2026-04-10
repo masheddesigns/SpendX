@@ -167,6 +167,7 @@ class _DailySpendingHeatmapState extends State<DailySpendingHeatmap> {
                   color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
+                  decoration: TextDecoration.none,
                 ),
               ),
               Text(
@@ -174,6 +175,7 @@ class _DailySpendingHeatmapState extends State<DailySpendingHeatmap> {
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontSize: 12,
+                  decoration: TextDecoration.none,
                 ),
               ),
             ],
@@ -185,6 +187,7 @@ class _DailySpendingHeatmapState extends State<DailySpendingHeatmap> {
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 12,
+            decoration: TextDecoration.none,
           ),
         ),
       ],
@@ -207,13 +210,13 @@ class _DailySpendingHeatmapState extends State<DailySpendingHeatmap> {
           const SizedBox(height: 16),
           const Text(
             'No spending data yet',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, decoration: TextDecoration.none),
           ),
           const SizedBox(height: 8),
           Text(
             'Start adding transactions to see your pattern.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13, decoration: TextDecoration.none),
           ),
           const SizedBox(height: 20),
           ElevatedButton.icon(
@@ -240,14 +243,14 @@ class _DailySpendingHeatmapState extends State<DailySpendingHeatmap> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Text('Less', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10)),
+        Text('Less', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, decoration: TextDecoration.none)),
         const SizedBox(width: 4),
         _legendBox(context, 0),
         _legendBox(context, 250),
         _legendBox(context, 1000),
         _legendBox(context, 3000),
         const SizedBox(width: 4),
-        Text('More', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10)),
+        Text('More', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 10, decoration: TextDecoration.none)),
       ],
     );
   }

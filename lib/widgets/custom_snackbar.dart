@@ -1,5 +1,5 @@
+import '../services/haptic_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class CustomSnackBar {
   /// Show a snackbar. Set [isError] for error (red), [isWarning] for warning (amber),
@@ -11,11 +11,11 @@ class CustomSnackBar {
     bool isWarning = false,
   }) {
     if (isError) {
-      HapticFeedback.heavyImpact();
+      HapticService.instance.critical();
     } else if (isWarning) {
-      HapticFeedback.mediumImpact();
+      HapticService.instance.success();
     } else {
-      HapticFeedback.lightImpact();
+      HapticService.instance.tap();
     }
 
     final Color bgColor = isError
@@ -76,7 +76,6 @@ class CustomSnackBar {
               ),
               child: Icon(icon, color: bgColor, size: 18),
             ),
-            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 message,
@@ -85,6 +84,7 @@ class CustomSnackBar {
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                   height: 1.3,
+                  decoration: TextDecoration.none,
                 ),
               ),
             ),

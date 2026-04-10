@@ -36,57 +36,87 @@ class RecurringTemplate {
         createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
+  /// Maps to the actual DB table columns (recurring_templates).
+  /// Table has: id, name, amount, type, category_id, frequency,
+  ///   interval, day_of_month, day_of_week, last_generated,
+  ///   next_generation, is_active, created_at
   Map<String, dynamic> toMap() => {
         'id': id,
-        'user_id': userId,
         'name': name,
         'amount': amount,
         'type': type,
         'category_id': categoryId,
         'frequency': frequency,
-        'start_date': startDate.toIso8601String(),
-        'end_date': endDate?.toIso8601String(),
-        'last_generated_date': lastGeneratedDate?.toIso8601String(),
+        'interval': 1,
+        'last_generated': lastGeneratedDate?.toIso8601String(),
+        'next_generation': startDate.toIso8601String(),
         'is_active': isActive ? 1 : 0,
-        'notes': notes,
         'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
       };
 
-  factory RecurringTemplate.fromMap(Map<String, dynamic> map) => RecurringTemplate(
+  factory RecurringTemplate.fromMap(Map<String, dynamic> map) =>
+      RecurringTemplate(
         id: map['id'] as String,
-        userId: map['user_id'] as String,
+        userId: map['user_id'] as String? ?? 'offline_user',
         name: map['name'] as String,
         amount: (map['amount'] as num).toDouble(),
         type: map['type'] as String? ?? 'expense',
         categoryId: map['category_id'] as String?,
         frequency: map['frequency'] as String? ?? 'monthly',
-        startDate: DateTime.parse(map['start_date'] as String),
-        endDate: map['end_date'] != null ? DateTime.parse(map['end_date'] as String) : null,
+        startDate: map['start_date'] != null
+            ? DateTime.parse(map['start_date'] as String)
+            : (map['next_generation'] != null
+                  ? DateTime.parse(map['next_generation'] as String)
+                  : DateTime.now()),
+        endDate: map['end_date'] != null
+            ? DateTime.parse(map['end_date'] as String)
+            : null,
         lastGeneratedDate: map['last_generated_date'] != null
             ? DateTime.parse(map['last_generated_date'] as String)
-            : null,
+            : (map['last_generated'] != null
+                  ? DateTime.parse(map['last_generated'] as String)
+                  : null),
         isActive: (map['is_active'] as int? ?? 1) == 1,
         notes: map['notes'] as String?,
-        createdAt: DateTime.parse(map['created_at'] as String),
-        updatedAt: DateTime.parse(map['updated_at'] as String),
+        createdAt: map['created_at'] != null
+            ? DateTime.parse(map['created_at'] as String)
+            : DateTime.now(),
+        updatedAt: map['updated_at'] != null
+            ? DateTime.parse(map['updated_at'] as String)
+            : (map['created_at'] != null
+                  ? DateTime.parse(map['created_at'] as String)
+                  : DateTime.now()),
       );
 
-  RecurringTemplate copyWith({DateTime? lastGeneratedDate, bool? isActive}) =>
-      RecurringTemplate(
-        id: id,
-        userId: userId,
-        name: name,
-        amount: amount,
-        type: type,
-        categoryId: categoryId,
-        frequency: frequency,
-        startDate: startDate,
-        endDate: endDate,
+  RecurringTemplate copyWith({
+    String? id,
+    String? userId,
+    String? name,
+    double? amount,
+    String? type,
+    String? categoryId,
+    String? frequency,
+    DateTime? startDate,
+    DateTime? endDate,
+    DateTime? lastGeneratedDate,
+    bool? isActive,
+    String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => RecurringTemplate(
+        id: id ?? this.id,
+        userId: userId ?? this.userId,
+        name: name ?? this.name,
+        amount: amount ?? this.amount,
+        type: type ?? this.type,
+        categoryId: categoryId ?? this.categoryId,
+        frequency: frequency ?? this.frequency,
+        startDate: startDate ?? this.startDate,
+        endDate: endDate ?? this.endDate,
         lastGeneratedDate: lastGeneratedDate ?? this.lastGeneratedDate,
         isActive: isActive ?? this.isActive,
-        notes: notes,
-        createdAt: createdAt,
-        updatedAt: DateTime.now(),
+        notes: notes ?? this.notes,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? DateTime.now(),
       );
 }

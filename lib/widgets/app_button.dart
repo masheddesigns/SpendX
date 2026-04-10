@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'common/primary_action_button.dart';
 
 enum AppButtonVariant { primary, secondary, outline, text }
 
@@ -78,7 +79,10 @@ class AppButton extends StatelessWidget {
       case AppButtonVariant.outline:
         backgroundColor = Colors.transparent;
         foregroundColor = cs.primary;
-        border = BorderSide(color: cs.primary.withValues(alpha: 0.7), width: 1.5);
+        border = BorderSide(
+          color: cs.primary.withValues(alpha: 0.7),
+          width: 1.5,
+        );
         break;
       case AppButtonVariant.text:
         backgroundColor = Colors.transparent;
@@ -112,7 +116,9 @@ class AppButton extends StatelessWidget {
         style: TextButton.styleFrom(
           foregroundColor: foregroundColor,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         child: content,
       );
@@ -120,18 +126,31 @@ class AppButton extends StatelessWidget {
 
     return SizedBox(
       width: width,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          elevation: 0,
-          side: border,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        child: content,
-      ),
+      child: variant == AppButtonVariant.primary
+          ? PrimaryActionButton(
+              label: text,
+              onPressed: onPressed,
+              icon: icon,
+              isLoading: isLoading,
+              expand: width != null || width == double.infinity,
+            )
+          : ElevatedButton(
+              onPressed: isLoading ? null : onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: backgroundColor,
+                foregroundColor: foregroundColor,
+                elevation: 0,
+                side: border,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: content,
+            ),
     );
   }
 }

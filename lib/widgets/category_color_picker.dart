@@ -26,14 +26,14 @@ class CategoryColorPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Pick a Color', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey)),
+        const Text('Pick a Color', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey, decoration: TextDecoration.none)),
         const SizedBox(height: 12),
         SizedBox(
           height: 44,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: palette.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = palette[index];
               final hex = item['hex']!;

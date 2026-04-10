@@ -1,5 +1,5 @@
+import '../core/logging/app_logger.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +10,8 @@ class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
   Future<void> init() async {
@@ -22,7 +23,11 @@ class NotificationService {
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    const initSettings = InitializationSettings(android: androidInit, iOS: darwinInit, macOS: darwinInit);
+    const initSettings = InitializationSettings(
+      android: androidInit,
+      iOS: darwinInit,
+      macOS: darwinInit,
+    );
 
     await _plugin.initialize(settings: initSettings);
     _initialized = true;
@@ -35,11 +40,14 @@ class NotificationService {
   }
 
   Future<void> _createNotificationChannels() async {
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (androidPlugin != null) {
       final prefs = await SharedPreferences.getInstance();
       final sound = prefs.getString('reminder_sound') ?? 'default';
-      
+
       AndroidNotificationChannel createChannel({
         required String id,
         required String name,
@@ -49,7 +57,9 @@ class NotificationService {
       }) {
         RawResourceAndroidNotificationSound? androidSound;
         if (sound != 'default') {
-          androidSound = RawResourceAndroidNotificationSound(sound.toLowerCase().replaceAll(' ', '_'));
+          androidSound = RawResourceAndroidNotificationSound(
+            sound.toLowerCase().replaceAll(' ', '_'),
+          );
         }
         return AndroidNotificationChannel(
           id,
@@ -61,37 +71,47 @@ class NotificationService {
         );
       }
 
-      await androidPlugin.createNotificationChannel(AndroidNotificationChannel(
-        'spendx_backup',
-        'SpendX Backups',
-        description: 'Status of Google Drive backups',
-        importance: Importance.low,
-      ));
-      
-      await androidPlugin.createNotificationChannel(createChannel(
-        id: 'spendx_alerts',
-        name: 'SpendX Alerts',
-        description: 'Instant transaction and budget alerts',
-      ));
-      
-      await androidPlugin.createNotificationChannel(createChannel(
-        id: 'spendx_reminders',
-        name: 'SpendX Reminders',
-        description: 'Payment due date reminders',
-      ));
-      
-      await androidPlugin.createNotificationChannel(createChannel(
-        id: 'spendx_periodic',
-        name: 'Periodic Reminders',
-        description: 'Daily / weekly / monthly check-in reminders',
-        importance: Importance.defaultImportance,
-      ));
-      
-      await androidPlugin.createNotificationChannel(createChannel(
-        id: 'spendx_networth',
-        name: 'Net Worth Updates',
-        description: 'Weekly reminders to update your net worth',
-      ));
+      await androidPlugin.createNotificationChannel(
+        AndroidNotificationChannel(
+          'spendx_backup',
+          'SpendX Backups',
+          description: 'Status of Google Drive backups',
+          importance: Importance.low,
+        ),
+      );
+
+      await androidPlugin.createNotificationChannel(
+        createChannel(
+          id: 'spendx_alerts',
+          name: 'SpendX Alerts',
+          description: 'Instant transaction and budget alerts',
+        ),
+      );
+
+      await androidPlugin.createNotificationChannel(
+        createChannel(
+          id: 'spendx_reminders',
+          name: 'SpendX Reminders',
+          description: 'Payment due date reminders',
+        ),
+      );
+
+      await androidPlugin.createNotificationChannel(
+        createChannel(
+          id: 'spendx_periodic',
+          name: 'Periodic Reminders',
+          description: 'Daily / weekly / monthly check-in reminders',
+          importance: Importance.defaultImportance,
+        ),
+      );
+
+      await androidPlugin.createNotificationChannel(
+        createChannel(
+          id: 'spendx_networth',
+          name: 'Net Worth Updates',
+          description: 'Weekly reminders to update your net worth',
+        ),
+      );
     }
   }
 
@@ -103,35 +123,46 @@ class NotificationService {
   Future<void> _initTimezonesAndReminders() async {
     try {
       tz_data.initializeTimeZones();
-      final tzInfo = await FlutterTimezone.getLocalTimezone().timeout(const Duration(seconds: 3));
+      final tzInfo = await FlutterTimezone.getLocalTimezone().timeout(
+        const Duration(seconds: 3),
+      );
       String tzName = tzInfo.identifier;
       if (tzName == 'Asia/Calcutta') tzName = 'Asia/Kolkata';
       tz.setLocalLocation(tz.getLocation(tzName));
     } catch (e) {
-      debugPrint('Timezone init non-critical error: $e');
+      AppLogger.d('Timezone init non-critical error: $e');
     }
-    
+
     try {
       await scheduleWeeklyNetWorthReminder();
     } catch (e) {
-      debugPrint('Reminder schedule non-critical error: $e');
+      AppLogger.d('Reminder schedule non-critical error: $e');
     }
   }
 
   Future<void> requestPermissions() async {
     try {
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       if (androidPlugin != null) {
         await androidPlugin.requestNotificationsPermission();
         await androidPlugin.requestExactAlarmsPermission();
       }
-      
-      await _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>()?.requestPermissions(alert: true, badge: true, sound: true);
-      await _plugin.resolvePlatformSpecificImplementation<
-          MacOSFlutterLocalNotificationsPlugin>()?.requestPermissions(alert: true, badge: true, sound: true);
+
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
     } catch (e) {
-      debugPrint('Error requesting notification permissions: $e');
+      AppLogger.d('Error requesting notification permissions: $e');
     }
   }
 
@@ -174,6 +205,7 @@ class NotificationService {
           channelDescription: 'Payment due date reminders',
           importance: Importance.high,
           priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
         ),
         iOS: DarwinNotificationDetails(badgeNumber: 1),
         macOS: DarwinNotificationDetails(badgeNumber: 1),
@@ -188,10 +220,36 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } on MissingPluginException catch (e) {
-      debugPrint('MissingPluginException scheduling notification: $e');
+      AppLogger.d('MissingPluginException scheduling notification: $e');
     } catch (e) {
-      debugPrint('Error scheduling notification: $e');
+      AppLogger.d('Error scheduling notification: $e');
     }
+  }
+
+  Future<void> scheduleSalaryDueReminder({
+    required String paymentId,
+    required String companyName,
+    required DateTime expectedDate,
+    required double amount,
+  }) async {
+    // 9 PM on the due date
+    final scheduledDate = DateTime(
+      expectedDate.year,
+      expectedDate.month,
+      expectedDate.day,
+      21,
+      0,
+    );
+
+    // Generate a consistent integer ID for this reminder
+    final id = paymentId.hashCode.abs();
+
+    await scheduleNotification(
+      id: id,
+      title: 'Salary Due Today',
+      body: 'Your salary of \${amount.toStringAsFixed(0)} from \$companyName is expected today. Please update SpendX if received!',
+      scheduledDate: scheduledDate,
+    );
   }
 
   Future<void> showInstant({
@@ -201,23 +259,74 @@ class NotificationService {
   }) async {
     try {
       const details = NotificationDetails(
-        android: AndroidNotificationDetails('spendx_alerts', 'SpendX Alerts', importance: Importance.high),
+        android: AndroidNotificationDetails(
+          'spendx_alerts',
+          'SpendX Alerts',
+          importance: Importance.high,
+        ),
         iOS: DarwinNotificationDetails(),
         macOS: DarwinNotificationDetails(),
       );
-      await _plugin.show(id: id, title: title, body: body, notificationDetails: details);
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+      );
     } on MissingPluginException catch (e) {
-      debugPrint('MissingPluginException showing notification: $e');
+      AppLogger.d('MissingPluginException showing notification: $e');
     } catch (e) {
-      debugPrint('Error showing instant notification: $e');
+      AppLogger.d('Error showing instant notification: $e');
+    }
+  }
+
+  Future<void> showProgress({
+    required int id,
+    required String title,
+    required String body,
+    int? maxProgress,
+    int? progress,
+    bool indeterminate = true,
+  }) async {
+    try {
+      final details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'spendx_alerts',
+          'SpendX Alerts',
+          importance: Importance.low,
+          priority: Priority.low,
+          showProgress: true,
+          maxProgress: maxProgress ?? 0,
+          progress: progress ?? 0,
+          indeterminate: indeterminate,
+          ongoing: true,
+          onlyAlertOnce: true,
+        ),
+        iOS: const DarwinNotificationDetails(),
+        macOS: const DarwinNotificationDetails(),
+      );
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+      );
+    } catch (e) {
+      AppLogger.d('Error showing progress notification: $e');
     }
   }
 
   Future<void> cancel(int id) async {
-    try { await _plugin.cancel(id: id); } catch (_) {}
+    try {
+      await _plugin.cancel(id: id);
+    } catch (_) {}
   }
 
-  Future<void> schedulePeriodicReminder(String frequency, {int hour = 9, int minute = 0}) async {
+  Future<void> schedulePeriodicReminder(
+    String frequency, {
+    int hour = 9,
+    int minute = 0,
+  }) async {
     const int reminderId = 999;
     await cancel(reminderId);
 
@@ -236,14 +345,22 @@ class NotificationService {
     );
 
     const title = 'Time to update SpendX!';
-    const body = 'Log your expenses, check your bank balance, and track your net worth.';
+    const body =
+        'Log your expenses, check your bank balance, and track your net worth.';
 
     try {
       final now = tz.TZDateTime.now(tz.local);
 
       if (frequency == 'daily') {
         // Schedule for specified time every day
-        var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+        var scheduledDate = tz.TZDateTime(
+          tz.local,
+          now.year,
+          now.month,
+          now.day,
+          hour,
+          minute,
+        );
         if (scheduledDate.isBefore(now)) {
           scheduledDate = scheduledDate.add(const Duration(days: 1));
         }
@@ -254,12 +371,21 @@ class NotificationService {
           scheduledDate: scheduledDate,
           notificationDetails: details,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.time, // repeats daily at same time
+          matchDateTimeComponents:
+              DateTimeComponents.time, // repeats daily at same time
         );
       } else if (frequency == 'weekly') {
         // Schedule for specified time every Monday
-        var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-        while (scheduledDate.weekday != DateTime.monday || scheduledDate.isBefore(now)) {
+        var scheduledDate = tz.TZDateTime(
+          tz.local,
+          now.year,
+          now.month,
+          now.day,
+          hour,
+          minute,
+        );
+        while (scheduledDate.weekday != DateTime.monday ||
+            scheduledDate.isBefore(now)) {
           scheduledDate = scheduledDate.add(const Duration(days: 1));
         }
         await _plugin.zonedSchedule(
@@ -269,13 +395,28 @@ class NotificationService {
           scheduledDate: scheduledDate,
           notificationDetails: details,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime, // repeats weekly
+          matchDateTimeComponents:
+              DateTimeComponents.dayOfWeekAndTime, // repeats weekly
         );
       } else if (frequency == 'monthly') {
         // Schedule for specified time on 1st of every month
-        var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, 1, hour, minute);
+        var scheduledDate = tz.TZDateTime(
+          tz.local,
+          now.year,
+          now.month,
+          1,
+          hour,
+          minute,
+        );
         if (scheduledDate.isBefore(now)) {
-          scheduledDate = tz.TZDateTime(tz.local, now.year, now.month + 1, 1, hour, minute);
+          scheduledDate = tz.TZDateTime(
+            tz.local,
+            now.year,
+            now.month + 1,
+            1,
+            hour,
+            minute,
+          );
         }
         await _plugin.zonedSchedule(
           id: reminderId,
@@ -284,15 +425,19 @@ class NotificationService {
           scheduledDate: scheduledDate,
           notificationDetails: details,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime, // repeats monthly
+          matchDateTimeComponents:
+              DateTimeComponents.dayOfMonthAndTime, // repeats monthly
         );
       }
     } catch (e) {
-      debugPrint('Error scheduling periodic reminder: $e');
+      AppLogger.d('Error scheduling periodic reminder: $e');
     }
   }
 
-  Future<void> scheduleWeeklyNetWorthReminder({int hour = 10, int minute = 0}) async {
+  Future<void> scheduleWeeklyNetWorthReminder({
+    int hour = 10,
+    int minute = 0,
+  }) async {
     const int netWorthReminderId = 1001;
     await cancel(netWorthReminderId);
 
@@ -312,10 +457,18 @@ class NotificationService {
 
     // Schedule for every Sunday at specified time
     var now = tz.TZDateTime.now(tz.local);
-    var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    
+    var scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+
     // Find next Sunday (weekday 7)
-    while (scheduledDate.weekday != DateTime.sunday || scheduledDate.isBefore(now)) {
+    while (scheduledDate.weekday != DateTime.sunday ||
+        scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
 
@@ -323,14 +476,15 @@ class NotificationService {
       await _plugin.zonedSchedule(
         id: netWorthReminderId,
         title: 'Review your Net Worth',
-        body: 'It\'s been a week! Update your bank balances and investments to see your progress.',
+        body:
+            'It\'s been a week! Update your bank balances and investments to see your progress.',
         scheduledDate: scheduledDate,
         notificationDetails: details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       );
     } catch (e) {
-      debugPrint('Error scheduling weekly net worth reminder: $e');
+      AppLogger.d('Error scheduling weekly net worth reminder: $e');
     }
   }
 
@@ -345,8 +499,7 @@ class NotificationService {
           importance: Importance.low,
           priority: Priority.low,
           showProgress: true,
-          maxProgress: 100,
-          progress: 50,
+          indeterminate: true,
           onlyAlertOnce: true,
           icon: 'ic_notification',
         ),
@@ -355,12 +508,12 @@ class NotificationService {
       );
       await _plugin.show(
         id: 2001,
-        title: '☁️ Uploading to cloud…',
-        body: 'Backing up your SpendX data',
+        title: '🔄 Backup started',
+        body: 'Uploading data to Google Drive...',
         notificationDetails: details,
       );
     } catch (e) {
-      debugPrint('showBackupStarted error: $e');
+      AppLogger.d('showBackupStarted error: $e');
     }
   }
 
@@ -383,16 +536,96 @@ class NotificationService {
         id: 2001,
         title: success ? '✅ Backup complete' : '❌ Backup failed',
         body: success
-            ? 'Your data has been safely backed up to cloud'
-            : 'Could not upload to cloud. Check your connection.',
+            ? 'Your data has been securely backed up'
+            : 'Could not upload to Google Drive. Check your connection.',
         notificationDetails: details,
       );
     } catch (e) {
-      debugPrint('showBackupComplete error: $e');
+      AppLogger.d('showBackupComplete error: $e');
     }
   }
 
+  Future<void> showRestoreStarted() async {
+    try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'spendx_backup',
+          'SpendX Backups',
+          importance: Importance.low,
+          showProgress: true,
+          indeterminate: true,
+          onlyAlertOnce: true,
+        ),
+      );
+      await _plugin.show(
+        id: 2002,
+        title: '⬇ Downloading backup',
+        body: 'Fetching data from Google Drive...',
+        notificationDetails: details,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> showRestoreValidating() async {
+    try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'spendx_backup',
+          'SpendX Backups',
+          importance: Importance.low,
+          showProgress: true,
+          indeterminate: true,
+          onlyAlertOnce: true,
+        ),
+      );
+      await _plugin.show(
+        id: 2002,
+        title: '🔍 Validating backup',
+        body: 'Checking data integrity...',
+        notificationDetails: details,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> showRestoreComplete(bool success) async {
+    try {
+      await _plugin.show(
+        id: 2002,
+        title: success ? '✅ Restore complete' : '❌ Restore failed',
+        body: success
+            ? 'Your data has been successfully restored'
+            : 'Could not restore backup. Data may be incompatible.',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'spendx_backup',
+            'SpendX Backups',
+            importance: Importance.high,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> showSyncReminder({required String body}) async {
+    try {
+      await _plugin.show(
+        id: 2003,
+        title: '☁ New Cloud Backup',
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'spendx_backup',
+            'SpendX Backups',
+            importance: Importance.defaultImportance,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> cancelAll() async {
-    try { await _plugin.cancelAll(); } catch (_) {}
+    try {
+      await _plugin.cancelAll();
+    } catch (_) {}
   }
 }

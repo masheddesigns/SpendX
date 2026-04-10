@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/settings_service.dart';
-import '../../theme/app_theme.dart';
 
 class CurrencySelectionScreen extends StatelessWidget {
   const CurrencySelectionScreen({super.key});
@@ -51,81 +50,83 @@ class CurrencySelectionScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Consumer<SettingsService>(
-        builder: (context, settings, _) {
-          final currentCurrency = settings.primaryCurrency;
-          
-          return ListView.builder(
-            itemCount: _currencies.length,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemBuilder: (context, index) {
-              final currency = _currencies[index];
-              final isSelected = currentCurrency == currency['symbol'] || currentCurrency == currency['code'];
-              
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                      : Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
-                    width: isSelected ? 2.0 : 1.0,
+      body: SafeArea(
+        child: Consumer<SettingsService>(
+          builder: (context, settings, _) {
+            final currentCurrency = settings.primaryCurrency;
+            
+            return ListView.builder(
+              itemCount: _currencies.length,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemBuilder: (context, index) {
+                final currency = _currencies[index];
+                final isSelected = currentCurrency == currency['symbol'] || currentCurrency == currency['code'];
+                
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                        : Theme.of(context).colorScheme.surfaceContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
+                      width: isSelected ? 2.0 : 1.0,
+                    ),
+                    boxShadow: [
+                      if (isSelected) 
+                        BoxShadow(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
                   ),
-                  boxShadow: [
-                    if (isSelected) 
-                      BoxShadow(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: CircleAvatar(
+                      backgroundColor: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Text(
+                        currency['symbol']!,
+                        style: TextStyle(
+                          color: isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                          fontSize: isSelected ? 15 : 14,
+                        ),
                       ),
-                  ],
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: CircleAvatar(
-                    backgroundColor: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Text(
-                      currency['symbol']!,
+                    ),
+                    title: Text(
+                      currency['name']!,
                       style: TextStyle(
-                        color: isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                        fontSize: isSelected ? 15 : 14,
+                        color: isSelected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
-                  ),
-                  title: Text(
-                    currency['name']!,
-                    style: TextStyle(
-                      color: isSelected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    subtitle: Text(
+                      currency['code']!,
+                      style: TextStyle(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.onSurfaceVariant
+                            : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                        fontSize: 12,
+                      ),
                     ),
+                    trailing: isSelected
+                        ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 24)
+                        : Icon(Icons.radio_button_unchecked, color: Theme.of(context).colorScheme.outlineVariant, size: 22),
+                    onTap: () {
+                      settings.setPrimaryCurrency(currency['code']!);
+                      Navigator.pop(context);
+                    },
                   ),
-                  subtitle: Text(
-                    currency['code']!,
-                    style: TextStyle(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.onSurfaceVariant
-                          : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                      fontSize: 12,
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 24)
-                      : Icon(Icons.radio_button_unchecked, color: Theme.of(context).colorScheme.outlineVariant, size: 22),
-                  onTap: () {
-                    settings.setPrimaryCurrency(currency['code']!);
-                    Navigator.pop(context);
-                  },
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

@@ -6,7 +6,7 @@ class SettingsTile extends StatelessWidget {
   final Color color;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Widget? trailing;
   final double iconContainerSize;
   final double iconSize;
@@ -17,7 +17,7 @@ class SettingsTile extends StatelessWidget {
     required this.color,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    this.onTap,
     this.trailing,
     this.iconContainerSize = 44,
     this.iconSize = 22,
@@ -47,6 +47,7 @@ class SettingsTile extends StatelessWidget {
           color: Theme.of(context).colorScheme.onSurface,
           fontWeight: FontWeight.w600,
           fontSize: 15,
+          decoration: TextDecoration.none,
         ),
       ),
       subtitle: Text(
@@ -54,6 +55,7 @@ class SettingsTile extends StatelessWidget {
         style: TextStyle(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
           fontSize: 12,
+          decoration: TextDecoration.none,
         ),
       ),
       trailing: trailing ?? Icon(

@@ -1,118 +1,63 @@
 import 'package:flutter/material.dart';
-import '../../services/database_helper.dart';
-import '../../utils/app_format.dart';
-import '../../theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-class NetWorthReportScreen extends StatefulWidget {
+import '../../data/providers.dart';
+import '../../models/net_worth_snapshot_record.dart';
+import '../../shared/widgets/undo_snackbar_listener.dart';
+import '../../services/settings_service.dart';
+import '../../utils/app_format.dart';
+
+class NetWorthReportScreen extends ConsumerStatefulWidget {
   const NetWorthReportScreen({super.key});
 
   @override
-  State<NetWorthReportScreen> createState() => _NetWorthReportScreenState();
+  ConsumerState<NetWorthReportScreen> createState() =>
+      _NetWorthReportScreenState();
 }
 
-class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _rawHistory = [];
-  
-  // Aggregated data
-  List<Map<String, dynamic>> _monthlyReport = [];
-  List<Map<String, dynamic>> _yearlyReport = [];
+class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
+  int _selectedTab = 0;
 
-  int _selectedTab = 0; // 0: Snapshots, 1: Monthly, 2: Yearly
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllData();
-  }
-
-  Future<void> _loadAllData() async {
-    setState(() => _isLoading = true);
-    // Fetch a large enough sample for aggregation (or all)
-    final data = await DatabaseHelper.instance.getNetWorthHistory(limit: 500);
-    
-    if (mounted) {
-      setState(() {
-        _rawHistory = data;
-        _generateAggregatedReports();
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _generateAggregatedReports() {
-    if (_rawHistory.isEmpty) return;
-
-    // --- Monthly Aggregation ---
-    final Map<String, Map<String, dynamic>> monthlyMap = {};
-    for (final item in _rawHistory) {
-      final date = DateTime.parse(item['timestamp']);
-      final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
-      
-      // Since history is DESC, the first one we find for a month is the latest
-      if (!monthlyMap.containsKey(key)) {
-        monthlyMap[key] = Map.from(item);
-      }
-    }
-    
-    final sortedMonths = monthlyMap.keys.toList()..sort((a, b) => b.compareTo(a));
-    _monthlyReport = sortedMonths.map((k) => monthlyMap[k]!).toList();
-
-    // Calculate changes for monthly
-    for (int i = 0; i < _monthlyReport.length - 1; i++) {
-      final current = _monthlyReport[i]['net_worth'] as double;
-      final previous = _monthlyReport[i + 1]['net_worth'] as double;
-      _monthlyReport[i]['change'] = current - previous;
-    }
-
-    // --- Yearly Aggregation ---
-    final Map<int, Map<String, dynamic>> yearlyMap = {};
-    for (final item in _rawHistory) {
-      final date = DateTime.parse(item['timestamp']);
-      final key = date.year;
-      
-      if (!yearlyMap.containsKey(key)) {
-        yearlyMap[key] = Map.from(item);
-      }
-    }
-    
-    final sortedYears = yearlyMap.keys.toList()..sort((a, b) => b.compareTo(a));
-    _yearlyReport = sortedYears.map((k) => yearlyMap[k]!).toList();
-
-     // Calculate changes for yearly
-    for (int i = 0; i < _yearlyReport.length - 1; i++) {
-      final current = _yearlyReport[i]['net_worth'] as double;
-      final previous = _yearlyReport[i + 1]['net_worth'] as double;
-      _yearlyReport[i]['change'] = current - previous;
-    }
-  }
-
-  Future<void> _deleteSnapshot(String id) async {
+  Future<void> _deleteSnapshot(NetWorthSnapshotRecord snapshot) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
         title: const Text('Delete Snapshot?'),
-        content: const Text('This will remove this specific entry from your history.'),
+        content: const Text(
+          'This will remove this specific entry from your history.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true), 
-            child: const Text('Delete', style: TextStyle(color: Colors.red))
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await DatabaseHelper.instance.deleteNetWorthSnapshot(id);
-      _loadAllData();
+      await ref.read(netWorthHistoryProvider.notifier).remove(snapshot);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    context.watch<SettingsService>();
+    final historyAsync = ref.watch(netWorthHistoryProvider);
+
+    listenForUndoSnackbars(
+      ref,
+      context,
+      matches: (payload) => payload is NetWorthSnapshotRecord,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Net Worth Report'),
@@ -125,7 +70,7 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -139,11 +84,34 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
           ),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _rawHistory.isEmpty
-              ? const Center(child: Text('No snapshots captured yet.', style: TextStyle(color: Colors.grey)))
-              : _buildList(),
+      body: SafeArea(
+        child: historyAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('Error: $error')),
+          data: (history) {
+            if (history.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No snapshots captured yet.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              );
+            }
+
+            final rawItems = history;
+            final monthlyItems = _aggregate(history, monthly: true);
+            final yearlyItems = _aggregate(history, monthly: false);
+
+            final items = switch (_selectedTab) {
+              1 => monthlyItems,
+              2 => yearlyItems,
+              _ => rawItems.map(_SnapshotViewItem.fromRecord).toList(),
+            };
+
+            return _buildList(items, isSnapshots: _selectedTab == 0);
+          },
+        ),
+      ),
     );
   }
 
@@ -155,9 +123,13 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
         child: Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: active ? Colors.blueAccent.withOpacity(0.2) : Colors.transparent,
+            color: active
+                ? Colors.blueAccent.withValues(alpha: 0.2)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
-            border: active ? Border.all(color: Colors.blueAccent.withOpacity(0.3)) : null,
+            border: active
+                ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))
+                : null,
           ),
           child: Text(
             title,
@@ -172,63 +144,49 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
     );
   }
 
-  Widget _buildList() {
-    List<Map<String, dynamic>> items;
-    bool isAggregated = false;
-    
-    if (_selectedTab == 0) {
-      items = _rawHistory;
-    } else if (_selectedTab == 1) {
-      items = _monthlyReport;
-      isAggregated = true;
-    } else {
-      items = _yearlyReport;
-      isAggregated = true;
-    }
-
+  Widget _buildList(
+    List<_SnapshotViewItem> items, {
+    required bool isSnapshots,
+  }) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
-      itemBuilder: (ctx, i) {
-        final item = items[i];
-        final date = DateTime.parse(item['timestamp']);
-        final netWorth = (item['net_worth'] as num).toDouble();
-        final assets = (item['assets'] as num).toDouble();
-        final liabilities = (item['liabilities'] as num).toDouble();
-        final change = item['change'] as double?;
-
-        String title;
-        String subtitle;
-        if (_selectedTab == 0) {
-          title = DateFormat('dd MMM yyyy').format(date);
-          subtitle = DateFormat('hh:mm a').format(date);
-        } else if (_selectedTab == 1) {
-          title = DateFormat('MMMM yyyy').format(date);
-          subtitle = 'Monthly Closing Balance';
-        } else {
-          title = '${date.year} Report';
-          subtitle = 'Yearly Closing Balance';
-        }
+      itemBuilder: (context, index) {
+        final item = items[index];
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
           ),
           child: Column(
             children: [
               ListTile(
                 contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-                title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                trailing: _selectedTab == 0 
-                  ? IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                      onPressed: () => _deleteSnapshot(item['id']),
-                    )
-                  : (change != null ? _changePill(change) : null),
+                title: Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                subtitle: Text(
+                  item.subtitle,
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ),
+                trailing: isSnapshots
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.redAccent,
+                          size: 20,
+                        ),
+                        onPressed: () =>
+                            _deleteSnapshot(item.originalSnapshot!),
+                      )
+                    : (item.change != null ? _changePill(item.change!) : null),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -239,9 +197,22 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _dataItem('Net Worth', AppFormat.currency(netWorth), netWorth >= 0 ? Colors.blueAccent : Colors.red, large: true),
-                        _dataItem('Assets', AppFormat.currency(assets), Colors.green),
-                        _dataItem('Liabilities', AppFormat.currency(liabilities), Colors.redAccent),
+                        _dataItem(
+                          'Net Worth',
+                          AppFormat.currency(item.netWorth),
+                          item.netWorth >= 0 ? Colors.blueAccent : Colors.red,
+                          large: true,
+                        ),
+                        _dataItem(
+                          'Assets',
+                          AppFormat.currency(item.assets),
+                          Colors.green,
+                        ),
+                        _dataItem(
+                          'Liabilities',
+                          AppFormat.currency(item.liabilities),
+                          Colors.redAccent,
+                        ),
                       ],
                     ),
                   ],
@@ -254,12 +225,43 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
     );
   }
 
+  List<_SnapshotViewItem> _aggregate(
+    List<NetWorthSnapshotRecord> history, {
+    required bool monthly,
+  }) {
+    final grouped = <String, NetWorthSnapshotRecord>{};
+    for (final item in history) {
+      final key = monthly
+          ? '${item.timestamp.year}-${item.timestamp.month.toString().padLeft(2, '0')}'
+          : '${item.timestamp.year}';
+      grouped.putIfAbsent(key, () => item);
+    }
+
+    final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+    final items = sortedKeys
+        .map(
+          (key) =>
+              _SnapshotViewItem.fromAggregate(grouped[key]!, monthly: monthly),
+        )
+        .toList();
+
+    for (var index = 0; index < items.length - 1; index++) {
+      final current = items[index];
+      final previous = items[index + 1];
+      items[index] = current.copyWith(
+        change: current.netWorth - previous.netWorth,
+      );
+    }
+
+    return items;
+  }
+
   Widget _changePill(double change) {
     final isPositive = change >= 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (isPositive ? Colors.green : Colors.red).withOpacity(0.1),
+        color: (isPositive ? Colors.green : Colors.red).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -284,12 +286,19 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
     );
   }
 
-  Widget _dataItem(String label, String val, Color color, {bool large = false}) {
+  Widget _dataItem(
+    String label,
+    String value,
+    Color color, {
+    bool large = false,
+  }) {
     return Column(
-      crossAxisAlignment: large ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      crossAxisAlignment: large
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
       children: [
         Text(
-          val,
+          value,
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.w600,
@@ -297,11 +306,72 @@ class _NetWorthReportScreenState extends State<NetWorthReportScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: Colors.grey[500], fontSize: 10),
-        ),
+        Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 10)),
       ],
+    );
+  }
+}
+
+class _SnapshotViewItem {
+  const _SnapshotViewItem({
+    required this.originalSnapshot,
+    required this.timestamp,
+    required this.title,
+    required this.subtitle,
+    required this.netWorth,
+    required this.assets,
+    required this.liabilities,
+    this.change,
+  });
+
+  final NetWorthSnapshotRecord? originalSnapshot;
+  final DateTime timestamp;
+  final String title;
+  final String subtitle;
+  final double netWorth;
+  final double assets;
+  final double liabilities;
+  final double? change;
+
+  factory _SnapshotViewItem.fromRecord(NetWorthSnapshotRecord record) {
+    return _SnapshotViewItem(
+      originalSnapshot: record,
+      timestamp: record.timestamp,
+      title: DateFormat('dd MMM yyyy').format(record.timestamp),
+      subtitle: DateFormat('hh:mm a').format(record.timestamp),
+      netWorth: record.netWorth,
+      assets: record.assets,
+      liabilities: record.liabilities,
+    );
+  }
+
+  factory _SnapshotViewItem.fromAggregate(
+    NetWorthSnapshotRecord record, {
+    required bool monthly,
+  }) {
+    return _SnapshotViewItem(
+      originalSnapshot: null,
+      timestamp: record.timestamp,
+      title: monthly
+          ? DateFormat('MMMM yyyy').format(record.timestamp)
+          : '${record.timestamp.year} Report',
+      subtitle: monthly ? 'Monthly Closing Balance' : 'Yearly Closing Balance',
+      netWorth: record.netWorth,
+      assets: record.assets,
+      liabilities: record.liabilities,
+    );
+  }
+
+  _SnapshotViewItem copyWith({double? change}) {
+    return _SnapshotViewItem(
+      originalSnapshot: originalSnapshot,
+      timestamp: timestamp,
+      title: title,
+      subtitle: subtitle,
+      netWorth: netWorth,
+      assets: assets,
+      liabilities: liabilities,
+      change: change ?? this.change,
     );
   }
 }

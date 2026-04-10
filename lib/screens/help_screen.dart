@@ -1,266 +1,416 @@
 import 'package:flutter/material.dart';
-import '../widgets/spendx_app_bar.dart';
+import 'package:spend_x/widgets/spendx_app_bar.dart';
 
-
-/// Help & User Guide screen — collapsible FAQ-style sections for every feature.
 class HelpScreen extends StatelessWidget {
   const HelpScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: SpendXAppBar(
-        title: 'Help & User Guide',
-      ),
-
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const _HelpBanner(),
-          const SizedBox(height: 16),
-          _section(context, '🚀 Getting Started', [
-            _HelpItem(
-              q: 'How do I add my first expense?',
-              a: 'Tap the red ➖ Expense button on the home screen Quick Actions, enter the amount, pick a category, and tap Save.',
-            ),
-            _HelpItem(
-              q: 'How do I log income?',
-              a: 'Tap the green ➕ Income button on the Quick Actions bar. Select the category (e.g., Salary) and save.',
-            ),
-            _HelpItem(
-              q: 'What is Guest mode?',
-              a: 'Guest mode lets you use SpendX without an account. Data is saved locally. Note: logging out will clear local data — sign in to keep data safe in the cloud.',
-            ),
-          ]),
-          _section(context, '💳 Transactions', [
-            _HelpItem(
-              q: 'How do I edit or delete a transaction?',
-              a: 'Go to the Transact tab → long-press or tap any transaction. An edit/delete menu will appear.',
-            ),
-            _HelpItem(
-              q: 'How do I select the bank account for an expense?',
-              a: 'On the Add Expense screen, scroll down past Category. You\'ll see your bank accounts listed — tap one to link this expense to that account. The balance updates automatically.',
-            ),
-            _HelpItem(
-              q: 'What is a Recurring Transaction?',
-              a: 'Toggle "Recurring" when adding an expense or income. The app will auto-generate the same transaction at your chosen frequency (daily, weekly, monthly).',
-            ),
-          ]),
-          _section(context, '🤖 AI & Financial Intelligence', [
-            _HelpItem(
-              q: 'How does AI Receipt Scanning work?',
-              a: 'On the Add Expense screen, tap the camera icon. Gemini AI will automatically extract the merchant, amount, and category from your receipt image.',
-            ),
-            _HelpItem(
-              q: 'What can I ask the AI Chat Assistant?',
-              a: 'You can ask questions like "How much did I spend on food this month?" or "Give me a summary of my recent budgets." It uses your local data for context.',
-            ),
-            _HelpItem(
-              q: 'What is the Monthly AI Report?',
-              a: 'At the end of each month, SpendX generates a deep-dive analysis of your spending habits, saving opportunities, and financial health trends.',
-            ),
-            _HelpItem(
-              q: 'Are my AI interactions private?',
-              a: 'Yes. SpendX follows an offline-first privacy approach. AI analysis is performed contextually, and you can disable AI features anytime in Settings > Customize Modules.',
-            ),
-          ]),
-          _section(context, '🏦 Net Worth & Bank Accounts', [
-            _HelpItem(
-              q: 'How do I add a bank account?',
-              a: 'More → Net Worth → tap the ➕ button. Add your bank name, account type, and current balance.',
-            ),
-            _HelpItem(
-              q: 'Why is Net Worth hidden on the home screen?',
-              a: 'For privacy — net worth starts hidden. Tap the 👁 eye icon to reveal it.',
-            ),
-            _HelpItem(
-              q: 'How is Net Worth calculated?',
-              a: 'Net Worth = Total Bank Assets − Credit Card Outstanding − Borrowed Lending Amounts.',
-            ),
-          ]),
-          _section(context, '💳 Credit Cards & EMI', [
-            _HelpItem(
-              q: 'How do I add a credit card?',
-              a: 'Go to the Credit tab → tap ➕ Add Card. Enter your card name, bank, last 4 digits, and credit limit.',
-            ),
-            _HelpItem(
-              q: 'How do I mark a credit card bill as paid?',
-              a: 'Credit tab → select your card → tap the "Mark as Paid" button on the Billing Due panel. Enter the amount paid and confirm. The outstanding balance updates automatically.',
-            ),
-            _HelpItem(
-              q: 'How do I set a payment reminder for a credit card?',
-              a: 'Credit tab → select your card → tap "Set Reminder" on the Billing panel. A local notification will fire at 9 AM the day before the due date.',
-            ),
-            _HelpItem(
-              q: 'How do I delete or edit a credit card?',
-              a: 'On the Credit screen, long-press any card → a menu appears with Edit and Delete options.',
-            ),
-            _HelpItem(
-              q: 'How do I add an EMI / Bank Loan?',
-              a: 'Credit tab → select a card (or use "No Card" for bank loans) → tap Add EMI. Enter the loan amount, interest rate, and tenure.',
-            ),
-            _HelpItem(
-              q: 'How do I track loan payments?',
-              a: 'On the EMI card, tap "Mark Instalment Paid" after each monthly payment. The progress bar updates automatically.',
-            ),
-          ]),
-          _section(context, '🤝 Lending & Borrowing', [
-            _HelpItem(
-              q: 'How do I record money I lent to someone?',
-              a: 'Go to the Lending tab → tap ➕. Choose "Lent" type, enter person\'s name, amount, and optional due date.',
-            ),
-            _HelpItem(
-              q: 'How do I mark a lending as settled?',
-              a: 'On the Lending screen, tap the lending record → tap "Mark Settled". It moves to the Settled tab.',
-            ),
-          ]),
-          _section(context, '🚗 Vehicles & Fuel', [
-            _HelpItem(
-              q: 'How do I add a vehicle?',
-              a: 'Vehicles tab → tap ➕ → enter vehicle name, type (car/bike), and fuel type.',
-            ),
-            _HelpItem(
-              q: 'How do I log a fuel fill-up?',
-              a: 'Tap ⛽ Fuel on Quick Actions, or go to Vehicles → select vehicle → Add Fuel Log. The app calculates mileage (km/l) automatically.',
-            ),
-          ]),
-          _section(context, '🎮 Gamification & Rewards', [
-            _HelpItem(
-              q: 'How do Streaks work?',
-              a: 'Log at least one transaction every day to maintain your streak. If you miss a day, the streak resets to zero. Keep it going to earn badges!',
-            ),
-            _HelpItem(
-              q: 'What are Levels and Achievements?',
-              a: 'As you track more, you unlock higher Levels (from Bronze to Diamond). Achievements are earned by hitting milestones like a 30-day streak or saving 20% of your income.',
-            ),
-          ]),
-          _section(context, '💚 Financial Health Score', [
-            _HelpItem(
-              q: 'What is the Financial Health Score?',
-              a: 'It\'s a real-time monitor of your financial wellbeing, calculated based on your saving-to-expense ratio, budget adherence, and consistency.',
-            ),
-            _HelpItem(
-              q: 'How do I improve my score?',
-              a: 'Stay within your budgets, maintain a positive net savings each month, and keep your tracking consistent over time.',
-            ),
-          ]),
-          _section(context, '🔐 Privacy & Data Security', [
-            _HelpItem(
-              q: 'Where is my data stored?',
-              a: 'SpendX is offline-first. Your transaction data, bank details, and accounts are stored locally on your device, not on our servers.',
-            ),
-            _HelpItem(
-              q: 'What about Cloud Sync?',
-              a: 'Cloud sync (Google Drive/Dropbox) is optional. If enabled, your data is encrypted and saved to your own private cloud storage for backup.',
-            ),
-          ]),
-          _section(context, '🔄 Sync & Cloud Backups', [
-            _HelpItem(
-              q: 'What is Real-time Auto-Sync?',
-              a: 'SpendX automatically detects when you add or change data (transactions, vehicles, accounts) and triggers a cloud backup instantly. No more manual syncing required!',
-            ),
-            _HelpItem(
-              q: 'How do I switch to a different Google/Dropbox account?',
-              a: 'Go to More → Backup Hub. Tap the "Unlink" icon next to your active account. You can then sign in with a different account.',
-            ),
-            _HelpItem(
-              q: 'What if the cloud data is different from my local data?',
-              a: 'If SpendX detects a newer version in the cloud, it will notify you on the Backup Hub. You can choose to "Keep Local" or "Restore Cloud" to resolve the conflict.',
-            ),
-          ]),
-          _section(context, '\ud83d\udcc8 Financial Reports', [
-            _HelpItem(
-              q: 'Where do I find the reports?',
-              a: 'Tap the \u22ef (three-dot) menu on the home screen \u2192 Financial Reports. Also accessible from More \u2192 Financial Reports.',
-            ),
-            _HelpItem(
-              q: 'What does the Overview tab show?',
-              a: 'Income vs Expense bar chart for 6 or 12 months, plus a month-by-month net savings breakdown.',
-            ),
-            _HelpItem(
-              q: 'What does the Credit tab show?',
-              a: 'Outstanding amounts across all your credit cards as a bar chart, with per-card utilization & days to due.',
-            ),
-            _HelpItem(
-              q: 'What does the Fuel tab show?',
-              a: 'Monthly fuel spend for last 6 months as a bar chart with total summary.',
-            ),
-          ]),
-          _section(context, '\ud83d\udd14 Notifications', [
-            _HelpItem(
-              q: 'How do I view upcoming payment reminders?',
-              a: 'Tap the \ud83d\udd14 bell icon (top-right home screen). The Notifications Inbox shows upcoming credit dues and EMI payments.',
-            ),
-            _HelpItem(
-              q: 'What can I do in the Notifications Inbox?',
-              a: 'Directly pay a credit bill, mark an EMI instalment paid, or add a new expense/income — all from the inbox.',
-            ),
-            _HelpItem(
-              q: 'How do I enable push notifications?',
-              a: 'More \u2192 Notification Settings \u2192 toggle on "Enable Notifications" and grant permission when prompted.',
-            ),
-          ]),
-          const SizedBox(height: 32),
-          Center(
-            child: Text(
-              'Still have questions? Contact us at mashingdesigns@gmail.com',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5), fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
+    final sections = <_GuideSectionData>[
+      // ── Getting Started ─────────────────────────────────
+      const _GuideSectionData(
+        title: 'Getting Started',
+        icon: Icons.rocket_launch_rounded,
+        items: [
+          _GuideItem(
+            title: 'Dashboard Overview',
+            body: 'The Home tab shows your financial summary (balance, income, expenses), '
+                'Wrapped story bubbles for weekly/monthly/yearly summaries, '
+                'and your recent transactions with infinite scroll.',
           ),
-          const SizedBox(height: 32),
+          _GuideItem(
+            title: 'Bottom Navigation',
+            body: 'Home: Dashboard and transactions\n'
+                'Accounts: Bank accounts and balances\n'
+                'Insights: Analytics, charts, and XP level\n'
+                'Plan: Budgets and financial planning\n'
+                'More: All tools, settings, and features',
+          ),
         ],
       ),
-    );
-  }
 
-  Widget _section(BuildContext context, String title, List<Widget> items) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 20, 0, 10),
-          child: Text(
-            title,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+      // ── Adding Transactions ─────────────────────────────
+      const _GuideSectionData(
+        title: 'Adding Transactions',
+        icon: Icons.add_card_rounded,
+        items: [
+          _GuideItem(
+            title: 'Quick Add',
+            body: 'Tap the "Add Transaction" button on the Home tab. '
+                'Choose expense or income, enter amount, select category, '
+                'and optionally add notes and payment method.',
           ),
+          _GuideItem(
+            title: 'AI Bill Scanning',
+            body: 'Use the AI Assistant (More > AI Assistant) to scan receipts. '
+                'Take a photo or pick an image — Gemini AI extracts the merchant, amount, and date.',
+          ),
+          _GuideItem(
+            title: 'SMS Auto-Import',
+            body: 'Go to More > SMS Import to scan your bank SMS messages. '
+                'SpendX detects transaction amounts, merchants, and dates from bank alerts. '
+                'Imported transactions go to the Review Queue for approval.',
+          ),
+          _GuideItem(
+            title: 'Smart Categories',
+            body: 'SpendX has 19 default categories covering Indian spending patterns — '
+                'food, transport, groceries, bills, rent, shopping, health, and more. '
+                'You can add custom categories from Settings > Categories.',
+          ),
+        ],
+      ),
+
+      // ── Smart Import ────────────────────────────────────
+      const _GuideSectionData(
+        title: 'Smart Import',
+        icon: Icons.auto_awesome_rounded,
+        items: [
+          _GuideItem(
+            title: 'Supported Formats',
+            body: 'CSV, TSV, JSON, Markdown tables, HTML tables, and ZIP archives. '
+                'Works with exports from Notion, Google Sheets, Excel, bank statements, and more.',
+          ),
+          _GuideItem(
+            title: 'How It Works',
+            body: '1. Go to Settings > Database Tools > Smart Import\n'
+                '2. Pick a file or share one from another app\n'
+                '3. SpendX auto-detects columns (amount, date, category, description)\n'
+                '4. Review the preview and uncheck rows you don\'t want\n'
+                '5. Tap "Import" to add transactions',
+          ),
+          _GuideItem(
+            title: 'Notion Export',
+            body: 'In Notion, open your expense database > "..." menu > Export > CSV or Markdown. '
+                'On Android, you can share the exported ZIP directly to SpendX.',
+          ),
+          _GuideItem(
+            title: 'Share-to-Import',
+            body: 'From any app (Notion, Files, Google Sheets, WhatsApp), '
+                'share a supported file and select SpendX. '
+                'The Smart Import screen opens automatically with the file parsed.',
+          ),
+        ],
+      ),
+
+      // ── Salary Tracking ─────────────────────────────────
+      const _GuideSectionData(
+        title: 'Income & Salary',
+        icon: Icons.account_balance_wallet_rounded,
+        items: [
+          _GuideItem(
+            title: 'Adding an Income Source',
+            body: 'Go to More > Income & Salary > Add Income Source.\n\n'
+                'Choose employment type:\n'
+                '  \u2022  Full-time: Traditional salaried job\n'
+                '  \u2022  Part-time: Reduced hours employment\n'
+                '  \u2022  Freelance: Client/project-based work\n'
+                '  \u2022  Contract: Fixed-term engagement\n\n'
+                'Then select your pay cycle: Monthly, Weekly, Bi-weekly, Daily, or Per Project (freelance only).',
+          ),
+          _GuideItem(
+            title: 'Pay Cycles',
+            body: 'SpendX adapts to how you get paid:\n\n'
+                '  \u2022  Monthly: Fixed salary once a month\n'
+                '  \u2022  Weekly: Rate \u00d7 ~4.33 per month\n'
+                '  \u2022  Bi-weekly: Rate \u00d7 ~2.17 per month\n'
+                '  \u2022  Daily: Rate \u00d7 working days (Mon-Fri)\n'
+                '  \u2022  Per Project: No fixed amount, track as payments come in\n\n'
+                'You can log multiple payments per month for any cycle.',
+          ),
+          _GuideItem(
+            title: 'Payment Status',
+            body: 'Each month has one of 5 statuses:\n\n'
+                '  \u2022  Pending: Awaiting payment\n'
+                '  \u2022  Partial: Some payment received\n'
+                '  \u2022  Paid: Full payment received\n'
+                '  \u2022  Overdue: Past due date, not fully paid\n'
+                '  \u2022  On Hold: You flagged it (client dispute, delay)\n\n'
+                'On-hold months are excluded from reliability scoring.',
+          ),
+          _GuideItem(
+            title: 'Employer Reliability',
+            body: 'SpendX computes a reliability score:\n'
+                '  \u2022  60% weight: On-time payment rate\n'
+                '  \u2022  20% weight: Average delay penalty\n'
+                '  \u2022  20% weight: Longest delay streak penalty\n\n'
+                'View this in the company dashboard. On-hold months are excluded.',
+          ),
+          _GuideItem(
+            title: 'Salary Reports',
+            body: 'Export salary data as CSV or PDF from Database Tools. '
+                'Reports include payment history, delay analysis, and company-wise summaries.',
+          ),
+        ],
+      ),
+
+      // ── Loans & Credit ──────────────────────────────────
+      const _GuideSectionData(
+        title: 'Loans & Credit Cards',
+        icon: Icons.account_balance_rounded,
+        items: [
+          _GuideItem(
+            title: 'Loan Tracking',
+            body: 'Add loans with amount, interest rate, EMI, and tenure. '
+                'Record installment payments and track remaining balance. '
+                'SpendX calculates paid vs. remaining automatically.',
+          ),
+          _GuideItem(
+            title: 'Credit Cards',
+            body: 'Track credit card spending limits, outstanding balance, and EMI plans. '
+                'Credit cards appear as payment methods when adding transactions.',
+          ),
+          _GuideItem(
+            title: 'Lend & Borrow',
+            body: 'Record money you\'ve lent to others or borrowed. '
+                'Track partial repayments and see who owes what at a glance.',
+          ),
+        ],
+      ),
+
+      // ── Goals ───────────────────────────────────────────
+      const _GuideSectionData(
+        title: 'Savings Goals',
+        icon: Icons.flag_rounded,
+        items: [
+          _GuideItem(
+            title: 'Creating Goals',
+            body: 'Set a target amount and optional deadline. '
+                'Examples: Emergency fund, vacation, new phone, wedding.',
+          ),
+          _GuideItem(
+            title: 'Tracking Progress',
+            body: 'Log contributions as you save. '
+                'The progress bar and percentage update in real-time. '
+                'Completed goals earn +20 XP.',
+          ),
+        ],
+      ),
+
+      // ── Backup & Sync ──────────────────────────────────
+      const _GuideSectionData(
+        title: 'Backup & Sync',
+        icon: Icons.backup_rounded,
+        items: [
+          _GuideItem(
+            title: 'Google Drive Backup',
+            body: 'Sign in with Google in the Backup Hub (More > Backup & Sync). '
+                'Your data is encrypted on-device with AES-256 before upload. '
+                'Backups go to your personal Drive appData folder.',
+          ),
+          _GuideItem(
+            title: 'Auto Backup',
+            body: 'Enable auto-backup to save automatically when you add or edit data. '
+                'Choose interval: 1 hour, 6 hours, or 24 hours. '
+                'Runs silently in the background.',
+          ),
+          _GuideItem(
+            title: 'Multi-Device Sync',
+            body: 'Sign into the same Google account on multiple devices. '
+                'Enable auto-restore to pull the latest backup on launch. '
+                'The encryption key is derived from your Google email, so it works across devices.',
+          ),
+          _GuideItem(
+            title: 'Force Restore',
+            body: 'If auto-restore skips (because local data is newer), '
+                'use "Force Restore" in the Backup Hub to overwrite local data with the cloud backup.',
+          ),
+        ],
+      ),
+
+      // ── Export & Database Tools ─────────────────────────
+      const _GuideSectionData(
+        title: 'Export & Database Tools',
+        icon: Icons.import_export_rounded,
+        items: [
+          _GuideItem(
+            title: 'Export Options',
+            body: 'Settings > Database Tools offers:\n'
+                '  \u2022  Full backup (JSON) — complete app data\n'
+                '  \u2022  Transactions CSV — spreadsheet-ready\n'
+                '  \u2022  Transactions JSON — structured data\n'
+                '  \u2022  Salary Report CSV/PDF — payment history\n'
+                '  \u2022  Reminders CSV — due reminders',
+          ),
+          _GuideItem(
+            title: 'Import Options',
+            body: '  \u2022  Smart Import — auto-detect from any format\n'
+                '  \u2022  Manual CSV Import — map columns yourself\n'
+                '  \u2022  Full Backup Restore — from spendx_backup.json',
+          ),
+        ],
+      ),
+
+      // ── Gamification ────────────────────────────────────
+      const _GuideSectionData(
+        title: 'Levels & Rewards',
+        icon: Icons.emoji_events_rounded,
+        items: [
+          _GuideItem(
+            title: 'XP System',
+            body: 'Earn XP by using SpendX:\n'
+                '  \u2022  +2 XP per transaction logged\n'
+                '  \u2022  +5 XP per day of current streak\n'
+                '  \u2022  +20 XP per completed goal\n'
+                '  \u2022  +8 XP per budget respected\n'
+                '  \u2022  +10 XP per clean day',
+          ),
+          _GuideItem(
+            title: 'Tiers',
+            body: 'Bronze: Level 1-4\n'
+                'Silver: Level 5-9\n'
+                'Gold: Level 10-14\n'
+                'Platinum: Level 15-19\n'
+                'Diamond: Level 20+\n\n'
+                'Your tier updates automatically in the Insights tab.',
+          ),
+          _GuideItem(
+            title: 'Wrapped Summaries',
+            body: 'SpendX generates Spotify-style financial summaries:\n'
+                '  \u2022  Weekly: Top categories, total spent, highlights\n'
+                '  \u2022  Monthly: Full month breakdown with comparisons\n'
+                '  \u2022  Yearly: Annual trends with 12-month chart\n\n'
+                'Wrapped bubbles appear on the Home dashboard and auto-dismiss after 5 days.',
+          ),
+        ],
+      ),
+
+      // ── Settings ────────────────────────────────────────
+      const _GuideSectionData(
+        title: 'Settings & Customization',
+        icon: Icons.settings_rounded,
+        items: [
+          _GuideItem(
+            title: 'Theme & Appearance',
+            body: 'Choose light/dark/system mode and pick a theme color. '
+                'Multiple color themes available (blue, teal, purple, orange, etc.).',
+          ),
+          _GuideItem(
+            title: 'Currency',
+            body: 'Change your display currency from Settings > Currency. '
+                'Supports INR, USD, EUR, GBP, and many regional formats.',
+          ),
+          _GuideItem(
+            title: 'Notifications',
+            body: 'Configure reminders for recurring payments, loan EMIs, '
+                'and custom alerts from Settings > Notifications.',
+          ),
+          _GuideItem(
+            title: 'Clear Data',
+            body: 'Selectively clear individual data types (expenses, income, salary, '
+                'loans, goals, accounts) or clear everything from Settings > Clear Data.',
+          ),
+        ],
+      ),
+
+      // ── Troubleshooting ─────────────────────────────────
+      const _GuideSectionData(
+        title: 'Troubleshooting',
+        icon: Icons.build_circle_rounded,
+        items: [
+          _GuideItem(
+            title: 'Balance Shows Wrong Amount',
+            body: 'The dashboard shows the last 30 days of income and expenses. '
+                'If you recently imported old data, it may not reflect in the summary. '
+                'Check the Accounts tab for your actual account balances.',
+          ),
+          _GuideItem(
+            title: 'Backup Not Working',
+            body: 'Ensure you\'re signed into Google in the Backup Hub. '
+                'Check your internet connection and Drive storage. '
+                'Try "Force Backup" if auto-backup seems stuck.',
+          ),
+          _GuideItem(
+            title: 'SMS Import Missing Transactions',
+            body: 'SpendX looks for specific bank SMS patterns. '
+                'Some banks use non-standard formats. '
+                'You can manually add missing transactions or use Smart Import with a bank CSV export.',
+          ),
+          _GuideItem(
+            title: 'Smart Import Shows 0 Rows',
+            body: 'Check that your file has a header row with recognizable column names '
+                '(like "Amount", "Date", "Category"). For Notion ZIP exports, '
+                'SpendX automatically extracts the CSV from nested ZIP archives.',
+          ),
+          _GuideItem(
+            title: 'App Feels Slow',
+            body: 'If you have thousands of transactions, pagination keeps the Home tab fast. '
+                'Scroll down to load more. If the app is still sluggish, '
+                'try clearing build cache or reinstalling.',
+          ),
+        ],
+      ),
+    ];
+
+    return Scaffold(
+      appBar: const SpendXAppBar(title: 'Help & User Guide'),
+      body: SafeArea(
+        child: ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return const _GuideBanner();
+            }
+
+            final section = sections[index - 1];
+            return _GuideSection(section: section);
+          },
+          separatorBuilder: (_, index) => SizedBox(height: index == 0 ? 24 : 0),
+          itemCount: sections.length + 1,
         ),
-        ...items,
-        const SizedBox(height: 4),
-      ],
+      ),
     );
   }
 }
 
-class _HelpBanner extends StatelessWidget {
-  const _HelpBanner();
+class _GuideBanner extends StatelessWidget {
+  const _GuideBanner();
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Theme.of(context).colorScheme.primary.withValues(alpha: 0.2), Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2)],
+          colors: [
+            colorScheme.primary.withValues(alpha: 0.22),
+            colorScheme.tertiary.withValues(alpha: 0.18),
+          ],
         ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          Icon(Icons.menu_book_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
-          SizedBox(width: 12),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(Icons.menu_book_rounded, color: colorScheme.primary),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('SpendX User Guide', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600, fontSize: 15)),
-                const SizedBox(height: 4),
-                Text('Tap any question to learn how to use each feature.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                Text(
+                  'SpendX User Guide',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Complete guide covering all features — transactions, salary tracking, '
+                  'smart import, backup, gamification, and more.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
               ],
             ),
           ),
@@ -270,75 +420,113 @@ class _HelpBanner extends StatelessWidget {
   }
 }
 
-class _HelpItem extends StatefulWidget {
-  final String q;
-  final String a;
-  const _HelpItem({required this.q, required this.a});
+class _GuideSection extends StatelessWidget {
+  final _GuideSectionData section;
 
-  @override
-  State<_HelpItem> createState() => _HelpItemState();
-}
-
-class _HelpItemState extends State<_HelpItem> {
-  bool _expanded = false;
+  const _GuideSection({required this.section});
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _expanded
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)
-              : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.2),
-        ),
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => setState(() => _expanded = !_expanded),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.q,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    size: 20,
-                  ),
-                ],
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(section.icon, color: colorScheme.primary),
               ),
-              if (_expanded) ...[
-                const SizedBox(height: 10),
-                Divider(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.2), height: 1),
-                const SizedBox(height: 10),
-                Text(
-                  widget.a,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 13,
-                    height: 1.5,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  section.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
+              ),
             ],
           ),
-        ),
+          const SizedBox(height: 20),
+          for (var index = 0; index < section.items.length; index++) ...[
+            _GuideTile(item: section.items[index]),
+            if (index < section.items.length - 1) const SizedBox(height: 12),
+          ],
+        ],
       ),
     );
   }
+}
+
+class _GuideTile extends StatelessWidget {
+  final _GuideItem item;
+
+  const _GuideTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.title,
+            style: Theme.of(context).textTheme.bodyLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.body,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuideSectionData {
+  final String title;
+  final IconData icon;
+  final List<_GuideItem> items;
+
+  const _GuideSectionData({
+    required this.title,
+    required this.icon,
+    required this.items,
+  });
+}
+
+class _GuideItem {
+  final String title;
+  final String body;
+
+  const _GuideItem({required this.title, required this.body});
 }

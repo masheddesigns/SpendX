@@ -1,141 +1,46 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../models/budget.dart';
 import '../models/category.dart';
-import '../services/database_helper.dart';
+import '../data/providers.dart';
 import '../utils/app_format.dart';
 
-class DashboardAnalyticsSection extends StatefulWidget {
+class DashboardAnalyticsSection extends ConsumerWidget {
   const DashboardAnalyticsSection({super.key});
 
   @override
-  State<DashboardAnalyticsSection> createState() => _DashboardAnalyticsSectionState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (kIsWeb) return const SizedBox.shrink();
 
-class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
-  List<_BudgetItem> _budgets = [];
-  Map<String, double> _categorySpend = {};
-  Map<String, Category> _categoriesMap = {};
+    final summary = ref.watch(analyticsSummaryProvider);
+    final budgets = summary.budgetProgress;
+    final categorySpend = summary.categorySpending;
+    final categoriesMap = summary.categoriesMap;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadAnalytics();
-  }
-
-  @override
-  void didUpdateWidget(DashboardAnalyticsSection old) {
-    super.didUpdateWidget(old);
-    _loadAnalytics();
-  }
-
-  Future<void> _loadAnalytics() async {
-    if (kIsWeb) return;
-    try {
-      final db = await DatabaseHelper.instance.database;
-      final catMaps = await db.query(DatabaseHelper.tableCategories);
-      final catMap = {for (var m in catMaps) m['id'] as String: Category.fromMap(m)};
-
-      final budgets = await DatabaseHelper.instance.getAllBudgets();
-      List<_BudgetItem> items = [];
-      for (var b in budgets) {
-        final spent = await DatabaseHelper.instance.getSpentThisMonth(b.categoryId);
-        final cat = catMap[b.categoryId];
-        if (cat != null) {
-          items.add(_BudgetItem(budget: b, category: cat, spent: spent));
-        }
-      }
-
-      // Optimized Category spending breakdown (this month)
-      final now = DateTime.now();
-      final startOfMonth = DateTime(now.year, now.month, 1);
-      final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-      
-      final spendMap = await DatabaseHelper.instance.getCategorySpending(
-        start: startOfMonth,
-        end: endOfMonth,
-      );
-
-      // Ensure 'vehicle' category exists in map if used
-      if (spendMap.containsKey('vehicle') && !catMap.containsKey('vehicle')) {
-        catMap['vehicle'] = Category(
-          id: 'vehicle', 
-          userId: 'default', 
-          name: 'Vehicle & Fuel', 
-          icon: 'local_gas_station', 
-          color: '#F97316', 
-          type: 'expense'
-        );
-      }
-
-      if (mounted) {
-        setState(() {
-          _budgets = items;
-          _categorySpend = spendMap;
-          _categoriesMap = catMap;
-        });
-      }
-    } catch (e) {
-      debugPrint('DashboardAnalytics error: $e');
-    }
-  }
-
-  Color _hexToColor(String hex) {
-    try {
-      hex = hex.replaceAll('#', '');
-      if (hex.length == 6) hex = 'FF$hex';
-      return Color(int.parse(hex, radix: 16));
-    } catch (_) {
-      return Colors.grey;
-    }
-  }
-
-  Widget _buildIcon(String icon, Color color, {double size = 16}) {
-    if (icon.length <= 2) {
-      return Text(icon, style: TextStyle(fontSize: size));
-    }
-    IconData iconData;
-    switch (icon) {
-      case 'restaurant': iconData = Icons.restaurant; break;
-      case 'directions_car': iconData = Icons.directions_car; break;
-      case 'local_gas_station': iconData = Icons.local_gas_station; break;
-      case 'shopping_bag': iconData = Icons.shopping_bag; break;
-      case 'home': iconData = Icons.home; break;
-      case 'bolt': iconData = Icons.bolt; break;
-      case 'movie': iconData = Icons.movie; break;
-      case 'payments': iconData = Icons.payments; break;
-      case 'health_and_safety': iconData = Icons.health_and_safety; break;
-      default: iconData = Icons.category;
-    }
-    return Icon(iconData, color: color, size: size);
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Budget Summary (only if budgets exist)
-        if (_budgets.isNotEmpty) ...[
-          _SectionTitle('Budgets This Month'),
+        if (budgets.isNotEmpty) ...[
+          const _SectionTitle('Budgets This Month'),
           const SizedBox(height: 12),
-          ..._budgets.map((item) => _buildBudgetRow(item)),
+          ...budgets.map((item) => _buildBudgetRow(context, ref, item)),
           const SizedBox(height: 24),
         ],
 
         // Category spending pie (only if data exists)
-        if (_categorySpend.isNotEmpty) ...[
-          _SectionTitle('Spending by Category'),
+        if (categorySpend.isNotEmpty) ...[
+          const _SectionTitle('Spending by Category'),
           const SizedBox(height: 12),
-          _buildPieChart(),
+          _buildPieChart(context, categorySpend, categoriesMap),
           const SizedBox(height: 24),
         ],
       ],
     );
   }
 
-  Widget _buildBudgetRow(_BudgetItem item) {
+  Widget _buildBudgetRow(BuildContext context, WidgetRef ref, dynamic item) {
     final progress = (item.spent / item.budget.limit).clamp(0.0, 1.0);
     final progressColor = progress < 0.7
         ? Theme.of(context).colorScheme.primary
@@ -145,7 +50,7 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
     final catColor = _hexToColor(item.category.color);
 
     return InkWell(
-      onTap: () => _showEditBudgetSheet(item),
+      onTap: () => _showEditBudgetSheet(context, ref, item),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -202,21 +107,20 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
     );
   }
 
-  Widget _buildPieChart() {
-    final total = _categorySpend.values.fold(0.0, (a, b) => a + b);
+  Widget _buildPieChart(BuildContext context, Map<String, double> categorySpend, Map<String, Category> categoriesMap) {
+    final total = categorySpend.values.fold(0.0, (a, b) => a + b);
     if (total == 0) return const SizedBox.shrink();
 
     final cs = Theme.of(context).colorScheme;
 
-    final sections = _categorySpend.entries.map((e) {
-      final cat = _categoriesMap[e.key];
+    final sections = categorySpend.entries.map((e) {
+      final cat = categoriesMap[e.key] ?? _getVehicleFallback(e.key);
       final color = _hexToColor(cat?.color ?? '#888888');
       return PieChartSectionData(
         value: e.value,
         color: color,
         radius: 20,
         showTitle: false,
-        badgeWidget: null,
       );
     }).toList();
 
@@ -239,8 +143,8 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
                     sectionsSpace: 4,
                     startDegreeOffset: -90,
                   ),
-                  swapAnimationDuration: const Duration(milliseconds: 800),
-                  swapAnimationCurve: Curves.easeInOutBack,
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeInOutBack,
                 ),
                 Center(
                   child: Column(
@@ -271,7 +175,6 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
             ),
           ),
           const SizedBox(height: 24),
-          // Legend Grid
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -281,10 +184,10 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
               crossAxisSpacing: 16,
               mainAxisSpacing: 8,
             ),
-            itemCount: _categorySpend.length,
+            itemCount: categorySpend.length,
             itemBuilder: (context, index) {
-              final entry = _categorySpend.entries.elementAt(index);
-              final cat = _categoriesMap[entry.key];
+              final entry = categorySpend.entries.elementAt(index);
+              final cat = categoriesMap[entry.key] ?? _getVehicleFallback(entry.key);
               final color = _hexToColor(cat?.color ?? '#888888');
               final pct = (entry.value / total * 100).toStringAsFixed(0);
               
@@ -329,7 +232,21 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
     );
   }
 
-  void _showEditBudgetSheet(_BudgetItem item) {
+  Category? _getVehicleFallback(String id) {
+    if (id == 'vehicle') {
+      return Category(
+        id: 'vehicle',
+        userId: 'default',
+        name: 'Vehicle & Fuel',
+        icon: 'local_gas_station',
+        color: '#F97316',
+        type: 'expense',
+      );
+    }
+    return null;
+  }
+
+  void _showEditBudgetSheet(BuildContext context, WidgetRef ref, dynamic item) {
     double currentLimit = item.budget.limit;
     final controller = TextEditingController(text: currentLimit.toStringAsFixed(0));
     final catColor = _hexToColor(item.category.color);
@@ -396,7 +313,6 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
                 },
               ),
               const SizedBox(height: 24),
-              // Quick Multipliers
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [500, 1000, 2000, 5000].map((val) => IntrinsicWidth(
@@ -424,15 +340,9 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
                   ),
                   onPressed: () async {
                     if (currentLimit <= 0) return;
-                    final updated = Budget(
-                      id: item.budget.id,
-                      categoryId: item.budget.categoryId,
-                      limit: currentLimit,
-                    );
-                    await DatabaseHelper.instance.updateBudget(updated);
+                    await ref.read(budgetsProvider.notifier).updateLimit(item.budget.id, currentLimit);
                     if (context.mounted) {
                       Navigator.pop(ctx);
-                      _loadAnalytics();
                     }
                   },
                   child: const Text('Update Limit', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
@@ -443,6 +353,36 @@ class _DashboardAnalyticsSectionState extends State<DashboardAnalyticsSection> {
         ),
       ),
     );
+  }
+
+  Color _hexToColor(String hex) {
+    try {
+      hex = hex.replaceAll('#', '');
+      if (hex.length == 6) hex = 'FF$hex';
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return Colors.grey;
+    }
+  }
+
+  Widget _buildIcon(String icon, Color color, {double size = 16}) {
+    if (icon.length <= 2) {
+      return Text(icon, style: TextStyle(fontSize: size));
+    }
+    IconData iconData;
+    switch (icon) {
+      case 'restaurant': iconData = Icons.restaurant; break;
+      case 'directions_car': iconData = Icons.directions_car; break;
+      case 'local_gas_station': iconData = Icons.local_gas_station; break;
+      case 'shopping_bag': iconData = Icons.shopping_bag; break;
+      case 'home': iconData = Icons.home; break;
+      case 'bolt': iconData = Icons.bolt; break;
+      case 'movie': iconData = Icons.movie; break;
+      case 'payments': iconData = Icons.payments; break;
+      case 'health_and_safety': iconData = Icons.health_and_safety; break;
+      default: iconData = Icons.category;
+    }
+    return Icon(iconData, color: color, size: size);
   }
 }
 
@@ -460,11 +400,4 @@ class _SectionTitle extends StatelessWidget {
           ),
     );
   }
-}
-
-class _BudgetItem {
-  final Budget budget;
-  final Category category;
-  final double spent;
-  const _BudgetItem({required this.budget, required this.category, required this.spent});
 }
