@@ -1,2 +1,2 @@
 # SpendX
-Personal finance and expense tracking app with analytics, budgeting, and spending insights.
+A local-first Flutter personal finance app for accounts, budgets, goals, imports, analytics, salary tracking, and financial health insights.
