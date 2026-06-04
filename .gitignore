@@ -4,6 +4,7 @@
 *.pyc
 *.swp
 .DS_Store
+.gitconfig
 .atom/
 .build/
 .buildlog/
@@ -46,6 +47,8 @@ app.*.map.json
 
 # Secrets
 .env
+.env.*
+!.env.example
 
 # Build artifacts & logs
 build_output.txt
@@ -67,6 +70,11 @@ android/app/google-services*.json
 
 # Screenshots (dev only)
 flutter_*.png
+
+# Local diagnostics and scratch files
+*.tmp
+*.bak
+*.orig
 
 # Database snapshots
 assets/spendx.db
