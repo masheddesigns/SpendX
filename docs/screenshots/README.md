@@ -1,10 +1,18 @@
 # Screenshots
 
-Replace the placeholder image references in the root `README.md` with real screenshots from this folder.
+This folder contains the screenshots used in the repository README.
 
-Suggested files:
+Current mapping:
 
-- `dashboard-placeholder.png`
-- `accounts-placeholder.png`
-- `transactions-placeholder.png`
-- `insights-placeholder.png`
+- `dashboard.png`
+- `transactions.png`
+- `accounts.png`
+- `budgeting.png`
+- `analytics.png`
+
+Additional captures kept for future documentation:
+
+- `extra-01.png`
+- `extra-02.png`
+- `extra-03.png`
+- `extra-04.png`

@@ -1,146 +1,176 @@
 # SpendX
 
-SpendX is a Flutter personal finance app for tracking money across bank accounts, credit cards, loans, recurring payments, salary flows, vehicles, and long-term financial goals.
+SpendX is a local-first Flutter personal finance app designed to help people manage daily money without subscriptions, cloud lock-in, or spreadsheet fatigue.
 
-The project is built as a local-first mobile app with rich analytics, smart import workflows, notification support, and modular feature areas for budgeting, reporting, planning, and financial health.
+It combines transaction tracking, account management, budgeting, salary planning, financial goals, analytics, and import workflows into a single mobile experience.
 
-## Highlights
+## Overview
 
-- Local-first finance tracking using Flutter and SQLite
-- Multi-account support for bank accounts, credit cards, lending, and loans
-- Transaction management with categories, tags, filters, and review flows
-- Smart import and parsing workflows for statements, shared files, OCR, and CSV-like data
-- Budgeting, goal tracking, and financial planning dashboards
-- Salary, recurring payment, and reminder management
-- Net worth, reports, analytics, timeline, and health insights
-- Vehicle expense and fuel tracking
-- Gamification, streaks, wrapped summaries, and progress views
-- Notification scheduling and share intent handling
+### Problem
+
+Many personal finance apps are either too complex, too cloud-dependent, or too focused on paid subscriptions. Users who just want a reliable, privacy-friendly way to manage expenses, accounts, and financial planning often end up juggling multiple apps or spreadsheets.
+
+### Solution
+
+SpendX is built as a local-first finance product that helps users:
+
+- track money across bank accounts, cards, loans, and lending
+- understand spending through dashboards and analytics
+- plan ahead with budgets, goals, salary flows, and reminders
+- import data from statements, shared files, and OCR-assisted inputs
+
+### Role
+
+- Product Designer
+- UX Designer
+- Flutter Developer
+
+## Features
+
+### Core Money Management
+
+- Transaction tracking for income, expenses, transfers, and reviews
+- Bank account, credit card, loan, and lending management
+- Categories, tags, search, and filter flows
+- Local SQLite-backed storage for offline-first usage
+
+### Planning and Financial Control
+
+- Budget planning and spending visibility
+- Financial goals for savings, limits, and debt payoff
+- Salary setup and recurring financial workflows
+- Reminders, alerts, and daily planning surfaces
+
+### Insights and Reporting
+
+- Analytics dashboard and financial summary views
+- Net worth and report screens
+- Financial health insights and money behavior nudges
+- Timeline and digest-style summaries
+
+### Smart Inputs
+
+- Import/export workflows
+- Statement and file-based smart import
+- OCR-assisted text extraction
+- Duplicate detection and merchant normalization helpers
+
+### Extended Modules
+
+- Vehicle and fuel expense tracking
+- Wrapped summaries, streaks, and gamification layers
+- Dark mode support
+
+## Screenshots
+
+### Dashboard
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Transactions
+
+![Transactions](docs/screenshots/transactions.png)
+
+### Accounts
+
+![Accounts](docs/screenshots/accounts.png)
+
+### Budgeting
+
+![Budgeting](docs/screenshots/budgeting.png)
+
+### Analytics
+
+![Analytics](docs/screenshots/analytics.png)
 
 ## Tech Stack
 
 - Flutter
 - Dart
-- Riverpod and Provider
-- SQLite (`sqflite`)
+- Riverpod
+- Provider
+- SQLite via `sqflite`
 - Google ML Kit text recognition
-- Google Generative AI integrations
+- Google Generative AI integration
 - Local notifications
+- Share intent handling
 
-## Project Structure
+## Architecture
+
+SpendX follows a modular Flutter structure with clear separation between UI, state, data access, and services.
 
 ```text
 lib/
-  core/          App config, logging, shared utilities
-  data/          Database, repositories, providers
-  features/      Feature-first modules
-  models/        Domain models
-  screens/       App screens and flows
+  core/          Config, logging, shared utilities
+  data/          Database, repositories, app-wide providers
+  features/      Feature modules and scoped state
+  models/        Domain and persistence models
+  screens/       Product flows and top-level pages
   services/      Business logic and integrations
-  shared/        Shared UI primitives
-  theme/         Theming and styling
-  widgets/       Reusable widgets
+  shared/        Reusable UI building blocks
+  widgets/       App-specific reusable widgets
 ```
 
-## Features
+For deeper notes, see:
 
-### Money Management
-
-- Add, edit, delete, and review transactions
-- Track income, expenses, transfers, and liabilities
-- Manage bank accounts, credit cards, loans, and lending records
-- Organize spending with categories and tags
-
-### Planning and Insights
-
-- Budget tracking and category-level spending views
-- Goal tracking for savings, debt payoff, and spending limits
-- Financial timeline, daily digest, and alerts
-- Net worth, monthly trends, and report screens
-- Financial health and money score style dashboards
-
-### Smart Input and Automation
-
-- Smart import for CSV, ZIP, JSON, and shared files
-- OCR-assisted receipt or document extraction
-- Merchant normalization and duplicate detection helpers
-- Recurring payment detection and reminder flows
-
-### Lifestyle Modules
-
-- Salary setup and month-level salary tracking
-- Vehicle and fuel expense tracking
-- Wrapped summaries, streaks, and gamification screens
+- [Architecture Notes](docs/architecture.md)
+- [Design Decisions](docs/design-decisions.md)
+- [Roadmap](docs/roadmap.md)
 
 ## Installation
 
 ### Prerequisites
 
 - Flutter SDK 3.10+
-- Dart SDK compatible with the Flutter version above
+- Dart SDK compatible with your Flutter installation
 - Android Studio or VS Code with Flutter tooling
 - Xcode for iOS builds on macOS
 
-### 1. Clone the project
+### Setup
 
 ```bash
 git clone <your-repository-url>
 cd SpendX
-```
-
-### 2. Install dependencies
-
-```bash
 flutter pub get
-```
-
-### 3. Create environment file
-
-Copy the example environment file and fill in any values your local setup needs:
-
-```bash
 cp .env.example .env
-```
-
-### 4. Run the app
-
-```bash
 flutter run
 ```
 
-## Configuration Notes
+## Release Build
 
-- `.env` is intentionally ignored by Git.
-- Android notification, share intent, and exact alarm behavior rely on platform permissions declared in the Android manifest.
-- The app uses a local SQLite database, so most day-to-day development can be done without a backend.
-
-## Useful Commands
+To generate a release APK locally:
 
 ```bash
-flutter pub get
-flutter analyze
-flutter test
-flutter run
-flutter build apk
+flutter build apk --release
 ```
 
-## Screenshots
+Expected output:
 
-Add screenshots to `/docs/screenshots/` and replace the placeholders below.
+```text
+build/app/outputs/flutter-apk/app-release.apk
+```
 
-| Screen | Placeholder file |
-| --- | --- |
-| Dashboard | `docs/screenshots/dashboard-placeholder.png` |
-| Accounts | `docs/screenshots/accounts-placeholder.png` |
-| Transactions | `docs/screenshots/transactions-placeholder.png` |
-| Insights | `docs/screenshots/insights-placeholder.png` |
+Suggested first public release:
 
-## Roadmap Ideas
+- `v0.1.0-beta`
 
-- Polished onboarding and demo data flow
-- Expanded import validation and reconciliation tools
-- Improved automated categorization confidence controls
-- More complete test coverage across providers and services
+## Repository Notes
+
+- Local env values belong in `.env`, which is ignored by Git.
+- Screenshots live in `docs/screenshots/`.
+- Reference SQL for the Supabase schema lives in `docs/reference/supabase-schema.sql`.
+
+## Roadmap
+
+- Improve onboarding and first-run setup
+- Expand smart import validation and reconciliation
+- Strengthen automated categorization confidence controls
+- Add broader test coverage for providers, services, and import flows
+- Package stable beta releases for public testing
+
+## About the Designer
+
+SpendX is also a product design case study. Beyond the code, the repository documents the UX direction, information architecture, and tradeoffs behind building a finance app that feels practical, personal, and approachable.
 
 ## License
 

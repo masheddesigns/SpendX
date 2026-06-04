@@ -51,6 +51,12 @@ app.*.map.json
 !.env.example
 
 # Build artifacts & logs
+analysis_*.txt
+analyze_*.txt
+build_*.txt
+build_error.log
+build_verbose*.txt
+full_build_error.log
 build_output.txt
 build_log.txt
 build_verbose.txt
@@ -75,6 +81,10 @@ flutter_*.png
 *.tmp
 *.bak
 *.orig
+
+# Temporary SQL maintenance scripts
+drop_all_tables.sql
+fix_uuid_mismatch.sql
 
 # Database snapshots
 assets/spendx.db
