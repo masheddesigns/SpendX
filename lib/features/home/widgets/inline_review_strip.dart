@@ -5,6 +5,7 @@ import '../../review_queue/providers/review_providers.dart';
 import '../../../models/review_item.dart';
 import '../../../utils/app_format.dart';
 import '../../../screens/review/review_queue_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 /// Inline review cards shown on Home when <= 3 items need review.
 /// Quick approve/reject without leaving the dashboard.
@@ -63,7 +64,7 @@ class _ViewAllBanner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: GestureDetector(
         onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const ReviewQueueScreen())),
+            AppPageRoute(builder: (_) => const ReviewQueueScreen())),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(

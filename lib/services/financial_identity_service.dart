@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' show Color, Colors;
 
+import 'adaptive_personality.dart';
 import 'data_audit_service.dart';
 import 'forecast_engine.dart';
 
@@ -42,52 +43,51 @@ class FinancialIdentityService {
     final negativeSavings = forecast.projectedSavings < 0;
 
     // ── Identity rules (ordered by priority) ──────────────
+    IdentityType type;
     if (negativeSavings) {
-      return const FinancialIdentity(
-        type: IdentityType.atRisk,
-        label: 'At Risk',
-        emoji: '\u{1F6A8}',
-        description: 'Your spending is outpacing income right now. Let\'s fix this together.',
-        color: Colors.red,
-      );
+      type = IdentityType.atRisk;
+    } else if (isOverspending && savingsRate < 0.10) {
+      type = IdentityType.impulsive;
+    } else if (savingsRate >= 0.25 && healthScore >= 80) {
+      type = IdentityType.disciplined;
+    } else if (savingsRate >= 0.10 && healthScore >= 60) {
+      type = IdentityType.stable;
+    } else {
+      type = IdentityType.improving;
     }
 
-    if (isOverspending && savingsRate < 0.10) {
-      return const FinancialIdentity(
-        type: IdentityType.impulsive,
-        label: 'Impulsive',
-        emoji: '\u{1F62C}',
-        description: 'You\'re spending freely. A small adjustment can make a big difference.',
-        color: Colors.orange,
-      );
-    }
+    final personality = AdaptivePersonality(type);
 
-    if (savingsRate >= 0.25 && healthScore >= 80) {
-      return const FinancialIdentity(
-        type: IdentityType.disciplined,
-        label: 'Disciplined',
-        emoji: '\u{1F4AA}',
-        description: 'You\'re in control of your money right now.',
-        color: Colors.green,
-      );
-    }
-
-    if (savingsRate >= 0.10 && healthScore >= 60) {
-      return const FinancialIdentity(
-        type: IdentityType.stable,
-        label: 'Stable',
-        emoji: '\u{1F44D}',
-        description: 'Your money habits are solid. Steady wins the race.',
-        color: Colors.blue,
-      );
-    }
-
-    return const FinancialIdentity(
-      type: IdentityType.improving,
-      label: 'Improving',
-      emoji: '\u{1F4C8}',
-      description: 'You\'re getting better. Small steps are compounding.',
-      color: Colors.teal,
+    return FinancialIdentity(
+      type: type,
+      label: _label(type),
+      emoji: _emoji(type),
+      description: personality.identityDescription,
+      color: _color(type),
     );
   }
+
+  static String _label(IdentityType t) => switch (t) {
+        IdentityType.disciplined => 'Disciplined',
+        IdentityType.stable => 'Stable',
+        IdentityType.improving => 'Improving',
+        IdentityType.impulsive => 'Impulsive',
+        IdentityType.atRisk => 'At Risk',
+      };
+
+  static String _emoji(IdentityType t) => switch (t) {
+        IdentityType.disciplined => '\u{1F4AA}',
+        IdentityType.stable => '\u{1F44D}',
+        IdentityType.improving => '\u{1F4C8}',
+        IdentityType.impulsive => '\u{1F62C}',
+        IdentityType.atRisk => '\u{1F6A8}',
+      };
+
+  static Color _color(IdentityType t) => switch (t) {
+        IdentityType.disciplined => Colors.green,
+        IdentityType.stable => Colors.blue,
+        IdentityType.improving => Colors.teal,
+        IdentityType.impulsive => Colors.orange,
+        IdentityType.atRisk => Colors.red,
+      };
 }

@@ -7,6 +7,7 @@ import '../../../widgets/transaction_tile.dart';
 import '../../../shared/widgets/empty_state_widget.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../screens/home/transactions_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 class TransactionsPreview extends ConsumerStatefulWidget {
   const TransactionsPreview({super.key});
@@ -135,7 +136,7 @@ class _SliverAnimatedTransactionList extends StatelessWidget {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const TransactionListScreen(isFullScreen: true)),
+                      AppPageRoute(builder: (_) => const TransactionListScreen(isFullScreen: true)),
                     );
                   },
                   child: const Text('See All'),

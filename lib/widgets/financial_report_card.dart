@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../shared/widgets/app_tap_scale.dart';
 
 class FinancialReportCard extends StatelessWidget {
   final double scoreChange;
@@ -21,7 +22,7 @@ class FinancialReportCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isPositive = scoreChange >= 0;
 
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

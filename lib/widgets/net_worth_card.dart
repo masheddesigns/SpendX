@@ -9,6 +9,8 @@ import '../domain/net_worth/net_worth_service.dart';
 import '../data/repositories/net_worth_repo.dart';
 import '../models/net_worth_summary.dart';
 import 'dart:math';
+import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/app_tap_scale.dart';
 
 class NetWorthCard extends StatefulWidget {
   const NetWorthCard({super.key});
@@ -58,11 +60,11 @@ class _NetWorthCardState extends State<NetWorthCard> {
     if (_loading) return const SizedBox.shrink();
 
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return AppTapScale(
       onTap: () async {
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const NetWorthScreen()),
+          AppPageRoute(builder: (_) => const NetWorthScreen()),
         );
         _loadNetWorth();
       },

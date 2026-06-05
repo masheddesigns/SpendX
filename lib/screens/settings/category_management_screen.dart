@@ -9,6 +9,8 @@ import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../utils/text_formatter.dart';
 import '../../widgets/category_color_picker.dart';
+import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../widgets/category_icon_picker.dart';
 
 class CategoryManagementScreen extends ConsumerStatefulWidget {
@@ -278,8 +280,8 @@ class _CategoryManagementScreenState
 
     return categoriesAsync.when(
       loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Scaffold(body: Center(child: Text('Error: $error'))),
+          const Scaffold(body: SkeletonLoader.transactions()),
+      error: (error, _) => Scaffold(body: ErrorStateWidget(error: error, onRetry: () => ref.invalidate(categoriesProvider))),
       data: (categories) {
         final sorted = [...categories]
           ..sort((a, b) {

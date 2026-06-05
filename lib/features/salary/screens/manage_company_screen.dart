@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../models/company.dart';
 import '../../salary_ledger/salary_ledger_notifier.dart';
+import '../../../shared/widgets/app_page_route.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 
 class ManageCompanyScreen extends ConsumerWidget {
   const ManageCompanyScreen({super.key});
@@ -25,10 +28,8 @@ class ManageCompanyScreen extends ConsumerWidget {
         label: Text('Add Company'),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-            child: Text('Error: $e',
-                style: const TextStyle(color: Colors.redAccent))),
+        loading: () => const SkeletonLoader.transactions(),
+        error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(salaryLedgerProvider)),
         data: (state) {
           final companies = state.companies;
           final selectedId = state.selectedCompanyId;
@@ -160,7 +161,7 @@ class ManageCompanyScreen extends ConsumerWidget {
     final notifier = ref.read(salaryLedgerProvider.notifier);
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
           builder: (_) => _CompanyEditorScreen(existing: existing)),
     );
     if (result == true) {

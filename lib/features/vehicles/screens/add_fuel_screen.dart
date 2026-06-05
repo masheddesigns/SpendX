@@ -5,6 +5,9 @@ import '../providers/vehicle_providers.dart';
 import '../../../models/vehicle.dart';
 import '../../../services/haptic_service.dart';
 import '../../../screens/expense/add_expense_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 
 class AddFuelScreen extends ConsumerStatefulWidget {
   final String? initialVehicleId;
@@ -277,7 +280,7 @@ class _AddFuelScreenState extends ConsumerState<AddFuelScreen> {
                 HapticService.instance.selection();
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
+                  AppPageRoute(
                     builder: (_) =>
                         const AddExpenseScreen(initialType: 'expense'),
                   ),
@@ -302,7 +305,7 @@ class _AddFuelScreenState extends ConsumerState<AddFuelScreen> {
                 HapticService.instance.selection();
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(
+                  AppPageRoute(
                     builder: (_) =>
                         const AddExpenseScreen(initialType: 'income'),
                   ),
@@ -349,8 +352,8 @@ class _AddFuelScreenState extends ConsumerState<AddFuelScreen> {
 
     return vehiclesAsync.when(
       loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
+          const Scaffold(body: SkeletonLoader.summary()),
+      error: (e, _) => Scaffold(body: ErrorStateWidget(error: e, onRetry: () => ref.invalidate(vehiclesProvider))),
       data: (vehicles) {
         if (_selectedVehicleId == null && vehicles.isNotEmpty) {
           _selectedVehicleId = vehicles.first.id;
@@ -368,8 +371,8 @@ class _AddFuelScreenState extends ConsumerState<AddFuelScreen> {
 
         return logsAsync.when(
           loading: () =>
-              const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
+              const Scaffold(body: SkeletonLoader.transactions()),
+          error: (e, _) => Scaffold(body: ErrorStateWidget(error: e, onRetry: () => ref.invalidate(fuelLogsProvider((vehicleId: _selectedVehicleId!, limit: 100, offset: 0))))),
           data: (currentLogs) {
             double? lastOdo;
             if (widget.existingLog == null && currentLogs.isNotEmpty) {

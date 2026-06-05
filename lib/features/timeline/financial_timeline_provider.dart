@@ -34,24 +34,27 @@ class FinancialTimeline {
 final financialTimelineProvider = FutureProvider<FinancialTimeline>((ref) async {
   ref.watch(transactionsProvider);
 
+  // Phase 1: compute identity (fast — reads forecast + health)
+  final identity = await FinancialIdentityService.instance.compute();
+
+  // Phase 2: load everything else in parallel, passing identity for tone
   final results = await Future.wait([
-    FinancialIdentityService.instance.compute(),
     MoneyScoreService.instance.getScore(),
     _getWeeklyWrapped(ref),
     DataAuditService.instance.getHealthScore(),
     ForecastEngine.instance.compute(),
-    GoalNudgeEngine.instance.generate(),
-    DecisionEngine.instance.getTopInsight(),
+    GoalNudgeEngine.instance.generate(identity: identity.type),
+    DecisionEngine.instance.getTopInsight(identity: identity.type),
   ]);
 
   return FinancialTimeline(
-    identity: results[0] as FinancialIdentity,
-    moneyScore: results[1] as MoneyScore,
-    weeklyWrapped: results[2] as WrappedSummary?,
-    health: results[3] as DataHealthScore,
-    forecast: results[4] as Forecast,
-    nudges: results[5] as List<Nudge>,
-    topInsight: results[6] as DecisionInsight?,
+    identity: identity,
+    moneyScore: results[0] as MoneyScore,
+    weeklyWrapped: results[1] as WrappedSummary?,
+    health: results[2] as DataHealthScore,
+    forecast: results[3] as Forecast,
+    nudges: results[4] as List<Nudge>,
+    topInsight: results[5] as DecisionInsight?,
   );
 });
 

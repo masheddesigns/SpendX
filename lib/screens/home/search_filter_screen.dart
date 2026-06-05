@@ -12,6 +12,7 @@ import '../expense/add_expense_screen.dart';
 import 'package:provider/provider.dart';
 import '../../services/settings_service.dart';
 import 'package:intl/intl.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class SearchFilterScreen extends ConsumerStatefulWidget {
   const SearchFilterScreen({super.key});
@@ -299,7 +300,7 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                           onTap: () async {
                             final result = await Navigator.push(
                               context,
-                              MaterialPageRoute(
+                              AppPageRoute(
                                 builder: (_) => UnifiedTransactionDetailScreen(
                                   transaction: t,
                                   category: _categoriesMap[t.categoryId],
@@ -311,7 +312,7 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                           onEdit: () async {
                             final result = await Navigator.push(
                               context,
-                              MaterialPageRoute(
+                              AppPageRoute(
                                 builder: (_) => AddExpenseScreen(
                                   initialType: t.type,
                                   existingTransaction: t,

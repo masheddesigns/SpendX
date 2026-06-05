@@ -8,6 +8,9 @@ import '../../../models/salary_contract.dart';
 import '../../../widgets/spendx_app_bar.dart';
 import '../../../screens/bank/add_bank_account_screen.dart';
 import 'manage_company_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 
 class SetupSalaryScreen extends ConsumerStatefulWidget {
   const SetupSalaryScreen({super.key, this.existingContract});
@@ -112,8 +115,8 @@ class _SetupSalaryScreenState extends ConsumerState<SetupSalaryScreen> {
             : 'Edit Salary Contract',
       ),
       body: companiesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const SkeletonLoader.summary(),
+        error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(salaryCompaniesProvider)),
         data: (companies) {
           if (companies.isEmpty) {
             return Center(
@@ -132,7 +135,7 @@ class _SetupSalaryScreenState extends ConsumerState<SetupSalaryScreen> {
                     ElevatedButton(
                       onPressed: () async {
                         await Navigator.of(context).push(
-                          MaterialPageRoute(
+                          AppPageRoute(
                             builder: (_) => const ManageCompanyScreen(),
                           ),
                         );
@@ -149,8 +152,8 @@ class _SetupSalaryScreenState extends ConsumerState<SetupSalaryScreen> {
           _initializeState(companies, activeCompany);
 
           return accountsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
+            loading: () => const SkeletonLoader.summary(),
+            error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(bankAccountsProvider)),
             data: (accounts) {
               return ListView(
                 padding: const EdgeInsets.all(16),
@@ -202,7 +205,7 @@ class _SetupSalaryScreenState extends ConsumerState<SetupSalaryScreen> {
                     onChanged: (value) async {
                       if (value == '__add_new__') {
                         await Navigator.of(context).push(
-                          MaterialPageRoute(
+                          AppPageRoute(
                             builder: (_) => const AddBankAccountScreen(),
                           ),
                         );

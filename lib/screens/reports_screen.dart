@@ -7,6 +7,9 @@ import '../data/providers.dart';
 import '../models/reports_summary.dart';
 
 import 'reports/monthly_report_screen.dart';
+import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/error_state_widget.dart';
+import '../shared/widgets/skeleton_loader.dart';
 
 /// Full financial reports screen with 5 tabs.
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -104,8 +107,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
             _LendingTab(summary: summary, anim: _chartAnim),
           ],
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        loading: () => const SkeletonLoader.summary(),
+        error: (err, _) => ErrorStateWidget(error: err, onRetry: () => ref.invalidate(reportsProvider)),
       ),
     );
   }
@@ -194,7 +197,7 @@ class _OverviewTab extends StatelessWidget {
                   'View deep insights for ${DateFormat('MMMM').format(DateTime.now())}'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 14),
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const MonthlyReportScreen())),
+                  AppPageRoute(builder: (_) => const MonthlyReportScreen())),
             ),
           ),
           const SizedBox(height: 40),

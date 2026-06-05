@@ -18,6 +18,11 @@ import '../../utils/app_format.dart';
 import '../credit_card_screen.dart';
 import '../financial_health_screen.dart';
 import '../net_worth_screen.dart';
+import '../../features/salary_ledger/salary_ledger_notifier.dart';
+import '../../features/salary_ledger/salary_ledger_models.dart';
+import '../../features/salary/screens/salary_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/app_tap_scale.dart';
 
 /// Insights tab — answers "What is happening with my money?"
 /// Consolidated into 6 clear sections. Scannable in 5 seconds.
@@ -36,6 +41,7 @@ class InsightsTab extends ConsumerWidget {
     final forecastAsync = ref.watch(forecastProvider);
     final streakAsync = ref.watch(streakProvider);
     final xpAsync = ref.watch(xpProvider);
+    final salaryAsync = ref.watch(salaryLedgerProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -54,9 +60,9 @@ class InsightsTab extends ConsumerWidget {
           // SECTION 1: Health Score (always visible)
           // ═══════════════════════════════════════════════════════════
           healthScore.when(
-            data: (score) => GestureDetector(
+            data: (score) => AppTapScale(
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const FinancialHealthScreen())),
+                  AppPageRoute(builder: (_) => const FinancialHealthScreen())),
               child: _HealthScoreCard(score: score),
             ),
             loading: () => const _ShimmerCard(height: 180),
@@ -84,7 +90,7 @@ class InsightsTab extends ConsumerWidget {
               change: data.change,
               changePct: data.changePct,
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const NetWorthScreen())),
+                  AppPageRoute(builder: (_) => const NetWorthScreen())),
             ),
             loading: () => const _ShimmerCard(height: 100),
             error: (_, _) => const SizedBox.shrink(),
@@ -103,7 +109,7 @@ class InsightsTab extends ConsumerWidget {
                 child: _CreditCompactCard(
                   health: health,
                   onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const CreditCardScreen())),
+                      AppPageRoute(builder: (_) => const CreditCardScreen())),
                 ),
               );
             },
@@ -112,7 +118,88 @@ class InsightsTab extends ConsumerWidget {
           ),
 
           // ═══════════════════════════════════════════════════════════
-          // SECTION 5: Monthly Summary
+          // SECTION 5: Salary Status (compact)
+          // ═══════════════════════════════════════════════════════════
+          salaryAsync.when(
+            data: (salaryState) {
+              final current = salaryState.currentMonth;
+              if (current == null) return const SizedBox.shrink();
+
+              final isPaid = current.status == SalaryStatus.paid;
+              final isPartial = current.status == SalaryStatus.partial;
+              final statusColor = isPaid
+                  ? const Color(0xFF22C55E)
+                  : isPartial
+                      ? const Color(0xFF0EA5E9)
+                      : const Color(0xFFF59E0B);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: AppTapScale(
+                  onTap: () => Navigator.push(context,
+                      AppPageRoute(builder: (_) => const SalaryScreen())),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isPaid
+                                  ? Icons.check_circle_rounded
+                                  : isPartial
+                                      ? Icons.timelapse_rounded
+                                      : Icons.schedule_rounded,
+                              color: statusColor,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Salary',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                            fontWeight: FontWeight.w600)),
+                                Text(
+                                  '${AppFormat.currency(current.month.expectedAmount)} \u2022 ${current.status.label}',
+                                  style: TextStyle(
+                                      color: statusColor,
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+
+          // ═══════════════════════════════════════════════════════════
+          // SECTION 6: Monthly Summary
           // ═══════════════════════════════════════════════════════════
           monthStats.when(
             data: (stats) {
@@ -427,7 +514,7 @@ class _NetWorthBanner extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isPositive = change >= 0;
 
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(18),
@@ -487,7 +574,7 @@ class _CreditCompactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Card(
         child: Padding(

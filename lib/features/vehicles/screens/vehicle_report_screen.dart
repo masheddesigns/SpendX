@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../providers/vehicle_providers.dart';
 import '../../../models/vehicle.dart';
 import '../../../models/transaction.dart' as spx;
@@ -23,8 +25,8 @@ class VehicleReportScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: detailAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => Center(child: Text('Error: $err')),
+          loading: () => const SkeletonLoader.summary(),
+          error: (err, stack) => ErrorStateWidget(error: err, onRetry: () => ref.invalidate(vehicleDetailProvider(vehicle))),
           data: (data) {
             final total = data.totalFuelCost + data.totalOtherCost;
             return SingleChildScrollView(

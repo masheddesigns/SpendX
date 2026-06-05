@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/health/health_score_provider.dart';
+import '../shared/widgets/error_state_widget.dart';
+import '../shared/widgets/skeleton_loader.dart';
 
 /// Detail screen for financial health — uses the SAME provider as Insights card.
 class FinancialHealthScreen extends ConsumerWidget {
@@ -19,10 +21,8 @@ class FinancialHealthScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: scoreAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-              child: Text('Error: $e',
-                  style: const TextStyle(color: Colors.redAccent))),
+          loading: () => const SkeletonLoader.summary(),
+          error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(financialHealthScoreProvider)),
           data: (score) {
             final color = _scoreColor(score.score);
             final bd = score.breakdown;

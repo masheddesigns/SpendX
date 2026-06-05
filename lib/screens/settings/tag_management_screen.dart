@@ -5,6 +5,9 @@ import 'package:uuid/uuid.dart';
 import '../../data/providers.dart';
 import '../../models/tag.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../widgets/common/spendx_fab.dart';
@@ -98,9 +101,13 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
     listenForUndoSnackbars(ref, context, matches: (payload) => payload is Tag);
 
     return tagsAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Scaffold(body: Center(child: Text('Error: $error'))),
+      loading: () => const Scaffold(body: SkeletonLoader.transactions()),
+      error: (error, _) => Scaffold(
+        body: ErrorStateWidget(
+          error: error,
+          onRetry: () => ref.invalidate(tagsProvider),
+        ),
+      ),
       data: (tags) {
         final sortedTags = [
           ...tags,
@@ -117,13 +124,10 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
           ),
           body: SafeArea(
             child: sortedTags.isEmpty
-                ? Center(
-                    child: Text(
-                      'No tags found.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                ? const EmptyStateWidget(
+                    icon: Icons.label_off_outlined,
+                    title: 'No tags yet',
+                    description: 'Create tags to organize your transactions.',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(

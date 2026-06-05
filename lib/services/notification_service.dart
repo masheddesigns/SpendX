@@ -1,4 +1,5 @@
 import '../core/logging/app_logger.dart';
+import 'retention_events.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -29,7 +30,13 @@ class NotificationService {
       macOS: darwinInit,
     );
 
-    await _plugin.initialize(settings: initSettings);
+    await _plugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (response) {
+        // Observation: notification tap
+        RetentionEvents.instance.log(RetentionEvent.notificationOpened);
+      },
+    );
     _initialized = true;
 
     // Create high-importance channels for Android
@@ -256,6 +263,7 @@ class NotificationService {
     required int id,
     required String title,
     required String body,
+    String? payload,
   }) async {
     try {
       const details = NotificationDetails(
@@ -263,6 +271,7 @@ class NotificationService {
           'spendx_alerts',
           'SpendX Alerts',
           importance: Importance.high,
+          styleInformation: BigTextStyleInformation(''),
         ),
         iOS: DarwinNotificationDetails(),
         macOS: DarwinNotificationDetails(),
@@ -272,7 +281,10 @@ class NotificationService {
         title: title,
         body: body,
         notificationDetails: details,
+        payload: payload,
       );
+      // Observation: notification dispatched
+      RetentionEvents.instance.log(RetentionEvent.notificationReceived);
     } on MissingPluginException catch (e) {
       AppLogger.d('MissingPluginException showing notification: $e');
     } catch (e) {

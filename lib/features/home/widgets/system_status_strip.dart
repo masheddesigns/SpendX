@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/system_alerts_provider.dart';
 import '../../../screens/review/review_queue_screen.dart';
 import '../../../screens/data_health_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 /// Single-priority system status strip on Home.
 ///
@@ -50,7 +51,7 @@ class SystemStatusStrip extends ConsumerWidget {
             label: '${alerts.reviewCount} transaction${alerts.reviewCount == 1 ? '' : 's'} need review',
             color: Colors.orange,
             onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const ReviewQueueScreen())),
+                AppPageRoute(builder: (_) => const ReviewQueueScreen())),
           );
         }
 
@@ -61,7 +62,7 @@ class SystemStatusStrip extends ConsumerWidget {
             label: '${alerts.auditIssueCount} data issue${alerts.auditIssueCount == 1 ? '' : 's'} found',
             color: Colors.orange,
             onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const DataHealthScreen())),
+                AppPageRoute(builder: (_) => const DataHealthScreen())),
           );
         }
 

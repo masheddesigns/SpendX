@@ -9,12 +9,15 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/app_card.dart';
 import '../../shared/widgets/app_dialog.dart';
 import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../utils/app_format.dart';
 import '../../utils/text_formatter.dart';
 import 'add_loan_screen.dart';
 import 'loan_detail_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class LoansScreen extends ConsumerStatefulWidget {
   const LoansScreen({super.key});
@@ -39,8 +42,11 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
       appBar: AppBar(title: const Text('Loans')),
       body: SafeArea(
         child: loansAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Center(child: Text('Error: $err')),
+          loading: () => const SkeletonLoader.transactions(),
+          error: (err, _) => ErrorStateWidget(
+            error: err,
+            onRetry: () => ref.invalidate(app_data.loansProvider),
+          ),
           data: (loans) {
             if (loans.isEmpty) {
               return _buildEmptyState(context);
@@ -80,7 +86,7 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
   Future<void> _addLoan() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddLoanScreen()),
+      AppPageRoute(builder: (_) => const AddLoanScreen()),
     );
     if (result == true && mounted) {
       await ref.read(app_data.loansProvider.notifier).refresh();
@@ -95,7 +101,7 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
         onTap: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => LoanDetailScreen(loan: loan)),
+            AppPageRoute(builder: (_) => LoanDetailScreen(loan: loan)),
           );
           if (!mounted) return;
           if (result == LoanDetailAction.deleted) {
@@ -345,7 +351,7 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
               Navigator.pop(context);
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => AddLoanScreen(loan: loan)),
+                AppPageRoute(builder: (_) => AddLoanScreen(loan: loan)),
               );
               if (result == true) {
                 await ref.read(app_data.loansProvider.notifier).refresh();

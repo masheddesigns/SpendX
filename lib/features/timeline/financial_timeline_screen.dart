@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/adaptive_personality.dart';
 import '../../services/decision_engine.dart';
 import '../../services/financial_identity_service.dart';
 import '../../services/forecast_engine.dart';
 import '../../services/goal_nudge_engine.dart';
 import '../../services/money_score_service.dart';
 import '../../services/data_audit_service.dart';
+import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../utils/app_format.dart';
 import '../wrapped/models/wrapped_summary.dart';
 import 'financial_timeline_provider.dart';
@@ -22,8 +25,8 @@ class FinancialTimelineScreen extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     return timelineAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const SkeletonLoader.summary(),
+      error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(financialTimelineProvider)),
       data: (timeline) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -541,12 +544,18 @@ class _IdentityBanner extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: FontWeight.w600)),
               if (score.weeklyDelta != null && score.weeklyDelta != 0)
-                Text(
-                  '${score.isImproving ? "\u2191" : "\u2193"} ${score.weeklyDelta!.abs()} vs last week',
-                  style: TextStyle(
-                      color: score.isImproving ? Colors.green : cs.error,
-                      fontSize: 10),
-                ),
+                Builder(builder: (_) {
+                  final p = AdaptivePersonality(identity.type);
+                  final text = score.isImproving
+                      ? p.scoreMomentumUp(score.weeklyDelta!)
+                      : p.scoreMomentumDown(score.weeklyDelta!);
+                  return Text(
+                    text,
+                    style: TextStyle(
+                        color: score.isImproving ? Colors.green : cs.error,
+                        fontSize: 10),
+                  );
+                }),
             ],
           ),
         ],

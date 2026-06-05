@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/vehicle.dart';
 import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../providers/vehicle_providers.dart';
 
 class FuelAnalyticsScreen extends ConsumerWidget {
@@ -23,8 +25,8 @@ class FuelAnalyticsScreen extends ConsumerWidget {
         title: Text('${vehicle.name} Analytics'),
       ),
       body: detailAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error: $error')),
+        loading: () => const SkeletonLoader.summary(),
+        error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(vehicleDetailProvider(vehicle))),
         data: (detail) {
           if (detail.logs.isEmpty) {
             return const Center(

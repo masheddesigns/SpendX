@@ -13,6 +13,7 @@ import 'database_tools_screen.dart';
 import 'notification_settings_screen.dart';
 import '../about_screen.dart';
 import '../help_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class ProfileSettingsScreen extends StatelessWidget {
   const ProfileSettingsScreen({super.key});
@@ -148,7 +149,7 @@ class ProfileSettingsScreen extends StatelessWidget {
                 subtitle:
                     '${settings.primaryCurrency} (${settings.currencySymbol})',
                 onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const CurrencySelectionScreen())),
+                    AppPageRoute(builder: (_) => const CurrencySelectionScreen())),
               ),
             ),
             _SettingsTile(
@@ -183,7 +184,7 @@ class ProfileSettingsScreen extends StatelessWidget {
               title: 'Categories',
               subtitle: 'Manage income & expense types',
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const CategoryManagementScreen())),
+                  AppPageRoute(builder: (_) => const CategoryManagementScreen())),
             ),
             _SettingsTile(
               icon: Icons.storage_outlined,
@@ -191,7 +192,7 @@ class ProfileSettingsScreen extends StatelessWidget {
               title: 'Database Tools',
               subtitle: 'Import, export, backup',
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const DatabaseToolsScreen())),
+                  AppPageRoute(builder: (_) => const DatabaseToolsScreen())),
             ),
             _SettingsTile(
               icon: Icons.delete_outline_rounded,
@@ -199,7 +200,7 @@ class ProfileSettingsScreen extends StatelessWidget {
               title: 'Clear Data',
               subtitle: 'Erase transactions, accounts, salary',
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const DataManagementScreen())),
+                  AppPageRoute(builder: (_) => const DataManagementScreen())),
             ),
 
             const Divider(height: 32),
@@ -212,7 +213,7 @@ class ProfileSettingsScreen extends StatelessWidget {
               title: 'Notifications',
               subtitle: 'Reminders, alerts, quiet hours',
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => NotificationSettingsScreen())),
+                  AppPageRoute(builder: (_) => NotificationSettingsScreen())),
             ),
 
             const Divider(height: 32),
@@ -225,7 +226,7 @@ class ProfileSettingsScreen extends StatelessWidget {
               title: 'Help & Guide',
               subtitle: 'How to use SpendX',
               onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const HelpScreen())),
+                  AppPageRoute(builder: (_) => const HelpScreen())),
             ),
             FutureBuilder<PackageInfo>(
               future: PackageInfo.fromPlatform(),
@@ -237,7 +238,7 @@ class ProfileSettingsScreen extends StatelessWidget {
                   title: 'About SpendX',
                   subtitle: 'Version $version',
                   onTap: () => Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const AboutScreen())),
+                      AppPageRoute(builder: (_) => const AboutScreen())),
                 );
               },
             ),

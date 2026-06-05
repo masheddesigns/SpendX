@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:spend_x/widgets/spendx_app_bar.dart';
 
 import 'privacy_policy_screen.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -210,7 +211,7 @@ class AboutScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) => const PrivacyPolicyScreen(),
                     ),
                   ),

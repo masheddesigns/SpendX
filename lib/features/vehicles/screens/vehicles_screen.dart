@@ -6,11 +6,14 @@ import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/app_bar.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/empty_state_widget.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../../../widgets/common/spendx_fab.dart';
 import '../providers/vehicle_providers.dart';
 import 'add_vehicle_entry_screen.dart';
 import 'vehicle_detail_screen.dart';
 import 'vehicle_management_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 class VehiclesScreen extends ConsumerWidget {
   const VehiclesScreen({super.key});
@@ -25,8 +28,8 @@ class VehiclesScreen extends ConsumerWidget {
         title: 'Vehicles',
       ),
       body: vehiclesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error: $error')),
+        loading: () => const SkeletonLoader.transactions(),
+        error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(vehiclesProvider)),
         data: (vehicles) {
           if (vehicles.isEmpty) {
             return EmptyStateWidget(
@@ -38,7 +41,7 @@ class VehiclesScreen extends ConsumerWidget {
               onCtaTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
+                  AppPageRoute(
                     builder: (_) => const VehicleManagementScreen(),
                   ),
                 );
@@ -74,7 +77,7 @@ class VehiclesScreen extends ConsumerWidget {
                   onManage: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      AppPageRoute(
                         builder: (_) => const VehicleManagementScreen(),
                       ),
                     );
@@ -88,7 +91,7 @@ class VehiclesScreen extends ConsumerWidget {
                   onViewDetails: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      AppPageRoute(
                         builder: (_) =>
                             VehicleDetailScreen(vehicle: selectedVehicle),
                       ),
@@ -146,7 +149,7 @@ class VehiclesScreen extends ConsumerWidget {
   Future<void> _openAddEntry(BuildContext context, String? selectedVehicleId) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => AddVehicleEntryScreen(
           initialVehicleId: selectedVehicleId,
           initialTabIndex: 0,

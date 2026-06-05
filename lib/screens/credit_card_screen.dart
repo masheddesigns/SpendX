@@ -8,6 +8,8 @@ import '../models/credit_emi.dart';
 import '../services/credit_intelligence_service.dart';
 import '../shared/theme/app_theme.dart';
 import '../shared/widgets/empty_state_widget.dart';
+import '../shared/widgets/skeleton_loader.dart';
+import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/undo_snackbar_listener.dart';
 import '../utils/app_format.dart';
 import 'credit_card/add_credit_card_screen.dart';
@@ -16,6 +18,8 @@ import 'credit_card/pay_credit_card_screen.dart';
 import 'credit_card/credit_emi_detail_screen.dart';
 import '../utils/text_formatter.dart';
 import '../features/liabilities/providers/liabilities_providers.dart';
+import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/app_tap_scale.dart';
 
 class CreditCardScreen extends ConsumerStatefulWidget {
   const CreditCardScreen({super.key});
@@ -47,8 +51,11 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Credit Cards')),
       body: cardsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        loading: () => const SkeletonLoader.transactions(),
+        error: (err, _) => ErrorStateWidget(
+          error: err,
+          onRetry: () => ref.invalidate(creditCardsProvider),
+        ),
         data: (cards) {
           if (cards.isEmpty) {
             return EmptyStateWidget(
@@ -100,9 +107,8 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             outstanding,
                             intelligenceAsync.valueOrNull,
                           ),
-                          loading: () =>
-                              const Center(child: CircularProgressIndicator()),
-                          error: (err, _) => Text('Error: $err'),
+                          loading: () => const SkeletonLoader.summary(),
+                          error: (err, _) => Text('$err'),
                         ),
                         AppSpacing.sectionSpacer,
                         _buildActionGrid(selectedCard),
@@ -121,10 +127,10 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 recentTxnsAsync.when(
                   data: (txns) => _buildRecentTransactionsList(txns),
                   loading: () => const SliverToBoxAdapter(
-                    child: Center(child: CircularProgressIndicator()),
+                    child: SkeletonLoader.transactions(),
                   ),
                   error: (err, _) => SliverToBoxAdapter(
-                    child: Center(child: Text('Error: $err')),
+                    child: Text('$err'),
                   ),
                 ),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
@@ -158,7 +164,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           final card = cards[index];
           final isSelected = _selectedCardIndex == index;
 
-          return GestureDetector(
+          return AppTapScale(
             onTap: () => setState(() => _selectedCardIndex = index),
             child: Container(
               width: 280,
@@ -273,7 +279,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   }
 
   Widget _buildAddCardButton() {
-    return GestureDetector(
+    return AppTapScale(
       onTap: _navigateToAddCard,
       child: Container(
         width: 100,
@@ -622,7 +628,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
+            AppPageRoute(
               builder: (context) => CreditEmiDetailScreen(emi: emi),
             ),
           ).then((_) => _invalidateAll());
@@ -765,7 +771,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   void _navigateToAddCard() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AddCreditCardScreen()),
+      AppPageRoute(builder: (context) => const AddCreditCardScreen()),
     ).then((result) {
       if (result == true) _invalidateAll();
     });
@@ -774,7 +780,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   void _navigateToEditCard(CreditCard card) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (context) => AddCreditCardScreen(existingCard: card),
       ),
     ).then((result) async {
@@ -793,7 +799,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   void _navigateToAddTransaction(CreditCard card) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (context) => AddCreditTransactionScreen(card: card),
       ),
     ).then((result) {
@@ -804,7 +810,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   void _navigateToPayments(CreditCard card) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (context) => PayCreditCardScreen(
           card: card,
           outstanding:

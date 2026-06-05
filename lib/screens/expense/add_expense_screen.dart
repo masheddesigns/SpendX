@@ -32,6 +32,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../bank/add_bank_account_screen.dart';
 import '../../widgets/form/add_category_sheet.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
   final String initialType; // 'expense' or 'income'
@@ -636,7 +637,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           onPressed: () async {
                             final result = await Navigator.push(
                               context,
-                              MaterialPageRoute(
+                              AppPageRoute(
                                 builder: (_) => const AddBankAccountScreen(),
                               ),
                             );

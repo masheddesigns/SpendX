@@ -10,9 +10,12 @@ import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../credit_card/add_credit_card_screen.dart';
 import '../loans/loans_screen.dart';
 import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 import 'add_bank_account_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class AccountListScreen extends ConsumerWidget {
   final bool isEmbedded;
@@ -25,16 +28,33 @@ class AccountListScreen extends ConsumerWidget {
     final cardsAsync = ref.watch(creditCardsProvider);
     final loansAsync = ref.watch(loansProvider);
 
-    return accountsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Error: $error')),
-      data: (accounts) => cardsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error: $error')),
-        data: (cards) => loansAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Error: $error')),
-          data: (loans) {
+    if (accountsAsync.isLoading || cardsAsync.isLoading || loansAsync.isLoading) {
+      return const SkeletonLoader();
+    }
+    if (accountsAsync.hasError) {
+      return ErrorStateWidget(
+        error: accountsAsync.error!,
+        onRetry: () => ref.invalidate(accountsProvider),
+      );
+    }
+    if (cardsAsync.hasError) {
+      return ErrorStateWidget(
+        error: cardsAsync.error!,
+        onRetry: () => ref.invalidate(creditCardsProvider),
+      );
+    }
+    if (loansAsync.hasError) {
+      return ErrorStateWidget(
+        error: loansAsync.error!,
+        onRetry: () => ref.invalidate(loansProvider),
+      );
+    }
+
+    return Builder(builder: (context) {
+      final accounts = accountsAsync.value!;
+      final cards = cardsAsync.value!;
+      final loans = loansAsync.value!;
+      {
           if (accounts.isEmpty && cards.isEmpty) {
             return EmptyStateWidget(
               icon: Icons.account_balance_wallet_outlined,
@@ -87,7 +107,7 @@ class AccountListScreen extends ConsumerWidget {
                     Expanded(
                       child: FilledButton.tonalIcon(
                         onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => const LoansScreen())),
+                            AppPageRoute(builder: (_) => const LoansScreen())),
                         icon: const Icon(Icons.account_balance_outlined, size: 16),
                         label: const Text('Loan', style: TextStyle(fontSize: 12)),
                       ),
@@ -146,7 +166,7 @@ class AccountListScreen extends ConsumerWidget {
                       const Spacer(),
                       TextButton(
                         onPressed: () => Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => const LoansScreen())),
+                            AppPageRoute(builder: (_) => const LoansScreen())),
                         child: const Text('View All'),
                       ),
                     ],
@@ -186,7 +206,7 @@ class AccountListScreen extends ConsumerWidget {
                                         Theme.of(context).colorScheme.error,
                                     fontWeight: FontWeight.w600)),
                             onTap: () => Navigator.push(context,
-                                MaterialPageRoute(
+                                AppPageRoute(
                                     builder: (_) => const LoansScreen())),
                           ),
                         ),
@@ -209,16 +229,15 @@ class AccountListScreen extends ConsumerWidget {
               label: const Text('Add Account'),
             ),
           );
-        },
-      ),
-      ),
+        }
+      },
     );
   }
 
   Future<void> _openAddAccount(BuildContext context, WidgetRef ref) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddBankAccountScreen()),
+      AppPageRoute(builder: (_) => const AddBankAccountScreen()),
     );
     if (result == true) {
       ref.invalidate(accountsProvider);
@@ -232,7 +251,7 @@ class AccountListScreen extends ConsumerWidget {
   ) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => AddBankAccountScreen(existing: account)),
+      AppPageRoute(builder: (_) => AddBankAccountScreen(existing: account)),
     );
     if (result == true) {
       ref.invalidate(accountsProvider);
@@ -242,7 +261,7 @@ class AccountListScreen extends ConsumerWidget {
   Future<void> _openAddCreditCard(BuildContext context, WidgetRef ref) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const AddCreditCardScreen()),
+      AppPageRoute(builder: (_) => const AddCreditCardScreen()),
     );
     if (result == true) {
       ref.invalidate(creditCardsProvider);
@@ -256,7 +275,7 @@ class AccountListScreen extends ConsumerWidget {
   ) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => AddCreditCardScreen(existingCard: card),
       ),
     );
@@ -309,7 +328,7 @@ class AccountListScreen extends ConsumerWidget {
     if (newCard != null && context.mounted) {
       await Navigator.push(
         context,
-        MaterialPageRoute(
+        AppPageRoute(
           builder: (_) => AddCreditCardScreen(existingCard: newCard),
         ),
       );
@@ -355,7 +374,7 @@ class AccountListScreen extends ConsumerWidget {
     if (newAccount != null && context.mounted) {
       await Navigator.push(
         context,
-        MaterialPageRoute(
+        AppPageRoute(
           builder: (_) => AddBankAccountScreen(existing: newAccount),
         ),
       );

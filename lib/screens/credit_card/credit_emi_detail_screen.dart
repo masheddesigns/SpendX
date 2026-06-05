@@ -6,6 +6,8 @@ import '../../models/emi_installment.dart';
 import '../../theme/app_spacing.dart';
 import '../../utils/app_format.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
+import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 
 class CreditEmiDetailScreen extends ConsumerStatefulWidget {
@@ -37,8 +39,8 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
       ),
       body: SafeArea(
         child: installmentsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Error: $error')),
+          loading: () => const SkeletonLoader.transactions(),
+          error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(emiInstallmentsProvider(widget.emi.id))),
           data: (installments) => Column(
             children: [
               _buildSummaryCard(),

@@ -11,6 +11,7 @@ import '../../models/goal_log.dart';
 import '../../models/transaction.dart';
 import '../../utils/app_format.dart';
 import 'add_goal_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class GoalDetailScreen extends ConsumerStatefulWidget {
   final Goal goal;
@@ -173,7 +174,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   Future<void> _editGoal() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => AddGoalScreen(existing: _goal)),
+      AppPageRoute(builder: (_) => AddGoalScreen(existing: _goal)),
     );
     if (result == true) {
       ref.invalidate(goalsProvider);

@@ -11,6 +11,7 @@ import '../services/gemini_service.dart';
 import '../widgets/custom_snackbar.dart';
 import '../services/export_service.dart';
 import '../services/import_service.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class ImportScreen extends ConsumerStatefulWidget {
   final String? initialMethod; // 'ai', 'csv', 'csv_generic'
@@ -250,7 +251,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           onTap: () => setState(
             () => Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
+              AppPageRoute(
                 builder: (_) =>
                     const ImportScreen(initialMethod: 'csv_generic'),
               ),

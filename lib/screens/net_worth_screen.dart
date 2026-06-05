@@ -13,11 +13,14 @@ import '../models/net_worth_snapshot_record.dart';
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
 import '../widgets/custom_snackbar.dart';
+import '../shared/widgets/skeleton_loader.dart';
+import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/undo_snackbar_listener.dart';
 import '../features/liabilities/providers/liabilities_providers.dart'
     show lendingProvider;
 import 'bank/add_bank_account_screen.dart';
 import 'net_worth/net_worth_report_screen.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class NetWorthScreen extends ConsumerStatefulWidget {
   const NetWorthScreen({super.key});
@@ -263,26 +266,17 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     );
 
     if (accountsAsync.isLoading || cardsAsync.isLoading || loansAsync.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: SkeletonLoader.summary());
     }
 
     if (accountsAsync.hasError || cardsAsync.hasError || loansAsync.hasError) {
+      final err = accountsAsync.error ?? cardsAsync.error ?? loansAsync.error;
       return Scaffold(
         appBar: AppBar(title: const Text('Net Worth')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text('Failed to calculate net worth'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _refreshData,
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
+        body: ErrorStateWidget(
+          error: err ?? 'Failed to load',
+          title: 'Failed to calculate net worth',
+          onRetry: _refreshData,
         ),
       );
     }
@@ -296,7 +290,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
             tooltip: 'Detailed History',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => NetWorthReportScreen()),
+              AppPageRoute(builder: (_) => NetWorthReportScreen()),
             ),
           ),
         ],
@@ -308,7 +302,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         onPressed: () async {
           final res = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AddBankAccountScreen()),
+            AppPageRoute(builder: (_) => AddBankAccountScreen()),
           );
           if (res == true) {
             _refreshData();
@@ -561,8 +555,8 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
           ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, st) => Text('Error calculating net worth: $e'),
+      loading: () => const SkeletonLoader.summary(),
+      error: (e, _) => Text('$e'),
     );
   }
 
@@ -869,7 +863,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               Navigator.pop(context);
               final res = await Navigator.push(
                 context,
-                MaterialPageRoute(
+                AppPageRoute(
                   builder: (_) => AddBankAccountScreen(existing: a),
                 ),
               );

@@ -13,6 +13,7 @@ import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../utils/text_formatter.dart';
 import '../../utils/app_format.dart';
 import '../bank/add_bank_account_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 enum CreditCardFormAction { deleted }
 
@@ -197,7 +198,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
     if (newAccount != null && mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(
+        AppPageRoute(
           builder: (_) => AddBankAccountScreen(existing: newAccount),
         ),
       );

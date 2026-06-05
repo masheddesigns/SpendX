@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/providers.dart';
+import '../shared/widgets/skeleton_loader.dart';
+import '../shared/widgets/empty_state_widget.dart';
 import '../utils/app_format.dart';
 
 class NotificationsInboxScreen extends ConsumerStatefulWidget {
@@ -52,9 +54,13 @@ class _NotificationsInboxScreenState
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonLoader.transactions()
           : _items.isEmpty
-          ? const Center(child: Text('No alerts right now'))
+          ? const EmptyStateWidget(
+              icon: Icons.notifications_off_outlined,
+              title: 'No alerts right now',
+              description: 'You\'re all caught up. Alerts will appear here when actions are needed.',
+            )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemBuilder: (context, index) {

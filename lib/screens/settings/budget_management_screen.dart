@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/providers.dart';
 import '../../models/budget.dart';
 import '../../models/category.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
@@ -214,37 +216,12 @@ class _BudgetManagementScreenState
       ),
       body: SafeArea(
         child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const SkeletonLoader.transactions()
             : budgets.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.account_balance_wallet,
-                      size: 72,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No budgets set yet',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tap + to set a monthly limit per category',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
-                ),
+            ? const EmptyStateWidget(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'No budgets set yet',
+                description: 'Tap + to set a monthly limit per category.',
               )
             : ListView.builder(
                 padding: const EdgeInsets.all(16),

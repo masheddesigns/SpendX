@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/wrapped_providers.dart';
 import '../screens/wrapped_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 /// Horizontal scrollable story-style bubbles for the home screen.
 /// Shows available Wrapped periods (latest first).
@@ -40,7 +41,7 @@ class WrappedStoryBubbles extends ConsumerWidget {
               return GestureDetector(
                 onTap: () { HapticService.instance.tap(); Navigator.push(
                   context,
-                  MaterialPageRoute(
+                  AppPageRoute(
                       builder: (_) => WrappedScreen(period: period)),
                 ); },
                 child: Container(

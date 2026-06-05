@@ -37,6 +37,9 @@ final approveReviewProvider = Provider((ref) {
     String? accountId,
   }) async {
     final parsed = item.parsed;
+    final fallbackNote = parsed.rawText.length > 100
+        ? parsed.rawText.substring(0, 100)
+        : parsed.rawText;
     final transaction = Transaction(
       amount: parsed.amount,
       userId: 'offline_user',
@@ -44,10 +47,10 @@ final approveReviewProvider = Provider((ref) {
       categoryId: categoryId,
       accountId: accountId,
       date: parsed.date,
-      notes: parsed.merchant ?? parsed.body,
-      source: 'sms_review',
+      notes: parsed.merchant ?? fallbackNote,
+      source: 'review',
       externalRef: parsed.refId ??
-          '${parsed.sender}|${parsed.date.millisecondsSinceEpoch}|'
+          '${parsed.source ?? 'review'}|${parsed.date.millisecondsSinceEpoch}|'
           '${parsed.amount.toStringAsFixed(2)}|${parsed.last4 ?? ''}',
     );
 
@@ -56,7 +59,7 @@ final approveReviewProvider = Provider((ref) {
 
     // 2. Learn from this approval → merchant rules
     //    This turns every manual approval into a future auto-categorization.
-    final merchantText = parsed.merchant ?? parsed.body;
+    final merchantText = parsed.merchant ?? fallbackNote;
     final learnCategoryId = categoryId ?? transaction.categoryId;
     if (learnCategoryId != null && merchantText.isNotEmpty) {
       await ref.read(learnMerchantRuleProvider)(

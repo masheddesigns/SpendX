@@ -7,7 +7,10 @@ import '../transaction_detail_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import 'search_filter_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class TransactionListScreen extends ConsumerStatefulWidget {
   final bool isFullScreen;
@@ -58,7 +61,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
   Future<void> _onAddTransaction() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => const AddExpenseScreen(initialType: 'expense'),
       ),
     );
@@ -74,9 +77,13 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
 
     return categoryMapAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
+      loading: () => const Scaffold(body: SkeletonLoader.transactions()),
+      error: (err, _) => Scaffold(
+        body: ErrorStateWidget(
+          error: err,
+          onRetry: () => ref.invalidate(transactionCategoryMapProvider),
+        ),
+      ),
       data: (categoriesMap) {
         // Filter by IDs if provided (audit fix flow)
         List transactions;
@@ -129,7 +136,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                 onTap: () async {
                   final result = await Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) => UnifiedTransactionDetailScreen(
                         transaction: t,
                         category: categoriesMap[t.categoryId],
@@ -141,7 +148,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                 onEdit: () async {
                   final result = await Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) => AddExpenseScreen(
                         initialType: t.type,
                         existingTransaction: t,
@@ -169,7 +176,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   tooltip: 'Search & Filter',
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                         builder: (_) => const SearchFilterScreen()),
                   ),
                 ),

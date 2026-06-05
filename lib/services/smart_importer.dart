@@ -137,7 +137,7 @@ class SmartImporter {
       if (row.category != null && row.category!.isNotEmpty) {
         categoryId = _matchCategory(row.category!, categories);
       }
-      // Priority 2: keyword classify from description/notes
+      // Priority 2: keyword classify from description/category/title
       if (categoryId == null) {
         final searchText = '${row.category ?? ''} ${row.description ?? ''}';
         final type = row.type ?? defaultType;
@@ -147,6 +147,19 @@ class SmartImporter {
               (c) => c.name.toLowerCase() == catName.toLowerCase());
           if (match.isNotEmpty) categoryId = match.first.id;
         }
+      }
+      // Priority 3: scan all raw row text for keyword matches
+      if (categoryId == null && row.rawRow.isNotEmpty) {
+        final allText = row.rawRow.join(' ');
+        final type = row.type ?? defaultType;
+        final catName = CategoryClassifier.detect(text: allText, type: type);
+        if (catName != null) {
+          final match = categories.where(
+              (c) => c.name.toLowerCase() == catName.toLowerCase());
+          if (match.isNotEmpty) categoryId = match.first.id;
+        }
+        // Priority 4: fuzzy alias match on all raw text
+        categoryId ??= _matchCategory(allText, categories);
       }
 
       String type = row.type ?? defaultType;
@@ -857,19 +870,27 @@ class SmartImporter {
     }
 
     const aliases = {
-      'food': ['food', 'meal', 'lunch', 'dinner', 'breakfast', 'restaurant', 'cafe', 'snack', 'zomato', 'swiggy', 'biryani', 'pizza', 'burger', 'tea', 'coffee', 'canteen', 'mess', 'tiffin', 'bakery', 'juice', 'ice cream', 'cake', 'dine', 'eat'],
-      'transport': ['transport', 'fuel', 'petrol', 'diesel', 'cab', 'uber', 'ola', 'rapido', 'metro', 'bus', 'bike fuel', 'car fuel', 'auto', 'rickshaw', 'parking', 'toll', 'fastag', 'train ticket', 'commute'],
-      'groceries': ['grocery', 'groceries', 'supermarket', 'kirana', 'provision', 'vegetables', 'fruits', 'dmart', 'bigbasket', 'blinkit', 'zepto', 'instamart', 'milk', 'egg'],
-      'bills': ['bill', 'bills', 'electricity', 'water', 'gas', 'internet', 'wifi', 'broadband', 'recharge', 'bsnl', 'jio', 'airtel', 'vi', 'postpaid', 'prepaid', 'dth', 'phone bill', 'mobile', 'landline', 'maintenance'],
-      'rent': ['rent', 'home rent', 'house rent', 'room rent', 'pg', 'hostel', 'flat rent', 'lease'],
-      'shopping': ['shopping', 'amazon', 'flipkart', 'myntra', 'meesho', 'ajio', 'clothes', 'apparel', 'shoes', 'gadget', 'electronics', 'furniture', 'decor', 'gift', 'accessories'],
-      'health': ['health', 'medical', 'medicine', 'doctor', 'hospital', 'pharmacy', 'lab', 'test', 'dental', 'eye', 'gym', 'yoga', 'fitness', 'insurance', 'apollo', 'practo', 'pharmeasy', '1mg'],
-      'entertainment': ['entertainment', 'movie', 'netflix', 'spotify', 'hotstar', 'prime', 'youtube', 'subscription', 'game', 'gaming', 'concert', 'event', 'party', 'outing', 'pub', 'bar', 'club'],
-      'education': ['education', 'course', 'book', 'tuition', 'school', 'college', 'university', 'exam', 'coaching', 'udemy', 'coursera', 'stationery', 'fees', 'library'],
-      'travel': ['travel', 'trip', 'hotel', 'flight', 'train', 'booking', 'irctc', 'makemytrip', 'goibibo', 'airbnb', 'oyo', 'vacation', 'holiday', 'tour', 'visa', 'passport'],
-      'subscriptions': ['subscription', 'subscriptions', 'premium', 'membership', 'annual', 'monthly plan', 'saas'],
-      'salary': ['salary', 'income', 'wages', 'pay', 'stipend', 'earning', 'bonus', 'freelance', 'consulting'],
-      'investment': ['investment', 'mutual fund', 'sip', 'stock', 'share', 'fd', 'ppf', 'nps', 'gold', 'crypto', 'trading', 'dividend'],
+      'food': ['food', 'meal', 'lunch', 'dinner', 'breakfast', 'restaurant', 'cafe', 'snack', 'zomato', 'swiggy', 'biryani', 'pizza', 'burger', 'tea', 'coffee', 'canteen', 'mess', 'tiffin', 'bakery', 'juice', 'ice cream', 'cake', 'dine', 'eat', 'chicken', 'mutton', 'fish', 'thali', 'parcel', 'takeaway', 'delivery', 'noodles', 'shawarma', 'momos', 'dosa', 'idli'],
+      'transport': ['transport', 'fuel', 'petrol', 'diesel', 'cab', 'uber', 'ola', 'rapido', 'metro', 'bus', 'bike fuel', 'car fuel', 'auto', 'rickshaw', 'parking', 'toll', 'fastag', 'train ticket', 'commute', 'ride', 'car wash', 'tyre', 'puncture', 'challan'],
+      'groceries': ['grocery', 'groceries', 'supermarket', 'kirana', 'provision', 'vegetables', 'fruits', 'dmart', 'bigbasket', 'blinkit', 'zepto', 'instamart', 'milk', 'egg', 'bread', 'rice', 'wheat', 'atta', 'dal', 'oil', 'sugar', 'curd', 'butter', 'ghee', 'amul', 'daily needs'],
+      'bills': ['bill', 'bills', 'electricity', 'water', 'gas', 'internet', 'wifi', 'broadband', 'recharge', 'bsnl', 'jio', 'airtel', 'vi', 'postpaid', 'prepaid', 'dth', 'phone bill', 'mobile', 'landline', 'maintenance', 'property tax', 'water tax', 'sewage', 'municipal'],
+      'rent': ['rent', 'home rent', 'house rent', 'room rent', 'pg', 'hostel', 'flat rent', 'lease', 'landlord', 'broker', 'brokerage', 'security deposit', 'plumber', 'electrician', 'carpenter', 'maid', 'cook', 'servant', 'pest control', 'deep cleaning', 'repair', 'painting'],
+      'shopping': ['shopping', 'amazon', 'flipkart', 'myntra', 'meesho', 'ajio', 'clothes', 'apparel', 'shoes', 'gadget', 'electronics', 'furniture', 'decor', 'accessories', 'watch', 'bag', 'cosmetics', 'makeup', 'skincare', 'perfume', 'headphone', 'charger', 'fan', 'cooler'],
+      'health': ['health', 'medical', 'medicine', 'doctor', 'hospital', 'pharmacy', 'lab', 'test', 'dental', 'eye', 'gym', 'yoga', 'fitness', 'apollo', 'practo', 'pharmeasy', '1mg', 'surgery', 'therapy', 'physiotherapy', 'supplement', 'vitamin', 'wellness', 'cult fit'],
+      'entertainment': ['entertainment', 'movie', 'netflix', 'spotify', 'hotstar', 'prime', 'youtube', 'game', 'gaming', 'concert', 'event', 'party', 'outing', 'pub', 'bar', 'club', 'birthday', 'anniversary', 'celebration', 'picnic', 'amusement', 'comedy', 'standup', 'bowling', 'arcade'],
+      'education': ['education', 'course', 'book', 'tuition', 'school', 'college', 'university', 'exam', 'coaching', 'udemy', 'coursera', 'stationery', 'fees', 'library', 'certification', 'workshop', 'seminar', 'textbook', 'study material'],
+      'travel': ['travel', 'trip', 'hotel', 'flight', 'train', 'booking', 'irctc', 'makemytrip', 'goibibo', 'airbnb', 'oyo', 'vacation', 'holiday', 'tour', 'visa', 'passport', 'trek', 'camping', 'resort', 'luggage', 'airport', 'railway', 'sightseeing', 'pilgrimage', 'temple', 'darshan'],
+      'subscriptions': ['subscription', 'subscriptions', 'premium', 'membership', 'annual', 'monthly plan', 'saas', 'chatgpt', 'notion', 'canva', 'figma', 'adobe', 'vpn'],
+      'family': ['family', 'parents', 'mother', 'father', 'mom', 'dad', 'amma', 'appa', 'mummy', 'papa', 'brother', 'sister', 'wife', 'husband', 'son', 'daughter', 'kids', 'baby', 'child', 'relative', 'wedding', 'marriage', 'engagement', 'function', 'ceremony', 'festival', 'diwali', 'eid', 'christmas', 'onam', 'pongal', 'rakhi', 'gift', 'pocket money', 'allowance', 'daycare', 'nanny', 'diaper', 'toys'],
+      'personal care': ['salon', 'haircut', 'spa', 'massage', 'facial', 'grooming', 'barber', 'parlour', 'beauty', 'manicure', 'pedicure', 'waxing', 'laundry', 'dry clean', 'ironing', 'tailor'],
+      'charity': ['donation', 'charity', 'ngo', 'trust', 'foundation', 'temple donation', 'zakat', 'offering', 'crowdfunding', 'fundraiser', 'orphanage', 'seva', 'daan', 'contribution'],
+      'pets': ['pet', 'dog', 'cat', 'vet', 'veterinary', 'pet food', 'pet shop', 'kennel', 'dog food', 'cat food'],
+      'insurance': ['insurance', 'premium', 'lic', 'policy', 'term plan', 'cover', 'life insurance', 'vehicle insurance', 'car insurance', 'bike insurance', 'health insurance'],
+      'emi': ['emi', 'installment', 'loan emi', 'auto debit', 'home loan', 'car loan', 'personal loan', 'education loan', 'mortgage', 'loan repayment'],
+      'salary': ['salary', 'income', 'wages', 'pay', 'stipend', 'earning', 'bonus', 'freelance', 'consulting', 'commission', 'retainer'],
+      'investment': ['investment', 'mutual fund', 'sip', 'stock', 'share', 'fd', 'ppf', 'nps', 'gold', 'crypto', 'trading', 'dividend', 'zerodha', 'groww', 'kuvera'],
+      'rental income': ['rental income', 'rent received', 'tenant', 'lease income', 'property income'],
+      'business': ['business income', 'sales', 'revenue', 'collection', 'receivable', 'customer payment', 'shop income'],
       'others': ['other', 'others', 'misc', 'miscellaneous', 'general', 'unknown', 'uncategorized'],
     };
 

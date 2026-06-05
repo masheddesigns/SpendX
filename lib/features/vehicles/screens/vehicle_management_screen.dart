@@ -7,6 +7,8 @@ import '../../../shared/widgets/app_bar.dart';
 import '../../../shared/widgets/undo_snackbar_listener.dart';
 import '../../../widgets/common/spendx_fab.dart';
 import '../../../utils/text_formatter.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../providers/vehicle_providers.dart';
 import 'add_vehicle_screen.dart';
 
@@ -64,8 +66,8 @@ class _VehicleManagementScreenState
       ),
       body: SafeArea(
         child: vehiclesAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Error: $error')),
+          loading: () => const SkeletonLoader.transactions(),
+          error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(vehiclesProvider)),
           data: (vehicles) => vehicles.isEmpty
               ? Center(
                   child: Column(

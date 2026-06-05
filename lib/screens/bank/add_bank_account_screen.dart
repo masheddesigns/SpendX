@@ -11,6 +11,7 @@ import '../../shared/widgets/app_section_header.dart';
 import '../../shared/widgets/app_amount_field.dart';
 import '../../utils/text_formatter.dart';
 import '../credit_card/add_credit_card_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class AddBankAccountScreen extends ConsumerStatefulWidget {
   final BankAccount? existing;
@@ -153,7 +154,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     if (newCard != null && mounted) {
       Navigator.push(
         context,
-        MaterialPageRoute(
+        AppPageRoute(
           builder: (_) => AddCreditCardScreen(existingCard: newCard),
         ),
       );

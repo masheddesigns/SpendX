@@ -5,7 +5,7 @@ import '../models/salary_contract.dart';
 import '../services/salary_insights_service.dart';
 import '../utils/app_format.dart';
 
-class SalaryInsightsTab extends StatelessWidget {
+class SalaryInsightsTab extends StatefulWidget {
   const SalaryInsightsTab({
     super.key,
     required this.company,
@@ -16,9 +16,30 @@ class SalaryInsightsTab extends StatelessWidget {
   final SalaryContract contract;
 
   @override
+  State<SalaryInsightsTab> createState() => _SalaryInsightsTabState();
+}
+
+class _SalaryInsightsTabState extends State<SalaryInsightsTab> {
+  late Future<_InsightsBundle> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load(widget.company, widget.contract);
+  }
+
+  @override
+  void didUpdateWidget(covariant SalaryInsightsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.company != widget.company || oldWidget.contract != widget.contract) {
+      _future = _load(widget.company, widget.contract);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<_InsightsBundle>(
-      future: _load(company, contract),
+      future: _future,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Padding(

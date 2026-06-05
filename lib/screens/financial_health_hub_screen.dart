@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/providers.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class FinancialHealthHubScreen extends ConsumerStatefulWidget {
@@ -57,7 +58,7 @@ class _FinancialHealthHubScreenState extends ConsumerState<FinancialHealthHubScr
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonLoader(itemCount: 3, itemHeight: 100)
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [

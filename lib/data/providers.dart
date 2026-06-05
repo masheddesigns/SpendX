@@ -1179,19 +1179,59 @@ final remindersProvider =
 
 // --- Analytics: Batched Summary Computation ---
 
+// Diagnostic: detect rebuild storms. If this counter jumps fast in a single
+// second-window, providers are over-watching.
+int _analyticsRebuildCount = 0;
+DateTime? _analyticsLastRebuild;
+
+// Memoization: only recompute when an input length actually changes.
+// Riverpod calls this body whenever ANY watched provider emits — most of
+// those emissions are intermediate AsyncLoading→AsyncData transitions
+// where the resulting list is the same as before. Returning the cached
+// summary prevents downstream selector invalidation storms.
+String? _analyticsCacheKey;
+AnalyticsSummary? _analyticsCacheValue;
+
 final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
-  // Watch all core data sources
-  final txns = ref.watch(transactionsProvider).valueOrNull ?? [];
-  final accounts = ref.watch(accountsProvider).valueOrNull ?? [];
-  final loans = ref.watch(loansProvider).valueOrNull ?? [];
-  final cards = ref.watch(cardsProvider).valueOrNull ?? [];
-  final categories = ref.watch(categoriesProvider).valueOrNull ?? [];
-  final budgets = ref.watch(budgetsProvider).valueOrNull ?? [];
+  // Use .select() so we only react when the value field changes,
+  // not on every AsyncValue lifecycle transition.
+  final txns =
+      ref.watch(transactionsProvider.select((a) => a.valueOrNull ?? const []));
+  final accounts =
+      ref.watch(accountsProvider.select((a) => a.valueOrNull ?? const []));
+  final loans =
+      ref.watch(loansProvider.select((a) => a.valueOrNull ?? const []));
+  final cards =
+      ref.watch(cardsProvider.select((a) => a.valueOrNull ?? const []));
+  final categories =
+      ref.watch(categoriesProvider.select((a) => a.valueOrNull ?? const []));
+  final budgets =
+      ref.watch(budgetsProvider.select((a) => a.valueOrNull ?? const []));
+
+  // Cheap fingerprint to skip recomputation when inputs are equivalent.
+  final key = '${txns.length}|${accounts.length}|${loans.length}|'
+      '${cards.length}|${categories.length}|${budgets.length}';
+  if (_analyticsCacheKey == key && _analyticsCacheValue != null) {
+    return _analyticsCacheValue!;
+  }
+
+  // Storm detection (only after cache miss — true rebuilds, not cached hits)
+  final now = DateTime.now();
+  if (_analyticsLastRebuild != null &&
+      now.difference(_analyticsLastRebuild!).inSeconds < 1) {
+    _analyticsRebuildCount++;
+    if (_analyticsRebuildCount >= 3) {
+      debugPrint('⚠️ FETCH STORM: analyticsSummaryProvider rebuilt '
+          '$_analyticsRebuildCount times in <1s — check provider deps');
+    }
+  } else {
+    _analyticsRebuildCount = 1;
+  }
+  _analyticsLastRebuild = now;
 
   debugPrint('\u{1F4CA} Analytics provider: txns=${txns.length}, '
       'accounts=${accounts.length}, loans=${loans.length}, cards=${cards.length}');
 
-  // Create bundle for service processing
   final bundle = AnalyticsBundle(
     transactions: txns,
     accounts: accounts,
@@ -1200,8 +1240,10 @@ final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
     categories: categories,
     budgets: budgets,
   );
-
-  return ref.read(analyticsServiceProvider).computeSummary(bundle);
+  final summary = ref.read(analyticsServiceProvider).computeSummary(bundle);
+  _analyticsCacheKey = key;
+  _analyticsCacheValue = summary;
+  return summary;
 });
 
 // Memoized Selectors to prevent over-building widgets

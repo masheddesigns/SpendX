@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/gamification_service.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 
 class ProgressRewardsScreen extends StatefulWidget {
   const ProgressRewardsScreen({super.key});
@@ -56,7 +57,7 @@ class _ProgressRewardsScreenState extends State<ProgressRewardsScreen> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonLoader(itemCount: 3, itemHeight: 100)
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [

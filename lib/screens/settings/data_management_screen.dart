@@ -9,6 +9,7 @@ import '../../services/drive_service.dart';
 import '../../services/settings_service.dart';
 import '../../features/settings/providers/data_management_providers.dart';
 import '../debug/debug_hub_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class DataManagementScreen extends ConsumerStatefulWidget {
   const DataManagementScreen({super.key});
@@ -288,7 +289,7 @@ class _DataManagementScreenState extends ConsumerState<DataManagementScreen> {
                   subtitle: 'Seed data, stress tests, and diagnostics',
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) => const DebugHubScreen(),
                     ),
                   ),

@@ -1,4 +1,6 @@
+import 'adaptive_personality.dart';
 import 'data_audit_service.dart';
+import 'financial_identity_service.dart';
 import 'forecast_engine.dart';
 import 'goal_nudge_engine.dart';
 import '../utils/app_format.dart';
@@ -35,8 +37,9 @@ class DecisionEngine {
   static final instance = DecisionEngine._();
 
   /// Compute the prioritized insight stack.
-  Future<List<DecisionInsight>> compute() async {
+  Future<List<DecisionInsight>> compute({IdentityType? identity}) async {
     final insights = <DecisionInsight>[];
+    final p = AdaptivePersonality(identity ?? IdentityType.stable);
 
     // ── 1. Forecast risk (highest priority) ─────────────────
     try {
@@ -49,8 +52,8 @@ class DecisionEngine {
           ..sort((a, b) => b.driftPercent.compareTo(a.driftPercent));
 
         insights.add(DecisionInsight(
-          title: 'You\'re drifting above your usual spending',
-          body: 'At this pace, about ${AppFormat.currency(forecast.overspendAmount)} more than last month.',
+          title: p.overspendTitle,
+          body: p.overspendBody(AppFormat.currency(forecast.overspendAmount)),
           priority: InsightPriority.critical,
           reasons: [
             'Daily spend: ${AppFormat.currency(forecast.dailyBurnRate)}/day',
@@ -62,8 +65,8 @@ class DecisionEngine {
         ));
       } else if (forecast.projectedSavings > 0) {
         insights.add(DecisionInsight(
-          title: 'Everything looks on track',
-          body: 'You\'re heading towards ${AppFormat.currency(forecast.projectedSavings)} in savings this month.',
+          title: p.onTrackTitle,
+          body: p.onTrackBody(AppFormat.currency(forecast.projectedSavings)),
           priority: InsightPriority.low,
           reasons: [
             'Daily spend: ${AppFormat.currency(forecast.dailyBurnRate)}/day',
@@ -75,7 +78,7 @@ class DecisionEngine {
 
     // ── 2. Goal delays (high priority) ──────────────────────
     try {
-      final nudges = await GoalNudgeEngine.instance.generate();
+      final nudges = await GoalNudgeEngine.instance.generate(identity: identity);
       final delays = nudges.where((n) => n.type == NudgeType.delayWarning);
       for (final delay in delays) {
         insights.add(DecisionInsight(
@@ -104,7 +107,7 @@ class DecisionEngine {
       if (serious.isNotEmpty) {
         final total = serious.fold<int>(0, (s, i) => s + i.count);
         insights.add(DecisionInsight(
-          title: '$total data issue${total == 1 ? '' : 's'} need attention',
+          title: p.dataIssueTitle(total),
           body: serious.map((i) => i.title).join(', '),
           priority: InsightPriority.medium,
           reasons: serious.map((i) => i.impact ?? i.description).toList(),
@@ -120,8 +123,8 @@ class DecisionEngine {
   }
 
   /// Get the single most important insight.
-  Future<DecisionInsight?> getTopInsight() async {
-    final all = await compute();
+  Future<DecisionInsight?> getTopInsight({IdentityType? identity}) async {
+    final all = await compute(identity: identity);
     return all.isNotEmpty ? all.first : null;
   }
 }

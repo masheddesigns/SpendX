@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/data_audit_service.dart';
 import '../widgets/spendx_app_bar.dart';
 import 'home/transactions_screen.dart';
+import '../shared/widgets/app_page_route.dart';
 
 /// Data Health screen — shows audit results with quick-fix actions.
 /// Accessible from: More → Data Health, or Home status strip.
@@ -83,7 +84,7 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) => TransactionListScreen(
           isFullScreen: true,
           filterIds: issue.transactionIds,

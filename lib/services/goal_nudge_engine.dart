@@ -1,5 +1,7 @@
 import '../data/repositories/goal_repo.dart';
 import '../utils/app_format.dart';
+import 'adaptive_personality.dart';
+import 'financial_identity_service.dart';
 import 'forecast_engine.dart';
 
 /// A goal-aware nudge — connects spending behavior to personal goals.
@@ -30,8 +32,9 @@ class GoalNudgeEngine {
   static final instance = GoalNudgeEngine._();
 
   /// Generate nudges based on current goals and forecast.
-  Future<List<Nudge>> generate() async {
+  Future<List<Nudge>> generate({IdentityType? identity}) async {
     final nudges = <Nudge>[];
+    final p = AdaptivePersonality(identity ?? IdentityType.stable);
 
     try {
       final goalRepo = GoalRepo();
@@ -54,7 +57,7 @@ class GoalNudgeEngine {
         if (progress >= 75) {
           nudges.add(Nudge(
             title: '${progress.toStringAsFixed(0)}% to ${goal.title}',
-            body: 'You\'re almost there — ${AppFormat.currency(remaining)} to go!',
+            body: p.milestoneBody(AppFormat.currency(remaining)),
             type: NudgeType.milestone,
             goalId: goal.id,
           ));
@@ -73,8 +76,11 @@ class GoalNudgeEngine {
             final deficit = (monthsNeeded - monthsLeft).ceil();
             nudges.add(Nudge(
               title: '${goal.title} at risk',
-              body: 'At current savings, you\'ll miss by $deficit month${deficit == 1 ? "" : "s"}. '
-                  'Need ${AppFormat.currency(remaining / monthsLeft)}/month to stay on track.',
+              body: p.delayWarningBody(
+                goal.title,
+                deficit,
+                AppFormat.currency(remaining / monthsLeft),
+              ),
               type: NudgeType.delayWarning,
               goalId: goal.id,
             ));
@@ -96,7 +102,7 @@ class GoalNudgeEngine {
           // Negative savings — warning
           nudges.add(Nudge(
             title: '${goal.title} stalled',
-            body: 'You\'re spending more than earning. ${AppFormat.currency(remaining)} still needed.',
+            body: p.stalledBody(goal.title, AppFormat.currency(remaining)),
             type: NudgeType.delayWarning,
             goalId: goal.id,
           ));

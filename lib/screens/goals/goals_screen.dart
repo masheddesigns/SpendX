@@ -7,8 +7,12 @@ import '../../features/goals/goal_insights_provider.dart';
 import '../../features/goals/behavior_engine.dart';
 import '../../models/goal.dart';
 import '../../utils/app_format.dart';
+import '../../shared/widgets/skeleton_loader.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import 'add_goal_screen.dart';
 import 'goal_detail_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/app_tap_scale.dart';
 
 class GoalsScreen extends ConsumerWidget {
   const GoalsScreen({super.key});
@@ -21,8 +25,11 @@ class GoalsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Goals')),
       body: goalsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        loading: () => const SkeletonLoader.transactions(),
+        error: (err, _) => ErrorStateWidget(
+          error: err,
+          onRetry: () => ref.invalidate(activeGoalsProvider),
+        ),
         data: (goals) {
           if (goals.isEmpty) return _buildEmptyState(context);
 
@@ -50,7 +57,7 @@ class GoalsScreen extends ConsumerWidget {
                     onTap: () async {
                       final result = await Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        AppPageRoute(
                           builder: (_) => GoalDetailScreen(goal: goal),
                         ),
                       );
@@ -70,7 +77,7 @@ class GoalsScreen extends ConsumerWidget {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const AddGoalScreen()),
+            AppPageRoute(builder: (_) => const AddGoalScreen()),
           );
           if (result == true) {
             ref.invalidate(goalsProvider);
@@ -142,7 +149,7 @@ class GoalCard extends StatelessWidget {
         typeIcon = Icons.credit_score_rounded;
     }
 
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Card(
         child: Padding(

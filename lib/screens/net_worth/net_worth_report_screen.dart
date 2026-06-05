@@ -7,6 +7,8 @@ import '../../data/providers.dart';
 import '../../models/net_worth_snapshot_record.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../services/settings_service.dart';
+import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 import '../../utils/app_format.dart';
 
 class NetWorthReportScreen extends ConsumerStatefulWidget {
@@ -86,8 +88,8 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
       ),
       body: SafeArea(
         child: historyAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Error: $error')),
+          loading: () => const SkeletonLoader.transactions(),
+          error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(netWorthHistoryProvider)),
           data: (history) {
             if (history.isEmpty) {
               return const Center(

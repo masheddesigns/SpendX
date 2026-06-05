@@ -69,6 +69,136 @@ class TransactionTile extends StatelessWidget {
     return notesText;
   }
 
+  bool _isAutoDetected() {
+    final src = transaction.source;
+    return src == 'sms_auto' || src == 'sms_import' || src == 'sms_review';
+  }
+
+  /// Visual trust signal for auto-detected transactions.
+  /// Green = category + account both known (high signal).
+  /// Amber = missing category OR account (needs review).
+  /// Tap → opens an explanation sheet.
+  Widget _confidenceDot(ColorScheme cs) {
+    final hasCategory = transaction.categoryId != null;
+    final hasAccount = transaction.accountId != null;
+    final isFullyMapped = hasCategory && hasAccount;
+    final color = isFullyMapped ? Colors.green : Colors.orange;
+    return Builder(
+      builder: (ctx) => GestureDetector(
+        onTap: () => _showConfidenceSheet(ctx, isFullyMapped),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showConfidenceSheet(BuildContext context, bool isFullyMapped) {
+    final cs = Theme.of(context).colorScheme;
+    final hasCategory = transaction.categoryId != null;
+    final hasAccount = transaction.accountId != null;
+    final color = isFullyMapped ? Colors.green : Colors.orange;
+    final label = isFullyMapped ? 'High confidence' : 'Needs review';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Auto-detected · $label',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isFullyMapped
+                  ? 'I matched this to a category and account from your saved details.'
+                  : 'I detected the amount, but couldn\'t match everything. Tap Fix to update what\'s missing.',
+              style: TextStyle(
+                  color: cs.onSurfaceVariant, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            _ConfidenceCheck(
+              label: 'Amount detected',
+              ok: true,
+            ),
+            _ConfidenceCheck(
+              label: hasCategory ? 'Category matched' : 'Category missing',
+              ok: hasCategory,
+            ),
+            _ConfidenceCheck(
+              label: hasAccount ? 'Account matched' : 'Account missing',
+              ok: hasAccount,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(sheetCtx),
+                    child: const Text('Got it'),
+                  ),
+                ),
+                if (!isFullyMapped) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        if (onTap != null) onTap!();
+                      },
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      label: const Text('Fix'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildIcon(Category? category, Color color, {double size = 24}) {
     // If source is a special ledger type, override category icon
     IconData? specialIcon;
@@ -217,11 +347,21 @@ class TransactionTile extends StatelessWidget {
           ),
           child: Center(child: _buildIcon(category, categoryColor)),
         ),
-        title: Text(
-          TextFormatter.toSmartTitleCase(category?.name ?? 'Needs Category'),
-          style: AppTextStyles.titleMedium,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                TextFormatter.toSmartTitleCase(category?.name ?? 'Needs Category'),
+                style: AppTextStyles.titleMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (_isAutoDetected()) ...[
+              const SizedBox(width: 6),
+              _confidenceDot(cs),
+            ],
+          ],
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 2.0),
@@ -326,6 +466,36 @@ class TransactionTile extends StatelessWidget {
         ],
       ),
       child: tile,
+    );
+  }
+}
+
+class _ConfidenceCheck extends StatelessWidget {
+  final String label;
+  final bool ok;
+
+  const _ConfidenceCheck({required this.label, required this.ok});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(
+            ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+            size: 16,
+            color: ok ? Colors.green : Colors.orange,
+          ),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 }

@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../services/data_audit_service.dart';
 import '../../review_queue/providers/review_providers.dart';
-import '../../sms/services/sms_safe_mode.dart';
 
 /// Aggregated system status for the Home screen.
 /// Combines: review queue, drift alerts, safe mode, last sync, data health.
@@ -36,8 +35,8 @@ final systemAlertsProvider = FutureProvider<SystemAlerts>((ref) async {
   final reviewCount =
       await ref.watch(reviewQueueCountProvider.future).catchError((_) => 0);
 
-  // Safe mode
-  final safeModeActive = SmsSafeMode.instance.isEnabled;
+  // Safe mode (legacy SMS pipeline gone — always false)
+  const safeModeActive = false;
 
   // Audit issues (lightweight count)
   int auditCount = 0;

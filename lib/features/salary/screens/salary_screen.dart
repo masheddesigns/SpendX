@@ -12,8 +12,12 @@ import '../../../utils/app_format.dart';
 import '../../salary_ledger/salary_ledger_models.dart';
 import '../../salary_ledger/salary_ledger_notifier.dart';
 import '../services/salary_pdf_export.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
+import '../../../shared/widgets/error_state_widget.dart';
 import '../widgets/salary_analytics_card.dart';
 import 'month_detail_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
+import '../../../shared/widgets/app_tap_scale.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY POINT
@@ -27,37 +31,11 @@ class SalaryScreen extends ConsumerWidget {
     final async = ref.watch(salaryLedgerProvider);
 
     return async.when(
-      loading: () => const Scaffold(
-        
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const Scaffold(body: SkeletonLoader.summary()),
       error: (e, _) => Scaffold(
-        
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline_rounded,
-                    color: Colors.redAccent, size: 48),
-                const SizedBox(height: 16),
-                Text('$e',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: Colors.redAccent, fontSize: 14)),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () =>
-                      ref.invalidate(salaryLedgerProvider),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Retry'),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: Colors.blueAccent),
-                ),
-              ],
-            ),
-          ),
+        body: ErrorStateWidget(
+          error: e,
+          onRetry: () => ref.invalidate(salaryLedgerProvider),
         ),
       ),
       data: (state) {
@@ -758,10 +736,10 @@ class _MonthCard extends StatelessWidget {
     // Paid-but-late gets amber treatment
     final isLate = m.status == SalaryStatus.paid && m.delayDays > 0;
 
-    return GestureDetector(
+    return AppTapScale(
       onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(
+          AppPageRoute(
               builder: (_) => MonthDetailScreen(monthId: m.month.id))),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1031,7 +1009,7 @@ class _ExportOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),

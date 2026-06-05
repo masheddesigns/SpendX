@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spend_x/services/settings_service.dart';
 import 'package:spend_x/services/notification_service.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
 import 'package:spend_x/widgets/app_button.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -17,13 +16,11 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 6;
+  final int _totalPages = 5;
 
   // States
   String _selectedCurrency = 'INR';
   bool _notificationsEnabled = false;
-  bool _smsEnabled = false;
-  String _smsImportPeriod = 'last_30'; // 'last_7', 'last_30', 'last_90', 'all'
 
   @override
   void dispose() {
@@ -60,15 +57,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await SettingsService.instance.setEnableCreditCards(true);
     await SettingsService.instance.setEnableLending(true);
 
-    // Save SMS preference via SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('sms_import_enabled', _smsEnabled);
-    await prefs.setString('sms_import_period', _smsImportPeriod);
-
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      AppPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 
@@ -84,7 +76,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           decoration: BoxDecoration(
             color: _currentPage == index
                 ? Theme.of(context).colorScheme.primary
-                : Colors.grey.shade800,
+                : Theme.of(context).colorScheme.outlineVariant,
             borderRadius: BorderRadius.circular(4),
           ),
         );
@@ -113,8 +105,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _currentPage < _totalPages - 1
                       ? TextButton(
                           onPressed: _finishOnboarding,
-                          child: const Text('Skip',
-                              style: TextStyle(color: Colors.grey)),
+                          child: Text('Skip',
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         )
                       : const SizedBox(width: 48),
                 ],
@@ -131,7 +123,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _buildWelcomeScreen(),
                   _buildCurrencySetupScreen(),
                   _buildNotificationPermissionScreen(),
-                  _buildSmsPermissionScreen(),
                   _buildBackupExplanationScreen(),
                   _buildFinishSetupScreen(),
                 ],
@@ -171,7 +162,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               width: 110,
               height: 110,
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
@@ -197,7 +188,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'Welcome to SpendX',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                     letterSpacing: -0.5,
                   ),
               textAlign: TextAlign.center,
@@ -207,7 +198,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               'Track expenses, manage salary, loans, goals, and more '
               '— all stored locally on your device.',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white70,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.5,
                   ),
               textAlign: TextAlign.center,
@@ -220,10 +211,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 'AES-256 encrypted Google Drive sync'),
             const SizedBox(height: 14),
             _buildSmallFeature(Icons.auto_awesome_rounded, 'Smart Import',
-                'Import from CSV, JSON, Notion, and more'),
-            const SizedBox(height: 14),
-            _buildSmallFeature(Icons.sms_rounded, 'SMS Auto-Track',
-                'Auto-detect bank transactions from SMS'),
+                'Share screenshots or text from any payment app'),
             const SizedBox(height: 14),
             _buildSmallFeature(Icons.emoji_events_rounded, 'Gamification',
                 'Earn XP, level up, and view Wrapped summaries'),
@@ -239,10 +227,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, color: Colors.white70, size: 20),
+          child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -250,10 +238,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, color: Colors.white)),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
               Text(subtitle,
-                  style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
             ],
           ),
         ),
@@ -285,11 +273,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Text('Primary Currency',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                   )),
           const SizedBox(height: 8),
-          const Text('Select your main currency for all totals.',
-              style: TextStyle(color: Colors.white70)),
+          Text('Select your main currency for all totals.',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 32),
           Expanded(
             child: ListView.builder(
@@ -319,7 +307,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         border: Border.all(
                           color: isSelected
                               ? Theme.of(context).colorScheme.primary
-                              : Colors.white.withValues(alpha: 0.08),
+                              : Theme.of(context).colorScheme.outlineVariant,
                           width: isSelected ? 2.0 : 1.0,
                         ),
                         borderRadius: BorderRadius.circular(16),
@@ -330,10 +318,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             radius: 22,
                             backgroundColor: isSelected
                                 ? Theme.of(context).colorScheme.primary
-                                : Colors.white.withValues(alpha: 0.05),
+                                : Theme.of(context).colorScheme.surfaceContainerHighest,
                             child: Text(c['symbol']!,
-                                style: const TextStyle(
-                                    color: Colors.white,
+                                style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16)),
                           ),
@@ -347,11 +335,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                         fontWeight: isSelected
                                             ? FontWeight.w700
                                             : FontWeight.w500,
-                                        color: Colors.white,
+                                        color: Theme.of(context).colorScheme.onSurface,
                                         fontSize: 15)),
                                 Text(c['code']!,
-                                    style: const TextStyle(
-                                        color: Colors.white54, fontSize: 13)),
+                                    style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
                               ],
                             ),
                           ),
@@ -397,7 +385,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Text('Stay on Track',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                 textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -407,7 +395,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: Theme.of(context)
                   .textTheme
                   .bodyLarge
-                  ?.copyWith(color: Colors.white70, height: 1.5),
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 40),
@@ -418,8 +406,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       Icon(Icons.check_circle,
                           color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
-                      const Text('Notifications enabled',
-                          style: TextStyle(color: Colors.white70)),
+                      Text('Notifications enabled',
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
                   )
                 : AppButton.secondary(
@@ -433,157 +421,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ),
     );
-  }
-
-  // ── SMS Permission + Import Period ────────────────────
-
-  Widget _buildSmsPermissionScreen() {
-    final cs = Theme.of(context).colorScheme;
-
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: const Icon(Icons.sms_rounded,
-                  size: 70, color: Color(0xFF0EA5E9)),
-            ),
-            const SizedBox(height: 40),
-            Text('Auto-Track from SMS',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            Text(
-              'SpendX can read your bank SMS messages to automatically log transactions. '
-              'All processing happens on your device — nothing is sent to any server.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(color: Colors.white70, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-
-            // Enable/Disable toggle
-            _smsEnabled
-                ? Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle, color: cs.primary),
-                          const SizedBox(width: 8),
-                          const Text('SMS access enabled',
-                              style: TextStyle(color: Colors.white70)),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Import period selection
-                      Text('Import messages from:',
-                          style: TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 12),
-                      ..._buildPeriodOptions(cs),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      AppButton.secondary(
-                        onPressed: () async {
-                          final status = await Permission.sms.request();
-                          if (status.isGranted) {
-                            setState(() => _smsEnabled = true);
-                          }
-                        },
-                        text: 'Enable SMS Access',
-                      ),
-                      const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: () => _nextPage(),
-                        child: const Text('Skip — I\'ll add transactions manually',
-                            style: TextStyle(color: Colors.white54)),
-                      ),
-                    ],
-                  ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildPeriodOptions(ColorScheme cs) {
-    const options = [
-      ('last_7', 'Last 7 days', 'Quick scan of recent transactions'),
-      ('last_30', 'Last 30 days', 'Recommended for most users'),
-      ('last_90', 'Last 3 months', 'Import recent history'),
-      ('all', 'All messages', 'Full SMS scan — may take a moment'),
-    ];
-
-    return options.map((opt) {
-      final isSelected = _smsImportPeriod == opt.$1;
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: GestureDetector(
-          onTap: () => setState(() => _smsImportPeriod = opt.$1),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? cs.primary.withValues(alpha: 0.15)
-                  : Colors.white.withValues(alpha: 0.03),
-              border: Border.all(
-                color: isSelected
-                    ? cs.primary
-                    : Colors.white.withValues(alpha: 0.08),
-                width: isSelected ? 2 : 1,
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isSelected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                  color: isSelected ? cs.primary : Colors.white38,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(opt.$2,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight:
-                                isSelected ? FontWeight.w600 : FontWeight.w400,
-                          )),
-                      Text(opt.$3,
-                          style:
-                              const TextStyle(color: Colors.white54, fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }).toList();
   }
 
   // ── Backup ────────────────────────────────────────────
@@ -609,7 +446,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Text('Your Data, Your Drive',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                 textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -619,35 +456,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: Theme.of(context)
                   .textTheme
                   .bodyLarge
-                  ?.copyWith(color: Colors.white70, height: 1.5),
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 40),
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(20),
                 border:
-                    Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Column(
                 children: [
                   _benefitRow(
                       Icons.offline_pin_rounded, 'Works Offline', 'No internet? No problem.'),
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(color: Colors.white10)),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
                   _benefitRow(Icons.enhanced_encryption_rounded, 'AES-256 Encrypted',
                       'Data encrypted before upload'),
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(color: Colors.white10)),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
                   _benefitRow(Icons.devices_rounded, 'Multi-Device',
                       'Sync across phones with same Google account'),
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(color: Colors.white10)),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
                   _benefitRow(Icons.restore_page_rounded, 'Easy Recovery',
                       'Restore everything in one tap'),
                 ],
@@ -669,11 +506,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, color: Colors.white)),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
               Text(subtitle,
                   style:
-                      const TextStyle(color: Colors.white54, fontSize: 12)),
+                      TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
             ],
           ),
         ),
@@ -724,7 +561,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Text("You're all set!",
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onSurface,
                     )),
             const SizedBox(height: 16),
             Text(
@@ -732,17 +569,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               style: Theme.of(context)
                   .textTheme
                   .bodyLarge
-                  ?.copyWith(color: Colors.white70, height: 1.5),
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 40),
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(20),
                 border:
-                    Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -752,9 +589,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       Icon(Icons.tips_and_updates_rounded,
                           color: Colors.amber[300], size: 20),
                       const SizedBox(width: 12),
-                      const Text('Quick Tips',
+                      Text('Quick Tips',
                           style: TextStyle(
-                              fontWeight: FontWeight.w700, color: Colors.white)),
+                              fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -778,10 +615,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('\u2022 ', style: TextStyle(color: Colors.white54)),
+        Text('\u2022 ', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         Expanded(
           child: Text(text,
-              style: const TextStyle(color: Colors.white70, height: 1.4)),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4)),
         ),
       ],
     );

@@ -5,6 +5,7 @@ import '../credit_card_screen.dart';
 import '../loans/loans_screen.dart';
 import '../../utils/app_format.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
+import '../../shared/widgets/skeleton_loader.dart';
 
 class LiabilitiesHubScreen extends ConsumerStatefulWidget {
   const LiabilitiesHubScreen({super.key});
@@ -44,11 +45,11 @@ class _LiabilitiesHubScreenState extends ConsumerState<LiabilitiesHubScreen>
             summaryAsync.when(
               loading: () => const SizedBox(
                 height: 100,
-                child: Center(child: CircularProgressIndicator()),
+                child: SkeletonLoader.summary(),
               ),
               error: (err, _) => SizedBox(
                 height: 100,
-                child: Center(child: Text('Error: $err')),
+                child: Center(child: Text('$err')),
               ),
               data: (summary) => _buildSummaryCard(summary),
             ),

@@ -9,6 +9,7 @@ import '../../services/export_service.dart';
 import '../../services/import_service.dart';
 import '../smart_import_screen.dart';
 import '../import_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class DatabaseToolsScreen extends ConsumerStatefulWidget {
   const DatabaseToolsScreen({super.key});
@@ -129,7 +130,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) => const SmartImportScreen(),
                     ),
                   );
@@ -144,7 +145,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    AppPageRoute(
                       builder: (_) =>
                           ImportScreen(initialMethod: 'csv_generic'),
                     ),

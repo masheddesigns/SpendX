@@ -15,6 +15,7 @@ import '../features/salary/screens/salary_screen.dart';
 import '../screens/loans/loans_screen.dart';
 import '../screens/credit_card_screen.dart';
 import '../screens/lending/lending_screen.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class NotificationServiceV2 {
   static final NotificationServiceV2 _instance = NotificationServiceV2._();
@@ -365,19 +366,19 @@ class NotificationServiceV2 {
     switch (sourceType) {
       case 'salary':
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SalaryScreen()),
+          AppPageRoute(builder: (_) => const SalaryScreen()),
         );
         break;
       case 'loan':
       case 'emi':
         Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const LoansScreen()));
+        ).push(AppPageRoute(builder: (_) => const LoansScreen()));
         break;
       case 'credit':
         Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const CreditCardScreen()));
+        ).push(AppPageRoute(builder: (_) => const CreditCardScreen()));
         break;
       case 'service':
       case 'insurance':
@@ -386,7 +387,7 @@ class NotificationServiceV2 {
       case 'lending':
         Navigator.of(
           context,
-        ).push(MaterialPageRoute(builder: (_) => const LendingScreen()));
+        ).push(AppPageRoute(builder: (_) => const LendingScreen()));
         break;
       default:
         // Generic landing

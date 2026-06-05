@@ -33,17 +33,8 @@ class HomeDashboard extends ConsumerStatefulWidget {
 }
 
 class _HomeDashboardState extends ConsumerState<HomeDashboard> {
-  bool _initialized = false;
-
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) {
-      _initialized = true;
-      Future.microtask(() {
-        ref.invalidate(transactionsProvider);
-      });
-    }
-
     final paginatedState = ref.watch(paginatedTransactionsProvider);
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
     final categoriesMap = categoryMapAsync.valueOrNull ?? {};
@@ -86,15 +77,21 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
               child: Row(
                 children: [
-                  Text('Recent Transactions',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    'Recent Transactions',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const Spacer(),
                   TextButton(
-                    onPressed: () => Navigator.push(context,
-                        AppPageRoute(
-                            builder: (_) =>
-                                const TransactionListScreen(isFullScreen: true))),
+                    onPressed: () => Navigator.push(
+                      context,
+                      AppPageRoute(
+                        builder: (_) =>
+                            const TransactionListScreen(isFullScreen: true),
+                      ),
+                    ),
                     child: const Text('View All'),
                   ),
                 ],
@@ -104,8 +101,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
 
           // ── Skeleton loader (while loading) ──────────────
           if (isLoading)
-            const SliverToBoxAdapter(
-                child: SkeletonLoader.transactions()),
+            const SliverToBoxAdapter(child: SkeletonLoader.transactions()),
 
           // ── Empty state ──────────────────────────────────
           if (!isLoading && recentTxns.isEmpty)
@@ -115,26 +111,30 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.receipt_long_outlined,
-                          size: 48,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withValues(alpha: 0.4)),
+                      Icon(
+                        Icons.receipt_long_outlined,
+                        size: 48,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                      ),
                       const SizedBox(height: 12),
-                      Text('No transactions yet',
-                          style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant)),
+                      Text(
+                        'No transactions yet',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text('Tap + to add your first one',
-                          style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant
-                                  .withValues(alpha: 0.6),
-                              fontSize: 12)),
+                      Text(
+                        'Tap + to add your first one',
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -144,33 +144,33 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
           // ── Transaction List ──────────────────────────────
           if (!isLoading && recentTxns.isNotEmpty)
             SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final t = recentTxns[index];
-                  return Padding(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.listHorizontalPadding,
-                        vertical: AppSpacing.cardGap / 2),
-                    child: TransactionTile(
-                      transaction: t,
-                      category: categoriesMap[t.categoryId],
-                      onTap: () async {
-                        await Navigator.push(context,
-                            AppPageRoute(
-                              builder: (_) => AddExpenseScreen(
-                                initialType: t.type,
-                                existingTransaction: t,
-                              ),
-                            ));
-                        ref
-                            .read(paginatedTransactionsProvider.notifier)
-                            .refresh();
-                      },
-                    ),
-                  );
-                },
-                childCount: recentTxns.length,
-              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final t = recentTxns[index];
+                return Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.listHorizontalPadding,
+                    vertical: AppSpacing.cardGap / 2,
+                  ),
+                  child: TransactionTile(
+                    transaction: t,
+                    category: categoriesMap[t.categoryId],
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        AppPageRoute(
+                          builder: (_) => AddExpenseScreen(
+                            initialType: t.type,
+                            existingTransaction: t,
+                          ),
+                        ),
+                      );
+                      await ref
+                          .read(paginatedTransactionsProvider.notifier)
+                          .refresh();
+                    },
+                  ),
+                );
+              }, childCount: recentTxns.length),
             ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 96)),

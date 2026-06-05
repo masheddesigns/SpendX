@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/config/app_env.dart';
 import '../../services/dev_tools_service.dart';
 import '../../widgets/custom_snackbar.dart';
+import 'retention_metrics_screen.dart';
 
 class DebugHubScreen extends StatefulWidget {
   const DebugHubScreen({super.key});
@@ -119,6 +120,19 @@ class _DebugHubScreenState extends State<DebugHubScreen> {
               successMessage: 'Lending stress test complete',
               failureLabel: 'Lending stress test',
             ),
+          ),
+          _sectionTitle('Observation'),
+          ListTile(
+            leading: const Icon(Icons.show_chart),
+            title: const Text('Retention Metrics'),
+            subtitle: const Text('Today + last 7 days · CTA / completion / open rates'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const RetentionMetricsScreen()),
+              );
+            },
           ),
           _sectionTitle('System'),
           ListTile(

@@ -10,6 +10,8 @@ import 'insights_activity_screen.dart';
 import '../services/games_integration_service.dart';
 import '../services/insights_activity_service.dart';
 import '../widgets/financial_report_card.dart';
+import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/app_tap_scale.dart';
 
 class ProfileHubScreen extends StatefulWidget {
   const ProfileHubScreen({super.key});
@@ -119,7 +121,7 @@ class _ProfileHubScreenState extends State<ProfileHubScreen> {
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
+              AppPageRoute(builder: (_) => const ProfileSettingsScreen()),
             ),
           ),
         ],
@@ -353,7 +355,7 @@ class _FinancialHealthCard extends StatelessWidget {
       double.infinity,
     );
 
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(24),
@@ -480,7 +482,7 @@ class _InsightsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -533,7 +535,7 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return AppTapScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),

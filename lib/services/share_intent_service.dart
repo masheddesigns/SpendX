@@ -1,101 +1,181 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
-import '../screens/smart_import_screen.dart';
 
-/// Listens for files shared from other apps (Notion, Sheets, Files, etc.)
-/// and routes them to the Smart Import screen.
+import 'smart_import_router.dart';
+
+/// Listens for shared content from other apps and dispatches via
+/// [SmartImportRouter] (text → parser, image → OCR → parser, file →
+/// existing CSV/JSON flow).
+///
+/// User always confirms before insert. No silent saves.
 class ShareIntentService {
   ShareIntentService._();
   static final instance = ShareIntentService._();
 
   StreamSubscription? _streamSub;
   bool _initialized = false;
-  bool _isNavigating = false;
-  String? _lastHandledPath;
+  bool _isHandling = false;
+  // Cold-start guard: prevents the initial-intent payload from being
+  // handled twice if the stream also delivers the same items quickly after.
+  bool _handledInitial = false;
+  String? _lastHandledKey;
   DateTime? _lastHandledTime;
 
-  /// Supported file extensions for smart import.
-  static const _supportedExtensions = {
+  /// File extensions that the file (CSV/JSON/Notion) pipeline supports.
+  static const _fileExtensions = {
     'csv', 'tsv', 'txt', 'md', 'markdown',
     'html', 'htm', 'json', 'zip',
   };
 
-  /// Initialize the share intent listener.
-  /// Call this once after the navigator is ready.
+  /// Image extensions that should go through OCR.
+  static const _imageExtensions = {
+    'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'bmp',
+  };
+
   void init(GlobalKey<NavigatorState> navigatorKey) {
     if (_initialized) return;
     _initialized = true;
 
-    // Handle file shared while app was closed (cold start)
-    // Delay to ensure navigation stack is ready after splash
-    Future.delayed(const Duration(seconds: 2), () {
-      ReceiveSharingIntent.instance.getInitialMedia().then((files) {
-        if (files.isNotEmpty) {
-          _handleSharedFiles(files, navigatorKey);
-        }
-        // Reset AFTER handling to prevent re-trigger
-        ReceiveSharingIntent.instance.reset();
-      });
-    });
+    // Cold start: app was launched directly by a share intent. Without
+    // explicit handling here, we'd silently drop the initial payload and
+    // never trigger Smart Import for this session.
+    //
+    // Retry with backoff until the navigator is ready (post-splash).
+    _drainColdStart(navigatorKey);
 
-    // Handle file shared while app is running (warm start)
+    // Warm start: app was already running.
     _streamSub = ReceiveSharingIntent.instance.getMediaStream().listen(
-      (files) {
-        if (files.isNotEmpty) {
-          _handleSharedFiles(files, navigatorKey);
+      (items) {
+        if (items.isNotEmpty) {
+          _handleShared(items, navigatorKey);
         }
       },
     );
   }
 
-  void _handleSharedFiles(
-      List<SharedMediaFile> files, GlobalKey<NavigatorState> navigatorKey) {
-    if (files.isEmpty || _isNavigating) return;
+  /// Drain the cold-start payload, retrying briefly until navigator is ready.
+  /// Guards against the stream re-delivering the same items immediately after.
+  Future<void> _drainColdStart(
+    GlobalKey<NavigatorState> navigatorKey,
+  ) async {
+    if (_handledInitial) return;
+    final initial = await ReceiveSharingIntent.instance.getInitialMedia();
+    if (initial.isEmpty) {
+      _handledInitial = true;
+      ReceiveSharingIntent.instance.reset();
+      return;
+    }
 
-    for (final shared in files) {
-      final path = shared.path;
-      final ext = path.split('.').last.toLowerCase();
+    // Wait for navigator (max ~5s, polled every 200ms)
+    for (var attempt = 0; attempt < 25; attempt++) {
+      if (navigatorKey.currentState != null) break;
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
 
-      if (_supportedExtensions.contains(ext)) {
-        // Deduplicate: skip if same file handled within last 5 seconds
-        final now = DateTime.now();
-        if (_lastHandledPath == path &&
-            _lastHandledTime != null &&
-            now.difference(_lastHandledTime!).inSeconds < 5) {
-          debugPrint('[ShareIntent] Skipping duplicate: $path');
-          return;
-        }
+    if (navigatorKey.currentState == null) {
+      debugPrint('[ShareIntent] Cold-start: navigator never ready, dropping');
+      _handledInitial = true;
+      ReceiveSharingIntent.instance.reset();
+      return;
+    }
 
-        _lastHandledPath = path;
-        _lastHandledTime = now;
-        _isNavigating = true;
+    _handledInitial = true;
+    _handleShared(initial, navigatorKey);
+    ReceiveSharingIntent.instance.reset();
+  }
 
-        debugPrint('[ShareIntent] Opening Smart Import for: $path');
+  void _handleShared(
+    List<SharedMediaFile> items,
+    GlobalKey<NavigatorState> navigatorKey,
+  ) {
+    if (items.isEmpty || _isHandling) return;
 
-        final navigator = navigatorKey.currentState;
-        if (navigator != null) {
-          navigator.push(
-            MaterialPageRoute(
-              builder: (_) => SmartImportScreen(sharedFilePath: path),
-            ),
-          ).then((_) {
-            _isNavigating = false;
-            // Reset after navigation completes to allow future shares
-            ReceiveSharingIntent.instance.reset();
-          });
-        } else {
-          _isNavigating = false;
-        }
-        return;
+    // Bundle detection: payment apps often share image + caption together.
+    // Combine them into one payload so the router can merge before parsing.
+    final payload = _coalesce(items);
+    if (payload == null) return;
+
+    final key = _payloadKey(payload, items);
+    final now = DateTime.now();
+    if (_lastHandledKey == key &&
+        _lastHandledTime != null &&
+        now.difference(_lastHandledTime!).inSeconds < 5) {
+      debugPrint('[ShareIntent] Skipping duplicate: $key');
+      return;
+    }
+    _lastHandledKey = key;
+    _lastHandledTime = now;
+    _isHandling = true;
+
+    debugPrint('[ShareIntent] Dispatching ${payload.type.name}');
+    SmartImportRouter.instance.handle(payload, navigatorKey).whenComplete(() {
+      _isHandling = false;
+      ReceiveSharingIntent.instance.reset();
+    });
+  }
+
+  /// Merge image + accompanying text into a single payload.
+  /// Falls back to the first valid item if no bundle pattern is detected.
+  SharePayload? _coalesce(List<SharedMediaFile> items) {
+    SharedMediaFile? image;
+    SharedMediaFile? text;
+    SharedMediaFile? file;
+
+    for (final s in items) {
+      switch (s.type) {
+        case SharedMediaType.image:
+          image ??= s;
+          break;
+        case SharedMediaType.text:
+        case SharedMediaType.url:
+          text ??= s;
+          break;
+        case SharedMediaType.file:
+          // Could be image-by-extension or document
+          final ext = s.path.split('.').last.toLowerCase();
+          if (_imageExtensions.contains(ext) ||
+              (s.mimeType?.startsWith('image/') ?? false)) {
+            image ??= s;
+          } else {
+            file ??= s;
+          }
+          break;
+        case SharedMediaType.video:
+          break;
       }
     }
+
+    // Image + caption together → merge into image payload with caption.
+    if (image != null) {
+      return SharePayload.image(
+        File(image.path),
+        caption: text?.path,
+      );
+    }
+    if (text != null) {
+      return SharePayload.text(text.path);
+    }
+    if (file != null) {
+      final ext = file.path.split('.').last.toLowerCase();
+      if (_fileExtensions.contains(ext)) {
+        return SharePayload.file(File(file.path));
+      }
+    }
+    return null;
+  }
+
+  String _payloadKey(SharePayload payload, List<SharedMediaFile> items) {
+    final paths = items.map((s) => '${s.type.value}:${s.path}').join('|');
+    return '${payload.type.name}|$paths';
   }
 
   void dispose() {
     _streamSub?.cancel();
     _streamSub = null;
     _initialized = false;
-    _isNavigating = false;
+    _isHandling = false;
   }
 }

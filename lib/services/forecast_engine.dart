@@ -128,10 +128,20 @@ class ForecastEngine {
     final projectedIncome = dailyIncome * daysInMonth;
     final projectedSavings = projectedIncome - projectedExpense;
 
-    // Overspend risk (vs previous month)
-    final isOverspendRisk = prevExpense > 0 && projectedExpense > prevExpense * 1.1;
-    final overspendAmount =
-        isOverspendRisk ? projectedExpense - prevExpense : 0.0;
+    // Overspend risk — true if EITHER:
+    //   (a) projected spending exceeds last month by >10%, OR
+    //   (b) projected savings is negative (spending more than earning).
+    // The second condition catches the "you're losing money but it's fine"
+    // bug where prev-month was low so the 10% threshold never triggered.
+    final exceedsPrevMonth =
+        prevExpense > 0 && projectedExpense > prevExpense * 1.1;
+    final negativeSavings = projectedSavings < 0;
+    final isOverspendRisk = exceedsPrevMonth || negativeSavings;
+    final overspendAmount = isOverspendRisk
+        ? (negativeSavings
+            ? projectedExpense - projectedIncome
+            : projectedExpense - prevExpense)
+        : 0.0;
 
     // Category forecasts with drift
     final categoryForecasts = <String, CategoryForecast>{};

@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../data/repositories/category_repo.dart';
-import '../features/sms/services/sms_listener.dart';
+import '../data/repositories/review_repo.dart';
 import '../services/app_session_service.dart';
+import '../services/retention_events.dart';
+import '../services/retention_service.dart';
 import '../services/notification_service.dart';
 import '../services/recurring_engine.dart';
 import '../services/settings_service.dart';
@@ -11,6 +15,7 @@ import '../services/snapshot_trigger.dart';
 import '../services/spending_insights_service.dart';
 import '../features/home/screens/home_screen.dart';
 import 'onboarding_screen.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,6 +32,16 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _textFade;
   late Animation<double> _subtitleFade;
   late Animation<double> _glowOpacity;
+
+  /// Init work has finished — we just need a moment when splash is
+  /// the topmost route to actually navigate. Set after
+  /// [_checkInitialState] completes; gates the home-nav recheck loop.
+  bool _initWorkDone = false;
+
+  /// Recheck timer used when share flow is on top of splash. Polls
+  /// every 400ms until splash becomes the visible route again, then
+  /// fires the home navigation that was deferred.
+  Timer? _navRecheck;
 
   @override
   void initState() {
@@ -81,6 +96,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
+    _navRecheck?.cancel();
     _ctrl.dispose();
     super.dispose();
   }
@@ -100,8 +116,16 @@ class _SplashScreenState extends State<SplashScreen>
     final onboardingComplete = SettingsService.instance.isOnboardingComplete;
 
     if (!onboardingComplete) {
+      // Defensive guard: only replace if splash is still the topmost
+      // route. A share intent received during the splash delay can
+      // push ImportProcessingScreen on top; replacing in that state
+      // would silently destroy the share flow.
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        debugPrint('[Splash] Share flow on top — skipping onboarding nav');
+        return;
+      }
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        AppPageRoute(builder: (_) => const OnboardingScreen()),
       );
       return;
     }
@@ -109,8 +133,16 @@ class _SplashScreenState extends State<SplashScreen>
     // Start session tracking
     AppSessionService.instance.init();
 
-    // Start SMS auto-listener
-    SmsAutoListener.instance.start();
+    // Mark today as active (streak + last-active timestamp)
+    await RetentionService.instance.markActiveToday();
+    // Observation: app open event
+    await RetentionEvents.instance.log(RetentionEvent.appOpen);
+    // Re-arm the 24h re-engagement notification — only if actionable.
+    // Empty "just checking in" notifications degrade trust.
+    final pendingReviews = await ReviewRepo().getPendingCount();
+    await RetentionService.instance.scheduleReengagementCheck(
+      pendingReviews: pendingReviews,
+    );
 
     // Schedule wrapped notifications
     _scheduleWrappedNotifications();
@@ -131,18 +163,39 @@ class _SplashScreenState extends State<SplashScreen>
     // Daily net worth snapshot
     SnapshotTrigger.instance.onAppOpen();
 
-    if (!mounted) return;
+    _initWorkDone = true;
+    _attemptHomeNavigation();
+  }
 
+  /// Push HomeScreen IF splash is currently the visible route.
+  /// Otherwise schedule a recheck — needed because:
+  ///   * A share intent during cold start pushes ImportProcessingScreen
+  ///     on top of splash before this method is called, so we'd
+  ///     stomp the share flow if we pushReplaced unconditionally.
+  ///   * After the share flow ends (user saves/cancels) the user
+  ///     pops back to splash. Without a recheck loop they'd be stuck
+  ///     on the splash logo with no way to advance.
+  /// The 400ms cadence is fast enough to feel instant on user pop-back
+  /// without burning CPU during the share window.
+  void _attemptHomeNavigation() {
+    if (!mounted || !_initWorkDone) return;
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      _navRecheck?.cancel();
+      _navRecheck = Timer(
+        const Duration(milliseconds: 400),
+        _attemptHomeNavigation,
+      );
+      return;
+    }
+    _navRecheck?.cancel();
+    _navRecheck = null;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      AppPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 
   Future<void> _requestPermissions() async {
     try {
-      final smsStatus = await Permission.sms.status;
-      if (!smsStatus.isGranted) await Permission.sms.request();
-
       final notifStatus = await Permission.notification.status;
       if (!notifStatus.isGranted) await Permission.notification.request();
 

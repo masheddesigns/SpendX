@@ -18,10 +18,10 @@ class TransactionRepo {
       where: 'is_deleted = 0',
       limit: limit,
       offset: offset,
-      orderBy: 'date DESC, created_at DESC',
+      orderBy: 'date DESC, created_at DESC, id DESC',
     );
 
-    return res.map((e) => Transaction.fromMap(e)).toList();
+    return _dedupeExactTransactions(res.map((e) => Transaction.fromMap(e)));
   }
 
   Future<Transaction?> getById(String id) async {
@@ -80,7 +80,8 @@ class TransactionRepo {
       }
     }
 
-    // Fast batch insert — duplicates silently ignored by UNIQUE constraint
+    // Fast batch insert — duplicates silently ignored by UNIQUE constraint.
+    // Keep results so we can tell which rows SQLite actually inserted.
     final batch = txn.batch();
     for (final tx in txns) {
       batch.insert(
@@ -89,37 +90,24 @@ class TransactionRepo {
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
     }
-    await batch.commit(noResult: true);
+    final results = await batch.commit(noResult: false);
 
-    // Query back which of our candidate refs actually exist in the DB.
-    // Since we're inside a transaction, this is a consistent read.
+    // Sqflite returns the inserted row id. For ignored conflicts SQLite reports
+    // 0/null, so only these refs should receive balance/card side-effects.
     final insertedRefs = <String>{};
-    const chunkSize = 900; // SQLite variable limit
-    for (var i = 0; i < candidateRefs.length; i += chunkSize) {
-      final chunk = candidateRefs.sublist(
-        i,
-        (i + chunkSize).clamp(0, candidateRefs.length),
-      );
-      final placeholders = List.filled(chunk.length, '?').join(',');
-      final rows = await txn.rawQuery(
-        'SELECT external_ref FROM ${Tables.transactions} '
-        'WHERE external_ref IN ($placeholders)',
-        chunk,
-      );
-      for (final row in rows) {
-        final ref = row['external_ref'];
-        if (ref is String) insertedRefs.add(ref);
+    for (var i = 0; i < txns.length && i < results.length; i++) {
+      final ref = txns[i].externalRef;
+      final result = results[i];
+      if (ref != null && ref.isNotEmpty && result is int && result > 0) {
+        insertedRefs.add(ref);
       }
     }
 
-    // The inserted set is the intersection of what we sent AND what the DB has.
-    // Pre-existing rows (from prior imports) will also appear in the query,
-    // but the bulk provider already filtered those via app-level dedup.
-    // Any ref in insertedRefs that wasn't in candidateRefs is impossible
-    // since we only query our own refs.
     final skipped = candidateRefs.length - insertedRefs.length;
-    debugPrint('🧠 Insert: ${txns.length} batched, ${insertedRefs.length} confirmed, '
-        '$skipped skipped by DB');
+    debugPrint(
+      '🧠 Insert: ${txns.length} batched, ${insertedRefs.length} confirmed, '
+      '$skipped skipped by DB',
+    );
     return insertedRefs;
   }
 
@@ -146,10 +134,7 @@ class TransactionRepo {
     // SQLite has a limit of 999 variables per query
     const chunkSize = 900;
     for (var i = 0; i < refs.length; i += chunkSize) {
-      final chunk = refs.sublist(
-        i,
-        (i + chunkSize).clamp(0, refs.length),
-      );
+      final chunk = refs.sublist(i, (i + chunkSize).clamp(0, refs.length));
       final placeholders = List.filled(chunk.length, '?').join(',');
       final rows = await database.rawQuery(
         'SELECT external_ref FROM ${Tables.transactions} '
@@ -174,11 +159,7 @@ class TransactionRepo {
     final rows = await database.query(
       Tables.transactions,
       where: 'is_deleted = 0 AND amount = ? AND date BETWEEN ? AND ?',
-      whereArgs: [
-        amount,
-        from.toIso8601String(),
-        to.toIso8601String(),
-      ],
+      whereArgs: [amount, from.toIso8601String(), to.toIso8601String()],
       limit: 5,
     );
     return rows.map(Transaction.fromMap).toList();
@@ -209,12 +190,15 @@ class TransactionRepo {
 
   /// Stats for a date range (used for weekly wrapped).
   Future<Map<String, dynamic>> getStatsForRange(
-      DateTime start, DateTime end) async {
+    DateTime start,
+    DateTime end,
+  ) async {
     final database = await db.database;
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
 
-    final summary = await database.rawQuery('''
+    final summary = await database.rawQuery(
+      '''
       SELECT
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense,
@@ -222,9 +206,12 @@ class TransactionRepo {
         MAX(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as biggest_expense
       FROM ${Tables.transactions}
       WHERE is_deleted = 0 AND date >= ? AND date < ?
-    ''', [startStr, endStr]);
+    ''',
+      [startStr, endStr],
+    );
 
-    final topCats = await database.rawQuery('''
+    final topCats = await database.rawQuery(
+      '''
       SELECT t.category_id, c.name, c.icon, c.color,
              SUM(t.amount) as total
       FROM ${Tables.transactions} t
@@ -234,7 +221,9 @@ class TransactionRepo {
       GROUP BY t.category_id
       ORDER BY total DESC
       LIMIT 5
-    ''', [startStr, endStr]);
+    ''',
+      [startStr, endStr],
+    );
 
     return {
       'income': (summary.first['income'] as num?)?.toDouble() ?? 0,
@@ -264,8 +253,40 @@ class TransactionRepo {
     );
   }
 
+  List<Transaction> _dedupeExactTransactions(
+    Iterable<Transaction> transactions,
+  ) {
+    final seenIds = <String>{};
+    final seenFingerprints = <String>{};
+    final unique = <Transaction>[];
+
+    for (final tx in transactions) {
+      final fingerprint = _exactFingerprint(tx);
+      if (!seenIds.add(tx.id)) continue;
+      if (!seenFingerprints.add(fingerprint)) continue;
+      unique.add(tx);
+    }
+
+    return unique;
+  }
+
+  String _exactFingerprint(Transaction tx) {
+    final notes = tx.notes.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    return [
+      tx.type,
+      tx.source,
+      tx.accountId ?? '',
+      tx.relatedEntityId ?? '',
+      tx.amount.toStringAsFixed(2),
+      tx.date.toIso8601String(),
+      notes,
+    ].join('|');
+  }
+
   /// Category spending breakdown for the last N months.
-  Future<List<Map<String, dynamic>>> getCategoryBreakdown(int monthsBack) async {
+  Future<List<Map<String, dynamic>>> getCategoryBreakdown(
+    int monthsBack,
+  ) async {
     final database = await db.database;
     final cutoff = DateTime.now().subtract(Duration(days: monthsBack * 30));
     return await database.rawQuery(
@@ -288,7 +309,9 @@ class TransactionRepo {
 
   /// Top spending categories for the last N months (expense only).
   Future<List<Map<String, dynamic>>> getTopExpenseCategories(
-      int monthsBack, {int limit = 10}) async {
+    int monthsBack, {
+    int limit = 10,
+  }) async {
     final database = await db.database;
     final cutoff = DateTime.now().subtract(Duration(days: monthsBack * 30));
     return await database.rawQuery(
@@ -331,7 +354,8 @@ class TransactionRepo {
     final database = await db.database;
     final monthStr = '$year-${month.toString().padLeft(2, '0')}';
 
-    final summary = await database.rawQuery('''
+    final summary = await database.rawQuery(
+      '''
       SELECT
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense,
@@ -339,9 +363,12 @@ class TransactionRepo {
         MAX(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as biggest_expense
       FROM ${Tables.transactions}
       WHERE is_deleted = 0 AND strftime('%Y-%m', date) = ?
-    ''', [monthStr]);
+    ''',
+      [monthStr],
+    );
 
-    final topCats = await database.rawQuery('''
+    final topCats = await database.rawQuery(
+      '''
       SELECT t.category_id, c.name, c.icon, c.color,
              SUM(t.amount) as total
       FROM ${Tables.transactions} t
@@ -351,7 +378,9 @@ class TransactionRepo {
       GROUP BY t.category_id
       ORDER BY total DESC
       LIMIT 5
-    ''', [monthStr]);
+    ''',
+      [monthStr],
+    );
 
     return {
       'income': (summary.first['income'] as num?)?.toDouble() ?? 0,
@@ -368,7 +397,8 @@ class TransactionRepo {
     final database = await db.database;
     final yearStr = year.toString();
 
-    final summary = await database.rawQuery('''
+    final summary = await database.rawQuery(
+      '''
       SELECT
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense,
@@ -376,9 +406,12 @@ class TransactionRepo {
         MAX(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as biggest_expense
       FROM ${Tables.transactions}
       WHERE is_deleted = 0 AND strftime('%Y', date) = ?
-    ''', [yearStr]);
+    ''',
+      [yearStr],
+    );
 
-    final monthly = await database.rawQuery('''
+    final monthly = await database.rawQuery(
+      '''
       SELECT
         strftime('%m', date) as m,
         SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
@@ -386,9 +419,12 @@ class TransactionRepo {
       FROM ${Tables.transactions}
       WHERE is_deleted = 0 AND strftime('%Y', date) = ?
       GROUP BY m ORDER BY m ASC
-    ''', [yearStr]);
+    ''',
+      [yearStr],
+    );
 
-    final topCats = await database.rawQuery('''
+    final topCats = await database.rawQuery(
+      '''
       SELECT t.category_id, c.name, c.icon, c.color,
              SUM(t.amount) as total
       FROM ${Tables.transactions} t
@@ -398,7 +434,9 @@ class TransactionRepo {
       GROUP BY t.category_id
       ORDER BY total DESC
       LIMIT 5
-    ''', [yearStr]);
+    ''',
+      [yearStr],
+    );
 
     // Build 12-month arrays
     final Map<int, double> incomeByMonth = {};
@@ -417,21 +455,23 @@ class TransactionRepo {
           (summary.first['biggest_expense'] as num?)?.toDouble() ?? 0,
       'top_categories': topCats,
       'monthly_income': List.generate(12, (i) => incomeByMonth[i + 1] ?? 0.0),
-      'monthly_expense':
-          List.generate(12, (i) => expenseByMonth[i + 1] ?? 0.0),
+      'monthly_expense': List.generate(12, (i) => expenseByMonth[i + 1] ?? 0.0),
     };
   }
 
   /// Get distinct months that have transactions (for wrapped periods).
   Future<List<String>> getDistinctMonths({int limit = 12}) async {
     final database = await db.database;
-    final result = await database.rawQuery('''
+    final result = await database.rawQuery(
+      '''
       SELECT DISTINCT strftime('%Y-%m', date) as month
       FROM ${Tables.transactions}
       WHERE is_deleted = 0
       ORDER BY month DESC
       LIMIT ?
-    ''', [limit]);
+    ''',
+      [limit],
+    );
     return result.map((r) => r['month'] as String).toList();
   }
 

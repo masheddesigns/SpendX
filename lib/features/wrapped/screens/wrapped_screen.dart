@@ -5,6 +5,8 @@ import '../../../services/haptic_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 import '../models/wrapped_summary.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../providers/wrapped_providers.dart';
 
 /// Full-screen Wrapped experience — Stack-based with Instagram-style progress bars.
@@ -97,10 +99,8 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
     return Scaffold(
       backgroundColor: CinematicTheme.bg,
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-            child: Text('Error: $e',
-                style: const TextStyle(color: Colors.redAccent))),
+        loading: () => const SkeletonLoader.summary(),
+        error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(wrappedSummaryProvider(widget.period))),
         data: (summary) {
           if (summary == null) {
             return const Center(

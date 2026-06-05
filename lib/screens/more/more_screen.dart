@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/review_queue/providers/review_providers.dart';
 import '../../features/salary/screens/salary_screen.dart';
 import '../ai_chat_screen.dart';
-import '../auto_tracking_screen.dart';
 import '../credit_card_screen.dart';
 import '../goals/goals_screen.dart';
 import '../lending/lending_screen.dart';
@@ -18,7 +17,7 @@ import '../settings/profile_settings_screen.dart';
 import '../settings/backup_hub_screen.dart';
 import '../feedback_screen.dart';
 import '../data_health_screen.dart';
-import '../debug/sms_debug_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -39,13 +38,6 @@ class MoreScreen extends ConsumerWidget {
           subtitle: 'Ask about your finances',
           iconColor: cs.primary,
           onTap: () => _push(context, const AiChatScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.auto_awesome_rounded,
-          title: 'Auto Tracking',
-          subtitle: 'Auto-detect transactions from SMS',
-          iconColor: const Color(0xFF0EA5E9),
-          onTap: () => _push(context, const AutoTrackingScreen()),
         ),
         _MoreTile(
           icon: Icons.rate_review_rounded,
@@ -165,13 +157,6 @@ class MoreScreen extends ConsumerWidget {
           iconColor: const Color(0xFF22C55E),
           onTap: () => _push(context, const DataHealthScreen()),
         ),
-        _MoreTile(
-          icon: Icons.monitor_heart_outlined,
-          title: 'SMS Pipeline',
-          subtitle: 'Debug, logs, safe mode',
-          iconColor: cs.onSurfaceVariant,
-          onTap: () => _push(context, const SmsDebugScreen()),
-        ),
       ],
     );
   }
@@ -179,7 +164,7 @@ class MoreScreen extends ConsumerWidget {
   void _push(BuildContext context, Widget screen) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => screen),
+      AppPageRoute(builder: (_) => screen),
     );
   }
 }

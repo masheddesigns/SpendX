@@ -17,6 +17,7 @@ import '../../shared/widgets/status_chip.dart';
 import '../../utils/text_formatter.dart';
 import '../../utils/app_format.dart';
 import '../../shared/widgets/app_account_picker.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 enum LoanDetailAction { deleted }
 
@@ -226,7 +227,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             onPressed: () async {
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(
+                AppPageRoute(
                   builder: (_) => AddLoanScreen(loan: loan),
                 ),
               );

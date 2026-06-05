@@ -6,6 +6,7 @@ import '../../utils/app_format.dart';
 import '../../utils/text_formatter.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import 'lending_report_screen.dart';
+import '../../shared/widgets/app_page_route.dart';
 
 class LendingScreen extends ConsumerStatefulWidget {
   const LendingScreen({super.key});
@@ -29,6 +30,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
     String name = '';
     String amount = '';
     String notes = '';
+    DateTime givenDate = DateTime.now();
+    DateTime? dueDate;
 
     if (!mounted) return;
     showModalBottomSheet(
@@ -149,6 +152,48 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 14),
+
+                // Date given + Due date
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DateField(
+                        label: 'Date',
+                        date: givenDate,
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: givenDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) setSheet(() => givenDate = picked);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _DateField(
+                        label: 'Due date',
+                        date: dueDate,
+                        placeholder: 'Optional',
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: dueDate ?? DateTime.now().add(const Duration(days: 30)),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) setSheet(() => dueDate = picked);
+                        },
+                        onClear: dueDate != null
+                            ? () => setSheet(() => dueDate = null)
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 20),
 
                 SizedBox(
@@ -164,6 +209,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                                     personName: TextFormatter.normalizeName(name),
                                     type: type,
                                     originalAmount: parsedAmount,
+                                    date: givenDate,
+                                    dueDate: dueDate,
                                     notes: notes.trim().isEmpty ? null : notes.trim(),
                                   ),
                                 );
@@ -348,7 +395,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
             icon: const Icon(Icons.bar_chart_rounded),
             tooltip: 'Lending Report',
             onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const LendingReportScreen())),
+                AppPageRoute(builder: (_) => const LendingReportScreen())),
           ),
         ],
       ),
@@ -648,25 +695,26 @@ class _LendingCard extends StatelessWidget {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  if (lending.dueDate != null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          lending.isOverdue ? Icons.warning_amber_rounded : Icons.calendar_today,
-                          size: 12,
-                          color: lending.isOverdue ? Colors.orange : cs.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          DateFormat('dd MMM').format(lending.dueDate!),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: lending.isOverdue ? Colors.orange : cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    DateFormat('dd MMM').format(lending.date),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                  ),
+                  if (lending.dueDate != null) ...[
+                    Text(' → ', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                    Icon(
+                      lending.isOverdue ? Icons.warning_amber_rounded : Icons.calendar_today,
+                      size: 12,
+                      color: lending.isOverdue ? Colors.orange : cs.onSurfaceVariant,
                     ),
+                    const SizedBox(width: 3),
+                    Text(
+                      DateFormat('dd MMM').format(lending.dueDate!),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: lending.isOverdue ? Colors.orange : cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   if (lending.isSettled)
                     const Row(
@@ -788,6 +836,77 @@ class _QuickBtn extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+}
+
+// ── Date Field ──────────────────────────────────────────────────────────
+
+class _DateField extends StatelessWidget {
+  final String label;
+  final DateTime? date;
+  final String? placeholder;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  const _DateField({
+    required this.label,
+    required this.date,
+    this.placeholder,
+    required this.onTap,
+    this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasValue = date != null;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today_rounded,
+                size: 16, color: cs.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 2),
+                  Text(
+                    hasValue
+                        ? DateFormat('dd MMM yyyy').format(date!)
+                        : placeholder ?? '—',
+                    style: TextStyle(
+                      color: hasValue ? cs.onSurface : cs.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: hasValue ? FontWeight.w500 : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onClear != null)
+              GestureDetector(
+                onTap: onClear,
+                child: Icon(Icons.close_rounded,
+                    size: 16, color: cs.onSurfaceVariant),
+              ),
+          ],
+        ),
       ),
     );
   }

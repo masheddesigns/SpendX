@@ -12,6 +12,7 @@ import 'expense/add_expense_screen.dart';
 import '../domain/credit/credit_card_service.dart';
 import '../utils/text_formatter.dart';
 import '../data/providers.dart';
+import '../shared/widgets/app_page_route.dart';
 
 class UnifiedTransactionDetailScreen extends ConsumerStatefulWidget {
   final Transaction transaction;
@@ -80,7 +81,7 @@ class _UnifiedTransactionDetailScreenState
   Future<void> _editTransaction() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
+      AppPageRoute(
         builder: (_) =>
             AddExpenseScreen(initialType: _tx.type, existingTransaction: _tx),
       ),

@@ -47,12 +47,11 @@ class PaginatedTransactionsState {
     List<Transaction>? items,
     bool? hasMore,
     bool? isLoadingMore,
-  }) =>
-      PaginatedTransactionsState(
-        items: items ?? this.items,
-        hasMore: hasMore ?? this.hasMore,
-        isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-      );
+  }) => PaginatedTransactionsState(
+    items: items ?? this.items,
+    hasMore: hasMore ?? this.hasMore,
+    isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+  );
 }
 
 class PaginatedTransactionsNotifier
@@ -61,37 +60,53 @@ class PaginatedTransactionsNotifier
   static const _pageSize = 30;
   int _offset = 0;
   bool _loading = false;
+  int _requestVersion = 0;
 
   PaginatedTransactionsNotifier(this._repo)
-      : super(const PaginatedTransactionsState()) {
+    : super(const PaginatedTransactionsState()) {
     loadInitial();
   }
 
   Future<void> loadInitial() async {
     if (_loading) return;
+    final requestVersion = ++_requestVersion;
     _loading = true;
     _offset = 0;
-    final data = await _repo.getAll(limit: _pageSize, offset: 0);
-    _offset = data.length;
-    state = PaginatedTransactionsState(
-      items: data,
-      hasMore: data.length >= _pageSize,
-    );
-    _loading = false;
-    debugPrint('📦 Transactions: loaded ${data.length} (paginated)');
+    try {
+      final data = await _repo.getAll(limit: _pageSize, offset: 0);
+      if (requestVersion != _requestVersion) return;
+      final uniqueData = _dedupeTransactions(data);
+      _offset = data.length;
+      state = PaginatedTransactionsState(
+        items: uniqueData,
+        hasMore: data.length >= _pageSize,
+        isLoadingMore: false,
+      );
+      debugPrint('📦 Transactions: loaded ${uniqueData.length} (paginated)');
+    } finally {
+      if (requestVersion == _requestVersion) {
+        _loading = false;
+      }
+    }
   }
 
   Future<void> loadMore() async {
-    if (!state.hasMore || state.isLoadingMore) return;
+    if (_loading || !state.hasMore || state.isLoadingMore) return;
     state = state.copyWith(isLoadingMore: true);
 
-    final data = await _repo.getAll(limit: _pageSize, offset: _offset);
-    _offset += data.length;
-    state = state.copyWith(
-      items: [...state.items, ...data],
-      hasMore: data.length >= _pageSize,
-      isLoadingMore: false,
-    );
+    try {
+      final data = await _repo.getAll(limit: _pageSize, offset: _offset);
+      _offset += data.length;
+      final items = _mergeUniqueTransactions(state.items, data);
+      state = state.copyWith(
+        items: items,
+        hasMore: data.length >= _pageSize,
+        isLoadingMore: false,
+      );
+    } catch (_) {
+      state = state.copyWith(isLoadingMore: false);
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {
@@ -100,10 +115,50 @@ class PaginatedTransactionsNotifier
   }
 }
 
-final paginatedTransactionsProvider = StateNotifierProvider<
-    PaginatedTransactionsNotifier, PaginatedTransactionsState>(
-  (ref) => PaginatedTransactionsNotifier(ref.read(transactionRepoProvider)),
-);
+List<Transaction> _dedupeTransactions(Iterable<Transaction> transactions) {
+  final seenIds = <String>{};
+  final seenFingerprints = <String>{};
+  final unique = <Transaction>[];
+
+  for (final tx in transactions) {
+    final fingerprint = _transactionFingerprint(tx);
+    if (!seenIds.add(tx.id)) continue;
+    if (!seenFingerprints.add(fingerprint)) continue;
+    unique.add(tx);
+  }
+
+  return unique;
+}
+
+List<Transaction> _mergeUniqueTransactions(
+  List<Transaction> existing,
+  List<Transaction> incoming,
+) {
+  return _dedupeTransactions([...existing, ...incoming]);
+}
+
+String _transactionFingerprint(Transaction tx) {
+  final notes = tx.notes.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  final amount = tx.amount.toStringAsFixed(2);
+  final date = tx.date.toIso8601String();
+  return [
+    tx.type,
+    tx.source,
+    tx.accountId ?? '',
+    tx.relatedEntityId ?? '',
+    amount,
+    date,
+    notes,
+  ].join('|');
+}
+
+final paginatedTransactionsProvider =
+    StateNotifierProvider<
+      PaginatedTransactionsNotifier,
+      PaginatedTransactionsState
+    >(
+      (ref) => PaginatedTransactionsNotifier(ref.read(transactionRepoProvider)),
+    );
 
 // ---------------------------------------------------------------------------
 // Shared impact logic — SINGLE SOURCE OF TRUTH
@@ -117,10 +172,7 @@ final paginatedTransactionsProvider = StateNotifierProvider<
 ///   2. transfer → deduct from source, add to destination (skip self-transfers)
 ///   3. expense → subtract from account
 ///   4. income → add to account
-void computeAccountImpact(
-  Transaction tx,
-  Map<String, double> accountDeltas,
-) {
+void computeAccountImpact(Transaction tx, Map<String, double> accountDeltas) {
   // Credit card purchases don't touch bank balances
   if (tx.source == 'credit_card_purchase') return;
 
@@ -154,10 +206,7 @@ void computeAccountImpact(
 }
 
 /// Reverse of [computeAccountImpact] — used when updating/deleting.
-void revertAccountImpact(
-  Transaction tx,
-  Map<String, double> accountDeltas,
-) {
+void revertAccountImpact(Transaction tx, Map<String, double> accountDeltas) {
   if (tx.source == 'credit_card_purchase') return;
 
   if (tx.type == 'transfer') {
@@ -307,7 +356,7 @@ class BulkTransactionEntry {
 ///   5. Provider invalidation happens AFTER commit
 final addTransactionsBulkProvider = Provider((ref) {
   return (List<BulkTransactionEntry> entries) async {
-    if (entries.isEmpty) return;
+    if (entries.isEmpty) return 0;
 
     final txRepo = ref.read(transactionRepoProvider);
     final accRepo = ref.read(accountRepoProvider);
@@ -339,15 +388,18 @@ final addTransactionsBulkProvider = Provider((ref) {
 
     if (candidateEntries.isEmpty) {
       debugPrint('📦 Bulk: all entries deduplicated, nothing to insert');
-      return;
+      return 0;
     }
 
     final appDedupSkipped = entries.length - candidateEntries.length;
-    debugPrint('📦 Bulk: ${entries.length} entries → ${candidateEntries.length} '
-        'candidates ($appDedupSkipped filtered by app dedup)');
+    debugPrint(
+      '📦 Bulk: ${entries.length} entries → ${candidateEntries.length} '
+      'candidates ($appDedupSkipped filtered by app dedup)',
+    );
 
     // ── 2. ATOMIC DB TRANSACTION — insert, confirm, then apply deltas ────
     int dbSkipped = 0;
+    var insertedCount = 0;
 
     final database = await AppDatabase.instance.database;
     await database.transaction((dbTxn) async {
@@ -366,14 +418,18 @@ final addTransactionsBulkProvider = Provider((ref) {
 
       dbSkipped = candidateEntries.length - confirmedEntries.length;
       if (dbSkipped > 0) {
-        debugPrint('⚠️ DB-level dedup: $dbSkipped additional duplicates '
-            'caught by UNIQUE constraint');
+        debugPrint(
+          '⚠️ DB-level dedup: $dbSkipped additional duplicates '
+          'caught by UNIQUE constraint',
+        );
       }
 
       if (confirmedEntries.isEmpty) {
         debugPrint('📦 Bulk: no rows survived DB-level dedup');
         return; // transaction commits empty — no harm
       }
+
+      insertedCount = confirmedEntries.length;
 
       // 2c. Compute deltas ONLY for confirmed inserts
       final accountDeltas = <String, double>{};
@@ -436,5 +492,6 @@ final addTransactionsBulkProvider = Provider((ref) {
     ref.invalidate(accountsProvider);
     DataAuditService.instance.invalidateCache();
     debugPrint('🔄 Providers invalidated (bulk)');
+    return insertedCount;
   };
 });

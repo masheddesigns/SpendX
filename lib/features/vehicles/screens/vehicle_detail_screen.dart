@@ -13,8 +13,11 @@ import '../widgets/activity_timeline.dart';
 import '../widgets/cost_summary_card.dart';
 import '../widgets/fuel_summary_card.dart';
 import '../widgets/reminders_section.dart';
+import '../../../shared/widgets/error_state_widget.dart';
+import '../../../shared/widgets/skeleton_loader.dart';
 import '../widgets/vehicle_header.dart';
 import 'add_vehicle_entry_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 class VehicleDetailScreen extends ConsumerWidget {
   const VehicleDetailScreen({super.key, required this.vehicle});
@@ -28,8 +31,8 @@ class VehicleDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: SpendXAppBar(title: vehicle.name),
       body: detailAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        loading: () => const SkeletonLoader.summary(),
+        error: (err, _) => ErrorStateWidget(error: err, onRetry: () => ref.invalidate(vehicleDetailProvider(vehicle))),
         data: (data) => RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(vehicleDetailProvider(vehicle));
@@ -87,7 +90,7 @@ class VehicleDetailScreen extends ConsumerWidget {
           expand: true,
           onPressed: () async {
             final result = await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
+              AppPageRoute(
                 builder: (_) =>
                     AddVehicleEntryScreen(initialVehicleId: vehicle.id),
               ),

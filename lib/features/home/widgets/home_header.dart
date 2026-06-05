@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../widgets/streak_card.dart';
 import '../../../screens/profile_hub_screen.dart';
 import '../../../screens/notifications_inbox_screen.dart';
+import '../../../shared/widgets/app_page_route.dart';
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
@@ -55,7 +56,7 @@ class HomeHeader extends ConsumerWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        AppPageRoute(
                           builder: (_) => const NotificationsInboxScreen(),
                         ),
                       );
@@ -66,7 +67,7 @@ class HomeHeader extends ConsumerWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        AppPageRoute(
                           builder: (_) => const ProfileHubScreen(),
                         ),
                       );
