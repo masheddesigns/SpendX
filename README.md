@@ -134,7 +134,7 @@ For deeper notes, see:
 ### Setup
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/masheddesigns/SpendX.git
 cd SpendX
 flutter pub get
 cp .env.example .env
@@ -157,7 +157,7 @@ build/app/outputs/flutter-apk/app-release.apk
 
 Suggested first public release:
 
-- `v0.1.0-beta`
+- `v1.0.0`
 
 ## Repository Notes
 
