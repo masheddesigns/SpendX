@@ -92,3 +92,10 @@ assets/spendx.db
 
 # Android build reports
 android/build/
+
+# Android release signing configurations
+android/key.properties
+android/keystore/
+*.jks
+*.keystore
+
