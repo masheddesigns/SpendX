@@ -13,7 +13,7 @@
 
 SpendX is a modern, privacy-friendly personal finance tracker designed for developers, creators, and individuals who want full ownership of their financial data. No subscriptions, no cloud lock-in, and no spreadsheet fatigue.
 
-[Features](#-key-features) • [Tech Stack](#%EF%B8%8F-tech-stack) • [Architecture](#%EF%B8%8F-architecture) • [Getting Started](#-getting-started) • [Release Setup](#-release--production-signing)
+[Features](#-key-features) • [Tech Stack](#%EF%B8%8F-tech-stack) • [Architecture](#%EF%B8%8F-architecture) • [Getting Started](#-getting-started) • [Release Build](#-release-build)
 
 </div>
 
@@ -120,44 +120,15 @@ Detailed documentation:
 
 ---
 
-## 🔐 Release & Production Signing
+## 📦 Release Build
 
-SpendX uses a robust, secure release setup designed to prevent sensitive credentials from ever being committed to Git.
-
-### 1. Keystore Configuration
-1. Place your release keystore at `android/keystore/spendx-release.jks`.
-2. Create a local properties file at `android/key.properties` (this is ignored by Git):
-   ```properties
-   storePassword=YOUR_KEYSTORE_PASSWORD
-   keyPassword=YOUR_KEY_PASSWORD
-   keyAlias=spendx
-   storeFile=keystore/spendx-release.jks
-   ```
-
-### 2. Gradle Integration
-The [build.gradle.kts](android/app/build.gradle.kts) handles signing config parsing safely. It automatically trims copy/paste whitespace to prevent build signing mismatches:
-```kotlin
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-}
-
-// Inside android { ... }
-signingConfigs {
-    create("release") {
-        keyAlias = (keystoreProperties["keyAlias"] as String?)?.trim()
-        keyPassword = (keystoreProperties["keyPassword"] as String?)?.trim()
-        storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it.toString().trim()) }
-        storePassword = (keystoreProperties["storePassword"] as String?)?.trim()
-    }
-}
-```
-
-### 3. Generate Release APK
-Build the release bundle:
+To generate a release APK locally:
 ```bash
 flutter build apk --release
+```
+Expected output:
+```text
+build/app/outputs/flutter-apk/app-release.apk
 ```
 
 ---
