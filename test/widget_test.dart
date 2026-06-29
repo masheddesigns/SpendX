@@ -1,30 +1,39 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:spend_x/main.dart';
+import 'package:spend_x/models/tag.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Tag Model Tests', () {
+    test('Tag serialization and deserialization should match', () {
+      final tag = Tag(
+        id: 'test-id-123',
+        userId: 'user-id-456',
+        name: 'Groceries',
+        color: '#FF5733',
+      );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      final map = tag.toMap();
+      expect(map['id'], 'test-id-123');
+      expect(map['name'], 'Groceries');
+      expect(map['color'], '#FF5733');
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      final deserialized = Tag.fromMap(map);
+      expect(deserialized.id, 'test-id-123');
+      expect(deserialized.name, 'Groceries');
+      expect(deserialized.color, '#FF5733');
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Tag copyWith should copy correct values', () {
+      final tag = Tag(
+        userId: 'user-id-1',
+        name: 'Bills',
+        color: '#00FF00',
+      );
+
+      final updated = tag.copyWith(name: 'Rent');
+      expect(updated.id, tag.id);
+      expect(updated.userId, 'user-id-1');
+      expect(updated.name, 'Rent');
+      expect(updated.color, '#00FF00');
+    });
   });
 }
