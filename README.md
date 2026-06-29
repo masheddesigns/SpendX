@@ -1,5 +1,10 @@
 # SpendX
 
+[![Flutter CI](https://github.com/masheddesigns/SpendX/actions/workflows/flutter_ci.yml/badge.svg)](https://github.com/masheddesigns/SpendX/actions/workflows/flutter_ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://makeapullrequest.com)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-lightgrey)](https://flutter.dev)
+
 SpendX is a local-first Flutter personal finance app designed to help people manage daily money without subscriptions, cloud lock-in, or spreadsheet fatigue.
 
 It combines transaction tracking, account management, budgeting, salary planning, financial goals, analytics, and import workflows into a single mobile experience.
