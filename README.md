@@ -1,182 +1,184 @@
-# SpendX
+<div align="center">
+
+# 📊 SpendX
+
+### **Your Money, Local-First. Secure, Subscription-Free Personal Finance.**
 
 [![Flutter CI](https://github.com/masheddesigns/SpendX/actions/workflows/flutter_ci.yml/badge.svg)](https://github.com/masheddesigns/SpendX/actions/workflows/flutter_ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://makeapullrequest.com)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-lightgrey)](https://flutter.dev)
 
-SpendX is a local-first Flutter personal finance app designed to help people manage daily money without subscriptions, cloud lock-in, or spreadsheet fatigue.
+---
 
-It combines transaction tracking, account management, budgeting, salary planning, financial goals, analytics, and import workflows into a single mobile experience.
+SpendX is a modern, privacy-friendly personal finance tracker designed for developers, creators, and individuals who want full ownership of their financial data. No subscriptions, no cloud lock-in, and no spreadsheet fatigue.
 
-## Overview
+[Features](#-key-features) • [Tech Stack](#%EF%B8%8F-tech-stack) • [Architecture](#%EF%B8%8F-architecture) • [Getting Started](#-getting-started) • [Release Setup](#-release--production-signing)
 
-### Problem
+</div>
 
-Many personal finance apps are either too complex, too cloud-dependent, or too focused on paid subscriptions. Users who just want a reliable, privacy-friendly way to manage expenses, accounts, and financial planning often end up juggling multiple apps or spreadsheets.
+---
 
-### Solution
+## 💡 The Problem & The Solution
 
-SpendX is built as a local-first finance product that helps users:
+### **The Problem**
+Most personal finance tools today require constant cloud syncing, force you into expensive monthly subscriptions, or compromise your privacy by linking directly to live bank accounts. When those services shut down or change their models, your history goes with them.
 
-- track money across bank accounts, cards, loans, and lending
-- understand spending through dashboards and analytics
-- plan ahead with budgets, goals, salary flows, and reminders
-- import data from statements, shared files, and OCR-assisted inputs
+### **The Solution**
+SpendX is built on a **local-first** philosophy. All transactional databases, settings, and credentials live directly on your physical device. It gives you the power of a comprehensive financial ledger, budgeting sheets, analytics, and intelligent imports without sacrificing your data privacy.
 
-### Role
+---
 
-- Product Designer
-- UX Designer
-- Flutter Developer
+## ✨ Key Features
 
-## Features
+### 💳 Core Ledger & Money Flows
+* **Multi-Account Management:** Track balances across cash, bank accounts, credit cards, loans, and lending arrangements.
+* **Granular Tracking:** Organize transactions with categories, customizable tags, and advanced search/filters.
+* **Offline-First Storage:** Powered by a local SQLite engine for instantaneous loads and zero-connection operation.
 
-### Core Money Management
+### 📅 Budgeting & Financial Control
+* **Flexible Budgets:** Set up category-based budgets to visualize monthly or periodic spending.
+* **Salary Planning Ledger:** Integrated flows to allocate and plan salary distribution across goals and bills.
+* **Recurring Transactions:** Automate recurring expense logging (subscriptions, utility bills) on a flexible timeline engine.
 
-- Transaction tracking for income, expenses, transfers, and reviews
-- Bank account, credit card, loan, and lending management
-- Categories, tags, search, and filter flows
-- Local SQLite-backed storage for offline-first usage
+### 📈 Reports & Deep Insights
+* **Interactive Analytics:** View spending breakdowns, category metrics, and tag distributions through native canvas charts.
+* **Net Worth History:** Track your overall net worth over time with local database snapshots.
+* **Nudges & Health Nudges:** Receive subtle behavioral triggers about your spending trends.
 
-### Planning and Financial Control
+### 🤖 Smart Inputs (OCR & Imports)
+* **Digital Statement Parser:** Import records using bank-agnostic statement template mappings.
+* **On-Device OCR Receipt Scanning:** Scan physical receipts using Google ML Kit to extract transaction details on-device.
+* **SMS Intent Handler:** Optionally parse transaction messages locally to speed up entry.
 
-- Budget planning and spending visibility
-- Financial goals for savings, limits, and debt payoff
-- Salary setup and recurring financial workflows
-- Reminders, alerts, and daily planning surfaces
+---
 
-### Insights and Reporting
+## 🛠️ Tech Stack
 
-- Analytics dashboard and financial summary views
-- Net worth and report screens
-- Financial health insights and money behavior nudges
-- Timeline and digest-style summaries
+SpendX uses modern mobile components to ensure high performance and maintainability:
 
-### Smart Inputs
+* **Framework:** [Flutter](https://flutter.dev) (Dart)
+* **State Management:** [Riverpod](https://riverpod.dev) & [Provider](https://pub.dev/packages/provider) for reactive state updates
+* **Local Storage:** [sqflite](https://pub.dev/packages/sqflite) (SQLite for Android & iOS)
+* **ML Engines:** [Google ML Kit Text Recognition](https://pub.dev/packages/google_mlkit_text_recognition) (local, on-device OCR)
+* **CI/CD:** GitHub Actions workflow automatically verifying linting, formatting, and unit tests
 
-- Import/export workflows
-- Statement and file-based smart import
-- OCR-assisted text extraction
-- Duplicate detection and merchant normalization helpers
+---
 
-### Extended Modules
+## 🏗️ Architecture
 
-- Vehicle and fuel expense tracking
-- Wrapped summaries, streaks, and gamification layers
-- Dark mode support
-
-## Screenshots
-
-### Dashboard
-
-![Dashboard](docs/screenshots/dashboard.png)
-
-### Transactions
-
-![Transactions](docs/screenshots/transactions.png)
-
-### Accounts
-
-![Accounts](docs/screenshots/accounts.png)
-
-### Budgeting
-
-![Budgeting](docs/screenshots/budgeting.png)
-
-### Analytics
-
-![Analytics](docs/screenshots/analytics.png)
-
-## Tech Stack
-
-- Flutter
-- Dart
-- Riverpod
-- Provider
-- SQLite via `sqflite`
-- Google ML Kit text recognition
-- Google Generative AI integration
-- Local notifications
-- Share intent handling
-
-## Architecture
-
-SpendX follows a modular Flutter structure with clear separation between UI, state, data access, and services.
+SpendX follows a modular, feature-first structure with clean separation of layers:
 
 ```text
 lib/
-  core/          Config, logging, shared utilities
-  data/          Database, repositories, app-wide providers
-  features/      Feature modules and scoped state
-  models/        Domain and persistence models
-  screens/       Product flows and top-level pages
-  services/      Business logic and integrations
-  shared/        Reusable UI building blocks
-  widgets/       App-specific reusable widgets
+  ├── core/          # App configuration, logging, and global utilities
+  ├── data/          # Local database schemas, migrations, and shared repositories
+  ├── features/      # Feature modules (salary ledger, transactions, budget) with scoped state
+  ├── models/        # Scoped serialization and domain models
+  ├── screens/       # Core app screen structures and layout routes
+  ├── services/      # Business logic, SMS parsing, and file import engines
+  ├── shared/        # Reusable global UI elements and layout rules
+  └── widgets/       # Core components and modular visual cards
 ```
 
-For deeper notes, see:
+Detailed documentation:
+* 📘 [Architecture Specifications](docs/architecture.md)
+* 💡 [Design Decisions & Tradeoffs](docs/design-decisions.md)
+* 🗺️ [Development Roadmap](docs/roadmap.md)
 
-- [Architecture Notes](docs/architecture.md)
-- [Design Decisions](docs/design-decisions.md)
-- [Roadmap](docs/roadmap.md)
+---
 
-## Installation
+## 🚀 Getting Started
 
 ### Prerequisites
+* Flutter SDK (`3.10.0` or higher)
+* Android Studio, VS Code, or Xcode (for iOS compilation)
+* CocoaPods (if compiling on macOS for iOS)
 
-- Flutter SDK 3.10+
-- Dart SDK compatible with your Flutter installation
-- Android Studio or VS Code with Flutter tooling
-- Xcode for iOS builds on macOS
+### Installation & Run
 
-### Setup
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/masheddesigns/SpendX.git
+   cd SpendX
+   ```
 
-```bash
-git clone https://github.com/masheddesigns/SpendX.git
-cd SpendX
-flutter pub get
-cp .env.example .env
-flutter run
+2. **Install Flutter packages:**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Configure Environment Variables:**
+   ```bash
+   cp .env.example .env
+   ```
+
+4. **Launch the application:**
+   ```bash
+   flutter run
+   ```
+
+---
+
+## 🔐 Release & Production Signing
+
+SpendX uses a robust, secure release setup designed to prevent sensitive credentials from ever being committed to Git.
+
+### 1. Keystore Configuration
+1. Place your release keystore at `android/keystore/spendx-release.jks`.
+2. Create a local properties file at `android/key.properties` (this is ignored by Git):
+   ```properties
+   storePassword=YOUR_KEYSTORE_PASSWORD
+   keyPassword=YOUR_KEY_PASSWORD
+   keyAlias=spendx
+   storeFile=keystore/spendx-release.jks
+   ```
+
+### 2. Gradle Integration
+The [build.gradle.kts](android/app/build.gradle.kts) handles signing config parsing safely. It automatically trims copy/paste whitespace to prevent build signing mismatches:
+```kotlin
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+// Inside android { ... }
+signingConfigs {
+    create("release") {
+        keyAlias = (keystoreProperties["keyAlias"] as String?)?.trim()
+        keyPassword = (keystoreProperties["keyPassword"] as String?)?.trim()
+        storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it.toString().trim()) }
+        storePassword = (keystoreProperties["storePassword"] as String?)?.trim()
+    }
+}
 ```
 
-## Release Build
-
-To generate a release APK locally:
-
+### 3. Generate Release APK
+Build the release bundle:
 ```bash
 flutter build apk --release
 ```
 
-Expected output:
+---
 
-```text
-build/app/outputs/flutter-apk/app-release.apk
-```
+## 🔒 Security & Privacy
 
-Suggested first public release:
+Since SpendX operates entirely local-first, **no personal financial data is ever sent to any remote server**. 
+* SMS parsing is executed on-device using local string patterns.
+* Receipt text extraction runs on-device using Google's local ML Kit OCR library.
+* Backup and export features generate files locally to place control strictly in your hands.
 
-- `v1.0.0`
+Review our full security policy in [SECURITY.md](SECURITY.md).
 
-## Repository Notes
+---
 
-- Local env values belong in `.env`, which is ignored by Git.
-- Screenshots live in `docs/screenshots/`.
-- Reference SQL for the Supabase schema lives in `docs/reference/supabase-schema.sql`.
+## 🤝 Contributing
 
-## Roadmap
+We welcome contributions! Please review the setup rules, testing workflows, and branching patterns in [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-- Improve onboarding and first-run setup
-- Expand smart import validation and reconciliation
-- Strengthen automated categorization confidence controls
-- Add broader test coverage for providers, services, and import flows
-- Package stable beta releases for public testing
+---
 
-## About the Designer
-
-SpendX is also a product design case study. Beyond the code, the repository documents the UX direction, information architecture, and tradeoffs behind building a finance app that feels practical, personal, and approachable.
-
-## License
+## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
