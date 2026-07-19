@@ -70,7 +70,16 @@ class _BudgetManagementScreenState
                 if (existing == null)
                   DropdownButtonFormField<String>(
                     initialValue: selectedCategoryId,
-                    decoration: const InputDecoration(labelText: 'Category'),
+                    decoration: InputDecoration(
+                      labelText: 'Category',
+                      filled: true,
+                      fillColor: Theme.of(dialogContext).colorScheme.surfaceContainer,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    dropdownColor: Theme.of(dialogContext).colorScheme.surfaceContainerHigh,
                     items: available
                         .map(
                           (category) => DropdownMenuItem<String>(
@@ -87,7 +96,15 @@ class _BudgetManagementScreenState
                 TextField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Monthly Limit'),
+                  decoration: InputDecoration(
+                    labelText: 'Monthly Limit',
+                    filled: true,
+                    fillColor: Theme.of(dialogContext).colorScheme.surfaceContainer,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                   onChanged: (_) => setDialogState(() {}),
                 ),
               ],

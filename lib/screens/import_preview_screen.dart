@@ -20,6 +20,18 @@ class ImportPreviewScreen extends StatefulWidget {
   State<ImportPreviewScreen> createState() => _ImportPreviewScreenState();
 }
 
+InputDecoration _dialogFieldDecoration(BuildContext context, String label) {
+  return InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: Theme.of(context).colorScheme.surfaceContainer,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+  );
+}
+
 class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
   late List<FuelImportRow> _rows;
   final Set<int> _skippedIndices = {};
@@ -52,24 +64,22 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
             children: [
               TextField(
                 controller: dateController,
-                decoration: const InputDecoration(
-                  labelText: 'Date (yyyy-MM-dd)',
-                ),
+                decoration: _dialogFieldDecoration(context, 'Date (yyyy-MM-dd)'),
                 keyboardType: TextInputType.datetime,
               ),
               TextField(
                 controller: odoController,
-                decoration: const InputDecoration(labelText: 'Odometer (km)'),
+                decoration: _dialogFieldDecoration(context, 'Odometer (km)'),
                 keyboardType: TextInputType.number,
               ),
               TextField(
                 controller: fuelController,
-                decoration: const InputDecoration(labelText: 'Fuel (Litres)'),
+                decoration: _dialogFieldDecoration(context, 'Fuel (Litres)'),
                 keyboardType: TextInputType.number,
               ),
               TextField(
                 controller: costController,
-                decoration: const InputDecoration(labelText: 'Total Cost'),
+                decoration: _dialogFieldDecoration(context, 'Total Cost'),
                 keyboardType: TextInputType.number,
               ),
             ],

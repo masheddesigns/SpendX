@@ -6,6 +6,9 @@ import '../../models/category.dart';
 import '../../models/recurring_template.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/app_card.dart';
+import '../../shared/widgets/app_amount_field.dart';
+import '../../shared/widgets/app_text_field.dart';
+import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../utils/app_format.dart';
@@ -44,7 +47,13 @@ class _RecurringPaymentsScreenState
                   .toList()
                 ..sort((a, b) => a.name.compareTo(b.name));
 
+          final cs = Theme.of(dialogContext).colorScheme;
+
           return AlertDialog(
+            backgroundColor: cs.surfaceContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             title: Text(
               existing == null ? 'New Recurring Payment' : 'Edit Template',
             ),
@@ -52,37 +61,51 @@ class _RecurringPaymentsScreenState
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
+                  AppTextField(
                     controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name (e.g. Netflix, Rent)',
+                    hintText: 'e.g. Netflix, Rent',
+                    label: 'Name',
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    textCapitalization: TextCapitalization.words,
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _TypeSegment(
+                            label: 'Expense',
+                            selected: type == 'expense',
+                            color: cs.error,
+                            onTap: () => setDialogState(() {
+                              type = 'expense';
+                              categoryId = null;
+                            }),
+                          ),
+                        ),
+                        Expanded(
+                          child: _TypeSegment(
+                            label: 'Income',
+                            selected: type == 'income',
+                            color: cs.primary,
+                            onTap: () => setDialogState(() {
+                              type = 'income';
+                              categoryId = null;
+                            }),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'expense', label: Text('Expense')),
-                      ButtonSegment(value: 'income', label: Text('Income')),
-                    ],
-                    selected: {type},
-                    onSelectionChanged: (value) {
-                      setDialogState(() {
-                        type = value.first;
-                        categoryId = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Amount'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: frequency,
-                    decoration: const InputDecoration(labelText: 'Frequency'),
+                  const SizedBox(height: AppSpacing.m),
+                  AppAmountField(controller: amountController),
+                  const SizedBox(height: AppSpacing.m),
+                  _DropdownField<String>(
+                    label: 'Frequency',
+                    value: frequency,
                     items: const [
                       DropdownMenuItem(value: 'daily', child: Text('Daily')),
                       DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
@@ -99,15 +122,13 @@ class _RecurringPaymentsScreenState
                       setDialogState(() => frequency = value);
                     },
                   ),
-                  const SizedBox(height: 12),
-                  if (categories.isNotEmpty)
-                    DropdownButtonFormField<String?>(
-                      initialValue: categories.any((item) => item.id == categoryId)
+                  if (categories.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.m),
+                    _DropdownField<String?>(
+                      label: 'Category (optional)',
+                      value: categories.any((item) => item.id == categoryId)
                           ? categoryId
                           : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Category (optional)',
-                      ),
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
@@ -123,9 +144,11 @@ class _RecurringPaymentsScreenState
                       onChanged: (value) =>
                           setDialogState(() => categoryId = value),
                     ),
-                  const SizedBox(height: 16),
+                  ],
+                  const SizedBox(height: AppSpacing.m),
                   // Start date picker
                   InkWell(
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: dialogContext,
@@ -138,17 +161,29 @@ class _RecurringPaymentsScreenState
                         setDialogState(() => startDate = picked);
                       }
                     },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Start Date',
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            '${startDate.day}/${startDate.month}/${startDate.year}',
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Start Date',
+                                  style: Theme.of(dialogContext)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(color: cs.onSurfaceVariant)),
+                              const SizedBox(height: 4),
+                              Text(AppFormat.date(startDate)),
+                            ],
                           ),
-                          const Icon(Icons.calendar_today, size: 18),
+                          Icon(Icons.calendar_today, size: 18, color: cs.onSurfaceVariant),
                         ],
                       ),
                     ),
@@ -156,12 +191,16 @@ class _RecurringPaymentsScreenState
                 ],
               ),
             ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
                 child: const Text('Cancel'),
               ),
-              ElevatedButton(
+              const SizedBox(width: 8),
+              PrimaryButton(
+                label: 'Save',
+                height: 44,
                 onPressed: () async {
                   final name = nameController.text.trim();
                   final amount = double.tryParse(amountController.text);
@@ -198,7 +237,6 @@ class _RecurringPaymentsScreenState
                     Navigator.pop(dialogContext);
                   }
                 },
-                child: const Text('Save'),
               ),
             ],
           );
@@ -340,7 +378,7 @@ class _RecurringPaymentsScreenState
                       ),
                       subtitle: Text(
                         '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}'
-                        '\nStarts ${template.startDate.day}/${template.startDate.month}/${template.startDate.year}',
+                        '\nStarts ${AppFormat.date(template.startDate)}',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -382,6 +420,81 @@ class _RecurringPaymentsScreenState
                   );
                 },
               ),
+      ),
+    );
+  }
+}
+
+class _TypeSegment extends StatelessWidget {
+  const _TypeSegment({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: selected ? cs.onError : cs.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownField<T> extends StatelessWidget {
+  const _DropdownField({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButtonFormField<T>(
+          initialValue: value,
+          decoration: InputDecoration(
+            labelText: label,
+            border: InputBorder.none,
+          ),
+          items: items,
+          onChanged: onChanged,
+        ),
       ),
     );
   }

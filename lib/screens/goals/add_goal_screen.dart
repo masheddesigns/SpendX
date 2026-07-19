@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/categories/providers/category_providers.dart';
 import '../../features/goals/goal_providers.dart';
 import '../../models/goal.dart';
+import '../../shared/widgets/primary_button.dart';
 
 class AddGoalScreen extends ConsumerStatefulWidget {
   final Goal? existing;
@@ -279,15 +280,25 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
               Expanded(
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    foregroundColor: cs.onSurfaceVariant,
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 flex: 2,
-                child: FilledButton(
+                child: PrimaryButton(
+                  label: _isEditing ? 'Save Changes' : 'Create Goal',
                   onPressed: _isValid ? _save : null,
-                  child: Text(_isEditing ? 'Save Changes' : 'Create Goal'),
                 ),
               ),
             ],

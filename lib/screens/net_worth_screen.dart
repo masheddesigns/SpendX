@@ -160,7 +160,16 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
             children: [
               DropdownButtonFormField<String>(
                 initialValue: sourceId,
-                decoration: const InputDecoration(labelText: 'From Account'),
+                decoration: InputDecoration(
+                  labelText: 'From Account',
+                  filled: true,
+                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
                 items: accounts
                     .map(
                       (a) => DropdownMenuItem(value: a.id, child: Text(a.name)),
@@ -171,7 +180,16 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: destId,
-                decoration: const InputDecoration(labelText: 'To Account'),
+                decoration: InputDecoration(
+                  labelText: 'To Account',
+                  filled: true,
+                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
                 items: accounts
                     .map(
                       (a) => DropdownMenuItem(value: a.id, child: Text(a.name)),
@@ -182,9 +200,15 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: amountController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Amount',
                   prefixText: '₹',
+                  filled: true,
+                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
                 keyboardType: TextInputType.number,
               ),
