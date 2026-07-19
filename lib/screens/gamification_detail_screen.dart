@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/repositories/transaction_repo.dart';
 import '../services/gamification_service.dart';
 import '../services/app_session_service.dart';
 import '../widgets/animated_widgets.dart';
@@ -187,28 +188,49 @@ class GamificationDetailScreen extends StatelessWidget {
   }
 
   Widget _buildAchievementsList(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _fetchAchievementsData(),
+      builder: (context, snapshot) {
+        final longestStreak = snapshot.data?['longestStreak'] as int? ?? 0;
+        final txnCount = snapshot.data?['txnCount'] as int? ?? 0;
+        final loyalTrackerUnlocked = longestStreak >= 7;
+        final masterSaverUnlocked = txnCount >= 100;
+
+        return Column(
+          children: [
+            SettingsTile(
+              icon: Icons.local_fire_department,
+              color: Colors.orange,
+              title: 'Loyal Tracker',
+              subtitle: 'Maintained a 7-day streak',
+              onTap: () {},
+              trailing: loyalTrackerUnlocked
+                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  : Icon(Icons.lock, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+            ),
+            const SizedBox(height: 10),
+            SettingsTile(
+              icon: Icons.savings,
+              color: Colors.green,
+
+              title: 'Master Saver',
+              subtitle: 'Logged 100+ transactions',
+              onTap: () {},
+              trailing: masterSaverUnlocked
+                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  : Icon(Icons.lock, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+            ),
+            const SizedBox(height: 10),
+            _buildRemainingAchievements(context),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRemainingAchievements(BuildContext context) {
     return Column(
       children: [
-        SettingsTile(
-          icon: Icons.local_fire_department,
-          color: Colors.orange,
-          title: 'Loyal Tracker',
-          subtitle: 'Maintained a 7-day streak',
-          onTap: () {},
-          trailing: const Icon(Icons.check_circle, color: Colors.green),
-
-        ),
-        const SizedBox(height: 10),
-        SettingsTile(
-          icon: Icons.savings,
-          color: Colors.green,
-
-          title: 'Master Saver',
-          subtitle: 'Logged 100+ transactions',
-          onTap: () {},
-          trailing: Icon(Icons.lock, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
-        ),
-        const SizedBox(height: 10),
         SettingsTile(
           icon: Icons.auto_awesome_motion,
           color: Theme.of(context).colorScheme.secondary,
@@ -250,6 +272,16 @@ class GamificationDetailScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<Map<String, dynamic>> _fetchAchievementsData() async {
+    final longestStreak = await AppSessionService.instance.getLongestUsageStreak();
+    final txnCount = (await TransactionRepo().getAll()).length;
+
+    return {
+      'longestStreak': longestStreak,
+      'txnCount': txnCount,
+    };
   }
 
   Future<Map<String, dynamic>> _fetchUsageData() async {
