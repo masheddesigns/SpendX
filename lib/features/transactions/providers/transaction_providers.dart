@@ -264,6 +264,7 @@ final addTransactionProvider = Provider((ref) {
 
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
+    await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
   };
 });
@@ -287,6 +288,7 @@ final updateTransactionProvider = Provider((ref) {
     await txRepo.updateTransaction(newTransaction);
     ref.invalidate(accountsProvider);
     ref.invalidate(transactionsProvider);
+    await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
   };
 });
@@ -309,6 +311,7 @@ final deleteTransactionProvider = Provider((ref) {
     await txRepo.delete(transactionId);
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
+    await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
   };
 });
@@ -490,6 +493,7 @@ final addTransactionsBulkProvider = Provider((ref) {
     // ── 3. INVALIDATE ONCE (after commit) ────────────────────────────────
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
+    await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
     debugPrint('🔄 Providers invalidated (bulk)');
     return insertedCount;

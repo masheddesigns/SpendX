@@ -58,6 +58,7 @@ final netWorthChangeProvider =
 /// Monthly income/expense stats for the last N months.
 final monthlyStatsProvider =
     FutureProvider<List<MonthlyStats>>((ref) async {
+  ref.watch(transactionsProvider);
   final txRepo = ref.watch(transactionRepoProvider);
   final raw = await txRepo.getMonthlyStats(12);
 
