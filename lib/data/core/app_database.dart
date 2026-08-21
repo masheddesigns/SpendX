@@ -41,19 +41,13 @@ class AppDatabase {
     }
   }
 
-  /// Applies the full migration chain for [oldVersion] up to the current schema.
+  /// Applies the migration chain for [oldVersion] up to the current schema.
   ///
-  /// When [runBackfill] is false the v21 step only creates its schema (the
-  /// `ledger_backfill_log` table) and does NOT execute the Phase 1B backfill,
-  /// leaving that to the caller. This is what [migrateSchemaOnly] uses so the
-  /// dry-run harness can open a raw exported copy and run
-  /// [LedgerBackfillService] itself — mirroring how [onUpgrade] brings the
-  /// schema current before production backfills.
-  Future<void> _applyUpgrades(
-    Database db,
-    int oldVersion, {
-    bool runBackfill = true,
-  }) async {
+  /// The v21 step is SCHEMA ONLY: it creates the `ledger_backfill_log` table
+  /// and performs NO financial backfill. Financial data mutation is delegated
+  /// to the explicit [runLedgerBackfill] entry point, never to the upgrade
+  /// path — opening or upgrading a database must not mutate financial data.
+  Future<void> _applyUpgrades(Database db, int oldVersion) async {
     if (oldVersion < 3) await _migrateToV3(db);
     if (oldVersion < 5) await _migrateToV5(db);
     if (oldVersion < 6) await _migrateToV6(db);
@@ -72,11 +66,7 @@ class AppDatabase {
     if (oldVersion < 19) await _migrateToV19(db);
     if (oldVersion < 20) await _migrateToV20(db);
     if (oldVersion < 21) {
-      if (runBackfill) {
-        await _migrateToV21(db);
-      } else {
-        await _ensureV21Schema(db);
-      }
+      await _migrateToV21(db);
     }
     await _executeCreateQueries(db);
   }
@@ -87,7 +77,7 @@ class AppDatabase {
   /// [LedgerBackfillService] itself. [oldVersion] is the DB's current
   /// `user_version` (read it via `PRAGMA user_version`).
   Future<void> migrateSchemaOnly(Database db, int oldVersion) async {
-    await _applyUpgrades(db, oldVersion, runBackfill: false);
+    await _applyUpgrades(db, oldVersion);
   }
 
   Future<void> _migrateToV3(Database db) async {
@@ -365,25 +355,13 @@ class AppDatabase {
     ''');
   }
 
+  /// v21 migration — SCHEMA ONLY.
+  ///
+  /// Creates the `ledger_backfill_log` table and performs no financial data
+  /// mutation. The Phase 1B backfill is deliberately NOT run here; it is the
+  /// responsibility of the explicit [runLedgerBackfill] entry point.
   Future<void> _migrateToV21(Database db) async {
     await _ensureV21Schema(db);
-
-    try {
-      final report = await LedgerBackfillService.run(db);
-      await db.insert('ledger_backfill_log', {
-        'status': report.verdict,
-        'ran_at': DateTime.now().toIso8601String(),
-        'report': report.toSummary().toString(),
-      });
-    } on BackfillFailedException catch (e) {
-      await db.insert('ledger_backfill_log', {
-        'status': 'FAIL',
-        'ran_at': DateTime.now().toIso8601String(),
-        'report': e.report.toSummary().toString(),
-      });
-      // Do NOT rethrow: allow the upgrade (and the app) to proceed. The
-      // backfill already rolled back its own writes; the data is left intact.
-    }
   }
 
   /// Explicitly (re)run the Phase 1B backfill. Use [force] to run even if a
