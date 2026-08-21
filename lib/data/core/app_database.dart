@@ -25,61 +25,7 @@ class AppDatabase {
       version: 21,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 3) {
-          await _migrateToV3(db);
-        }
-        if (oldVersion < 5) {
-          await _migrateToV5(db);
-        }
-        if (oldVersion < 6) {
-          await _migrateToV6(db);
-        }
-        if (oldVersion < 7) {
-          await _migrateToV7(db);
-        }
-        if (oldVersion < 8) {
-          await _migrateToV8(db);
-        }
-        if (oldVersion < 9) {
-          await _migrateToV9(db);
-        }
-        if (oldVersion < 10) {
-          await _migrateToV10(db);
-        }
-        if (oldVersion < 11) {
-          await _migrateToV11(db);
-        }
-        if (oldVersion < 12) {
-          await _migrateToV12(db);
-        }
-        if (oldVersion < 13) {
-          await _migrateToV13(db);
-        }
-        if (oldVersion < 14) {
-          await _migrateToV14(db);
-        }
-        if (oldVersion < 15) {
-          await _migrateToV15(db);
-        }
-        if (oldVersion < 16) {
-          await _migrateToV16(db);
-        }
-        if (oldVersion < 17) {
-          await _migrateToV17(db);
-        }
-        if (oldVersion < 18) {
-          await _migrateToV18(db);
-        }
-        if (oldVersion < 19) {
-          await _migrateToV19(db);
-        }
-        if (oldVersion < 20) {
-          await _migrateToV20(db);
-        }
-        if (oldVersion < 21) {
-          await _migrateToV21(db);
-        }
-        await _executeCreateQueries(db);
+        await _applyUpgrades(db, oldVersion);
       },
     );
   }
@@ -93,6 +39,55 @@ class AppDatabase {
     for (final query in Tables.allCreateQueries) {
       await db.execute(query);
     }
+  }
+
+  /// Applies the full migration chain for [oldVersion] up to the current schema.
+  ///
+  /// When [runBackfill] is false the v21 step only creates its schema (the
+  /// `ledger_backfill_log` table) and does NOT execute the Phase 1B backfill,
+  /// leaving that to the caller. This is what [migrateSchemaOnly] uses so the
+  /// dry-run harness can open a raw exported copy and run
+  /// [LedgerBackfillService] itself — mirroring how [onUpgrade] brings the
+  /// schema current before production backfills.
+  Future<void> _applyUpgrades(
+    Database db,
+    int oldVersion, {
+    bool runBackfill = true,
+  }) async {
+    if (oldVersion < 3) await _migrateToV3(db);
+    if (oldVersion < 5) await _migrateToV5(db);
+    if (oldVersion < 6) await _migrateToV6(db);
+    if (oldVersion < 7) await _migrateToV7(db);
+    if (oldVersion < 8) await _migrateToV8(db);
+    if (oldVersion < 9) await _migrateToV9(db);
+    if (oldVersion < 10) await _migrateToV10(db);
+    if (oldVersion < 11) await _migrateToV11(db);
+    if (oldVersion < 12) await _migrateToV12(db);
+    if (oldVersion < 13) await _migrateToV13(db);
+    if (oldVersion < 14) await _migrateToV14(db);
+    if (oldVersion < 15) await _migrateToV15(db);
+    if (oldVersion < 16) await _migrateToV16(db);
+    if (oldVersion < 17) await _migrateToV17(db);
+    if (oldVersion < 18) await _migrateToV18(db);
+    if (oldVersion < 19) await _migrateToV19(db);
+    if (oldVersion < 20) await _migrateToV20(db);
+    if (oldVersion < 21) {
+      if (runBackfill) {
+        await _migrateToV21(db);
+      } else {
+        await _ensureV21Schema(db);
+      }
+    }
+    await _executeCreateQueries(db);
+  }
+
+  /// Applies all schema migrations to an already-open database WITHOUT running
+  /// the backfill. Intended for the dry-run harness: it opens a raw exported
+  /// copy (which may be at any `user_version`) and then runs
+  /// [LedgerBackfillService] itself. [oldVersion] is the DB's current
+  /// `user_version` (read it via `PRAGMA user_version`).
+  Future<void> migrateSchemaOnly(Database db, int oldVersion) async {
+    await _applyUpgrades(db, oldVersion, runBackfill: false);
   }
 
   Future<void> _migrateToV3(Database db) async {
@@ -301,12 +296,23 @@ class AppDatabase {
       final columns = await db.rawQuery(
         'PRAGMA table_info(ledger_transactions)',
       );
+      final hasCategoryId = columns.any((c) => c['name'] == 'category_id');
       final isText = columns.any(
         (c) =>
             c['name'] == 'category_id' &&
             (c['type'] as String? ?? '').toUpperCase() == 'TEXT',
       );
       if (isText) return;
+
+      if (!hasCategoryId) {
+        // V17 never added the column on this DB (e.g. a real exported v19
+        // database). Simply add it as TEXT rather than rebuilding, which would
+        // otherwise fail trying to SELECT a non-existent column.
+        await db.execute(
+          'ALTER TABLE ledger_transactions ADD COLUMN category_id TEXT',
+        );
+        return;
+      }
 
       await db.execute('''
         CREATE TABLE ledger_transactions_new (
@@ -348,7 +354,7 @@ class AppDatabase {
   /// the failure is recorded in `ledger_backfill_log`. The upgrade itself is
   /// NOT failed, so the app can still open with an incomplete (rolled-back)
   /// ledger; the failure is surfaced via the log and [runLedgerBackfill].
-  Future<void> _migrateToV21(Database db) async {
+  Future<void> _ensureV21Schema(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ledger_backfill_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -357,6 +363,10 @@ class AppDatabase {
         report TEXT
       )
     ''');
+  }
+
+  Future<void> _migrateToV21(Database db) async {
+    await _ensureV21Schema(db);
 
     try {
       final report = await LedgerBackfillService.run(db);

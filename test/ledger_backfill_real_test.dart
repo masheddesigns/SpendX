@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 
+import 'package:spend_x/data/core/app_database.dart';
 import 'package:spend_x/data/migrations/ledger_backfill_dry_run.dart';
 
 /// Phase 1C — real-data validation entry point.
@@ -42,6 +43,13 @@ void main() {
 
     final db = await databaseFactoryFfi.openDatabase(copyPath);
     try {
+      // Bring the schema current WITHOUT running the backfill (mirrors what
+      // AppDatabase does on open before production backfills). A raw exported
+      // DB may be at any user_version.
+      final versionRow = await db.rawQuery('PRAGMA user_version');
+      final oldVersion = (versionRow.first['user_version'] as int?) ?? 0;
+      await AppDatabase.instance.migrateSchemaOnly(db, oldVersion);
+
       final commit = Platform.environment['LEDGER_BACKFILL_COMMIT'] == '1';
       final report = commit ? await execute(db) : await dryRun(db);
       print(const JsonEncoder.withIndent('  ').convert(report.toSummary()));
