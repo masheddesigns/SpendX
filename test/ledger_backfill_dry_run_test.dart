@@ -155,7 +155,7 @@ void main() {
     expect(report.hardFailures.isEmpty, isTrue);
     expect(report.exceptions.join('\n'), contains('repayment'));
     expect(report.openingBalancesCreated, greaterThan(0));
-    expect(report.verdict, 'PASS WITH DOCUMENTED MIGRATION EXCEPTIONS');
+    expect(report.verdict, 'EXECUTABLE_WITH_EXCEPTIONS');
 
     // Surface the full classified report for Phase 1C verification.
     print(const JsonEncoder.withIndent('  ').convert(report.toSummary()));

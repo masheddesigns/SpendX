@@ -156,7 +156,11 @@ void main() {
         'updated_at': DateTime(2025, 5, 1).toIso8601String(),
       });
 
-      final report = await AppDatabase.instance.runLedgerBackfill(force: true);
+      await AppDatabase.instance.setBackfillEnabled(true);
+      final report = await AppDatabase.instance.runLedgerBackfill(
+        authorized: true,
+        force: true,
+      );
 
       expect(report.passed, isTrue);
       expect((await live.query('ledger_transactions')).length,

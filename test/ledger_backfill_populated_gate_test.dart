@@ -299,7 +299,7 @@ void main() {
     );
     expect(
       report.verdict == 'PASS' ||
-          report.verdict == 'PASS WITH DOCUMENTED MIGRATION EXCEPTIONS',
+          report.verdict == 'EXECUTABLE_WITH_EXCEPTIONS',
       isTrue,
     );
   });

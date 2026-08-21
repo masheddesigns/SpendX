@@ -8,6 +8,16 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
 
+  /// Test-only override for the on-disk database file name. Lets tests run the
+  /// guarded reconciliation against an isolated database without colliding
+  /// with the production `spendx.db` singleton. Passing `null` restores the
+  /// default. Setting it also drops any cached connection.
+  static String? _testDbPath;
+  static void setTestDatabasePath(String? path) {
+    _testDbPath = path;
+    _database = null;
+  }
+
   AppDatabase._init();
 
   Future<Database> get database async {
@@ -18,7 +28,7 @@ class AppDatabase {
 
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
+    final path = join(dbPath, _testDbPath ?? filePath);
 
     return await openDatabase(
       path,
@@ -275,8 +285,8 @@ class AppDatabase {
   }
 
   Future<void> close() async {
-    final db = await instance.database;
-    db.close();
+    await _database?.close();
+    _database = null;
   }
 
   /// V20: ensure ledger_transactions.category_id is TEXT (V17 created it as
@@ -339,11 +349,9 @@ class AppDatabase {
 
   /// V21: Phase 1B ledger backfill + reconciliation.
   ///
-  /// Runs the idempotent backfill inside its own transaction. If any required
-  /// parity/integrity check fails the backfill rolls back (no partial data) and
-  /// the failure is recorded in `ledger_backfill_log`. The upgrade itself is
-  /// NOT failed, so the app can still open with an incomplete (rolled-back)
-  /// ledger; the failure is surfaced via the log and [runLedgerBackfill].
+  /// Creates the `ledger_backfill_log` (reconciliation audit trail) and the
+  /// `ledger_backfill_flags` (local feature-flag / kill-switch store). No
+  /// financial data mutation happens here.
   Future<void> _ensureV21Schema(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ledger_backfill_log (
@@ -353,6 +361,85 @@ class AppDatabase {
         report TEXT
       )
     ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ledger_backfill_flags (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 1D — local feature flag + kill switch (no remote config).
+  // `ledgerBackfillEnabled` means the reconciliation feature is *permitted*
+  // to run; it does NOT by itself authorize a mutation. The explicit
+  // `authorized` signal on [runLedgerBackfill] is required for any write.
+  // ---------------------------------------------------------------------------
+  static const String _flagEnabled = 'enabled';
+  static const String _flagKill = 'kill_switch';
+
+  Future<void> _ensureFlagsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ledger_backfill_flags (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<bool> isBackfillEnabled() async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    final row = await db.query(
+      'ledger_backfill_flags',
+      where: 'key = ?',
+      whereArgs: [_flagEnabled],
+    );
+    return row.isNotEmpty && row.first['value'] == 'true';
+  }
+
+  Future<void> setBackfillEnabled(bool v) async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    await db.insert(
+      'ledger_backfill_flags',
+      {'key': _flagEnabled, 'value': v ? 'true' : 'false'},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<bool> isKillSwitchActive() async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    final row = await db.query(
+      'ledger_backfill_flags',
+      where: 'key = ?',
+      whereArgs: [_flagKill],
+    );
+    return row.isNotEmpty && row.first['value'] == 'true';
+  }
+
+  Future<void> setKillSwitch(bool v) async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    await db.insert(
+      'ledger_backfill_flags',
+      {'key': _flagKill, 'value': v ? 'true' : 'false'},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Read-only preflight: analyzes the current data and returns the verdict
+  /// WITHOUT mutating anything. Safe to call any time.
+  Future<BackfillReport> preflightReconciliation() async {
+    final db = await instance.database;
+    await _ensureV21Schema(db);
+    if (await isKillSwitchActive()) {
+      final report = BackfillReport();
+      report.hardFailures.add('Kill switch active: reconciliation disabled.');
+      return report;
+    }
+    return LedgerBackfillService.reconcile(db, authorized: false);
   }
 
   /// v21 migration — SCHEMA ONLY.
@@ -364,44 +451,68 @@ class AppDatabase {
     await _ensureV21Schema(db);
   }
 
-  /// Explicitly (re)run the Phase 1B backfill. Use [force] to run even if a
-  /// prior PASS was recorded. Returns the resulting report.
-  Future<BackfillReport> runLedgerBackfill({bool force = false}) async {
+  /// Explicitly (re)run the guarded Phase 1D reconciliation.
+  ///
+  /// Three independent gates must ALL pass before any write occurs:
+  ///   1. Kill switch inactive.
+  ///   2. Feature flag [isBackfillEnabled] true.
+  ///   3. Explicit [authorized] signal true.
+  ///
+  /// Without [authorized] this is a read-only preflight (no mutation). Returns
+  /// the resulting report, which is also recorded in `ledger_backfill_log`.
+  Future<BackfillReport> runLedgerBackfill({
+    bool force = false,
+    bool authorized = false,
+  }) async {
     final db = await instance.database;
+    await _ensureV21Schema(db);
+
+    // Gate 1: kill switch — hard no-op, no mutation, no log write of success.
+    if (await isKillSwitchActive()) {
+      final report = BackfillReport();
+      report.hardFailures.add('Kill switch active: reconciliation disabled.');
+      return report;
+    }
+
+    // Gate 2: feature flag — permitted to run, but still no mutation here.
+    if (!await isBackfillEnabled()) {
+      final report = BackfillReport();
+      report.exceptions.add(
+        'Reconciliation feature is disabled (ledgerBackfillEnabled=false). '
+        'Enable it explicitly before authorizing a run.',
+      );
+      return report;
+    }
+
+    // Gate 3: explicit authorization — without it, this is a preflight only.
+    if (!authorized) {
+      return LedgerBackfillService.reconcile(db, authorized: false);
+    }
+
+    // Skip if a prior successful reconcile already recorded (unless forced).
     if (!force) {
       final prior = await db.query(
         'ledger_backfill_log',
-        where: 'status = ?',
-        whereArgs: ['PASS'],
+        where: 'status IN (?, ?)',
+        whereArgs: ['PASS', 'EXECUTABLE_WITH_EXCEPTIONS'],
         limit: 1,
       );
       if (prior.isNotEmpty) {
-        final existing = await db.query(
-          'ledger_backfill_log',
-          orderBy: 'id DESC',
-          limit: 1,
+        final report = BackfillReport();
+        report.exceptions.add(
+          'Prior successful reconciliation recorded; not re-run '
+          '(use force to re-run).',
         );
-        final report = BackfillReport()..passed = true;
-        report.errorMessage = 'Prior PASS recorded; not re-run '
-            '(use force to re-run). Last entry: ${existing.first['report']}';
         return report;
       }
     }
-    try {
-      final report = await LedgerBackfillService.run(db);
-      await db.insert('ledger_backfill_log', {
-        'status': report.verdict,
-        'ran_at': DateTime.now().toIso8601String(),
-        'report': report.toSummary().toString(),
-      });
-      return report;
-    } on BackfillFailedException catch (e) {
-      await db.insert('ledger_backfill_log', {
-        'status': 'FAIL',
-        'ran_at': DateTime.now().toIso8601String(),
-        'report': e.report.toSummary().toString(),
-      });
-      return e.report;
-    }
+
+    final report = await LedgerBackfillService.reconcile(db, authorized: true);
+    await db.insert('ledger_backfill_log', {
+      'status': report.verdict,
+      'ran_at': DateTime.now().toIso8601String(),
+      'report': report.toSummary().toString(),
+    });
+    return report;
   }
 }
