@@ -85,19 +85,31 @@ class LedgerBackfillService {
   /// and the report is returned. This guarantees parity is verified against
   /// the actually-applied state (no dry-run-then-execute TOCTOU window) and
   /// that a preflight never leaves data behind.
+  ///
+  /// When [enforceFlagKill] is true (production path via
+  /// [AppDatabase.runLedgerBackfill]...), the feature flag and kill switch are
+  /// re-read INSIDE this same transaction before any analysis or mutation, so
+  /// a flag/kill-switch change between a preflight and the execution cannot
+  /// authorize a mutation incorrectly. Unit/harness callers pass false to skip
+  /// the flag/kill reads.
   static Future<BackfillReport> reconcile(
     DatabaseExecutor db, {
     required bool authorized,
+    bool enforceFlagKill = false,
   }) async {
     final report = BackfillReport();
     if (db is Database) {
       try {
         await db.transaction((txn) async {
+          await _gateInTransaction(txn, report,
+              enforceFlagKill: enforceFlagKill, authorized: authorized);
           await _reconcileSteps(txn, report, apply: true);
           if (!authorized || !report.isExecutable) {
             // Preflight or non-executable: roll back, return analysis only.
+            report.blockReason ??= authorized ? 'fail' : 'preflight';
             throw _ReconcileNoApply(report);
           }
+          report.applied = true;
         });
       } on _ReconcileNoApply catch (e) {
         return e.report;
@@ -106,11 +118,43 @@ class LedgerBackfillService {
     }
     // Already inside a transaction (e.g. harness): apply inline; signal
     // no-apply so the caller rolls back when not authorized / not executable.
+    await _gateInTransaction(db, report,
+        enforceFlagKill: enforceFlagKill, authorized: authorized);
     await _reconcileSteps(db, report, apply: true);
     if (!authorized || !report.isExecutable) {
+      report.blockReason ??= authorized ? 'fail' : 'preflight';
       throw _ReconcileNoApply(report);
     }
+    report.applied = true;
     return report;
+  }
+
+  /// Re-reads kill switch and feature flag INSIDE the transaction, before any
+  /// analysis or mutation. Throws [_ReconcileNoApply] (rollback) on a hard
+  /// gate. Authorized flag is checked but a non-authorized call still proceeds
+  /// to analyze (preflight) — it is only rejected from mutating.
+  static Future<void> _gateInTransaction(
+    DatabaseExecutor db,
+    BackfillReport report, {
+    required bool enforceFlagKill,
+    required bool authorized,
+  }) async {
+    if (!enforceFlagKill) return;
+    await _ensureFlagsTable(db);
+    if (await _killSwitchActive(db)) {
+      report.blockReason = 'kill';
+      report.hardFailures
+          .add('Kill switch active: reconciliation disabled.');
+      throw _ReconcileNoApply(report);
+    }
+    if (!await _flagEnabled(db)) {
+      report.blockReason = 'flag';
+      report.exceptions.add(
+        'Reconciliation feature is disabled (ledgerBackfillEnabled=false). '
+        'Enable it explicitly before authorizing a run.',
+      );
+      throw _ReconcileNoApply(report);
+    }
   }
 
   static Future<void> _reconcileSteps(
@@ -134,11 +178,11 @@ class LedgerBackfillService {
     report.passed = report.hardFailures.isEmpty;
     final openingTouched =
         report.openingBalancesCreated + report.openingBalancesExpected;
-    report.historicalCompleteness = (openingTouched == 0 &&
-            report.exceptions.isEmpty &&
-            report.reviewItems.isEmpty)
-        ? 'COMPLETE'
-        : 'PARTIAL';
+    final complete = openingTouched == 0 &&
+        report.exceptions.isEmpty &&
+        report.reviewItems.isEmpty &&
+        report.openingAbsorbedInterest == 0;
+    report.historicalCompleteness = complete ? 'COMPLETE' : 'PARTIAL';
   }
 
   // ---------------------------------------------------------------------------
@@ -666,20 +710,40 @@ class LedgerBackfillService {
       );
       report.salaryResidualExceptions++;
     }
-    final loanInt = (await db.rawQuery(
-      'SELECT COALESCE(SUM(interestComponent),0) as s FROM loan_installments',
-    )).first['s'];
-    final emiInt = (await db.rawQuery(
-      'SELECT COALESCE(SUM(interestAmount),0) as s FROM credit_emis',
-    )).first['s'];
-    final unsupported =
-        (loanInt as num).toDouble() + (emiInt as num).toDouble();
-    if (unsupported > tolerance) {
-      report.openingAbsorbedUnsupported = unsupported;
-      report.exceptions.add(
-        'Loan/credit interest (INR $unsupported) is not individually '
-        'journaled; absorbed into opening balance.',
+    // LOAN_CREDIT_INTEREST_RESIDUAL: historical interest cannot be
+    // reconstructed from available legacy data and is absorbed into opening
+    // balance. This is an explicitly named, allow-listed exception — never a
+    // generic WARN. Unquantifiable (NULL) interest must FAIL, not become zero.
+    final nullLoanInt = (await db.rawQuery(
+      'SELECT COUNT(*) as c FROM loan_installments '
+      'WHERE interestComponent IS NULL',
+    )).first['c'] as int? ?? 0;
+    final nullEmiInt = (await db.rawQuery(
+      'SELECT COUNT(*) as c FROM credit_emis WHERE interestAmount IS NULL',
+    )).first['c'] as int? ?? 0;
+    if (nullLoanInt + nullEmiInt > 0) {
+      report.hardFailures.add(
+        'Loan/credit interest amount is unquantifiable '
+        '(${nullLoanInt + nullEmiInt} installment(s) with NULL interest). '
+        'Cannot safely absorb an unknown amount into opening balance.',
       );
+    } else {
+      final loanInt = (await db.rawQuery(
+        'SELECT COALESCE(SUM(interestComponent),0) as s FROM loan_installments',
+      )).first['s'];
+      final emiInt = (await db.rawQuery(
+        'SELECT COALESCE(SUM(interestAmount),0) as s FROM credit_emis',
+      )).first['s'];
+      final interest =
+          (loanInt as num).toDouble() + (emiInt as num).toDouble();
+      if (interest > tolerance) {
+        report.openingAbsorbedInterest = interest;
+        report.interestResidualExceptions++;
+        report.exceptions.add(
+          'LOAN_CREDIT_INTEREST_RESIDUAL: historical interest (INR $interest) '
+          'is not individually journaled; absorbed into opening balance.',
+        );
+      }
     }
   }
 
@@ -721,6 +785,43 @@ class LedgerBackfillService {
       [cardId],
     );
     return (rows.first['outstanding'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 1E — in-transaction feature-flag / kill-switch reads.
+  // Self-contained (creates the flags table if absent) so reconcile() can gate
+  // itself even when invoked directly.
+  // ---------------------------------------------------------------------------
+  static const String _flagKeyEnabled = 'enabled';
+  static const String _flagKeyKill = 'kill_switch';
+
+  static Future<void> _ensureFlagsTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ledger_backfill_flags (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+  }
+
+  static Future<bool> _killSwitchActive(DatabaseExecutor db) async {
+    await _ensureFlagsTable(db);
+    final row = await db.query(
+      'ledger_backfill_flags',
+      where: 'key = ?',
+      whereArgs: [_flagKeyKill],
+    );
+    return row.isNotEmpty && row.first['value'] == 'true';
+  }
+
+  static Future<bool> _flagEnabled(DatabaseExecutor db) async {
+    await _ensureFlagsTable(db);
+    final row = await db.query(
+      'ledger_backfill_flags',
+      where: 'key = ?',
+      whereArgs: [_flagKeyEnabled],
+    );
+    return row.isNotEmpty && row.first['value'] == 'true';
   }
 
   static List<Map<String, dynamic>> _expectedLegs(Map<String, dynamic> tx) {
@@ -875,12 +976,21 @@ class BackfillReport {
   int duplicateCount = 0;
   int lendingRepaymentExceptions = 0;
   int salaryResidualExceptions = 0;
+  int interestResidualExceptions = 0;
   bool passed = false;
   String? errorMessage;
 
   String historicalCompleteness = 'UNKNOWN';
   double openingAbsorbedSalary = 0.0;
-  double openingAbsorbedUnsupported = 0.0;
+  double openingAbsorbedInterest = 0.0;
+
+  /// Whether the financial transaction actually committed. `false` means the
+  /// run was a preflight, was blocked by a gate, or rolled back.
+  bool applied = false;
+
+  /// Why a non-applied run did not commit: 'kill' | 'flag' | 'preflight' |
+  /// 'fail' | null.
+  String? blockReason;
 
   final List<BackfillParity> accountParity = [];
   final List<BackfillParity> lendingParity = [];
@@ -892,6 +1002,11 @@ class BackfillReport {
 
   bool get isExecutable => passed;
 
+  /// True only when the account is balanced AND historically journalized
+  /// (no residual absorbed into opening balance). A balanced account is not
+  /// necessarily historically complete.
+  bool get historicallyJournalized => historicalCompleteness == 'COMPLETE';
+
   String get verdict {
     if (!passed) return 'FAIL — ROLLED BACK';
     return exceptions.isEmpty ? 'PASS' : 'EXECUTABLE_WITH_EXCEPTIONS';
@@ -902,8 +1017,12 @@ class BackfillReport {
         'passed': passed,
         'isExecutable': isExecutable,
         'historicalCompleteness': historicalCompleteness,
+        'historicallyJournalized': historicallyJournalized,
         'openingAbsorbedSalary': openingAbsorbedSalary,
-        'openingAbsorbedUnsupported': openingAbsorbedUnsupported,
+        'openingAbsorbedInterest': openingAbsorbedInterest,
+        'interestResidualExceptions': interestResidualExceptions,
+        'applied': applied,
+        'blockReason': blockReason,
         'accountsExamined': accountsExamined,
         'accountsMigrated': accountsMigrated,
         'openingBalancesCreated': openingBalancesCreated,

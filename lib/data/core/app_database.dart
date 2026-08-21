@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'tables.dart';
@@ -453,13 +454,17 @@ class AppDatabase {
 
   /// Explicitly (re)run the guarded Phase 1D reconciliation.
   ///
-  /// Three independent gates must ALL pass before any write occurs:
-  ///   1. Kill switch inactive.
-  ///   2. Feature flag [isBackfillEnabled] true.
-  ///   3. Explicit [authorized] signal true.
+  /// A lightweight precheck rejects (no mutation) when the kill switch is
+  /// active or the feature flag is off, giving immediate feedback. The
+  /// authoritative re-check of those gates happens INSIDE the reconcile
+  /// transaction (see [LedgerBackfillService.reconcile] with
+  /// `enforceFlagKill`), so a concurrent flag/kill change cannot authorize a
+  /// mutation incorrectly.
   ///
-  /// Without [authorized] this is a read-only preflight (no mutation). Returns
-  /// the resulting report, which is also recorded in `ledger_backfill_log`.
+  /// The audit outcome is written to `ledger_backfill_log` in a separate,
+  /// best-effort statement AFTER the financial transaction has committed or
+  /// rolled back. A failure to write the audit log never rolls back or
+  /// invalidates the (already committed) financial result.
   Future<BackfillReport> runLedgerBackfill({
     bool force = false,
     bool authorized = false,
@@ -467,34 +472,29 @@ class AppDatabase {
     final db = await instance.database;
     await _ensureV21Schema(db);
 
-    // Gate 1: kill switch — hard no-op, no mutation, no log write of success.
+    // Precheck (fast no-op). The in-transaction re-check is authoritative.
     if (await isKillSwitchActive()) {
-      final report = BackfillReport();
+      final report = BackfillReport()..blockReason = 'kill';
       report.hardFailures.add('Kill switch active: reconciliation disabled.');
+      await _writeAuditLog(db, 'BLOCKED_BY_KILL_SWITCH', report);
       return report;
     }
-
-    // Gate 2: feature flag — permitted to run, but still no mutation here.
     if (!await isBackfillEnabled()) {
-      final report = BackfillReport();
+      final report = BackfillReport()..blockReason = 'flag';
       report.exceptions.add(
         'Reconciliation feature is disabled (ledgerBackfillEnabled=false). '
         'Enable it explicitly before authorizing a run.',
       );
+      await _writeAuditLog(db, 'BLOCKED_BY_FLAG', report);
       return report;
     }
 
-    // Gate 3: explicit authorization — without it, this is a preflight only.
-    if (!authorized) {
-      return LedgerBackfillService.reconcile(db, authorized: false);
-    }
-
-    // Skip if a prior successful reconcile already recorded (unless forced).
+    // Idempotency: only a committed EXECUTION_SUCCESS blocks re-run.
     if (!force) {
       final prior = await db.query(
         'ledger_backfill_log',
-        where: 'status IN (?, ?)',
-        whereArgs: ['PASS', 'EXECUTABLE_WITH_EXCEPTIONS'],
+        where: 'status = ?',
+        whereArgs: ['EXECUTION_SUCCESS'],
         limit: 1,
       );
       if (prior.isNotEmpty) {
@@ -507,12 +507,65 @@ class AppDatabase {
       }
     }
 
-    final report = await LedgerBackfillService.reconcile(db, authorized: true);
-    await db.insert('ledger_backfill_log', {
-      'status': report.verdict,
-      'ran_at': DateTime.now().toIso8601String(),
-      'report': report.toSummary().toString(),
-    });
+    final report = await LedgerBackfillService.reconcile(
+      db,
+      authorized: authorized,
+      enforceFlagKill: true,
+    );
+    await _writeAuditLog(db, _outcomeStatus(report), report);
     return report;
+  }
+
+  /// Maps a completed reconcile report to its audit-log status. This is the
+  /// single source of truth for distinguishing blocked / preflight / success /
+  /// rollback outcomes — never a financial state.
+  static String _outcomeStatus(BackfillReport report) {
+    if (report.applied) return 'EXECUTION_SUCCESS';
+    switch (report.blockReason) {
+      case 'kill':
+        return 'BLOCKED_BY_KILL_SWITCH';
+      case 'flag':
+        return 'BLOCKED_BY_FLAG';
+      case 'preflight':
+        return report.passed ? 'PREFLIGHT_PASS' : 'PREFLIGHT_FAIL';
+      case 'fail':
+      default:
+        return 'EXECUTION_ROLLBACK';
+    }
+  }
+
+  /// Test-only seam: when set, the audit-log write is delegated to this
+  /// function (which may throw to simulate logging failure). Defaults to the
+  /// real best-effort writer. Not used by production code.
+  static Future<void> Function(
+    DatabaseExecutor db,
+    String status,
+    BackfillReport report,
+  )? auditLogWriter;
+
+  /// Writes the audit outcome OUTSIDE the financial transaction. Best-effort:
+  /// a failure here must NOT roll back or invalidate a committed financial
+  /// result; it is surfaced separately (console) and the run's outcome in the
+  /// returned report is unaffected.
+  Future<void> _writeAuditLog(
+    DatabaseExecutor db,
+    String status,
+    BackfillReport report,
+  ) async {
+    try {
+      if (auditLogWriter != null) {
+        await auditLogWriter!(db, status, report);
+        return;
+      }
+      await db.insert('ledger_backfill_log', {
+        'status': status,
+        'ran_at': DateTime.now().toIso8601String(),
+        'report': report.toSummary().toString(),
+      });
+    } catch (e) {
+      // Operational telemetry failure — never affects the financial outcome.
+      log('[ledger_backfill] audit log write failed (status=$status)',
+          error: e);
+    }
   }
 }
