@@ -482,6 +482,7 @@ class Tables {
       account_id TEXT,
       credit_card_id TEXT,
       loan_id TEXT,
+      category_id TEXT,
       reference_id TEXT,
       created_at TEXT NOT NULL
     )

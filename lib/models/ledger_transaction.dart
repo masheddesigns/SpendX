@@ -14,6 +14,7 @@ enum LedgerType {
   processing_fee,
   interest_charge,
   refund,
+  openingBalance,
 }
 
 
@@ -56,6 +57,7 @@ class LedgerTransaction {
       'account_id': accountId,
       'credit_card_id': creditCardId,
       'loan_id': loanId,
+      'category_id': categoryId,
       'note': note,
       'reference_id': referenceId,
       'created_at': DateTime.now().toIso8601String(),

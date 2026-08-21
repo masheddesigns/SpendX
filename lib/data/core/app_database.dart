@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'tables.dart';
+import '../migrations/ledger_backfill_service.dart';
 
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
@@ -21,7 +22,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 19,
+      version: 21,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 3) {
@@ -72,6 +73,12 @@ class AppDatabase {
         if (oldVersion < 19) {
           await _migrateToV19(db);
         }
+        if (oldVersion < 20) {
+          await _migrateToV20(db);
+        }
+        if (oldVersion < 21) {
+          await _migrateToV21(db);
+        }
         await _executeCreateQueries(db);
       },
     );
@@ -79,6 +86,7 @@ class AppDatabase {
 
   Future<void> _onCreate(Database db, int version) async {
     await _executeCreateQueries(db);
+    await _migrateToV21(db);
   }
 
   Future<void> _executeCreateQueries(Database db) async {
@@ -284,5 +292,128 @@ class AppDatabase {
   Future<void> close() async {
     final db = await instance.database;
     db.close();
+  }
+
+  /// V20: ensure ledger_transactions.category_id is TEXT (V17 created it as
+  /// INTEGER, but categories use UUID text ids). Preserves all existing rows.
+  Future<void> _migrateToV20(Database db) async {
+    try {
+      final columns = await db.rawQuery(
+        'PRAGMA table_info(ledger_transactions)',
+      );
+      final isText = columns.any(
+        (c) =>
+            c['name'] == 'category_id' &&
+            (c['type'] as String? ?? '').toUpperCase() == 'TEXT',
+      );
+      if (isText) return;
+
+      await db.execute('''
+        CREATE TABLE ledger_transactions_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          amount REAL NOT NULL,
+          type TEXT NOT NULL,
+          date TEXT NOT NULL,
+          note TEXT,
+          account_id TEXT,
+          credit_card_id TEXT,
+          loan_id TEXT,
+          category_id TEXT,
+          reference_id TEXT,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO ledger_transactions_new
+          (id, user_id, amount, type, date, note, account_id,
+           credit_card_id, loan_id, category_id, reference_id, created_at)
+        SELECT id, user_id, amount, type, date, note, account_id,
+               credit_card_id, loan_id, category_id, reference_id, created_at
+        FROM ledger_transactions
+      ''');
+      await db.execute('DROP TABLE ledger_transactions');
+      await db.execute(
+        'ALTER TABLE ledger_transactions_new RENAME TO ledger_transactions',
+      );
+    } catch (_) {
+      // Defensive: if rebuild fails, leave the table as-is.
+    }
+  }
+
+  /// V21: Phase 1B ledger backfill + reconciliation.
+  ///
+  /// Runs the idempotent backfill inside its own transaction. If any required
+  /// parity/integrity check fails the backfill rolls back (no partial data) and
+  /// the failure is recorded in `ledger_backfill_log`. The upgrade itself is
+  /// NOT failed, so the app can still open with an incomplete (rolled-back)
+  /// ledger; the failure is surfaced via the log and [runLedgerBackfill].
+  Future<void> _migrateToV21(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ledger_backfill_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        status TEXT NOT NULL,
+        ran_at TEXT NOT NULL,
+        report TEXT
+      )
+    ''');
+
+    try {
+      final report = await LedgerBackfillService.run(db);
+      await db.insert('ledger_backfill_log', {
+        'status': report.verdict,
+        'ran_at': DateTime.now().toIso8601String(),
+        'report': report.toSummary().toString(),
+      });
+    } on BackfillFailedException catch (e) {
+      await db.insert('ledger_backfill_log', {
+        'status': 'FAIL',
+        'ran_at': DateTime.now().toIso8601String(),
+        'report': e.report.toSummary().toString(),
+      });
+      // Do NOT rethrow: allow the upgrade (and the app) to proceed. The
+      // backfill already rolled back its own writes; the data is left intact.
+    }
+  }
+
+  /// Explicitly (re)run the Phase 1B backfill. Use [force] to run even if a
+  /// prior PASS was recorded. Returns the resulting report.
+  Future<BackfillReport> runLedgerBackfill({bool force = false}) async {
+    final db = await instance.database;
+    if (!force) {
+      final prior = await db.query(
+        'ledger_backfill_log',
+        where: 'status = ?',
+        whereArgs: ['PASS'],
+        limit: 1,
+      );
+      if (prior.isNotEmpty) {
+        final existing = await db.query(
+          'ledger_backfill_log',
+          orderBy: 'id DESC',
+          limit: 1,
+        );
+        final report = BackfillReport()..passed = true;
+        report.errorMessage = 'Prior PASS recorded; not re-run '
+            '(use force to re-run). Last entry: ${existing.first['report']}';
+        return report;
+      }
+    }
+    try {
+      final report = await LedgerBackfillService.run(db);
+      await db.insert('ledger_backfill_log', {
+        'status': report.verdict,
+        'ran_at': DateTime.now().toIso8601String(),
+        'report': report.toSummary().toString(),
+      });
+      return report;
+    } on BackfillFailedException catch (e) {
+      await db.insert('ledger_backfill_log', {
+        'status': 'FAIL',
+        'ran_at': DateTime.now().toIso8601String(),
+        'report': e.report.toSummary().toString(),
+      });
+      return e.report;
+    }
   }
 }
