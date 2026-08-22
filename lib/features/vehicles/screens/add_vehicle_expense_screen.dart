@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/vehicle_providers.dart';
-import '../../../data/providers.dart';
+import '../../transactions/providers/transaction_providers.dart';
 import '../../../models/transaction.dart';
 import '../../../models/category.dart';
 import '../../../utils/text_formatter.dart';
@@ -111,7 +111,7 @@ class _AddVehicleExpenseScreenState
     );
 
     try {
-      await ref.read(transactionsProvider.notifier).add(newTransaction);
+      await ref.read(addTransactionProvider)(newTransaction);
       ref.invalidate(vehicleDetailProvider);
       if (mounted) {
         Navigator.pop(context, true);

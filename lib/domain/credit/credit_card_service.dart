@@ -8,6 +8,7 @@ import '../../data/repositories/credit_repo.dart';
 import '../../data/repositories/ledger_repo.dart';
 import '../../data/repositories/reminder_repo.dart';
 import '../../models/ledger_transaction.dart';
+import '../../services/financial_transaction_service.dart';
 
 class CreditCardService {
   final CreditRepo _creditRepo;
@@ -25,7 +26,7 @@ class CreditCardService {
   Future<void> addCreditTransaction(CreditTransaction tx) async {
     await _creditRepo.insertTransaction(tx);
 
-    await _ledgerRepo.insert(
+    await FinancialTransactionService().appendLedger(
       LedgerTransaction(
         type: LedgerType.credit_purchase,
         amount: tx.amount,
@@ -82,7 +83,7 @@ class CreditCardService {
     await _creditRepo.deleteTransaction(id);
 
     // 3. Delete from Ledger
-    await _ledgerRepo.deleteByReferenceId(id);
+    await FinancialTransactionService().removeLedger(referenceId: id);
   }
 
   Future<void> deleteCreditEMI(String emiId) async {
@@ -98,7 +99,10 @@ class CreditCardService {
     await _creditRepo.deleteEMI(emiId);
 
     // 3. Delete Ledger entries (emi_installment) linked to the original txn
-    await _ledgerRepo.deleteByReferenceAndType(originalTxnId, LedgerType.emi_installment.name);
+    await FinancialTransactionService().removeLedger(
+      referenceId: originalTxnId,
+      type: LedgerType.emi_installment.name,
+    );
 
     // 4. Restore original CreditTransaction status to 'active'
     await _creditRepo.updateTransactionStatus(originalTxnId, 'active');
@@ -106,7 +110,7 @@ class CreditCardService {
     // 5. Restore Ledger entry for the original purchase
     final ctx = await _creditRepo.getTransactionById(originalTxnId);
     if (ctx != null) {
-      await _ledgerRepo.insert(
+      await FinancialTransactionService().appendLedger(
         LedgerTransaction(
           type: LedgerType.credit_purchase,
           amount: ctx.amount,
@@ -147,7 +151,7 @@ class CreditCardService {
     await _creditRepo.insertTransaction(paymentTxn);
 
     // Ledger Record (Credit Card Side - Reduces Outstanding)
-    await _ledgerRepo.insert(
+    await FinancialTransactionService().appendLedger(
       LedgerTransaction(
         type: LedgerType.credit_payment,
         amount: paymentAmount,
@@ -160,7 +164,7 @@ class CreditCardService {
 
     // Ledger Record (Bank Account Side - Reduces Balance)
     if (accountId != null) {
-      await _ledgerRepo.insert(
+      await FinancialTransactionService().appendLedger(
         LedgerTransaction(
           type: LedgerType.expense,
           amount: paymentAmount,
@@ -187,7 +191,10 @@ class CreditCardService {
     await _creditRepo.updateTransactionStatus(purchase.id, 'converted');
 
     // 2. Ledger Consistency: Remove original credit_purchase from ledger
-    await _ledgerRepo.deleteByReferenceAndType(purchase.id, LedgerType.credit_purchase.name);
+    await FinancialTransactionService().removeLedger(
+      referenceId: purchase.id,
+      type: LedgerType.credit_purchase.name,
+    );
 
     // 3. Add processing fee transaction
     if (processingFee > 0) {
@@ -204,7 +211,7 @@ class CreditCardService {
       );
       await _creditRepo.insertTransaction(feeTxn);
 
-      await _ledgerRepo.insert(
+      await FinancialTransactionService().appendLedger(
         LedgerTransaction(
           type: LedgerType.processing_fee,
           amount: processingFee,
@@ -272,7 +279,7 @@ class CreditCardService {
       );
 
       // Ledger entries
-      await _ledgerRepo.insert(
+      await FinancialTransactionService().appendLedger(
         LedgerTransaction(
           type: LedgerType.emi_installment,
           amount: emiAmount,
@@ -322,7 +329,10 @@ class CreditCardService {
     await _creditRepo.deleteInstallments(emiId);
 
     // 5. Update Ledger (Delete old emi_installments and add new ones)
-    await _ledgerRepo.deleteByReferenceAndType(oldEmi.transactionId, LedgerType.emi_installment.name);
+    await FinancialTransactionService().removeLedger(
+      referenceId: oldEmi.transactionId,
+      type: LedgerType.emi_installment.name,
+    );
 
     for (int i = 1; i <= tenureMonths; i++) {
       final dueDate = DateTime(oldEmi.startDate.year, oldEmi.startDate.month + i, oldEmi.startDate.day);
@@ -336,7 +346,7 @@ class CreditCardService {
       );
       await _creditRepo.insertInstallment(inst);
 
-      await _ledgerRepo.insert(
+      await FinancialTransactionService().appendLedger(
         LedgerTransaction(
           type: LedgerType.emi_installment,
           amount: emiAmount,

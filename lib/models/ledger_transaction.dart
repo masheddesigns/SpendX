@@ -15,6 +15,8 @@ enum LedgerType {
   interest_charge,
   refund,
   openingBalance,
+  reversal,
+  correction,
 }
 
 

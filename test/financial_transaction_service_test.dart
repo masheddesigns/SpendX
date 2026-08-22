@@ -148,7 +148,7 @@ void main() {
     expect(await ledgerRepo.getDerivedAccountBalance('A', openingBalance: 1000), 750);
   });
 
-  test('edit transaction replaces ledger legs and keeps balance consistent', () async {
+  test('edit transaction is append-only and keeps balance consistent', () async {
     await svc.createExpense(_tx(id: 'e4', type: 'expense', amount: 500, accountId: 'A'));
     expect(await ledgerRepo.getAccountBalance('A'), -500);
 
@@ -157,20 +157,33 @@ void main() {
       newTransaction: _tx(id: 'e4', type: 'expense', amount: 800, accountId: 'A'),
     );
 
+    // Balance reflects net effect (original + reversal + corrected).
     expect(await ledgerRepo.getAccountBalance('A'), -800);
-    final legs = await ledgerRepo.getAll(referenceId: 'e4');
-    expect(legs.length, 1);
-    expect(legs.first.amount, 800);
+
+    // The corrected event row exists with the new amount (original retained).
+    final corrected = (await ledgerRepo.getAll(referenceId: 'e4'))
+        .where((l) => l.type == LedgerType.expense)
+        .toList();
+    expect(corrected.length, 2); // original (500) + corrected (800)
+    expect(corrected.any((l) => l.amount == 800), isTrue);
+
+    // A reversal row was appended (never deleted).
+    final reversals = await ledgerRepo.getAll(referenceId: 'e4:rev:1');
+    expect(reversals.length, 1);
+    expect(reversals.first.type, LedgerType.reversal);
   });
 
-  test('delete transaction removes both event and ledger rows', () async {
+  test('delete transaction is append-only (reversal) and reverts balance', () async {
     await svc.createExpense(_tx(id: 'e5', type: 'expense', amount: 500, accountId: 'A'));
     expect((await db.query('transactions')).length, 1);
     expect((await db.query('ledger_transactions')).length, 1);
 
     await svc.deleteTransaction('e5');
+    // Source row removed...
     expect((await db.query('transactions')).length, 0);
-    expect((await db.query('ledger_transactions')).length, 0);
+    // ...but the journal keeps the original event AND its reversal (append-only).
+    expect((await db.query('ledger_transactions')).length, 2);
+    expect(await ledgerRepo.getAccountBalance('A'), 0);
   });
 
   test('loan principal remaining excludes interest (uses schedule)', () async {

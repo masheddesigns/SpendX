@@ -103,6 +103,7 @@ class LedgerRepo {
       SELECT SUM(CASE 
         WHEN type IN ('income', 'lending_received', 'loan_disbursement', 'refund', 'opening_balance') THEN amount 
         WHEN type IN ('expense', 'credit_payment', 'emi_installment', 'loan_payment', 'transfer', 'lending_given', 'fuel_expense', 'processing_fee', 'interest_charge') THEN -amount 
+        WHEN type IN ('reversal', 'correction') THEN amount
         ELSE 0 END) as balance
       FROM ${Tables.ledgerTransactions}
       WHERE account_id = ?
@@ -136,6 +137,7 @@ class LedgerRepo {
       SELECT SUM(CASE 
         WHEN type IN ('income', 'lending_received', 'loan_disbursement', 'refund') THEN amount 
         WHEN type IN ('expense', 'credit_payment', 'emi_installment', 'loan_payment', 'transfer', 'lending_given', 'fuel_expense', 'processing_fee', 'interest_charge') THEN -amount 
+        WHEN type IN ('reversal', 'correction') THEN amount
         ELSE 0 END) as balance
       FROM ${Tables.ledgerTransactions}
       WHERE account_id = ?
@@ -152,6 +154,7 @@ class LedgerRepo {
       SELECT SUM(CASE 
         WHEN type IN ('credit_purchase', 'emi_installment', 'processing_fee', 'interest_charge') THEN amount 
         WHEN type IN ('credit_payment', 'refund') THEN -amount 
+        WHEN type IN ('reversal', 'correction') THEN amount
         ELSE 0 END) as outstanding
       FROM ${Tables.ledgerTransactions}
       WHERE credit_card_id = ?
@@ -169,6 +172,7 @@ class LedgerRepo {
       SELECT SUM(CASE 
         WHEN type IN ('loan_disbursement', 'interest_charge') THEN amount 
         WHEN type = 'loan_payment' THEN -amount 
+        WHEN type IN ('reversal', 'correction') THEN amount
         ELSE 0 END) as balance
       FROM ${Tables.ledgerTransactions}
       WHERE loan_id = ?
@@ -209,6 +213,7 @@ class LedgerRepo {
       SELECT SUM(CASE 
         WHEN type = 'lending_given' THEN amount 
         WHEN type = 'lending_received' THEN -amount 
+        WHEN type IN ('reversal', 'correction') THEN amount
         ELSE 0 END) as balance
       FROM ${Tables.ledgerTransactions}
       WHERE reference_id = ?

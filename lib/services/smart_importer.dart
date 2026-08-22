@@ -11,6 +11,7 @@ import '../data/repositories/category_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
+import 'financial_transaction_service.dart';
 
 /// Supported import formats.
 enum ImportFormat { csv, markdown, html, json, zip, unknown }
@@ -193,7 +194,7 @@ class SmartImporter {
       );
 
       try {
-        await txRepo.create(txn);
+        await FinancialTransactionService().createTransaction(txn);
         imported++;
       } catch (e) {
         debugPrint('[SmartImport] Row failed: $e');
@@ -211,7 +212,6 @@ class SmartImporter {
   // ── BILLS IMPORT (credit card payments) ─────────────────────
 
   Future<SmartImportSummary> _importBills(List<SmartImportRow> rows) async {
-    final txRepo = TransactionRepo();
     final catRepo = CategoryRepo();
     final categories = await catRepo.getAll();
     int imported = 0;
@@ -246,7 +246,7 @@ class SmartImporter {
       );
 
       try {
-        await txRepo.create(txn);
+        await FinancialTransactionService().createTransaction(txn);
         imported++;
       } catch (e) {
         debugPrint('[SmartImport] Bill row failed: $e');

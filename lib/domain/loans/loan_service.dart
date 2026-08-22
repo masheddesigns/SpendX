@@ -6,6 +6,7 @@ import '../../data/repositories/loan_repo.dart';
 import '../../data/repositories/ledger_repo.dart';
 import '../../data/repositories/reminder_repo.dart';
 import '../../models/ledger_transaction.dart';
+import '../../services/financial_transaction_service.dart';
 import '../../services/notification_service_v2.dart';
 import 'dart:math';
 
@@ -27,7 +28,7 @@ class LoanService {
     await _loanRepo.insertLoan(loan);
 
     // Ledger Record for disbursement
-    await _ledgerRepo.insert(
+    await FinancialTransactionService().appendLedger(
       LedgerTransaction(
         type: LedgerType.loan_disbursement,
         amount: loan.principalAmount,
@@ -170,7 +171,7 @@ class LoanService {
 
     if (!isManual) {
       // Ledger Record (Loan Side - Reduces Debt)
-      await _ledgerRepo.insert(
+      await FinancialTransactionService().appendLedger(
         LedgerTransaction(
           type: LedgerType.loan_payment,
           amount: inst.amount,
@@ -183,7 +184,7 @@ class LoanService {
 
       // Ledger Record (Bank Account Side - Reduces Balance)
       if (accountId != null) {
-        await _ledgerRepo.insert(
+        await FinancialTransactionService().appendLedger(
           LedgerTransaction(
             type: LedgerType.expense,
             amount: inst.amount,

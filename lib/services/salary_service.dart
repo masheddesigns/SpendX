@@ -13,6 +13,7 @@ import '../data/repositories/reminder_repo.dart';
 import '../data/repositories/category_repo.dart';
 import 'notification_service.dart';
 import 'data_change_bus.dart';
+import 'financial_transaction_service.dart';
 
 class SalarySummary {
   const SalarySummary({
@@ -801,13 +802,20 @@ class SalaryService {
       relatedEntityId: payment.accountId,
     );
 
+    final svc = FinancialTransactionService();
     String transactionId;
     if (payment.linkedTransactionId != null &&
         payment.linkedTransactionId!.isNotEmpty) {
-      await transactionRepo.update(txn);
+      final old = await transactionRepo.getById(txn.id);
+      if (old != null) {
+        await svc.editTransaction(oldTransaction: old, newTransaction: txn);
+      } else {
+        await svc.createTransaction(txn);
+      }
       transactionId = payment.linkedTransactionId!;
     } else {
-      transactionId = await transactionRepo.insert(txn);
+      await svc.createTransaction(txn);
+      transactionId = txn.id;
     }
     return payment.copyWith(linkedTransactionId: transactionId);
   }

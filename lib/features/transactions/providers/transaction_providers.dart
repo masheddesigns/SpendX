@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/core/app_database.dart';
 import '../../../data/providers.dart' as app_data;
-import '../../../data/repositories/credit_repo.dart';
 import '../../../data/repositories/transaction_repo.dart';
+import '../../../services/financial_transaction_service.dart';
 import '../../../models/category.dart';
 import '../../../models/credit_transaction.dart';
 import '../../../models/transaction.dart';
@@ -161,101 +161,19 @@ final paginatedTransactionsProvider =
     );
 
 // ---------------------------------------------------------------------------
-// Shared impact logic — SINGLE SOURCE OF TRUTH
-// ---------------------------------------------------------------------------
-
-/// Compute the bank-account balance delta for a single transaction.
-/// Accumulates into [accountDeltas] map (accountId -> delta).
-///
-/// Rules (matching the original _applyTransactionImpact exactly):
-///   1. credit_card_purchase → NO bank balance change
-///   2. transfer → deduct from source, add to destination (skip self-transfers)
-///   3. expense → subtract from account
-///   4. income → add to account
-void computeAccountImpact(Transaction tx, Map<String, double> accountDeltas) {
-  // Credit card purchases don't touch bank balances
-  if (tx.source == 'credit_card_purchase') return;
-
-  // Transfers: deduct from source, add to destination
-  if (tx.type == 'transfer') {
-    final fromId = tx.accountId;
-    final toId = tx.relatedEntityId;
-
-    // Self-transfer guard
-    if (fromId != null && toId != null && fromId == toId) return;
-
-    if (fromId != null && fromId.isNotEmpty) {
-      accountDeltas[fromId] = (accountDeltas[fromId] ?? 0) - tx.amount;
-    }
-    if (toId != null && toId.isNotEmpty) {
-      accountDeltas[toId] = (accountDeltas[toId] ?? 0) + tx.amount;
-    }
-    return;
-  }
-
-  // Income/expense on a bank account
-  final accountId = tx.accountId;
-  if (accountId == null || accountId.isEmpty) return;
-
-  if (tx.type == 'expense') {
-    accountDeltas[accountId] = (accountDeltas[accountId] ?? 0) - tx.amount;
-  } else {
-    // income
-    accountDeltas[accountId] = (accountDeltas[accountId] ?? 0) + tx.amount;
-  }
-}
-
-/// Reverse of [computeAccountImpact] — used when updating/deleting.
-void revertAccountImpact(Transaction tx, Map<String, double> accountDeltas) {
-  if (tx.source == 'credit_card_purchase') return;
-
-  if (tx.type == 'transfer') {
-    final fromId = tx.accountId;
-    final toId = tx.relatedEntityId;
-
-    if (fromId != null && toId != null && fromId == toId) return;
-
-    if (fromId != null && fromId.isNotEmpty) {
-      accountDeltas[fromId] = (accountDeltas[fromId] ?? 0) + tx.amount;
-    }
-    if (toId != null && toId.isNotEmpty) {
-      accountDeltas[toId] = (accountDeltas[toId] ?? 0) - tx.amount;
-    }
-    return;
-  }
-
-  final accountId = tx.accountId;
-  if (accountId == null || accountId.isEmpty) return;
-
-  if (tx.type == 'expense') {
-    accountDeltas[accountId] = (accountDeltas[accountId] ?? 0) + tx.amount;
-  } else {
-    accountDeltas[accountId] = (accountDeltas[accountId] ?? 0) - tx.amount;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Single transaction providers (manual add / edit / delete)
+// NOTE: balance/ledger mutation now lives exclusively in
+// [FinancialTransactionService] (Phase 2A, G1–G3). These providers only
+// orchestrate the user intent and invalidate caches.
 // ---------------------------------------------------------------------------
 
 final addTransactionProvider = Provider((ref) {
   return (Transaction transaction) async {
-    final txRepo = ref.read(transactionRepoProvider);
-    final accRepo = ref.read(accountRepoProvider);
+    final svc = FinancialTransactionService();
 
     debugPrint('➡️ Adding transaction: ${transaction.amount}');
-    await txRepo.create(transaction);
-    debugPrint('✅ Transaction inserted');
-
-    // Use shared impact logic
-    final deltas = <String, double>{};
-    computeAccountImpact(transaction, deltas);
-    for (final entry in deltas.entries) {
-      await accRepo.adjustBalance(entry.key, entry.value);
-    }
-
-    final allTransactions = await txRepo.getAll();
-    debugPrint('📊 Total transactions: ${allTransactions.length}');
+    await svc.createTransaction(transaction);
+    debugPrint('✅ Transaction inserted (journaled)');
 
     // Award XP for adding a transaction
     try {
@@ -274,18 +192,14 @@ final updateTransactionProvider = Provider((ref) {
     required Transaction oldTransaction,
     required Transaction newTransaction,
   }) async {
-    final accRepo = ref.read(accountRepoProvider);
-    final txRepo = ref.read(transactionRepoProvider);
+    final svc = FinancialTransactionService();
 
-    // Use shared impact logic: revert old, apply new
-    final deltas = <String, double>{};
-    revertAccountImpact(oldTransaction, deltas);
-    computeAccountImpact(newTransaction, deltas);
-    for (final entry in deltas.entries) {
-      await accRepo.adjustBalance(entry.key, entry.value);
-    }
+    // Append-only: reversal of old + corrected event, inside one transaction.
+    await svc.editTransaction(
+      oldTransaction: oldTransaction,
+      newTransaction: newTransaction,
+    );
 
-    await txRepo.updateTransaction(newTransaction);
     ref.invalidate(accountsProvider);
     ref.invalidate(transactionsProvider);
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
@@ -296,19 +210,12 @@ final updateTransactionProvider = Provider((ref) {
 final deleteTransactionProvider = Provider((ref) {
   return (String transactionId) async {
     final txRepo = ref.read(transactionRepoProvider);
-    final accRepo = ref.read(accountRepoProvider);
+    final svc = FinancialTransactionService();
 
-    // Fetch transaction BEFORE deleting to revert its balance impact
+    // Fetch before delete so the reversal can reference the original event.
     final tx = await txRepo.getById(transactionId);
-    if (tx != null) {
-      final deltas = <String, double>{};
-      revertAccountImpact(tx, deltas);
-      for (final entry in deltas.entries) {
-        await accRepo.adjustBalance(entry.key, entry.value);
-      }
-    }
+    await svc.deleteTransaction(transactionId, oldTransaction: tx);
 
-    await txRepo.delete(transactionId);
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
@@ -362,8 +269,6 @@ final addTransactionsBulkProvider = Provider((ref) {
     if (entries.isEmpty) return 0;
 
     final txRepo = ref.read(transactionRepoProvider);
-    final accRepo = ref.read(accountRepoProvider);
-    final creditRepo = CreditRepo();
 
     // ── 1. APP-LEVEL DEDUP (read-only, outside transaction) ──────────────
     final allRefs = <String>[];
@@ -434,48 +339,19 @@ final addTransactionsBulkProvider = Provider((ref) {
 
       insertedCount = confirmedEntries.length;
 
-      // 2c. Compute deltas ONLY for confirmed inserts
-      final accountDeltas = <String, double>{};
-      final cardDeltas = <String, double>{};
-      final creditTxns = <CreditTransaction>[];
-      final loanDeltas = <String, double>{};
-
+      // 2c. Route every confirmed insert through the canonical service
+      // (journal + materialized balance + credit/loan side-effects) inside
+      // this same transaction. The source row was already inserted above.
+      final svc = FinancialTransactionService();
       for (final entry in confirmedEntries) {
-        computeAccountImpact(entry.transaction, accountDeltas);
-
-        if (entry.cardId != null && entry.cardOutstandingDelta != 0) {
-          cardDeltas[entry.cardId!] =
-              (cardDeltas[entry.cardId!] ?? 0) + entry.cardOutstandingDelta;
-        }
-        if (entry.creditTransaction != null) {
-          creditTxns.add(entry.creditTransaction!);
-        }
-
-        if (entry.loanId != null && entry.loanPaidDelta != 0) {
-          loanDeltas[entry.loanId!] =
-              (loanDeltas[entry.loanId!] ?? 0) + entry.loanPaidDelta;
-        }
-      }
-
-      // 2d. Apply all balance adjustments within same transaction
-      await accRepo.adjustBalancesWithTxn(dbTxn, accountDeltas);
-
-      if (cardDeltas.isNotEmpty) {
-        await creditRepo.adjustOutstandingsWithTxn(dbTxn, cardDeltas);
-      }
-      if (creditTxns.isNotEmpty) {
-        await creditRepo.insertTransactionsWithTxn(dbTxn, creditTxns);
-      }
-
-      if (loanDeltas.isNotEmpty) {
-        final loanBatch = dbTxn.batch();
-        for (final entry in loanDeltas.entries) {
-          loanBatch.rawUpdate(
-            'UPDATE loans SET paid_amount = paid_amount + ? WHERE id = ?',
-            [entry.value, entry.key],
-          );
-        }
-        await loanBatch.commit(noResult: true);
+        await svc.createTransaction(
+          entry.transaction,
+          creditTxn: entry.creditTransaction,
+          loanId: entry.loanId,
+          loanPaidDelta: entry.loanPaidDelta,
+          txn: dbTxn,
+          insertSource: false,
+        );
       }
 
       // 2e. Audit log (inside txn scope for accurate counts)
@@ -484,10 +360,10 @@ final addTransactionsBulkProvider = Provider((ref) {
       debugPrint('   App-dedup skipped: $appDedupSkipped');
       debugPrint('   DB-dedup skipped: $dbSkipped');
       debugPrint('   Inserted: ${confirmedEntries.length}');
-      debugPrint('   Accounts adjusted: ${accountDeltas.length}');
-      debugPrint('   Cards adjusted: ${cardDeltas.length}');
-      debugPrint('   Credit txns: ${creditTxns.length}');
-      debugPrint('   Loans adjusted: ${loanDeltas.length}');
+      debugPrint(
+        '   Credit/loan-linked: '
+        '${confirmedEntries.where((e) => e.creditTransaction != null || e.loanId != null).length}',
+      );
     });
 
     // ── 3. INVALIDATE ONCE (after commit) ────────────────────────────────

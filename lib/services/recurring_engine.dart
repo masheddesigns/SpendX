@@ -1,6 +1,7 @@
 import '../models/recurring_template.dart';
 import '../models/transaction.dart' as spx;
 import 'database_helper.dart';
+import 'financial_transaction_service.dart';
 
 class RecurringEngine {
   RecurringEngine._();
@@ -65,9 +66,13 @@ class RecurringEngine {
     }
 
     if (transactionsToInsert.isNotEmpty) {
-      await DatabaseHelper.instance.batchInsertTransactions(
-        transactionsToInsert,
-      );
+      // Route every generated transaction through the canonical service so the
+      // journal + materialized balance stay consistent (G1–G3). Recurring
+      // transactions carry no accountId, so only the source row is persisted.
+      final svc = FinancialTransactionService();
+      for (final t in transactionsToInsert) {
+        await svc.createTransaction(t);
+      }
     }
 
     return anyChanges;

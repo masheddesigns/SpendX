@@ -8,6 +8,7 @@ import '../../../models/ledger_transaction.dart';
 import '../../../models/loan.dart';
 import '../../../models/lending.dart';
 import '../../../services/credit_intelligence_service.dart';
+import '../../../services/financial_transaction_service.dart';
 import '../../../services/haptic_service.dart';
 import '../../../core/services/service_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,7 +78,7 @@ class CreditPurchaseMutationNotifier extends StateNotifier<AsyncValue<void>> {
     await _ref.read(writeQueueProvider).enqueue(() async {
       try {
         await _ref.read(creditRepoProvider).insertTransaction(transaction);
-        await _ref.read(ledgerRepoProvider).insert(ledgerTransaction);
+        await FinancialTransactionService().appendLedger(ledgerTransaction);
         _ref.invalidate(creditRecentTransactionsProvider(cardId));
         _ref.invalidate(creditOutstandingProvider(cardId));
         _ref.invalidate(liabilitiesSummaryProvider);
