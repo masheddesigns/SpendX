@@ -8,7 +8,7 @@ import '../data/repositories/review_repo.dart';
 import '../services/app_session_service.dart';
 import '../services/retention_events.dart';
 import '../services/retention_service.dart';
-import '../services/notification_service.dart';
+import '../services/notification_service_v2.dart';
 import '../services/recurring_engine.dart';
 import '../services/settings_service.dart';
 import '../services/snapshot_trigger.dart';
@@ -199,7 +199,7 @@ class _SplashScreenState extends State<SplashScreen>
       final notifStatus = await Permission.notification.status;
       if (!notifStatus.isGranted) await Permission.notification.request();
 
-      await NotificationService.instance.requestPermissions();
+      await NotificationServiceV2().requestPermissions();
     } catch (e) {
       debugPrint('\u26A0\uFE0F Permission request error (non-fatal): $e');
     }
@@ -213,7 +213,7 @@ class _SplashScreenState extends State<SplashScreen>
       final daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
       final nextMonday = DateTime(now.year, now.month,
           now.day + (daysUntilMonday == 0 ? 7 : daysUntilMonday), 9, 0);
-      NotificationService.instance.scheduleNotification(
+      NotificationServiceV2().scheduleNotification(
         id: 90000,
         title: 'Your Weekly Wrapped is ready!',
         body: 'See how you spent this week',
@@ -222,7 +222,7 @@ class _SplashScreenState extends State<SplashScreen>
 
       // Monthly: 1st of next month 9am
       final nextMonth = DateTime(now.year, now.month + 1, 1, 9, 0);
-      NotificationService.instance.scheduleNotification(
+      NotificationServiceV2().scheduleNotification(
         id: 90001,
         title: 'Your ${_monthName(now.month)} Wrapped is ready!',
         body: 'See your monthly financial summary',
@@ -231,7 +231,7 @@ class _SplashScreenState extends State<SplashScreen>
 
       // Yearly: Jan 1 10am
       final nextYear = DateTime(now.year + 1, 1, 1, 10, 0);
-      NotificationService.instance.scheduleNotification(
+      NotificationServiceV2().scheduleNotification(
         id: 90002,
         title: 'Your ${now.year} Year in Review is here!',
         body: 'Tap to see your yearly financial wrapped',
@@ -252,7 +252,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (dailyTime.isBefore(now)) {
         dailyTime = dailyTime.add(const Duration(days: 1));
       }
-      NotificationService.instance.scheduleNotification(
+      NotificationServiceV2().scheduleNotification(
         id: 42001,
         title: 'Daily Spending Summary',
         body: 'Tap to see today\'s summary',
@@ -268,7 +268,7 @@ class _SplashScreenState extends State<SplashScreen>
       final daysUntilMon = (DateTime.monday - now.weekday + 7) % 7;
       final nextMon = DateTime(now.year, now.month,
           now.day + (daysUntilMon == 0 ? 7 : daysUntilMon), 8, 0);
-      NotificationService.instance.scheduleNotification(
+      NotificationServiceV2().scheduleNotification(
         id: 42002,
         title: 'Weekly Spending Report',
         body: 'Tap to see this week\'s comparison',

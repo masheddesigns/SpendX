@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:spend_x/services/settings_service.dart';
-import 'package:spend_x/services/notification_service.dart';
+import 'package:spend_x/services/notification_service_v2.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
 import 'package:spend_x/widgets/app_button.dart';
 import '../shared/widgets/app_page_route.dart';
@@ -412,7 +412,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   )
                 : AppButton.secondary(
                     onPressed: () async {
-                      await NotificationService.instance.requestPermissions();
+                      await NotificationServiceV2().requestPermissions();
                       setState(() => _notificationsEnabled = true);
                     },
                     text: 'Enable Notifications',

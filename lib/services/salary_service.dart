@@ -11,7 +11,7 @@ import '../data/repositories/salary_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../data/repositories/reminder_repo.dart';
 import '../data/repositories/category_repo.dart';
-import 'notification_service.dart';
+import 'notification_service_v2.dart';
 import 'data_change_bus.dart';
 import 'financial_transaction_service.dart';
 
@@ -921,14 +921,14 @@ class SalaryService {
     // Schedule 9 PM notification if not received
     final notificationId = payment.id.hashCode.abs();
     if (payment.status != SalaryPaymentStatus.received) {
-      await NotificationService.instance.scheduleSalaryDueReminder(
+      await NotificationServiceV2().scheduleSalaryDueReminder(
         paymentId: payment.id,
         companyName: company?.name ?? 'your company',
         expectedDate: payment.expectedDate,
         amount: payment.totalAmount,
       );
     } else {
-      await NotificationService.instance.cancel(notificationId);
+      await NotificationServiceV2().cancel(notificationId);
     }
   }
 

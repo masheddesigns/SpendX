@@ -87,6 +87,35 @@ class NotificationServiceV2 {
         );
   }
 
+  /// Request notification permissions (Android 13+ POST_NOTIFICATIONS and
+  /// exact-alarm, plus iOS/macOS alerts/badge/sound). Mirrors the v1
+  /// NotificationService API so the legacy service could be retired.
+  Future<void> requestPermissions() async {
+    try {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (androidPlugin != null) {
+        await androidPlugin.requestNotificationsPermission();
+        await androidPlugin.requestExactAlarmsPermission();
+      }
+
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    } catch (e) {
+      AppLogger.d('Error requesting notification permissions: $e');
+    }
+  }
+
   Future<void> showNotification({
     required String title,
     required String body,
@@ -509,6 +538,152 @@ class NotificationServiceV2 {
 
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+
+  /// Cancel a notification scheduled with a numeric id (mirrors v1
+  /// NotificationService.cancel so legacy call sites can be retired).
+  Future<void> cancel(int id) async {
+    try {
+      await _plugin.cancel(id: id);
+    } catch (_) {}
+  }
+
+  /// Show a notification when a cloud backup/upload starts.
+  Future<void> showBackupStarted() async {
+    try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'spendx_backup',
+          'SpendX Backups',
+          channelDescription: 'Status of Google Drive backups',
+          importance: Importance.low,
+          priority: Priority.low,
+          showProgress: true,
+          indeterminate: true,
+          onlyAlertOnce: true,
+          icon: '@drawable/ic_notification',
+        ),
+        iOS: DarwinNotificationDetails(),
+        macOS: DarwinNotificationDetails(),
+      );
+      await _plugin.show(
+        id: 2001,
+        title: '🔄 Backup started',
+        body: 'Uploading data to Google Drive...',
+        notificationDetails: details,
+      );
+    } catch (e) {
+      AppLogger.d('showBackupStarted error: $e');
+    }
+  }
+
+  /// Show a notification when a cloud backup completes.
+  Future<void> showBackupComplete(bool success) async {
+    try {
+      final details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'spendx_backup',
+          'SpendX Backups',
+          channelDescription: 'Status of Google Drive backups',
+          importance: success ? Importance.defaultImportance : Importance.high,
+          priority: success ? Priority.defaultPriority : Priority.high,
+          icon: '@drawable/ic_notification',
+        ),
+        iOS: const DarwinNotificationDetails(),
+        macOS: const DarwinNotificationDetails(),
+      );
+      await _plugin.show(
+        id: 2001,
+        title: success ? '✅ Backup complete' : '❌ Backup failed',
+        body: success
+            ? 'Your data has been securely backed up'
+            : 'Could not upload to Google Drive. Check your connection.',
+        notificationDetails: details,
+      );
+    } catch (e) {
+      AppLogger.d('showBackupComplete error: $e');
+    }
+  }
+
+  Future<void> showRestoreStarted() async {
+    try {
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'spendx_backup',
+          'SpendX Backups',
+          importance: Importance.low,
+          showProgress: true,
+          indeterminate: true,
+          onlyAlertOnce: true,
+        ),
+      );
+      await _plugin.show(
+        id: 2002,
+        title: '⬇ Downloading backup',
+        body: 'Fetching data from Google Drive...',
+        notificationDetails: details,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> showRestoreComplete(bool success) async {
+    try {
+      await _plugin.show(
+        id: 2002,
+        title: success ? '✅ Restore complete' : '❌ Restore failed',
+        body: success
+            ? 'Your data has been successfully restored'
+            : 'Could not restore backup. Data may be incompatible.',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'spendx_backup',
+            'SpendX Backups',
+            importance: Importance.high,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> showSyncReminder({required String body}) async {
+    try {
+      await _plugin.show(
+        id: 2003,
+        title: '☁ New Cloud Backup',
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'spendx_backup',
+            'SpendX Backups',
+            importance: Importance.defaultImportance,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// Schedule a salary-due reminder (9 PM on the due date). Mirrors v1.
+  Future<void> scheduleSalaryDueReminder({
+    required String paymentId,
+    required String companyName,
+    required DateTime expectedDate,
+    required double amount,
+  }) async {
+    final scheduledDate = DateTime(
+      expectedDate.year,
+      expectedDate.month,
+      expectedDate.day,
+      21,
+      0,
+    );
+    final id = paymentId.hashCode.abs();
+    await scheduleNotification(
+      id: id,
+      title: 'Salary Due Today',
+      body: 'Your salary of \${amount.toStringAsFixed(0)} from \$companyName '
+          'is expected today. Please update SpendX if received!',
+      scheduledDate: scheduledDate,
+    );
   }
 
   String _buildReminderBody(Reminder reminder) {

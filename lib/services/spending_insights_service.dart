@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/repositories/transaction_repo.dart';
 import '../utils/app_format.dart';
-import 'notification_service.dart';
+import 'notification_service_v2.dart';
 
 /// Generates smart spending insights and sends notifications.
 /// - Daily: "You spent X today" (evening summary)
@@ -41,7 +41,7 @@ class SpendingInsightsService {
 
       if (todayExpenses.isEmpty) {
         // No spending today — send a positive message
-        await NotificationService.instance.showInstant(
+        await NotificationServiceV2().showInstant(
           id: _dailyNotifId,
           title: 'Zero spending today!',
           body: 'Great discipline. Keep it up!',
@@ -84,7 +84,7 @@ class SpendingInsightsService {
         }
       }
 
-      await NotificationService.instance.showInstant(
+      await NotificationServiceV2().showInstant(
         id: _dailyNotifId,
         title: 'Today\'s Spending: ${AppFormat.currency(todayTotal)}',
         body: body,
@@ -155,7 +155,7 @@ class SpendingInsightsService {
         }
       }
 
-      await NotificationService.instance.showInstant(
+      await NotificationServiceV2().showInstant(
         id: _weeklyNotifId,
         title: title,
         body: body,

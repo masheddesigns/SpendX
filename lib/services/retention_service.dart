@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'haptic_service.dart';
 import 'money_score_service.dart';
-import 'notification_service.dart';
+import 'notification_service_v2.dart';
 
 /// Centralized retention system.
 ///
@@ -237,7 +237,7 @@ class RetentionService {
   }) async {
     if (pendingReviews <= 0 && !hasCriticalSignal) {
       // Nothing actionable — don't notify. Cancel any previously scheduled.
-      await NotificationService.instance.cancel(51001);
+      await NotificationServiceV2().cancel(51001);
       return;
     }
 
@@ -246,7 +246,7 @@ class RetentionService {
         : 'You\'re drifting above your usual spending';
 
     final at = DateTime.now().add(const Duration(hours: 24));
-    await NotificationService.instance.scheduleNotification(
+    await NotificationServiceV2().scheduleNotification(
       id: 51001,
       title: 'SpendX',
       body: body,

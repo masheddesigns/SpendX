@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'auth_service.dart';
 import 'backup_service.dart';
 import 'drive_service.dart';
-import 'notification_service.dart';
+import 'notification_service_v2.dart';
 import 'settings_service.dart';
 
 enum SyncStatus {
@@ -67,11 +67,11 @@ class SyncEngine extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<bool> manualBackup() async {
     _log("manual backup started");
-    await NotificationService.instance.showBackupStarted();
+    await NotificationServiceV2().showBackupStarted();
 
     final success = await BackupService.instance.backupNow();
 
-    await NotificationService.instance.showBackupComplete(success);
+    await NotificationServiceV2().showBackupComplete(success);
     if (success) {
       _log("upload finished");
     } else {
@@ -82,11 +82,11 @@ class SyncEngine extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<bool> manualRestore({bool force = false}) async {
     _log("manual restore started (force: $force)");
-    await NotificationService.instance.showRestoreStarted();
+    await NotificationServiceV2().showRestoreStarted();
 
     final success = await BackupService.instance.restoreFromDrive(forceRestore: force);
 
-    await NotificationService.instance.showRestoreComplete(success);
+    await NotificationServiceV2().showRestoreComplete(success);
     if (success) {
       _log("restore finished");
     } else {
@@ -246,7 +246,7 @@ class SyncEngine extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
 
       if (available) {
-        await NotificationService.instance.showSyncReminder(
+        await NotificationServiceV2().showSyncReminder(
           body: "New data available from another device.",
         );
       }

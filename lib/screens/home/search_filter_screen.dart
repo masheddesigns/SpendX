@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/transaction.dart';
 import '../../models/category.dart';
 import '../../data/providers.dart';
-import '../../services/transaction_service.dart';
+import '../../data/repositories/transaction_repo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/transaction_tile.dart';
 import '../transaction_detail_screen.dart';
@@ -44,16 +44,26 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
 
     final query = _searchController.text.trim();
 
-    final fetched = await TransactionService.instance.searchTransactions(
-      query: query.isEmpty ? null : query,
-      type: _selectedType,
-      categoryId: _selectedCategoryId,
-      startDate: _startDate?.toIso8601String(),
-      endDate: _endDate
-          ?.add(const Duration(days: 1))
-          .subtract(const Duration(milliseconds: 1))
-          .toIso8601String(), // End of day
-    );
+    final all = await TransactionRepo().getAll();
+    final q = query.toLowerCase();
+    final fetched = all.where((t) {
+      final matchesQuery =
+          q.isEmpty || t.notes.toLowerCase().contains(q);
+      final matchesType = _selectedType == null || t.type == _selectedType;
+      final matchesCategory =
+          _selectedCategoryId == null || t.categoryId == _selectedCategoryId;
+      final matchesStart =
+          _startDate == null || !t.date.isBefore(_startDate!);
+      final matchesEnd = _endDate == null ||
+          t.date.isBefore(
+            _endDate!.add(const Duration(days: 1)),
+          );
+      return matchesQuery &&
+          matchesType &&
+          matchesCategory &&
+          matchesStart &&
+          matchesEnd;
+    }).toList();
 
     if (mounted) {
       setState(() {
