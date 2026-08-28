@@ -160,12 +160,19 @@ void main() {
     // Balance reflects net effect (original + reversal + corrected).
     expect(await ledgerRepo.getAccountBalance('A'), -800);
 
-    // The corrected event row exists with the new amount (original retained).
-    final corrected = (await ledgerRepo.getAll(referenceId: 'e4'))
+    // The original event is retained, and the corrected event is appended with
+    // its own append-only reference_id (e4:corr:1) — distinct from the original
+    // so reconciliation never treats it as a duplicate of the original leg.
+    final originalRows = (await ledgerRepo.getAll(referenceId: 'e4'))
         .where((l) => l.type == LedgerType.expense)
         .toList();
-    expect(corrected.length, 2); // original (500) + corrected (800)
-    expect(corrected.any((l) => l.amount == 800), isTrue);
+    expect(originalRows.length, 1); // original (500) retained
+    expect(originalRows.any((l) => l.amount == 500), isTrue);
+
+    final corrected = await ledgerRepo.getAll(referenceId: 'e4:corr:1');
+    expect(corrected.length, 1); // corrected (800) appended separately
+    expect(corrected.first.type, LedgerType.expense);
+    expect(corrected.first.amount, 800);
 
     // A reversal row was appended (never deleted).
     final reversals = await ledgerRepo.getAll(referenceId: 'e4:rev:1');

@@ -71,7 +71,13 @@ class FinancialTransactionService {
   }
 
   /// Bank-account ledger legs for a transaction (empty for card-side purchases).
-  List<LedgerTransaction> _bankLegs(Transaction tx) {
+  ///
+  /// [referenceId] overrides the default `tx.id` anchor — used by append-only
+  /// edits so the corrected event gets a distinct `tx.id:corr:N` reference
+  /// (never colliding with the original `tx.id` leg or any `tx.id:rev:N`
+  /// reversal), keeping the journal unambiguous for the G4 backfill.
+  List<LedgerTransaction> _bankLegs(Transaction tx, {String? referenceId}) {
+    final ref = referenceId ?? tx.id;
     if (tx.source == 'credit_card_purchase') return const [];
 
     switch (tx.type) {
@@ -86,7 +92,7 @@ class FinancialTransactionService {
               accountId: tx.accountId,
               categoryId: tx.categoryId,
               note: tx.notes,
-              referenceId: tx.id,
+              referenceId: ref,
             ),
           );
         }
@@ -99,7 +105,7 @@ class FinancialTransactionService {
               accountId: tx.relatedEntityId,
               categoryId: tx.categoryId,
               note: tx.notes,
-              referenceId: tx.id,
+              referenceId: ref,
             ),
           );
         }
@@ -120,7 +126,7 @@ class FinancialTransactionService {
             accountId: tx.accountId,
             categoryId: tx.categoryId,
             note: tx.notes,
-            referenceId: tx.id,
+            referenceId: ref,
           ),
         ];
 
@@ -133,7 +139,7 @@ class FinancialTransactionService {
             accountId: tx.accountId,
             categoryId: tx.categoryId,
             note: tx.notes,
-            referenceId: tx.id,
+            referenceId: ref,
           ),
         ];
     }
@@ -316,8 +322,11 @@ class FinancialTransactionService {
   }) async {
     Future<void> inner(DatabaseExecutor t) async {
       final oldLegs = _bankLegs(oldTransaction);
-      final newLegs = _bankLegs(newTransaction);
       final seq = await _revSeq(t, oldTransaction.id);
+      final newLegs = _bankLegs(
+        newTransaction,
+        referenceId: '${oldTransaction.id}:corr:$seq',
+      );
 
       final revLegs = oldLegs.map((l) {
         return LedgerTransaction(

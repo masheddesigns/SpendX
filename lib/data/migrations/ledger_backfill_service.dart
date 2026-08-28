@@ -227,13 +227,17 @@ class LedgerBackfillService {
       }
 
       final legs = _expectedLegs(tx);
-      final existing = await db.query(
+      final trail = await db.query(
         'ledger_transactions',
-        where: 'reference_id = ?',
-        whereArgs: [tx['id']],
+        where: 'reference_id = ? OR reference_id LIKE ? OR reference_id LIKE ?',
+        whereArgs: [
+          tx['id'],
+          '${tx['id']}:rev:%',
+          '${tx['id']}:corr:%',
+        ],
       );
 
-      if (existing.isEmpty) {
+      if (trail.isEmpty) {
         if (apply) {
           for (final leg in legs) {
             await db.insert('ledger_transactions', _legMap(leg, tx));
@@ -251,7 +255,27 @@ class LedgerBackfillService {
           report.ledgerEntriesExpected += legs.length;
         }
       } else {
-        if (_legsMatch(existing, legs)) {
+        // G4: tolerate the live append-only trail (original leg plus `:rev:`/
+        // `:corr:` events produced by edits/deletes after cutover). The trail
+        // must net to the canonical derivation from the current (latest)
+        // transaction row; if it does, the journal already fully represents
+        // this transaction and nothing is inserted. Genuine inconsistencies
+        // (trail that does not reconcile) still block execution.
+        double trailNet = 0;
+        for (final r in trail) {
+          trailNet += _signedOfTrail(
+            r['type'] as String,
+            (r['amount'] as num).toDouble(),
+          );
+        }
+        double expectedNet = 0;
+        for (final leg in legs) {
+          expectedNet += _signedOf(
+            leg['type'] as String,
+            (leg['amount'] as num).toDouble(),
+          );
+        }
+        if ((trailNet - expectedNet).abs() <= tolerance) {
           report.existingLedgerSkipped++;
         } else {
           // Already journaled but amount/type differs -> WARN/REVIEW, never
@@ -589,11 +613,28 @@ class LedgerBackfillService {
     final creditTxnIds = creditTxns.map((c) => c['id']).toSet();
 
     final allLedger = await db.query('ledger_transactions');
+
+    // G4 conformance: the live FinancialTransactionService emits append-only
+    // `reversal`/`correction` events. Their reference_id is `txId:rev:N` /
+    // `txId:corr:N`; the original `txId` leg may remain after an edit/delete
+    // (append-only). Collect the base `txId`s so those original legs are not
+    // mistaken for orphans.
+    final appendOnlyBases = <String>{};
+    final revCorr = RegExp(r'^(.+):(rev|corr):\d+$');
+    for (final row in allLedger) {
+      final ref = row['reference_id'];
+      if (ref is String) {
+        final m = revCorr.firstMatch(ref);
+        if (m != null) appendOnlyBases.add(m.group(1)!);
+      }
+    }
+
     for (final row in allLedger) {
       final acc = row['account_id'];
       final card = row['credit_card_id'];
       final loan = row['loan_id'];
       final ref = row['reference_id'];
+      final type = row['type'] as String?;
 
       if (acc != null && !accountIds.contains(acc)) {
         report.orphanCount++;
@@ -608,12 +649,16 @@ class LedgerBackfillService {
         report.hardFailures.add('Orphan ledger row references missing loan $loan');
       }
       if (ref is String &&
+          type != 'reversal' &&
+          type != 'correction' &&
+          !revCorr.hasMatch(ref) &&
           !ref.startsWith('migration-') &&
           !txIds.contains(ref) &&
           !lendingIds.contains(ref) &&
           !loanIds.contains(ref) &&
           !instIds.contains(ref) &&
-          !creditTxnIds.contains(ref)) {
+          !creditTxnIds.contains(ref) &&
+          !appendOnlyBases.contains(ref)) {
         report.orphanCount++;
         report.hardFailures.add(
           'Orphan ledger row reference_id $ref matches no known entity '
@@ -625,8 +670,12 @@ class LedgerBackfillService {
     final byRefType = <String, int>{};
     for (final row in allLedger) {
       final ref = row['reference_id'];
-      final type = row['type'];
+      final type = row['type'] as String?;
       if (ref == null) continue;
+      // reversal/correction are append-only events with unique per-seq
+      // reference_ids; multiple rows of the same (ref,type) are expected and
+      // must not be flagged as duplicate representations.
+      if (type == 'reversal' || type == 'correction') continue;
       final key = '$ref|$type';
       byRefType[key] = (byRefType[key] ?? 0) + 1;
     }
@@ -762,6 +811,7 @@ class LedgerBackfillService {
                       'loan_payment', 'transfer', 'lending_given',
                       'fuel_expense', 'processing_fee', 'interest_charge')
           THEN -amount
+        WHEN type IN ('reversal', 'correction') THEN amount
         ELSE 0 END) as balance
       FROM ledger_transactions
       WHERE account_id = ?
@@ -878,6 +928,13 @@ class LedgerBackfillService {
     return 0.0;
   }
 
+  /// Like [_signedOf], but treats the live append-only `reversal`/`correction`
+  /// events as already-signed (their `amount` carries the exact delta). G4.
+  static double _signedOfTrail(String type, double amount) {
+    if (type == 'reversal' || type == 'correction') return amount;
+    return _signedOf(type, amount);
+  }
+
   static Map<String, dynamic> _legMap(
     Map<String, dynamic> leg,
     Map<String, dynamic> tx,
@@ -892,25 +949,6 @@ class LedgerBackfillService {
       'reference_id': tx['id'],
       'created_at': DateTime.now().toIso8601String(),
     };
-  }
-
-  static bool _legsMatch(
-    List<Map<String, dynamic>> existing,
-    List<Map<String, dynamic>> legs,
-  ) {
-    for (final leg in legs) {
-      final match = existing.any((r) {
-        final rType = r['type'];
-        final rAcc = r['account_id'];
-        final rAmt = (r['amount'] as num?)?.toDouble() ?? 0.0;
-        final lAmt = (leg['amount'] as num?)?.toDouble() ?? 0.0;
-        return rType == leg['type'] &&
-            rAcc == leg['account_id'] &&
-            (rAmt - lAmt).abs() < tolerance;
-      });
-      if (!match) return false;
-    }
-    return true;
   }
 }
 
