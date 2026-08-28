@@ -11,7 +11,7 @@ import '../widgets/custom_snackbar.dart';
 class FeedbackScreen extends StatelessWidget {
   const FeedbackScreen({super.key});
 
-  static const _supportEmail = 'support@mashingdesigns.com';
+  static const _supportEmail = 'mashingdesigns@gmail.com';
   static const _playStoreUrl =
       'https://play.google.com/store/apps/details?id=com.mashingdesigns.spend_x';
 
