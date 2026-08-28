@@ -10,6 +10,7 @@ import '../settings/backup_hub_screen.dart';
 import '../feedback_screen.dart';
 import '../data_health_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../insights/insights_tab.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
@@ -42,6 +43,18 @@ class MoreScreen extends ConsumerWidget {
             error: (_, _) => null,
           ),
           onTap: () => _push(context, const ReviewQueueScreen()),
+        ),
+
+        const Divider(height: 32, indent: 16, endIndent: 16),
+
+        // ── Insights ──────────────────────────────────────────────────
+        _SectionHeader(title: 'Insights'),
+        _MoreTile(
+          icon: Icons.auto_graph_rounded,
+          title: 'Insights',
+          subtitle: 'Health score, net worth, forecasts',
+          iconColor: cs.primary,
+          onTap: () => _push(context, const _InsightsScreen()),
         ),
 
         const Divider(height: 32, indent: 16, endIndent: 16),
@@ -179,6 +192,21 @@ class _MoreTile extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
       onTap: onTap,
+    );
+  }
+}
+
+class _InsightsScreen extends StatelessWidget {
+  const _InsightsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Insights')),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [InsightsTab(embedded: true)],
+      ),
     );
   }
 }

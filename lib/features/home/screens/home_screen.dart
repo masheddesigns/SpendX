@@ -5,7 +5,6 @@ import '../../../services/haptic_service.dart';
 import '../../streak/streak_provider.dart';
 import '../../../screens/bank/account_list_screen.dart';
 import '../../../screens/expense/add_expense_screen.dart';
-import '../../../screens/insights_plan_tab.dart';
 import '../../../screens/tools/financial_tools_screen.dart';
 import '../../../screens/more/more_screen.dart';
 import 'home_dashboard.dart';
@@ -24,16 +23,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const _titles = <String>[
     'Home',
     'Accounts',
-    'Tools',
-    'Insights',
+    'Cash Flow',
+    'Wealth',
     'More',
   ];
 
   static const _tabs = <Widget>[
     HomeDashboard(),
     AccountListScreen(isEmbedded: true),
-    FinancialToolsScreen(),
-    InsightsPlanTab(),
+    FinancialToolsScreen(section: FinancialToolSection.cashFlow),
+    FinancialToolsScreen(section: FinancialToolSection.wealth),
     MoreScreen(),
   ];
 
@@ -72,14 +71,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Accounts',
           ),
           NavigationDestination(
-            icon: Icon(Icons.handyman_outlined),
-            selectedIcon: Icon(Icons.handyman_rounded),
-            label: 'Tools',
+            icon: Icon(Icons.payments_outlined),
+            selectedIcon: Icon(Icons.payments_rounded),
+            label: 'Cash Flow',
           ),
           NavigationDestination(
-            icon: Icon(Icons.auto_graph_outlined),
-            selectedIcon: Icon(Icons.auto_graph_rounded),
-            label: 'Insights',
+            icon: Icon(Icons.savings_outlined),
+            selectedIcon: Icon(Icons.savings_rounded),
+            label: 'Wealth',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz_rounded),

@@ -21,33 +21,36 @@ class InsightsPlanTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(financialTimelineProvider);
-        ref.invalidate(activeGoalsProvider);
-        ref.invalidate(smartBudgetProvider);
-        ref.invalidate(forecastProvider);
-        ref.invalidate(smartNudgesProvider);
-        ref.invalidate(financialHealthScoreProvider);
-        ref.invalidate(runwayProvider);
-        ref.invalidate(anomalyProvider);
-        ref.invalidate(netWorthChangeProvider);
-        ref.invalidate(creditHealthProvider);
-        ref.invalidate(currentMonthStatsProvider);
-      },
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: const [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: PlanTab(embedded: true),
-          ),
-          _SectionDivider(label: 'Insights'),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: InsightsTab(embedded: true),
-          ),
-        ],
+    return Scaffold(
+      appBar: AppBar(title: const Text('Insights')),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(financialTimelineProvider);
+          ref.invalidate(activeGoalsProvider);
+          ref.invalidate(smartBudgetProvider);
+          ref.invalidate(forecastProvider);
+          ref.invalidate(smartNudgesProvider);
+          ref.invalidate(financialHealthScoreProvider);
+          ref.invalidate(runwayProvider);
+          ref.invalidate(anomalyProvider);
+          ref.invalidate(netWorthChangeProvider);
+          ref.invalidate(creditHealthProvider);
+          ref.invalidate(currentMonthStatsProvider);
+        },
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: const [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: PlanTab(embedded: true),
+            ),
+            _SectionDivider(label: 'Insights'),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: InsightsTab(embedded: true),
+            ),
+          ],
+        ),
       ),
     );
   }

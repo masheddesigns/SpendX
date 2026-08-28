@@ -602,3 +602,19 @@ class _BudgetRow extends StatelessWidget {
     );
   }
 }
+
+/// Standalone Plans screen (wraps the embedded [PlanTab] in an app bar).
+class PlansScreen extends StatelessWidget {
+  const PlansScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Plans')),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: const [PlanTab(embedded: true)],
+      ),
+    );
+  }
+}

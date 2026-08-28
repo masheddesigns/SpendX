@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/salary_ledger/salary_ledger_notifier.dart';
 import '../../features/dashboard/insights_providers.dart';
 import '../../features/health/health_score_provider.dart';
+import '../plan/plan_tab.dart';
 import '../../features/salary/screens/salary_screen.dart';
-import '../../features/vehicles/screens/vehicles_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../credit_card_screen.dart';
 import '../financial_health_screen.dart';
@@ -16,8 +16,11 @@ import '../net_worth_screen.dart';
 import '../recurring/recurring_payments_screen.dart';
 import '../reports_screen.dart';
 
+enum FinancialToolSection { cashFlow, wealth }
+
 class FinancialToolsScreen extends ConsumerWidget {
-  const FinancialToolsScreen({super.key});
+  final FinancialToolSection section;
+  const FinancialToolsScreen({super.key, required this.section});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,61 +38,50 @@ class FinancialToolsScreen extends ConsumerWidget {
     final netWorth = (nw?.current)?.toDouble() ?? 0;
     final healthScore = (health?.score)?.toInt() ?? 0;
 
+    final isCashFlow = section == FinancialToolSection.cashFlow;
+
+    final subsections = isCashFlow ? _cashFlowSubsections : _wealthSubsections;
+    final Widget insight = isCashFlow
+        ? _CashFlowInsight(expectedIncome: expectedIncome, spent: spent)
+        : _WealthInsight(netWorth: netWorth, healthScore: healthScore);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
         Text(
-          'Financial Tools',
+          isCashFlow ? 'Cash Flow & Debt' : 'Wealth & Planning',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
         ),
         const SizedBox(height: 4),
         Text(
-          'Manage every part of your money from one place',
+          isCashFlow
+              ? 'Track income, spending and what you owe'
+              : 'Grow and plan your net worth',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
         ),
-        const SizedBox(height: 20),
-
-        // ── Section 1: Cash Flow & Debt ───────────────────────────────
-        _SectionHeader(title: 'Cash Flow & Debt'),
-        const SizedBox(height: 10),
-        _CashFlowInsight(expectedIncome: expectedIncome, spent: spent),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.35,
+        const SizedBox(height: 16),
+        insight,
+        for (final sub in subsections) ...[
+          const SizedBox(height: 20),
+          _SectionHeader(title: sub.heading),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.35,
+            ),
+            itemCount: sub.tools.length,
+            itemBuilder: (context, index) => _ToolCard(tool: sub.tools[index]),
           ),
-          itemCount: _cashFlowTools.length,
-          itemBuilder: (context, index) => _ToolCard(tool: _cashFlowTools[index]),
-        ),
-
-        const SizedBox(height: 24),
-
-        // ── Section 2: Wealth & Planning ─────────────────────────────
-        _SectionHeader(title: 'Wealth & Planning'),
-        const SizedBox(height: 10),
-        _WealthInsight(netWorth: netWorth, healthScore: healthScore),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.35,
-          ),
-          itemCount: _wealthTools.length,
-          itemBuilder: (context, index) => _ToolCard(tool: _wealthTools[index]),
-        ),
+        ],
       ],
     );
   }
@@ -97,82 +89,96 @@ class FinancialToolsScreen extends ConsumerWidget {
 
 // ── Cash Flow & Debt tools ──────────────────────────────────────────────────
 
-const _cashFlowTools = <_Tool>[
-  _Tool(
-    icon: Icons.account_balance_wallet_rounded,
-    title: 'Income & Salary',
-    subtitle: 'Salary, employer reliability',
-    color: Color(0xFF3B82F6),
-    screen: SalaryScreen(),
-  ),
-  _Tool(
-    icon: Icons.repeat_rounded,
-    title: 'Recurring',
-    subtitle: 'Rent, subscriptions',
-    color: Color(0xFF8B5CF6),
-    screen: RecurringPaymentsScreen(),
-  ),
-  _Tool(
-    icon: Icons.credit_card_rounded,
-    title: 'Credit Cards',
-    subtitle: 'Cards, EMI, dues',
-    color: Color(0xFF8B5CF6),
-    screen: CreditCardScreen(),
-  ),
-  _Tool(
-    icon: Icons.account_balance_rounded,
-    title: 'Loans',
-    subtitle: 'Loan repayments',
-    color: Color(0xFFF59E0B),
-    screen: LoansScreen(),
-  ),
-  _Tool(
-    icon: Icons.swap_horiz_rounded,
-    title: 'Lend & Borrow',
-    subtitle: 'Money given & owed',
-    color: Color(0xFF10B981),
-    screen: LendingScreen(),
-  ),
+class _SubSection {
+  final String heading;
+  final List<_Tool> tools;
+  const _SubSection(this.heading, this.tools);
+}
+
+const _cashFlowSubsections = <_SubSection>[
+  _SubSection('Cash Flow', [
+    _Tool(
+      icon: Icons.account_balance_wallet_rounded,
+      title: 'Income & Salary',
+      subtitle: 'Salary, employer reliability',
+      color: Color(0xFF3B82F6),
+      screen: SalaryScreen(),
+    ),
+    _Tool(
+      icon: Icons.repeat_rounded,
+      title: 'Recurring',
+      subtitle: 'Rent, subscriptions',
+      color: Color(0xFF8B5CF6),
+      screen: RecurringPaymentsScreen(),
+    ),
+    _Tool(
+      icon: Icons.credit_card_rounded,
+      title: 'Credit Cards',
+      subtitle: 'Cards, EMI, dues',
+      color: Color(0xFF8B5CF6),
+      screen: CreditCardScreen(),
+    ),
+  ]),
+  _SubSection('Debt', [
+    _Tool(
+      icon: Icons.account_balance_rounded,
+      title: 'Loans',
+      subtitle: 'Loan repayments',
+      color: Color(0xFFF59E0B),
+      screen: LoansScreen(),
+    ),
+    _Tool(
+      icon: Icons.swap_horiz_rounded,
+      title: 'Lend & Borrow',
+      subtitle: 'Money given & owed',
+      color: Color(0xFF10B981),
+      screen: LendingScreen(),
+    ),
+  ]),
 ];
 
 // ── Wealth & Planning tools ─────────────────────────────────────────────────
 
-const _wealthTools = <_Tool>[
-  _Tool(
-    icon: Icons.flag_rounded,
-    title: 'Goals',
-    subtitle: 'Savings targets',
-    color: Color(0xFF22C55E),
-    screen: GoalsScreen(),
-  ),
-  _Tool(
-    icon: Icons.bar_chart_rounded,
-    title: 'Reports',
-    subtitle: 'Monthly & category',
-    color: Color(0xFF0EA5E9),
-    screen: ReportsScreen(),
-  ),
-  _Tool(
-    icon: Icons.favorite_rounded,
-    title: 'Financial Health',
-    subtitle: 'Discipline score',
-    color: Color(0xFF22C55E),
-    screen: FinancialHealthScreen(),
-  ),
-  _Tool(
-    icon: Icons.pie_chart_rounded,
-    title: 'Net Worth',
-    subtitle: 'Assets & liabilities',
-    color: Color(0xFF0EA5E9),
-    screen: NetWorthScreen(),
-  ),
-  _Tool(
-    icon: Icons.directions_car_rounded,
-    title: 'Vehicles',
-    subtitle: 'EMI, fuel, running cost',
-    color: Color(0xFFF59E0B),
-    screen: VehiclesScreen(),
-  ),
+const _wealthSubsections = <_SubSection>[
+  _SubSection('Net Worth', [
+    _Tool(
+      icon: Icons.pie_chart_rounded,
+      title: 'Net Worth',
+      subtitle: 'Assets & liabilities',
+      color: Color(0xFF0EA5E9),
+      screen: NetWorthScreen(),
+    ),
+    _Tool(
+      icon: Icons.flag_rounded,
+      title: 'Goals',
+      subtitle: 'Savings targets',
+      color: Color(0xFF22C55E),
+      screen: GoalsScreen(),
+    ),
+    _Tool(
+      icon: Icons.favorite_rounded,
+      title: 'Financial Health',
+      subtitle: 'Discipline score',
+      color: Color(0xFF22C55E),
+      screen: FinancialHealthScreen(),
+    ),
+  ]),
+  _SubSection('Planning', [
+    _Tool(
+      icon: Icons.checklist_rounded,
+      title: 'Plans',
+      subtitle: 'What to do next',
+      color: Color(0xFF22C55E),
+      screen: PlansScreen(),
+    ),
+    _Tool(
+      icon: Icons.bar_chart_rounded,
+      title: 'Reports',
+      subtitle: 'Monthly & category',
+      color: Color(0xFF0EA5E9),
+      screen: ReportsScreen(),
+    ),
+  ]),
 ];
 
 // ── Insight cards ───────────────────────────────────────────────────────────
