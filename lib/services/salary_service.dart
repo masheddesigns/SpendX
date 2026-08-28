@@ -59,12 +59,14 @@ class SalaryService {
   final SalaryRepo salaryRepo;
   final TransactionRepo transactionRepo;
   final ReminderRepo reminderRepo;
+  final FinancialTransactionService _svc;
 
   SalaryService({
     required this.salaryRepo,
     required this.transactionRepo,
     required this.reminderRepo,
-  });
+    FinancialTransactionService? financialService,
+  }) : _svc = financialService ?? FinancialTransactionService();
 
   static final instance = SalaryService(
     salaryRepo: SalaryRepo(),
@@ -802,7 +804,7 @@ class SalaryService {
       relatedEntityId: payment.accountId,
     );
 
-    final svc = FinancialTransactionService();
+    final svc = _svc;
     String transactionId;
     if (payment.linkedTransactionId != null &&
         payment.linkedTransactionId!.isNotEmpty) {

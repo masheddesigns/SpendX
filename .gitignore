@@ -95,6 +95,7 @@ android/build/
 
 # Android release signing configurations
 android/key.properties
+android/key.properties.save
 android/keystore/
 *.jks
 *.keystore

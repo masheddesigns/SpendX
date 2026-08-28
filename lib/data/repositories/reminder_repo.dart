@@ -4,10 +4,15 @@ import '../../models/reminder_model.dart';
 import 'package:sqflite/sqflite.dart';
 
 class ReminderRepo {
-  final db = AppDatabase.instance;
+  final Database? database;
+
+  ReminderRepo({this.database});
+
+  Future<Database> get _db async =>
+      database ?? await AppDatabase.instance.database;
 
   Future<List<Reminder>> getAll() async {
-    final database = await db.database;
+    final database = await _db;
     final results = await database.query(
       Tables.reminders,
       orderBy: 'created_at DESC',
@@ -16,7 +21,7 @@ class ReminderRepo {
   }
 
   Future<Reminder?> getById(String id) async {
-    final database = await db.database;
+    final database = await _db;
     final results = await database.query(
       Tables.reminders,
       where: 'id = ?',
@@ -30,7 +35,7 @@ class ReminderRepo {
   }
 
   Future<void> insertGlobalReminder(Map<String, dynamic> reminder) async {
-    final database = await db.database;
+    final database = await _db;
     await database.insert(
       Tables.reminders,
       reminder,
@@ -43,7 +48,7 @@ class ReminderRepo {
   }
 
   Future<int> update(Reminder reminder) async {
-    final database = await db.database;
+    final database = await _db;
     return database.update(
       Tables.reminders,
       reminder.toMap(),
@@ -53,7 +58,7 @@ class ReminderRepo {
   }
 
   Future<void> deleteGlobalReminder(String id) async {
-    final database = await db.database;
+    final database = await _db;
     await database.delete(Tables.reminders, where: 'id = ?', whereArgs: [id]);
   }
 }

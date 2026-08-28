@@ -1,4 +1,4 @@
-import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
+import 'package:sqflite/sqflite.dart' show Database, DatabaseExecutor;
 
 import '../../models/credit_card.dart';
 import '../../models/credit_transaction.dart';
@@ -9,17 +9,22 @@ import '../core/app_database.dart';
 import '../core/tables.dart';
 
 class CreditRepo {
-  final db = AppDatabase.instance;
+  final Database? database;
+
+  CreditRepo({this.database});
+
+  Future<Database> get _db async =>
+      database ?? await AppDatabase.instance.database;
 
   Future<List<CreditCard>> getAll() async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(Tables.creditCards, orderBy: 'name ASC');
 
     return res.map((e) => CreditCard.fromMap(e)).toList();
   }
 
   Future<CreditCard?> getCard(String id) async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(
       Tables.creditCards,
       where: 'id = ?',
@@ -29,13 +34,13 @@ class CreditRepo {
   }
 
   Future<String> insert(CreditCard card) async {
-    final database = await db.database;
+    final database = await _db;
     await database.insert(Tables.creditCards, card.toMap());
     return card.id;
   }
 
   Future<int> update(CreditCard card) async {
-    final database = await db.database;
+    final database = await _db;
     return await database.update(
       Tables.creditCards,
       card.toMap(),
@@ -45,7 +50,7 @@ class CreditRepo {
   }
 
   Future<int> delete(String id) async {
-    final database = await db.database;
+    final database = await _db;
     return await database.delete(
       Tables.creditCards,
       where: 'id = ?',
@@ -56,7 +61,7 @@ class CreditRepo {
   /// Batch-adjust outstanding (used_amount) for multiple cards.
   Future<void> adjustOutstandings(Map<String, double> deltas) async {
     if (deltas.isEmpty) return;
-    final database = await db.database;
+    final database = await _db;
     await adjustOutstandingsWithTxn(database, deltas);
   }
 
@@ -80,7 +85,7 @@ class CreditRepo {
   /// Bulk-insert credit transactions in a single batch.
   Future<void> insertTransactions(List<CreditTransaction> txns) async {
     if (txns.isEmpty) return;
-    final database = await db.database;
+    final database = await _db;
     await insertTransactionsWithTxn(database, txns);
   }
 
@@ -98,7 +103,7 @@ class CreditRepo {
   }
 
   Future<List<CreditTransaction>> getTransactions(String cardId) async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(
       Tables.creditTransactions,
       where: 'cardId = ?',
@@ -109,7 +114,7 @@ class CreditRepo {
   }
 
   Future<CreditTransaction?> getTransactionById(String id) async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(
       Tables.creditTransactions,
       where: 'id = ?',
@@ -119,12 +124,12 @@ class CreditRepo {
   }
 
   Future<void> insertTransaction(CreditTransaction tx) async {
-    final database = await db.database;
+    final database = await _db;
     await database.insert(Tables.creditTransactions, tx.toMap());
   }
 
   Future<void> updateTransactionStatus(String id, String status) async {
-    final database = await db.database;
+    final database = await _db;
     await database.update(
       Tables.creditTransactions,
       {'status': status},
@@ -134,7 +139,7 @@ class CreditRepo {
   }
 
   Future<void> deleteTransaction(String id) async {
-    final database = await db.database;
+    final database = await _db;
     await database.delete(
       Tables.creditTransactions,
       where: 'id = ?',
@@ -143,7 +148,7 @@ class CreditRepo {
   }
 
   Future<List<CreditEMI>> getEmis(String cardId) async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(
       Tables.creditEmis,
       where: 'cardId = ?',
@@ -154,7 +159,7 @@ class CreditRepo {
   }
 
   Future<CreditEMI?> getEMIById(String id) async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(
       Tables.creditEmis,
       where: 'id = ?',
@@ -164,12 +169,12 @@ class CreditRepo {
   }
 
   Future<void> insertEMI(CreditEMI emi) async {
-    final database = await db.database;
+    final database = await _db;
     await database.insert(Tables.creditEmis, emi.toMap());
   }
 
   Future<void> updateEMI(CreditEMI emi) async {
-    final database = await db.database;
+    final database = await _db;
     await database.update(
       Tables.creditEmis,
       emi.toMap(),
@@ -179,12 +184,12 @@ class CreditRepo {
   }
 
   Future<void> deleteEMI(String id) async {
-    final database = await db.database;
+    final database = await _db;
     await database.delete(Tables.creditEmis, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<List<EMIInstallment>> getInstallments(String emiId) async {
-    final database = await db.database;
+    final database = await _db;
     final res = await database.query(
       Tables.emiInstallments,
       where: 'emiId = ?',
@@ -195,12 +200,12 @@ class CreditRepo {
   }
 
   Future<void> insertInstallment(EMIInstallment inst) async {
-    final database = await db.database;
+    final database = await _db;
     await database.insert(Tables.emiInstallments, inst.toMap());
   }
 
   Future<int> updateInstallment(EMIInstallment installment) async {
-    final database = await db.database;
+    final database = await _db;
     return database.update(
       Tables.emiInstallments,
       installment.toMap(),
@@ -210,7 +215,7 @@ class CreditRepo {
   }
 
   Future<int> deleteInstallment(String id) async {
-    final database = await db.database;
+    final database = await _db;
     return database.delete(
       Tables.emiInstallments,
       where: 'id = ?',
@@ -219,7 +224,7 @@ class CreditRepo {
   }
 
   Future<void> deleteInstallments(String emiId) async {
-    final database = await db.database;
+    final database = await _db;
     await database.delete(
       Tables.emiInstallments,
       where: 'emiId = ?',
@@ -228,7 +233,7 @@ class CreditRepo {
   }
 
   Future<void> insertStatement(CardStatement statement) async {
-    final database = await db.database;
+    final database = await _db;
     await database.insert(Tables.cardStatements, statement.toMap());
   }
 
@@ -238,7 +243,7 @@ class CreditRepo {
   }) async {
     if (transactionIds.isEmpty) return;
 
-    final database = await db.database;
+    final database = await _db;
     final batch = database.batch();
     for (final id in transactionIds) {
       batch.update(

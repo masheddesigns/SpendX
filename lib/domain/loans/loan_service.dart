@@ -14,21 +14,24 @@ class LoanService {
   final LoanRepo _loanRepo;
   final LedgerRepo _ledgerRepo;
   final ReminderRepo _reminderRepo;
+  final FinancialTransactionService _svc;
 
   LoanService({
     LoanRepo? loanRepo,
     LedgerRepo? ledgerRepo,
     ReminderRepo? reminderRepo,
+    FinancialTransactionService? financialService,
   })  : _loanRepo = loanRepo ?? LoanRepo(),
         _ledgerRepo = ledgerRepo ?? LedgerRepo(),
-        _reminderRepo = reminderRepo ?? ReminderRepo();
+        _reminderRepo = reminderRepo ?? ReminderRepo(),
+        _svc = financialService ?? FinancialTransactionService();
 
   /// Create a new Loan and generate its amortization schedule
   Future<void> createLoan({required Loan loan}) async {
     await _loanRepo.insertLoan(loan);
 
     // Ledger Record for disbursement
-    await FinancialTransactionService().appendLedger(
+    await _svc.appendLedger(
       LedgerTransaction(
         type: LedgerType.loan_disbursement,
         amount: loan.principalAmount,
@@ -171,7 +174,7 @@ class LoanService {
 
     if (!isManual) {
       // Ledger Record (Loan Side - Reduces Debt)
-      await FinancialTransactionService().appendLedger(
+      await _svc.appendLedger(
         LedgerTransaction(
           type: LedgerType.loan_payment,
           amount: inst.amount,
@@ -184,7 +187,7 @@ class LoanService {
 
       // Ledger Record (Bank Account Side - Reduces Balance)
       if (accountId != null) {
-        await FinancialTransactionService().appendLedger(
+        await _svc.appendLedger(
           LedgerTransaction(
             type: LedgerType.expense,
             amount: inst.amount,

@@ -14,19 +14,22 @@ class CreditCardService {
   final CreditRepo _creditRepo;
   final LedgerRepo _ledgerRepo;
   final ReminderRepo _reminderRepo;
+  final FinancialTransactionService _svc;
 
   CreditCardService({
     CreditRepo? creditRepo,
     LedgerRepo? ledgerRepo,
     ReminderRepo? reminderRepo,
+    FinancialTransactionService? financialService,
   })  : _creditRepo = creditRepo ?? CreditRepo(),
         _ledgerRepo = ledgerRepo ?? LedgerRepo(),
-        _reminderRepo = reminderRepo ?? ReminderRepo();
+        _reminderRepo = reminderRepo ?? ReminderRepo(),
+        _svc = financialService ?? FinancialTransactionService();
 
   Future<void> addCreditTransaction(CreditTransaction tx) async {
     await _creditRepo.insertTransaction(tx);
 
-    await FinancialTransactionService().appendLedger(
+    await _svc.appendLedger(
       LedgerTransaction(
         type: LedgerType.credit_purchase,
         amount: tx.amount,
@@ -83,7 +86,7 @@ class CreditCardService {
     await _creditRepo.deleteTransaction(id);
 
     // 3. Delete from Ledger
-    await FinancialTransactionService().removeLedger(referenceId: id);
+    await _svc.removeLedger(referenceId: id);
   }
 
   Future<void> deleteCreditEMI(String emiId) async {
@@ -99,7 +102,7 @@ class CreditCardService {
     await _creditRepo.deleteEMI(emiId);
 
     // 3. Delete Ledger entries (emi_installment) linked to the original txn
-    await FinancialTransactionService().removeLedger(
+    await _svc.removeLedger(
       referenceId: originalTxnId,
       type: LedgerType.emi_installment.name,
     );
@@ -110,7 +113,7 @@ class CreditCardService {
     // 5. Restore Ledger entry for the original purchase
     final ctx = await _creditRepo.getTransactionById(originalTxnId);
     if (ctx != null) {
-      await FinancialTransactionService().appendLedger(
+      await _svc.appendLedger(
         LedgerTransaction(
           type: LedgerType.credit_purchase,
           amount: ctx.amount,
@@ -151,7 +154,7 @@ class CreditCardService {
     await _creditRepo.insertTransaction(paymentTxn);
 
     // Ledger Record (Credit Card Side - Reduces Outstanding)
-    await FinancialTransactionService().appendLedger(
+    await _svc.appendLedger(
       LedgerTransaction(
         type: LedgerType.credit_payment,
         amount: paymentAmount,
@@ -164,7 +167,7 @@ class CreditCardService {
 
     // Ledger Record (Bank Account Side - Reduces Balance)
     if (accountId != null) {
-      await FinancialTransactionService().appendLedger(
+      await _svc.appendLedger(
         LedgerTransaction(
           type: LedgerType.expense,
           amount: paymentAmount,
@@ -191,7 +194,7 @@ class CreditCardService {
     await _creditRepo.updateTransactionStatus(purchase.id, 'converted');
 
     // 2. Ledger Consistency: Remove original credit_purchase from ledger
-    await FinancialTransactionService().removeLedger(
+    await _svc.removeLedger(
       referenceId: purchase.id,
       type: LedgerType.credit_purchase.name,
     );
@@ -211,7 +214,7 @@ class CreditCardService {
       );
       await _creditRepo.insertTransaction(feeTxn);
 
-      await FinancialTransactionService().appendLedger(
+      await _svc.appendLedger(
         LedgerTransaction(
           type: LedgerType.processing_fee,
           amount: processingFee,
@@ -279,7 +282,7 @@ class CreditCardService {
       );
 
       // Ledger entries
-      await FinancialTransactionService().appendLedger(
+      await _svc.appendLedger(
         LedgerTransaction(
           type: LedgerType.emi_installment,
           amount: emiAmount,
@@ -329,7 +332,7 @@ class CreditCardService {
     await _creditRepo.deleteInstallments(emiId);
 
     // 5. Update Ledger (Delete old emi_installments and add new ones)
-    await FinancialTransactionService().removeLedger(
+    await _svc.removeLedger(
       referenceId: oldEmi.transactionId,
       type: LedgerType.emi_installment.name,
     );
@@ -346,7 +349,7 @@ class CreditCardService {
       );
       await _creditRepo.insertInstallment(inst);
 
-      await FinancialTransactionService().appendLedger(
+      await _svc.appendLedger(
         LedgerTransaction(
           type: LedgerType.emi_installment,
           amount: emiAmount,
