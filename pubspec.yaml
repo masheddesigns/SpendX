@@ -62,6 +62,8 @@ dev_dependencies:
 
   sqflite_common_ffi: ^2.4.0+3
   sqlite3_flutter_libs: ^0.6.0+eol
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
 
