@@ -9,6 +9,7 @@ import '../../models/credit_card.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../credit_card/add_credit_card_screen.dart';
 import '../loans/loans_screen.dart';
+import '../net_worth_screen.dart';
 import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/error_state_widget.dart';
@@ -559,9 +560,28 @@ class _NetWorthSummary extends StatelessWidget {
                   ),
                 ),
               ),
-            ],
+              ],
+            ),
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const NetWorthScreen()),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('View details',
+                      style: TextStyle(
+                          color: cs.primary, fontWeight: FontWeight.w600, fontSize: 12)),
+                  Icon(Icons.chevron_right_rounded, color: cs.primary, size: 16),
+                ],
+              ),
+            ),
           ),
-        ],
+          ],
       ),
     );
   }

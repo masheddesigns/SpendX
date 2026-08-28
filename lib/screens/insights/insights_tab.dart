@@ -27,7 +27,8 @@ import '../../shared/widgets/app_tap_scale.dart';
 /// Insights tab — answers "What is happening with my money?"
 /// Consolidated into 6 clear sections. Scannable in 5 seconds.
 class InsightsTab extends ConsumerWidget {
-  const InsightsTab({super.key});
+  const InsightsTab({super.key, this.embedded = false});
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,19 +44,7 @@ class InsightsTab extends ConsumerWidget {
     final xpAsync = ref.watch(xpProvider);
     final salaryAsync = ref.watch(salaryLedgerProvider);
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(financialHealthScoreProvider);
-        ref.invalidate(runwayProvider);
-        ref.invalidate(anomalyProvider);
-        ref.invalidate(netWorthChangeProvider);
-        ref.invalidate(creditHealthProvider);
-        ref.invalidate(currentMonthStatsProvider);
-        ref.invalidate(forecastProvider);
-      },
-      child: ListView(
-        padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
-        children: [
+    final children = <Widget>[
           // ═══════════════════════════════════════════════════════════
           // SECTION 1: Health Score (always visible)
           // ═══════════════════════════════════════════════════════════
@@ -225,7 +214,28 @@ class InsightsTab extends ConsumerWidget {
             loading: () => const SizedBox.shrink(),
             error: (_, _) => const SizedBox.shrink(),
           ),
-        ],
+        ];
+
+    if (embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(financialHealthScoreProvider);
+        ref.invalidate(runwayProvider);
+        ref.invalidate(anomalyProvider);
+        ref.invalidate(netWorthChangeProvider);
+        ref.invalidate(creditHealthProvider);
+        ref.invalidate(currentMonthStatsProvider);
+        ref.invalidate(forecastProvider);
+      },
+      child: ListView(
+        padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
+        children: children,
       ),
     );
   }

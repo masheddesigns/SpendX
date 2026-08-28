@@ -2,16 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/review_queue/providers/review_providers.dart';
-import '../../features/salary/screens/salary_screen.dart';
 import '../ai_chat_screen.dart';
-import '../credit_card_screen.dart';
-import '../goals/goals_screen.dart';
-import '../lending/lending_screen.dart';
-import '../loans/loans_screen.dart';
-import '../recurring/recurring_payments_screen.dart';
-import '../reports_screen.dart';
 import '../review/review_queue_screen.dart';
-import '../financial_health_screen.dart';
 import '../gamification_detail_screen.dart';
 import '../settings/profile_settings_screen.dart';
 import '../settings/backup_hub_screen.dart';
@@ -54,69 +46,8 @@ class MoreScreen extends ConsumerWidget {
 
         const Divider(height: 32, indent: 16, endIndent: 16),
 
-        // ── Financial Tools ───────────────────────────────────────────
-        _SectionHeader(title: 'Financial Tools'),
-        _MoreTile(
-          icon: Icons.account_balance_wallet_rounded,
-          title: 'Income & Salary',
-          subtitle: 'Track salary, employer reliability',
-          iconColor: const Color(0xFF3B82F6),
-          onTap: () => _push(context, const SalaryScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.repeat_rounded,
-          title: 'Recurring Payments',
-          subtitle: 'Rent, subscriptions, auto-logged',
-          iconColor: const Color(0xFF8B5CF6),
-          onTap: () => _push(context, const RecurringPaymentsScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.flag_rounded,
-          title: 'Goals',
-          subtitle: 'Savings targets, spending limits',
-          iconColor: const Color(0xFF22C55E),
-          onTap: () => _push(context, const GoalsScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.credit_card_rounded,
-          title: 'Credit Cards',
-          subtitle: 'Cards, EMI, outstanding',
-          iconColor: const Color(0xFF8B5CF6),
-          onTap: () => _push(context, const CreditCardScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.account_balance_rounded,
-          title: 'Loans',
-          subtitle: 'Track loan repayments',
-          iconColor: const Color(0xFFF59E0B),
-          onTap: () => _push(context, const LoansScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.swap_horiz_rounded,
-          title: 'Lend & Borrow',
-          subtitle: 'Track money given & owed',
-          iconColor: const Color(0xFF10B981),
-          onTap: () => _push(context, const LendingScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.bar_chart_rounded,
-          title: 'Reports',
-          subtitle: 'Monthly & category reports',
-          iconColor: const Color(0xFF0EA5E9),
-          onTap: () => _push(context, const ReportsScreen()),
-        ),
-
-        const Divider(height: 32, indent: 16, endIndent: 16),
-
-        // ── Insights & Rewards ───────────────────────────────────────
-        _SectionHeader(title: 'Insights & Rewards'),
-        _MoreTile(
-          icon: Icons.favorite_rounded,
-          title: 'Financial Health',
-          subtitle: 'Your discipline score & breakdown',
-          iconColor: const Color(0xFF22C55E),
-          onTap: () => _push(context, const FinancialHealthScreen()),
-        ),
+        // ── Rewards ──────────────────────────────────────────────────
+        _SectionHeader(title: 'Rewards'),
         _MoreTile(
           icon: Icons.emoji_events_rounded,
           title: 'Rewards & Activity',

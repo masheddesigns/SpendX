@@ -37,7 +37,8 @@ import '../../shared/widgets/skeleton_loader.dart';
 ///   ↓
 ///   Budget Pulse (compact: over-budget or "all on track")
 class PlanTab extends ConsumerWidget {
-  const PlanTab({super.key});
+  const PlanTab({super.key, this.embedded = false});
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -48,17 +49,7 @@ class PlanTab extends ConsumerWidget {
     final saveSugAsync = ref.watch(saveSuggestionProvider);
     final nudgesAsync = ref.watch(smartNudgesProvider);
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(financialTimelineProvider);
-        ref.invalidate(activeGoalsProvider);
-        ref.invalidate(smartBudgetProvider);
-        ref.invalidate(forecastProvider);
-        ref.invalidate(smartNudgesProvider);
-      },
-      child: ListView(
-        padding: AppSpacing.cardPadding,
-        children: [
+    final children = <Widget>[
           // ── Identity Banner ──────────────────────────────────
           // ── Daily Digest (one decision OR completion state) ─
           timelineAsync.when(
@@ -177,7 +168,26 @@ class PlanTab extends ConsumerWidget {
             error: (_, _) => const SizedBox.shrink(),
           ),
           const SizedBox(height: 32),
-        ],
+        ];
+
+    if (embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(financialTimelineProvider);
+        ref.invalidate(activeGoalsProvider);
+        ref.invalidate(smartBudgetProvider);
+        ref.invalidate(forecastProvider);
+        ref.invalidate(smartNudgesProvider);
+      },
+      child: ListView(
+        padding: AppSpacing.cardPadding,
+        children: children,
       ),
     );
   }
