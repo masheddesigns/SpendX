@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/system_alerts_provider.dart';
 import '../../../screens/review/review_queue_screen.dart';
-import '../../../screens/data_health_screen.dart';
 import '../../../shared/widgets/app_page_route.dart';
 
 /// Single-priority system status strip on Home.
@@ -55,18 +54,7 @@ class SystemStatusStrip extends ConsumerWidget {
           );
         }
 
-        // Priority 4: Data health issues
-        if (alerts.auditIssueCount > 0) {
-          return _StatusBanner(
-            icon: Icons.health_and_safety_outlined,
-            label: '${alerts.auditIssueCount} data issue${alerts.auditIssueCount == 1 ? '' : 's'} found',
-            color: Colors.orange,
-            onTap: () => Navigator.push(context,
-                AppPageRoute(builder: (_) => const DataHealthScreen())),
-          );
-        }
-
-        // Priority 5: Sync info (subtle, passive)
+        // Priority 4: Sync info (subtle, passive)
         if (alerts.hasSync) {
           return _SyncInfo(
             lastSync: alerts.lastSyncAgo!,

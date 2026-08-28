@@ -1,18 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../services/data_audit_service.dart';
 import '../../review_queue/providers/review_providers.dart';
 
 /// Aggregated system status for the Home screen.
-/// Combines: review queue, drift alerts, safe mode, last sync, data health.
+/// Combines: review queue, drift alerts, safe mode, last sync.
+/// (The data-health score is computed lazily on the Data Health screen, not
+/// here, to avoid scanning all transactions on every Home render.)
 class SystemAlerts {
   final int reviewCount;
   final bool safeModeActive;
   final String? lastSyncAgo;
   final int lastSyncCount;
   final String? driftMessage;
-  final int auditIssueCount;
 
   const SystemAlerts({
     this.reviewCount = 0,
@@ -20,12 +20,10 @@ class SystemAlerts {
     this.lastSyncAgo,
     this.lastSyncCount = 0,
     this.driftMessage,
-    this.auditIssueCount = 0,
   });
 
   bool get hasAlerts =>
-      reviewCount > 0 || safeModeActive || driftMessage != null ||
-      auditIssueCount > 0;
+      reviewCount > 0 || safeModeActive || driftMessage != null;
 
   bool get hasSync => lastSyncAgo != null;
 }
@@ -35,14 +33,8 @@ final systemAlertsProvider = FutureProvider<SystemAlerts>((ref) async {
   final reviewCount =
       await ref.watch(reviewQueueCountProvider.future).catchError((_) => 0);
 
-  // Safe mode (legacy SMS pipeline gone — always false)
+  // Safe mode (legacy SMS pipeline gone - always false)
   const safeModeActive = false;
-
-  // Audit issues (lightweight count)
-  int auditCount = 0;
-  try {
-    auditCount = await DataAuditService.instance.getIssueCount();
-  } catch (_) {}
 
   // Last sync info
   final prefs = await SharedPreferences.getInstance();
@@ -71,6 +63,5 @@ final systemAlertsProvider = FutureProvider<SystemAlerts>((ref) async {
     safeModeActive: safeModeActive,
     lastSyncAgo: lastSyncAgo,
     lastSyncCount: lastImportCount,
-    auditIssueCount: auditCount,
   );
 });
