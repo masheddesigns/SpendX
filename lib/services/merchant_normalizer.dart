@@ -24,7 +24,6 @@ class MerchantPattern {
 /// One source of truth for "what is this merchant" — used by:
 ///   * [TransactionTextParser] to resolve OCR/share text → merchant
 ///   * [RecurringDetector] to group transactions by stable identity
-///   * [MerchantAggregator] to bucket history without fragmentation
 ///
 /// Why centralized: if these layers each rolled their own normalization,
 /// "Amazon Pay" / "AMAZON PAY INDIA" / "amazonpay" would split across

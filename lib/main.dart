@@ -9,6 +9,7 @@ import 'screens/splash_screen.dart';
 import 'services/settings_service.dart';
 import 'services/auth_service.dart';
 import 'services/share_intent_service.dart';
+import 'services/notification_service_v2.dart';
 import 'data/core/app_database.dart';
 import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
@@ -42,6 +43,14 @@ void main() {
         );
       } catch (e, st) {
         AppLogger.e('SettingsService init failed', e, st);
+      }
+
+      // Initialize the notifications plugin + channels (idempotent) so that
+      // show/showInstant work even before the first scheduled notification.
+      try {
+        await NotificationServiceV2().init();
+      } catch (e, st) {
+        AppLogger.e('NotificationService init failed', e, st);
       }
 
       if (AppEnv.enableDebugTools) {

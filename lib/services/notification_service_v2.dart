@@ -122,6 +122,7 @@ class NotificationServiceV2 {
     String? category, // e.g. 'backupStatus'
     int? id,
   }) async {
+    if (!_initialized) await init();
     if (category != null) {
       final settings = await _settingsService.load();
       final map = settings.toMap();
@@ -197,6 +198,7 @@ class NotificationServiceV2 {
     String? channelId,
     int? id,
   }) async {
+    if (!_initialized) await init();
     final androidDetails = AndroidNotificationDetails(
       channelId ?? 'spendx_channel',
       'SpendX Notifications',
