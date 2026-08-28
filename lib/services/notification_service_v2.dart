@@ -458,6 +458,7 @@ class NotificationServiceV2 {
     required int hour,
     required int minute,
   }) async {
+    if (!_initialized) await init();
     const int reminderId = 999;
     await _plugin.cancel(id: reminderId);
 
