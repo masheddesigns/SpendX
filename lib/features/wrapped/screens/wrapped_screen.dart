@@ -39,8 +39,13 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
         if (status == AnimationStatus.completed && !_paused) _goNext();
       });
     // Slight delay before starting — prevents instant motion shock
-    Future.delayed(const Duration(milliseconds: 400), () {
+    Future.delayed(const Duration(milliseconds: 400), () async {
       if (mounted) _timerCtrl.forward();
+      // Mark as viewed so the home bubble expires after its post-view window
+      // (weekly 24h, monthly 7d) — see WrappedService.
+      if (mounted) {
+        await ref.read(wrappedServiceProvider).markViewed(widget.period);
+      }
     });
   }
 

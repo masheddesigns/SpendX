@@ -5,12 +5,19 @@ import '../models/wrapped_summary.dart';
 /// Service that computes and caches Wrapped summaries.
 /// UI → Provider → WrappedService → Repository → DB
 ///
-/// Periods auto-dismiss after 5 days from first appearance.
+/// Availability rules:
+///  - Only the CURRENT week / month / year is offered (one wrap per cadence).
+///  - Once a wrap is viewed, it expires after a post-view window:
+///      weekly  → 24 hours
+///      monthly → 7 days
+///      yearly  → 30 days
 class WrappedService {
   final TransactionRepo _repo;
   final Map<String, WrappedSummary> _cache = {};
-  static const _seenKeyPrefix = 'wrapped_first_seen_';
-  static const _dismissDays = 5;
+  static const _viewedKeyPrefix = 'wrapped_viewed_';
+  static const _weeklyExpiry = Duration(hours: 24);
+  static const _monthlyExpiry = Duration(days: 7);
+  static const _yearlyExpiry = Duration(days: 30);
 
   WrappedService(this._repo);
 
@@ -35,62 +42,66 @@ class WrappedService {
   /// Clear cache (e.g., after new transactions imported).
   void invalidate() => _cache.clear();
 
-  /// Get available periods (latest first, max 6).
-  /// Periods auto-dismiss after 5 days from first appearance.
-  /// Includes: current week, recent months, years.
+  /// Available periods (latest first).
+  /// Only the CURRENT week / month / year is offered (one wrap per cadence),
+  /// and a period is hidden once it has been viewed and its post-view window
+  /// has elapsed (weekly 24h, monthly 7d, yearly 30d).
   Future<List<String>> getAvailablePeriods() async {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
+    final result = <String>[];
 
-    final months = await _repo.getDistinctMonths(limit: 5);
-
-    // Build candidate periods
-    final candidates = <String>[];
-
-    // Current week wrapped
+    // Weekly: current week only.
     final weekNum = _isoWeekNumber(now);
     final weekKey = '${now.year}-W${weekNum.toString().padLeft(2, '0')}';
-    candidates.add(weekKey);
+    _maybeAddPeriod(result, weekKey, prefs, now);
 
-    // Previous week (if within 5 days)
-    final prevWeekDate = now.subtract(const Duration(days: 7));
-    final prevWeekNum = _isoWeekNumber(prevWeekDate);
-    final prevWeekKey =
-        '${prevWeekDate.year}-W${prevWeekNum.toString().padLeft(2, '0')}';
-    candidates.add(prevWeekKey);
+    // Monthly: current month only (if it has transactions).
+    final months = await _repo.getDistinctMonths(limit: 5);
+    final monthKey = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    if (months.contains(monthKey)) {
+      _maybeAddPeriod(result, monthKey, prefs, now);
+    }
 
-    // Monthly
-    candidates.addAll(months);
-
-    // Yearly
+    // Yearly: current year only (if it has transactions).
     final years = <String>{};
     for (final m in months) {
       years.add(m.split('-').first);
     }
-    candidates.addAll(years);
-
-    // Filter: remove duplicates, check 5-day dismiss
-    final seen = <String>{};
-    final result = <String>[];
-    for (final period in candidates) {
-      if (seen.contains(period)) continue;
-      seen.add(period);
-
-      // Check if dismissed (first seen > 5 days ago)
-      final seenKey = '$_seenKeyPrefix$period';
-      final firstSeenMs = prefs.getInt(seenKey);
-      if (firstSeenMs != null) {
-        final firstSeen = DateTime.fromMillisecondsSinceEpoch(firstSeenMs);
-        if (now.difference(firstSeen).inDays >= _dismissDays) continue;
-      } else {
-        // First time seeing this period — record it
-        await prefs.setInt(seenKey, now.millisecondsSinceEpoch);
-      }
-
-      result.add(period);
+    if (years.contains('${now.year}')) {
+      _maybeAddPeriod(result, '${now.year}', prefs, now);
     }
 
     return result.take(6).toList();
+  }
+
+  void _maybeAddPeriod(
+    List<String> result,
+    String period,
+    SharedPreferences prefs,
+    DateTime now,
+  ) {
+    final viewedMs = prefs.getInt('$_viewedKeyPrefix$period');
+    if (viewedMs != null) {
+      final viewed = DateTime.fromMillisecondsSinceEpoch(viewedMs);
+      if (now.difference(viewed) >= _expiryFor(period)) return; // expired
+    }
+    result.add(period);
+  }
+
+  Duration _expiryFor(String period) {
+    if (period.contains('-W')) return _weeklyExpiry;
+    if (period.contains('-')) return _monthlyExpiry;
+    return _yearlyExpiry;
+  }
+
+  /// Record that the user has viewed a wrap — starts its post-view expiry.
+  Future<void> markViewed(String period) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      '$_viewedKeyPrefix$period',
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   Future<WrappedSummary?> _computeWeekly(String period) async {
