@@ -36,9 +36,32 @@ void main() {
     final fab = find.byType(FloatingActionButton);
     if (tester.any(fab)) {
       await tester.tap(fab.first, warnIfMissed: false);
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
-      await tester.pageBack();
-      await tester.pumpAndSettle(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Drive the add-transaction form if it rendered (exercises the
+      // FinancialTransactionService / ledger path on-device). Bounded pumps
+      // only — never pumpAndSettle here, a save can kick off a perpetual
+      // animation that would hang the suite.
+      final fields = find.byType(TextFormField);
+      if (tester.any(fields)) {
+        await tester.enterText(fields.first, '250');
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      var submitted = false;
+      for (final label in const ['Save', 'Add', 'Submit']) {
+        final b = find.widgetWithText(ElevatedButton, label);
+        if (tester.any(b)) {
+          await tester.tap(b.first, warnIfMissed: false);
+          submitted = true;
+          break;
+        }
+      }
+      await tester.pump(const Duration(milliseconds: 600));
+      if (submitted) {
+        // Best-effort leave the screen.
+        await tester.pageBack();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
     }
 
     expect(errors, isEmpty,
