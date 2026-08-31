@@ -33,7 +33,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 21,
+      version: 22,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         await _applyUpgrades(db, oldVersion);
@@ -78,6 +78,9 @@ class AppDatabase {
     if (oldVersion < 20) await _migrateToV20(db);
     if (oldVersion < 21) {
       await _migrateToV21(db);
+    }
+    if (oldVersion < 22) {
+      await _migrateToV22(db);
     }
     await _executeCreateQueries(db);
   }
@@ -450,6 +453,33 @@ class AppDatabase {
   /// responsibility of the explicit [runLedgerBackfill] entry point.
   Future<void> _migrateToV21(Database db) async {
     await _ensureV21Schema(db);
+  }
+
+  /// V22: Extend the `reminders` table with the fields the Reminder model
+  /// actually persists (source linkage, snooze/done state, scheduling meta).
+  /// Defensive — each column is added independently, so a partially migrated
+  /// database still opens fine.
+  Future<void> _migrateToV22(Database db) async {
+    const reminderColumns = <String>[
+      'linked_entity_id TEXT',
+      'due_odometer REAL',
+      'amount REAL',
+      'notes TEXT',
+      'is_active INTEGER DEFAULT 1',
+      'last_triggered_at TEXT',
+      'snoozed_until TEXT',
+      'record_status TEXT',
+      'source_type TEXT',
+      'source_id TEXT',
+      'next_trigger_at INTEGER',
+    ];
+    for (final column in reminderColumns) {
+      try {
+        await db.execute('ALTER TABLE reminders ADD COLUMN $column');
+      } catch (_) {
+        // Column already exists (idempotent migration).
+      }
+    }
   }
 
   /// Explicitly (re)run the guarded Phase 1D reconciliation.

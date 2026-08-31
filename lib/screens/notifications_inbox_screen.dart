@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/providers.dart';
+import '../core/database/database_service.dart';
+import '../features/alerts/data/alert_service.dart';
+import '../features/alerts/data/app_alert.dart';
+import '../features/salary/screens/salary_screen.dart';
+import '../screens/credit_card_screen.dart';
+import '../screens/lending/lending_screen.dart';
+import '../screens/loans/loans_screen.dart';
+import '../screens/recurring/recurring_payments_screen.dart';
+import '../shared/widgets/app_page_route.dart';
 import '../shared/widgets/skeleton_loader.dart';
 import '../shared/widgets/empty_state_widget.dart';
 import '../utils/app_format.dart';
 
-class NotificationsInboxScreen extends ConsumerStatefulWidget {
+/// In-app notifications inbox: lists active (pending) reminders and routes
+/// taps to the relevant screen.
+class NotificationsInboxScreen extends StatefulWidget {
   const NotificationsInboxScreen({super.key});
 
   @override
-  ConsumerState<NotificationsInboxScreen> createState() =>
+  State<NotificationsInboxScreen> createState() =>
       _NotificationsInboxScreenState();
 }
 
-class _NotificationsInboxScreenState
-    extends ConsumerState<NotificationsInboxScreen> {
+class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
   bool _isLoading = true;
-  List<_NotificationItem> _items = const [];
+  List<AppAlert> _alerts = const [];
 
   @override
   void initState() {
@@ -27,25 +35,42 @@ class _NotificationsInboxScreenState
 
   Future<void> _load() async {
     setState(() => _isLoading = true);
-    final cards = await ref.read(cardsProvider.future);
-    final items = cards
-        .map(
-          (card) => _NotificationItem(
-            title: '${card.bank} card due',
-            subtitle:
-                '${card.daysUntilDue} days left • ${AppFormat.currency(card.outstanding)} outstanding',
-          ),
-        )
-        .toList();
+    final service = AlertService(databaseService: DatabaseService());
+    final alerts = await service.getActiveAlerts(forceRefresh: true);
     if (!mounted) return;
     setState(() {
-      _items = items;
+      _alerts = alerts;
       _isLoading = false;
     });
   }
 
+  void _open(AppAlert alert) {
+    final Widget? screen = switch (alert.type) {
+      AlertType.salaryDue ||
+      AlertType.salaryDelayed ||
+      AlertType.partialSalary => const SalaryScreen(),
+      AlertType.loanDue => const LoansScreen(),
+      AlertType.creditCardDue => const CreditCardScreen(),
+      AlertType.subscriptionDue => const RecurringPaymentsScreen(),
+      AlertType.custom => const LendingScreen(),
+      AlertType.vehicleService => null,
+    };
+
+    if (screen == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vehicle reminders are paused for now.')),
+      );
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).push(AppPageRoute(builder: (_) => screen));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
@@ -55,34 +80,68 @@ class _NotificationsInboxScreenState
       ),
       body: _isLoading
           ? const SkeletonLoader.transactions()
-          : _items.isEmpty
+          : _alerts.isEmpty
           ? const EmptyStateWidget(
               icon: Icons.notifications_off_outlined,
               title: 'No alerts right now',
-              description: 'You\'re all caught up. Alerts will appear here when actions are needed.',
+              description:
+                  'You\'re all caught up. Alerts will appear here when actions are needed.',
             )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemBuilder: (context, index) {
-                final item = _items[index];
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.notifications_none_rounded),
-                    title: Text(item.title),
-                    subtitle: Text(item.subtitle),
-                  ),
-                );
-              },
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemCount: _items.length,
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemBuilder: (context, index) {
+                  final alert = _alerts[index];
+                  final icon = switch (alert.type) {
+                    AlertType.salaryDue ||
+                    AlertType.salaryDelayed ||
+                    AlertType.partialSalary => Icons.work_rounded,
+                    AlertType.loanDue => Icons.account_balance_rounded,
+                    AlertType.creditCardDue => Icons.credit_card_rounded,
+                    AlertType.subscriptionDue => Icons.subscriptions_rounded,
+                    AlertType.vehicleService => Icons.directions_car_rounded,
+                    AlertType.custom => Icons.handshake_rounded,
+                  };
+                  final color = alert.severity == AlertSeverity.critical
+                      ? cs.error
+                      : alert.severity == AlertSeverity.warning
+                      ? Colors.orange
+                      : cs.primary;
+
+                  final dueLabel = alert.triggerDate != null
+                      ? '• ${AppFormat.date(alert.triggerDate!)}'
+                      : '';
+
+                  return Card(
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(icon, color: color, size: 22),
+                      ),
+                      title: Text(alert.title),
+                      subtitle: Text(
+                        '${alert.description} $dueLabel',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right_rounded,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      onTap: () => _open(alert),
+                    ),
+                  );
+                },
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemCount: _alerts.length,
+              ),
             ),
     );
   }
-}
-
-class _NotificationItem {
-  const _NotificationItem({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
 }

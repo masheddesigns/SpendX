@@ -456,7 +456,18 @@ class Tables {
       date TEXT NOT NULL,
       repeat_type TEXT DEFAULT 'once',
       is_completed INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      linked_entity_id TEXT,
+      due_odometer REAL,
+      amount REAL,
+      notes TEXT,
+      is_active INTEGER DEFAULT 1,
+      last_triggered_at TEXT,
+      snoozed_until TEXT,
+      record_status TEXT,
+      source_type TEXT,
+      source_id TEXT,
+      next_trigger_at INTEGER
     )
   ''';
 

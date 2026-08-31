@@ -29,6 +29,7 @@ class ReminderService extends ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     await refreshDueReminders();
+    await _notificationService.checkBudgetAlerts();
     _periodicTimer = Timer.periodic(_backgroundCheckInterval, (_) {
       unawaited(checkAndDispatchAlerts());
     });

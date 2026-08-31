@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_settings_service.dart';
+import '../data/repositories/category_repo.dart';
+import '../data/repositories/transaction_repo.dart';
+import '../features/budget/smart_budget_engine.dart';
 import '../models/notification_settings.dart';
 import '../models/reminder_model.dart';
 import 'haptic_service.dart';
@@ -15,6 +19,7 @@ import '../features/salary/screens/salary_screen.dart';
 import '../screens/loans/loans_screen.dart';
 import '../screens/credit_card_screen.dart';
 import '../screens/lending/lending_screen.dart';
+import '../screens/notifications_inbox_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 
 class NotificationServiceV2 {
@@ -219,10 +224,12 @@ class NotificationServiceV2 {
   Future<void> syncNotificationsFromDB(List<Reminder> reminders) async {
     final settings = await _settingsService.load();
 
-    // 1. Cancel all scheduled notifications to start fresh (avoids duplicates)
-    await _plugin.cancelAll();
+    // Note: we deliberately do NOT call cancelAll() here — that would wipe
+    // unrelated scheduled notifications (daily reminder, backup status).
+    // Re-scheduling with the same id replaces the existing alarm, so
+    // duplicates are avoided without nuking everything else.
 
-    // 2. Define a horizon to avoid hitting Android's 500 alarm limit
+    // Define a horizon to avoid hitting Android's 500 alarm limit
     final now = DateTime.now();
     final horizon = now.add(const Duration(days: 45));
 
@@ -375,16 +382,20 @@ class NotificationServiceV2 {
   }
 
   void _handleNotificationTap(NotificationResponse details) {
-    if (details.payload == null || details.payload!.isEmpty) return;
-
     try {
-      final payload = jsonDecode(details.payload!);
+      final payload = details.payload;
+      if (payload == null || payload.isEmpty) {
+        handleNotificationNavigation('inbox', '');
+        return;
+      }
+      final decoded = jsonDecode(payload);
       handleNotificationNavigation(
-        payload['source_type'] ?? '',
-        payload['source_id'] ?? '',
+        decoded['source_type'] ?? '',
+        decoded['source_id'] ?? '',
       );
     } catch (e) {
       AppLogger.d('Error decoding notification payload: $e');
+      handleNotificationNavigation('inbox', '');
     }
   }
 
@@ -394,34 +405,37 @@ class NotificationServiceV2 {
 
     AppLogger.d('Routing to $sourceType with ID: $sourceId');
 
+    void push(Widget screen) {
+      Navigator.of(
+        context,
+      ).push(AppPageRoute(builder: (_) => screen));
+    }
+
     switch (sourceType) {
       case 'salary':
-        Navigator.of(context).push(
-          AppPageRoute(builder: (_) => const SalaryScreen()),
-        );
+        push(const SalaryScreen());
         break;
       case 'loan':
       case 'emi':
-        Navigator.of(
-          context,
-        ).push(AppPageRoute(builder: (_) => const LoansScreen()));
+        push(const LoansScreen());
         break;
       case 'credit':
-        Navigator.of(
-          context,
-        ).push(AppPageRoute(builder: (_) => const CreditCardScreen()));
+        push(const CreditCardScreen());
         break;
       case 'service':
       case 'insurance':
       case 'vehicle':
+        // Vehicle/service screens are intentionally de-emphasized right now;
+        // land in the notifications inbox instead.
+        push(const NotificationsInboxScreen());
         break;
       case 'lending':
-        Navigator.of(
-          context,
-        ).push(AppPageRoute(builder: (_) => const LendingScreen()));
+        push(const LendingScreen());
         break;
+      case 'inbox':
       default:
-        // Generic landing
+        // Generic landing — show all alerts in the inbox.
+        push(const NotificationsInboxScreen());
         break;
     }
   }
@@ -541,6 +555,49 @@ class NotificationServiceV2 {
 
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+
+  /// Fires a budget alert for every category that is currently over budget
+  /// (once per budget per month). No-ops unless the `budgetAlerts` setting is
+  /// enabled. Runs at startup and periodically via [ReminderService.init].
+  Future<void> checkBudgetAlerts() async {
+    try {
+      final settings = await _settingsService.load();
+      if (!settings.budgetAlerts) return;
+
+      final transactions = await TransactionRepo().getAll();
+      final categories = await CategoryRepo().getAll();
+
+      final now = DateTime.now();
+      final startOfMonth = DateTime(now.year, now.month, 1);
+      final monthlyIncome = transactions
+          .where((t) => t.type == 'income' && !t.date.isBefore(startOfMonth))
+          .fold<double>(0, (sum, t) => sum + t.amount);
+
+      final budgets = SmartBudgetEngine().generate(
+        transactions: transactions,
+        monthlyIncome: monthlyIncome,
+        categories: categories,
+      );
+      final overBudget = budgets.where((b) => b.isOverBudget);
+
+      final prefs = await SharedPreferences.getInstance();
+      final monthKey = '${now.year}${now.month.toString().padLeft(2, '0')}';
+      for (final budget in overBudget) {
+        final alertedKey = 'budget_alerted_${budget.categoryId}_$monthKey';
+        if (prefs.getBool(alertedKey) ?? false) continue;
+
+        await showNotification(
+          title: 'Over budget: ${budget.categoryName}',
+          body: 'You\'ve spent ${budget.spent.round()} of your '
+              '${budget.limit.round()} budget.',
+          category: 'budgetAlerts',
+        );
+        await prefs.setBool(alertedKey, true);
+      }
+    } catch (e) {
+      AppLogger.d('checkBudgetAlerts error: $e');
+    }
   }
 
   /// Cancel a notification scheduled with a numeric id (mirrors v1

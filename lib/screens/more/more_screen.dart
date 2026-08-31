@@ -9,6 +9,7 @@ import '../settings/profile_settings_screen.dart';
 import '../settings/backup_hub_screen.dart';
 import '../feedback_screen.dart';
 import '../data_health_screen.dart';
+import '../notifications_inbox_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../insights/insights_tab.dart';
 
@@ -43,6 +44,13 @@ class MoreScreen extends ConsumerWidget {
             error: (_, _) => null,
           ),
           onTap: () => _push(context, const ReviewQueueScreen()),
+        ),
+        _MoreTile(
+          icon: Icons.notifications_rounded,
+          title: 'Notifications',
+          subtitle: 'Due reminders & alerts',
+          iconColor: const Color(0xFFF59E0B),
+          onTap: () => _push(context, const NotificationsInboxScreen()),
         ),
 
         const Divider(height: 32, indent: 16, endIndent: 16),

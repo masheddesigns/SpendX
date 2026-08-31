@@ -10,6 +10,7 @@ import 'services/settings_service.dart';
 import 'services/auth_service.dart';
 import 'services/share_intent_service.dart';
 import 'services/notification_service_v2.dart';
+import 'services/reminder_service.dart';
 import 'data/core/app_database.dart';
 import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
@@ -97,7 +98,13 @@ void main() {
 }
 
 Future<void> _deferredInitialization() async {
-  return;
+  // Start the periodic reminder/alert dispatch + budget checks. Safe to run
+  // after the first frame; the DB pre-warm has already been kicked off above.
+  try {
+    await ReminderService.instance.init();
+  } catch (e, st) {
+    AppLogger.e('ReminderService init failed', e, st);
+  }
 }
 
 class MyApp extends riverpod.ConsumerStatefulWidget {
