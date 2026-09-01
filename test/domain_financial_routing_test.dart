@@ -8,8 +8,6 @@ import 'package:spend_x/data/repositories/loan_repo.dart';
 import 'package:spend_x/data/repositories/reminder_repo.dart';
 import 'package:spend_x/domain/credit/credit_card_service.dart';
 import 'package:spend_x/domain/loans/loan_service.dart';
-import 'package:spend_x/models/credit_card.dart';
-import 'package:spend_x/models/credit_transaction.dart';
 import 'package:spend_x/models/loan.dart';
 import 'package:spend_x/models/loan_installment.dart';
 import 'package:spend_x/services/financial_transaction_service.dart';
