@@ -84,4 +84,3 @@ flutter:
   assets:
     - .env
     - assets/logo.svg
-    - assets/fonts/
