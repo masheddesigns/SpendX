@@ -61,13 +61,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'is not visible in your regular Drive files.',
             ),
             const _PolicySection(
-              title: 'SMS Permission',
+              title: 'SMS & Smart Import',
               content:
-                  'SpendX requests SMS read permission to automatically detect bank transaction '
-                  'messages and log them as expenses or income. SMS data is processed entirely '
-                  'on your device using local pattern matching. No SMS content is transmitted to '
-                  'any server. You can disable SMS import at any time from the app settings. '
-                  'SpendX only reads transaction-related SMS from known bank sender IDs.',
+                  'SpendX can import transactions from files you choose (CSV, JSON, Markdown, '
+                  'HTML, ZIP), content shared from other apps, or bank SMS messages from your '
+                  'Messages app (with your permission). SMS scanning happens entirely on-device '
+                  'using local pattern matching — no message content is transmitted to any '
+                  'server. Detected transactions go to the Review Queue for your approval '
+                  'before being saved.',
             ),
             const _PolicySection(
               title: 'Share-to-Import',

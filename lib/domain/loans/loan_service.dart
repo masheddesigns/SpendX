@@ -163,6 +163,25 @@ class LoanService {
     return _ledgerRepo.getLoanBalance(loanId);
   }
 
+  /// Marks the reminder for a paid installment as done and cancels its
+  /// scheduled notification so it stops nagging.
+  Future<void> _completeLoanReminder(String installmentId) async {
+    try {
+      final reminder = await _reminderRepo.getById('loan_inst_$installmentId');
+      if (reminder == null) return;
+      await _reminderRepo.update(
+        reminder.copyWith(
+          recordStatus: ReminderRecordStatus.done,
+          isActive: false,
+          status: ReminderStatus.inactive,
+        ),
+      );
+      await NotificationServiceV2().cancelReminderNotifications(reminder.id);
+    } catch (_) {
+      // Non-fatal — the payment itself is already recorded.
+    }
+  }
+
   Future<void> recordInstallmentPayment(String installmentId, {String? accountId, bool isManual = false}) async {
     final inst = await _loanRepo.getInstallmentById(installmentId);
     if (inst == null || inst.status == 'paid') return;
@@ -170,7 +189,8 @@ class LoanService {
     // Update Installment
     await _loanRepo.updateInstallmentStatus(installmentId, 'paid', DateTime.now());
 
-    // TODO: rewire reminder completion through the unified reminder flow.
+    // Mark the loan reminder as done so it stops nagging.
+    await _completeLoanReminder(installmentId);
 
     if (!isManual) {
       // Ledger Record (Loan Side - Reduces Debt)

@@ -11,7 +11,13 @@ import 'currency_selection_screen.dart';
 import 'data_management_screen.dart';
 import 'database_tools_screen.dart';
 import 'notification_settings_screen.dart';
+import 'income_salary_screen.dart';
+import 'budget_management_screen.dart';
+import 'tag_management_screen.dart';
+import 'feature_toggles_screen.dart';
+import 'notification_help_screen.dart';
 import '../about_screen.dart';
+import '../credit_history_screen.dart';
 import '../help_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 
@@ -195,12 +201,57 @@ class ProfileSettingsScreen extends StatelessWidget {
                   AppPageRoute(builder: (_) => const DatabaseToolsScreen())),
             ),
             _SettingsTile(
+              icon: Icons.tune_rounded,
+              iconColor: Theme.of(context).colorScheme.tertiary,
+              title: 'Feature Toggles',
+              subtitle: 'Enable or disable experimental features',
+              onTap: () => Navigator.push(context,
+                  AppPageRoute(builder: (_) => const FeatureTogglesScreen())),
+            ),
+            _SettingsTile(
               icon: Icons.delete_outline_rounded,
               iconColor: Theme.of(context).colorScheme.error,
               title: 'Clear Data',
               subtitle: 'Erase transactions, accounts, salary',
               onTap: () => Navigator.push(context,
                   AppPageRoute(builder: (_) => const DataManagementScreen())),
+            ),
+
+            const Divider(height: 32),
+
+            // ── Financial ─────────────────────────────────────
+            const _SectionHeader('Financial'),
+            _SettingsTile(
+              icon: Icons.payments_outlined,
+              iconColor: const Color(0xFF22C55E),
+              title: 'Income & Salary',
+              subtitle: 'Companies, pay cycles, salary',
+              onTap: () => Navigator.push(context,
+                  AppPageRoute(builder: (_) => const IncomeSalaryScreen())),
+            ),
+            _SettingsTile(
+              icon: Icons.pie_chart_outline,
+              iconColor: const Color(0xFF0EA5E9),
+              title: 'Budget Management',
+              subtitle: 'Set and track category budgets',
+              onTap: () => Navigator.push(context,
+                  AppPageRoute(builder: (_) => const BudgetManagementScreen())),
+            ),
+            _SettingsTile(
+              icon: Icons.label_outline_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              title: 'Tags',
+              subtitle: 'Organize transactions with tags',
+              onTap: () => Navigator.push(context,
+                  AppPageRoute(builder: (_) => const TagManagementScreen())),
+            ),
+            _SettingsTile(
+              icon: Icons.history_rounded,
+              iconColor: const Color(0xFFF59E0B),
+              title: 'Credit History',
+              subtitle: 'Statements and card history',
+              onTap: () => Navigator.push(context,
+                  AppPageRoute(builder: (_) => const CreditHistoryScreen())),
             ),
 
             const Divider(height: 32),
@@ -214,6 +265,14 @@ class ProfileSettingsScreen extends StatelessWidget {
               subtitle: 'Reminders, alerts, quiet hours',
               onTap: () => Navigator.push(context,
                   AppPageRoute(builder: (_) => NotificationSettingsScreen())),
+            ),
+            _SettingsTile(
+              icon: Icons.help_outline_rounded,
+              iconColor: Theme.of(context).colorScheme.secondary,
+              title: 'Notification Help',
+              subtitle: 'Fix missing or delayed notifications',
+              onTap: () => Navigator.push(context,
+                  AppPageRoute(builder: (_) => const NotificationHelpScreen())),
             ),
 
             const Divider(height: 32),

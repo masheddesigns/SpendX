@@ -104,6 +104,7 @@ class Tables {
       color TEXT,
       icon TEXT,
       is_asset INTEGER DEFAULT 1,
+      last4 TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )

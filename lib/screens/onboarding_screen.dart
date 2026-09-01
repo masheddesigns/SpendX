@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spend_x/services/settings_service.dart';
 import 'package:spend_x/services/notification_service_v2.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
 import 'package:spend_x/widgets/app_button.dart';
+import 'package:spend_x/main.dart';
+import 'package:spend_x/screens/sms_import_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -17,6 +20,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final int _totalPages = 5;
+  bool _smsImportOptIn = true;
 
   // States
   String _selectedCurrency = 'INR';
@@ -57,11 +61,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await SettingsService.instance.setEnableCreditCards(true);
     await SettingsService.instance.setEnableLending(true);
 
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_sms_optin', _smsImportOptIn);
+
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
       AppPageRoute(builder: (_) => const HomeScreen()),
     );
+
+    // Offer an SMS import scan right after setup when the user opted in.
+    if (_smsImportOptIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final navContext = MyApp.navigatorKey.currentContext;
+        if (navContext == null) return;
+        Navigator.of(
+          navContext,
+        ).push(AppPageRoute(builder: (_) => const SmsImportScreen()));
+      });
+    }
   }
 
   Widget _buildStepIndicator() {
@@ -212,6 +230,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(height: 14),
             _buildSmallFeature(Icons.auto_awesome_rounded, 'Smart Import',
                 'Share screenshots or text from any payment app'),
+            const SizedBox(height: 14),
+            _buildSmallFeature(Icons.sms_rounded, 'SMS Import',
+                'Scan bank SMS to auto-import transactions'),
             const SizedBox(height: 14),
             _buildSmallFeature(Icons.emoji_events_rounded, 'Gamification',
                 'Earn XP, level up, and view Wrapped summaries'),
@@ -572,7 +593,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+                border:
+                    Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              child: SwitchListTile(
+                secondary: Icon(Icons.sms_rounded,
+                    color: Theme.of(context).colorScheme.primary),
+                title: const Text('Import my bank SMS',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text(
+                    'Scan your Messages app for past bank transactions & balances'),
+                value: _smsImportOptIn,
+                onChanged: (v) => setState(() => _smsImportOptIn = v),
+              ),
+            ),
+            const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(

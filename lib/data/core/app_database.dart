@@ -33,7 +33,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 22,
+      version: 23,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         await _applyUpgrades(db, oldVersion);
@@ -81,6 +81,9 @@ class AppDatabase {
     }
     if (oldVersion < 22) {
       await _migrateToV22(db);
+    }
+    if (oldVersion < 23) {
+      await _migrateToV23(db);
     }
     await _executeCreateQueries(db);
   }
@@ -479,6 +482,16 @@ class AppDatabase {
       } catch (_) {
         // Column already exists (idempotent migration).
       }
+    }
+  }
+
+  /// V23: add `last4` to bank_accounts so SMS-detected accounts can be
+  /// matched (and auto-registered) by account number.
+  Future<void> _migrateToV23(Database db) async {
+    try {
+      await db.execute('ALTER TABLE bank_accounts ADD COLUMN last4 TEXT');
+    } catch (_) {
+      // Column already exists (idempotent migration).
     }
   }
 

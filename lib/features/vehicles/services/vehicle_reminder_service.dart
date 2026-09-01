@@ -23,21 +23,9 @@ class VehicleReminderService {
       await _vehicleReminderRepo.insert(reminder);
     }
 
-    // Handle background notification schedule
-    if (reminder.isActive && reminder.dueDate != null) {
-      final title = reminder.title;
-      final body = reminder.recurrencePeriod != null
-          ? 'Recurring task is due: $title'
-          : 'Task is due: $title';
-      await NotificationServiceV2().scheduleNotification(
-        id: reminder.id.hashCode & 0x7FFFFFFF,
-        title: 'Vehicle Reminder',
-        body: body,
-        scheduledDate: reminder.dueDate!,
-      );
-    } else {
-      await NotificationServiceV2().cancelNotification(reminder.id);
-    }
+    // Vehicle reminders are paused while the Vehicles feature is hidden —
+    // never schedule a notification, and clear any previously scheduled one.
+    await NotificationServiceV2().cancelNotification(reminder.id);
 
     await _syncToGlobalReminders(reminder);
   }

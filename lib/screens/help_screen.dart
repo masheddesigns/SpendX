@@ -46,10 +46,16 @@ class HelpScreen extends StatelessWidget {
                 'Take a photo or pick an image — Gemini AI extracts the merchant, amount, and date.',
           ),
           _GuideItem(
-            title: 'SMS Auto-Import',
-            body: 'Go to More > SMS Import to scan your bank SMS messages. '
-                'SpendX detects transaction amounts, merchants, and dates from bank alerts. '
+            title: 'Smart Import',
+            body: 'Go to More > Smart Import to import bank transactions from a CSV, '
+                'JSON, or ZIP export, or share a file into SpendX from any app. '
                 'Imported transactions go to the Review Queue for approval.',
+          ),
+          _GuideItem(
+            title: 'SMS Import',
+            body: 'Go to More > SMS Import to scan bank transaction alerts (debited, '
+                'credited, UPI) from your Messages app. SpendX parses them on-device '
+                'and opens each one for review before saving.',
           ),
           _GuideItem(
             title: 'Smart Categories',
@@ -320,10 +326,10 @@ class HelpScreen extends StatelessWidget {
                 'Try "Force Backup" if auto-backup seems stuck.',
           ),
           _GuideItem(
-            title: 'SMS Import Missing Transactions',
-            body: 'SpendX looks for specific bank SMS patterns. '
-                'Some banks use non-standard formats. '
-                'You can manually add missing transactions or use Smart Import with a bank CSV export.',
+            title: 'Import Missing Transactions',
+            body: 'If a transaction is missing, add it manually or use Smart Import '
+                '(More > Smart Import) with a bank CSV export. '
+                'You can also share a bank statement file into SpendX from any app.',
           ),
           _GuideItem(
             title: 'Smart Import Shows 0 Rows',

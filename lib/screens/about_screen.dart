@@ -120,16 +120,10 @@ class AboutScreen extends StatelessWidget {
                           'contribution logs, and visual progress indicators.',
                     ),
                     _InfoRow(
-                      icon: Icons.sms_rounded,
-                      label: 'SMS Auto-Import',
-                      value: 'Automatically capture bank transactions from SMS messages '
-                          'in real-time using smart pattern detection.',
-                    ),
-                    _InfoRow(
-                      icon: Icons.auto_awesome_rounded,
+                      icon: Icons.upload_file_rounded,
                       label: 'Smart Import',
-                      value: 'Import from CSV, JSON, Markdown, HTML, or ZIP (Notion exports). '
-                          'Auto-detects columns with 100+ keywords and 200+ category aliases.',
+                      value: 'Import bank transactions from CSV, JSON, Markdown, HTML, '
+                          'or ZIP exports with auto-detected columns and 200+ category aliases.',
                     ),
                     _InfoRow(
                       icon: Icons.share_rounded,

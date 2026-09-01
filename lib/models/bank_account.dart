@@ -11,6 +11,7 @@ class BankAccount {
   final String color; // Hex color for display
   final String icon; // Icon name
   final bool isAsset; // true = asset, false = liability
+  final String? last4; // Last 4 digits of the account number (for SMS matching)
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -24,6 +25,7 @@ class BankAccount {
     this.color = '#10B981',
     this.icon = 'account_balance',
     this.isAsset = true,
+    this.last4,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : id = id ?? const Uuid().v4(),
@@ -86,6 +88,7 @@ class BankAccount {
     'color': color,
     'icon': icon,
     'is_asset': isAsset ? 1 : 0,
+    'last4': last4,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
@@ -100,6 +103,7 @@ class BankAccount {
     color: map['color'] as String? ?? '#10B981',
     icon: map['icon'] as String? ?? 'account_balance',
     isAsset: (map['is_asset'] as int? ?? 1) == 1,
+    last4: map['last4'] as String?,
     createdAt: map['created_at'] != null
         ? DateTime.parse(map['created_at'] as String)
         : DateTime.now(),
@@ -108,8 +112,12 @@ class BankAccount {
         : DateTime.now(),
   );
 
-  BankAccount copyWith({String? id, double? balance, String? name}) =>
-      BankAccount(
+  BankAccount copyWith({
+    String? id,
+    double? balance,
+    String? name,
+    String? last4,
+  }) => BankAccount(
         id: id ?? this.id,
         userId: userId,
         name: name ?? this.name,
@@ -119,6 +127,7 @@ class BankAccount {
         color: color,
         icon: icon,
         isAsset: isAsset,
+        last4: last4 ?? this.last4,
         createdAt: createdAt,
         updatedAt: DateTime.now(),
       );

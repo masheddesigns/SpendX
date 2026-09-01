@@ -7,6 +7,7 @@ import '../../../screens/bank/account_list_screen.dart';
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/tools/financial_tools_screen.dart';
 import '../../../screens/more/more_screen.dart';
+import '../../../screens/profile_hub_screen.dart';
 import 'home_dashboard.dart';
 import '../../../shared/widgets/app_page_route.dart';
 
@@ -91,8 +92,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   List<Widget> _buildActions(BuildContext context) {
-    // Clean app bar — no SMS buttons (moved to More → SMS Import)
-    return const [];
+    return [
+      // Profile hub: level, streak, health breakdown, progress & rewards.
+      IconButton(
+        tooltip: 'Profile',
+        onPressed: () => Navigator.of(
+          context,
+        ).push(AppPageRoute(builder: (_) => const ProfileHubScreen())),
+        icon: const Icon(Icons.account_circle_outlined),
+      ),
+    ];
   }
 
   Widget _buildBody() {

@@ -1,4 +1,5 @@
 import '../core/logging/app_logger.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
@@ -19,8 +20,12 @@ import '../features/salary/screens/salary_screen.dart';
 import '../screens/loans/loans_screen.dart';
 import '../screens/credit_card_screen.dart';
 import '../screens/lending/lending_screen.dart';
+import '../screens/loans/loan_detail_screen.dart';
 import '../screens/notifications_inbox_screen.dart';
+import '../screens/sms_import_screen.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../data/repositories/loan_repo.dart';
+import '../models/loan.dart';
 
 class NotificationServiceV2 {
   static final NotificationServiceV2 _instance = NotificationServiceV2._();
@@ -126,6 +131,7 @@ class NotificationServiceV2 {
     required String body,
     String? category, // e.g. 'backupStatus'
     int? id,
+    String? payload,
   }) async {
     if (!_initialized) await init();
     if (category != null) {
@@ -149,6 +155,7 @@ class NotificationServiceV2 {
       title: title,
       body: body,
       notificationDetails: details,
+      payload: payload,
     );
   }
 
@@ -195,6 +202,11 @@ class NotificationServiceV2 {
   Future<void> cancelNotification(String id) async {
     final numericId = id.hashCode & 0x7FFFFFFF;
     await _plugin.cancel(id: numericId);
+  }
+
+  /// Cancels the scheduled 'due'/'upcoming' notifications for a reminder id.
+  Future<void> cancelReminderNotifications(String reminderId) async {
+    await _cancelReminderSchedules(reminderId);
   }
 
   Future<void> showInstant({
@@ -257,6 +269,13 @@ class NotificationServiceV2 {
     final reminderTime = settings.reminderTime;
     final hour = _parseReminderHour(reminderTime);
     final minute = _parseReminderMinute(reminderTime);
+
+    // Vehicle service/insurance reminders are paused while the Vehicles
+    // feature is hidden — never schedule notifications for them.
+    if (reminder.type == ReminderType.service ||
+        reminder.type == ReminderType.insurance) {
+      return;
+    }
 
     final payload = jsonEncode({
       'source_type': reminder.type.name,
@@ -385,21 +404,26 @@ class NotificationServiceV2 {
     try {
       final payload = details.payload;
       if (payload == null || payload.isEmpty) {
-        handleNotificationNavigation('inbox', '');
+        unawaited(handleNotificationNavigation('inbox', ''));
         return;
       }
       final decoded = jsonDecode(payload);
-      handleNotificationNavigation(
-        decoded['source_type'] ?? '',
-        decoded['source_id'] ?? '',
+      unawaited(
+        handleNotificationNavigation(
+          decoded['source_type'] ?? '',
+          decoded['source_id'] ?? '',
+        ),
       );
     } catch (e) {
       AppLogger.d('Error decoding notification payload: $e');
-      handleNotificationNavigation('inbox', '');
+      unawaited(handleNotificationNavigation('inbox', ''));
     }
   }
 
-  void handleNotificationNavigation(String sourceType, String sourceId) {
+  Future<void> handleNotificationNavigation(
+    String sourceType,
+    String sourceId,
+  ) async {
     final context = MyApp.navigatorKey.currentContext;
     if (context == null) return;
 
@@ -417,7 +441,13 @@ class NotificationServiceV2 {
         break;
       case 'loan':
       case 'emi':
-        push(const LoansScreen());
+        // Deep-link to the specific loan for the paid/due installment.
+        final loan = await _loanForInstallment(sourceId);
+        if (loan != null) {
+          push(LoanDetailScreen(loan: loan));
+        } else {
+          push(const LoansScreen());
+        }
         break;
       case 'credit':
         push(const CreditCardScreen());
@@ -432,11 +462,27 @@ class NotificationServiceV2 {
       case 'lending':
         push(const LendingScreen());
         break;
+      case 'balances':
+        push(const SmsImportScreen());
+        break;
       case 'inbox':
       default:
         // Generic landing — show all alerts in the inbox.
         push(const NotificationsInboxScreen());
         break;
+    }
+  }
+
+  /// Resolves a loan reminder's `source_id` (an installment id) to its loan.
+  Future<Loan?> _loanForInstallment(String installmentId) async {
+    try {
+      if (installmentId.isEmpty) return null;
+      final repo = LoanRepo();
+      final installment = await repo.getInstallmentById(installmentId);
+      if (installment == null) return null;
+      return await repo.getLoanById(installment.loanId);
+    } catch (_) {
+      return null;
     }
   }
 

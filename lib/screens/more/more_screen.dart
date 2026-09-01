@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/review_queue/providers/review_providers.dart';
+import '../../features/alerts/providers/alert_providers.dart';
 import '../ai_chat_screen.dart';
 import '../review/review_queue_screen.dart';
 import '../gamification_detail_screen.dart';
@@ -10,6 +11,8 @@ import '../settings/backup_hub_screen.dart';
 import '../feedback_screen.dart';
 import '../data_health_screen.dart';
 import '../notifications_inbox_screen.dart';
+import '../smart_import_screen.dart';
+import '../sms_import_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../insights/insights_tab.dart';
 
@@ -19,6 +22,7 @@ class MoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reviewCount = ref.watch(reviewQueueCountProvider);
+    final alertCount = ref.watch(activeAlertsProvider).valueOrNull?.length ?? 0;
     final cs = Theme.of(context).colorScheme;
 
     return ListView(
@@ -50,7 +54,22 @@ class MoreScreen extends ConsumerWidget {
           title: 'Notifications',
           subtitle: 'Due reminders & alerts',
           iconColor: const Color(0xFFF59E0B),
+          badge: alertCount > 0 ? alertCount : null,
           onTap: () => _push(context, const NotificationsInboxScreen()),
+        ),
+        _MoreTile(
+          icon: Icons.upload_file_rounded,
+          title: 'Smart Import',
+          subtitle: 'Import from files or shared content',
+          iconColor: const Color(0xFF0EA5E9),
+          onTap: () => _push(context, const SmartImportScreen()),
+        ),
+        _MoreTile(
+          icon: Icons.sms_rounded,
+          title: 'SMS Import',
+          subtitle: 'Scan bank SMS from your Messages app',
+          iconColor: const Color(0xFF22C55E),
+          onTap: () => _push(context, const SmsImportScreen()),
         ),
 
         const Divider(height: 32, indent: 16, endIndent: 16),
