@@ -9,6 +9,7 @@ import 'screens/splash_screen.dart';
 import 'services/settings_service.dart';
 import 'services/auth_service.dart';
 import 'services/share_intent_service.dart';
+import 'services/live_sms_service.dart';
 import 'services/notification_service_v2.dart';
 import 'services/reminder_service.dart';
 import 'data/core/app_database.dart';
@@ -104,6 +105,14 @@ Future<void> _deferredInitialization() async {
     await ReminderService.instance.init();
   } catch (e, st) {
     AppLogger.e('ReminderService init failed', e, st);
+  }
+
+  // Live SMS detection — listen for incoming bank SMS and drain anything
+  // captured while the app was closed.
+  try {
+    await LiveSmsService.instance.init();
+  } catch (e, st) {
+    AppLogger.e('LiveSmsService init failed', e, st);
   }
 }
 

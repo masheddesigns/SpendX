@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/notification_settings_service.dart';
+import '../../services/live_sms_service.dart';
 import '../../models/notification_settings.dart';
 import '../../widgets/spendx_app_bar.dart';
 import '../../services/notification_service_v2.dart';
@@ -19,6 +20,7 @@ class _NotificationSettingsScreenState
   final _service = NotificationSettingsService();
   NotificationSettings _settings = NotificationSettings();
   bool _loading = true;
+  bool _liveSmsEnabled = true;
 
   @override
   void initState() {
@@ -28,8 +30,10 @@ class _NotificationSettingsScreenState
 
   Future<void> _loadSettings() async {
     final settings = await _service.load();
+    final liveSms = await LiveSmsService.instance.enabled;
     setState(() {
       _settings = settings;
+      _liveSmsEnabled = liveSms;
       _loading = false;
     });
   }
@@ -169,6 +173,30 @@ class _NotificationSettingsScreenState
                 () => _settings = _settings.copyWith(budgetAlerts: v),
               ),
               Icons.pie_chart_outline,
+            ),
+            const Divider(),
+            SwitchListTile(
+              secondary: Icon(
+                Icons.sms_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text(
+                'Live SMS Detection',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Detect new bank SMS as they arrive and suggest transactions '
+                'or balance updates',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _liveSmsEnabled,
+              onChanged: (v) async {
+                setState(() => _liveSmsEnabled = v);
+                await LiveSmsService.instance.setEnabled(v);
+                if (v) {
+                  await LiveSmsService.instance.requestReceivePermission();
+                }
+              },
             ),
           ]),
           const SizedBox(height: 24),

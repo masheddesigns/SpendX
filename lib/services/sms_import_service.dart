@@ -89,6 +89,13 @@ class SmsScanOptions {
   const SmsScanOptions({this.daysBack});
 }
 
+/// Result of classifying a single SMS message (used by the live detector).
+class SmsClassification {
+  final ParsedTransaction? transaction;
+  final BalanceHit? balance;
+  const SmsClassification({this.transaction, this.balance});
+}
+
 /// Scans the device's SMS inbox for bank transaction messages and balance
 /// statements, parsing them with the same rule engine as share imports.
 class SmsImportService {
@@ -99,6 +106,45 @@ class SmsImportService {
   Future<bool> requestPermission() async {
     final status = await Permission.sms.request();
     return status.isGranted;
+  }
+
+  /// Classifies a single incoming SMS message (transaction / balance).
+  /// Used by the live SMS detector.
+  SmsClassification classifyMessage(String body, String sender) {
+    final balance = _detectBalance(body, sender);
+
+    // Future/intent messages are not completed transactions.
+    if (_futureIntentRe.hasMatch(body.toLowerCase())) {
+      return SmsClassification(balance: balance);
+    }
+
+    final parsed = TransactionTextParser.parse(body, source: 'sms');
+    if (parsed.amount <= 0 || parsed.confidence < 0.4) {
+      return SmsClassification(balance: balance);
+    }
+
+    var merchant = parsed.merchant;
+    if (merchant == null || merchant.isEmpty) {
+      merchant = _merchantFromUpi(body);
+    }
+
+    final effective = ParsedTransaction(
+      amount: parsed.amount,
+      isCredit: parsed.isCredit,
+      rawText: parsed.rawText,
+      date: parsed.date,
+      merchant: merchant,
+      refId: parsed.refId,
+      last4: parsed.last4,
+      bankName: parsed.bankName,
+      method: parsed.method,
+      source: 'sms',
+      confidence: parsed.confidence,
+      merchantSource: parsed.merchantSource,
+      hasDirectionSignal: parsed.hasDirectionSignal,
+    );
+
+    return SmsClassification(transaction: effective, balance: balance);
   }
 
   Future<List<SmsMessage>> _queryInbox() async {

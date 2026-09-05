@@ -5,16 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../core/utils/category_classifier.dart';
+import '../core/utils/category_resolver.dart';
 import '../data/providers.dart';
 import '../data/repositories/account_repo.dart';
-import '../data/repositories/category_repo.dart';
 import '../data/repositories/credit_repo.dart';
 import '../features/transactions/providers/transaction_providers.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
+import '../models/review_item.dart';
 import '../models/transaction.dart';
 import '../screens/loans/loans_screen.dart';
+import '../services/live_sms_service.dart';
 import '../services/notification_service_v2.dart';
 import '../services/sms_import_service.dart';
 import '../shared/widgets/app_page_route.dart';
@@ -67,6 +68,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       });
       return;
     }
+
+    // Also request RECEIVE_SMS so incoming SMS can be detected live.
+    await LiveSmsService.instance.requestReceivePermission();
 
     SmsScanBundle bundle;
     try {
@@ -273,6 +277,8 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     if (_saving) return;
     setState(() => _saving = true);
 
+    final accounts =
+        ref.read(accountsProvider).valueOrNull ?? const <BankAccount>[];
     var saved = 0;
     try {
       for (final index in indices) {
@@ -289,7 +295,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
           amount: parsed.amount,
           date: parsed.date,
           categoryId: categoryId,
-          accountId: _defaultAccountId,
+          // Prefer the explicitly chosen account, else auto-match by the
+          // account number last4 / bank name from the SMS.
+          accountId: _defaultAccountId ?? _matchAccountId(parsed, accounts),
           notes: parsed.merchant ?? parsed.rawText,
           source: 'sms',
           externalRef: parsed.refId,
@@ -337,12 +345,33 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     });
   }
 
-  Future<String?> _resolveCategoryId(String merchant, String type) async {
+  String? _matchAccountId(ParsedTransaction parsed, List<BankAccount> accounts) {
+  if (parsed.last4 != null) {
+    final byLast4 = accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
+    if (byLast4 != null) return byLast4.id;
+  }
+  if (parsed.bankName != null) {
+    final kw = parsed.bankName!.toLowerCase();
+    final byBank = accounts
+        .where(
+          (a) =>
+              a.bank.toLowerCase().contains(kw) ||
+              a.name.toLowerCase().contains(kw),
+        )
+        .toList();
+    if (byBank.length == 1) return byBank.first.id;
+  }
+  return null;
+}
+
+Future<String?> _resolveCategoryId(String merchant, String type) async {
     try {
-      final name = CategoryClassifier.detect(text: merchant, type: type);
-      if (name == null) return null;
-      final cat = await CategoryRepo().getByName(name);
-      return cat?.id;
+      final resolution = await resolveCategoryForText(
+        rawText: merchant,
+        merchant: merchant,
+        type: type,
+      );
+      return resolution.id;
     } catch (_) {
       return null;
     }
@@ -634,6 +663,25 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                   ),
                 ],
               ),
+              if (_balances.isNotEmpty ||
+                  _detectedAccounts.isNotEmpty ||
+                  _detectedCards.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    [
+                      if (_balances.isNotEmpty)
+                        '${_balances.length} balance${_balances.length == 1 ? '' : 's'}',
+                      if (_detectedAccounts.isNotEmpty)
+                        '${_detectedAccounts.length} account${_detectedAccounts.length == 1 ? '' : 's'}',
+                      if (_detectedCards.isNotEmpty)
+                        '${_detectedCards.length} card${_detectedCards.length == 1 ? '' : 's'}',
+                    ].join(' · '),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 8),
               _rangeSelector(cs),
               const SizedBox(height: 12),

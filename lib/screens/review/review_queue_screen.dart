@@ -44,8 +44,12 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
   Widget build(BuildContext context) {
     final queueAsync = ref.watch(reviewQueueProvider);
     final cs = Theme.of(context).colorScheme;
+    final hasItems = queueAsync.valueOrNull?.isNotEmpty ?? false;
 
     return Scaffold(
+      bottomNavigationBar: hasItems && !_isSelectionMode
+          ? _bottomBulkBar(context, cs, queueAsync.valueOrNull!.length)
+          : null,
       appBar: AppBar(
         leading: _isSelectionMode
             ? IconButton(
@@ -201,6 +205,34 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _bottomBulkBar(BuildContext context, ColorScheme cs, int count) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _confirmRejectAll(context, ref, count),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Reject all'),
+                style: OutlinedButton.styleFrom(foregroundColor: cs.error),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () => _confirmBulkApprove(context, ref, count),
+                icon: const Icon(Icons.done_all_rounded, size: 18),
+                label: const Text('Approve all'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

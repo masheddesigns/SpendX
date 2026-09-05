@@ -1,12 +1,39 @@
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/category_resolver.dart';
+import '../../../data/repositories/account_repo.dart';
 import '../../../data/repositories/review_repo.dart';
 import '../../../models/review_item.dart';
 import '../../../models/transaction.dart';
+import '../../../services/smart_category_classifier.dart';
 import '../../merchant_rules/providers/merchant_rule_providers.dart';
 import '../../transactions/providers/transaction_providers.dart';
 import '../../accounts/providers/account_providers.dart';
+
+/// Matches the account (by account-number last4 / bank name) for an
+/// auto-detected transaction so approving it also updates that balance.
+Future<String?> _matchAccountIdForParsed(ParsedTransaction parsed) async {
+  try {
+    final accounts = await AccountRepo().getAll();
+    if (parsed.last4 != null) {
+      final byLast4 = accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
+      if (byLast4 != null) return byLast4.id;
+    }
+    if (parsed.bankName != null) {
+      final kw = parsed.bankName!.toLowerCase();
+      final byBank = accounts
+          .where(
+            (a) =>
+                a.bank.toLowerCase().contains(kw) ||
+                a.name.toLowerCase().contains(kw),
+          )
+          .toList();
+      if (byBank.length == 1) return byBank.first.id;
+    }
+  } catch (_) {}
+  return null;
+}
 
 final reviewRepoProvider = Provider<ReviewRepo>((ref) => ReviewRepo());
 
@@ -40,12 +67,31 @@ final approveReviewProvider = Provider((ref) {
     final fallbackNote = parsed.rawText.length > 100
         ? parsed.rawText.substring(0, 100)
         : parsed.rawText;
+
+    // Auto-resolve the category from merchant memory when the user didn't
+    // pick one — repeat merchants keep the same category.
+    var effectiveCategoryId = categoryId;
+    String? effectiveCategoryName;
+    if (effectiveCategoryId == null) {
+      final resolution = await resolveCategoryForText(
+        rawText: parsed.rawText,
+        merchant: parsed.merchant,
+        type: parsed.isCredit ? 'income' : 'expense',
+      );
+      effectiveCategoryId = resolution.id;
+      effectiveCategoryName = resolution.name;
+    }
+
+    // Auto-link the matched account so approving also updates its balance.
+    var effectiveAccountId = accountId;
+    effectiveAccountId ??= await _matchAccountIdForParsed(parsed);
+
     final transaction = Transaction(
       amount: parsed.amount,
       userId: 'offline_user',
       type: parsed.isCredit ? 'income' : 'expense',
-      categoryId: categoryId,
-      accountId: accountId,
+      categoryId: effectiveCategoryId,
+      accountId: effectiveAccountId,
       date: parsed.date,
       notes: parsed.merchant ?? fallbackNote,
       source: 'review',
@@ -60,13 +106,24 @@ final approveReviewProvider = Provider((ref) {
     // 2. Learn from this approval → merchant rules
     //    This turns every manual approval into a future auto-categorization.
     final merchantText = parsed.merchant ?? fallbackNote;
-    final learnCategoryId = categoryId ?? transaction.categoryId;
+    final learnCategoryId = effectiveCategoryId ?? transaction.categoryId;
     if (learnCategoryId != null && merchantText.isNotEmpty) {
       await ref.read(learnMerchantRuleProvider)(
         text: merchantText,
         categoryId: learnCategoryId,
-        accountId: accountId ?? transaction.accountId,
+        accountId: effectiveAccountId ?? transaction.accountId,
       );
+    }
+
+    // 3. Learn merchant memory so the same merchant keeps the same category.
+    if (parsed.merchant != null && effectiveCategoryName != null) {
+      try {
+        await SmartCategoryClassifier.instance.learn(
+          rawText: parsed.rawText,
+          merchant: parsed.merchant,
+          category: effectiveCategoryName,
+        );
+      } catch (_) {}
     }
 
     // 3. Mark as approved

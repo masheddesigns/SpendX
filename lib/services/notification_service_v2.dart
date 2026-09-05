@@ -22,6 +22,7 @@ import '../screens/credit_card_screen.dart';
 import '../screens/lending/lending_screen.dart';
 import '../screens/loans/loan_detail_screen.dart';
 import '../screens/notifications_inbox_screen.dart';
+import '../screens/review/review_queue_screen.dart';
 import '../screens/sms_import_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../data/repositories/loan_repo.dart';
@@ -463,7 +464,11 @@ class NotificationServiceV2 {
         push(const LendingScreen());
         break;
       case 'balances':
+      case 'sms':
         push(const SmsImportScreen());
+        break;
+      case 'review':
+        push(const ReviewQueueScreen());
         break;
       case 'inbox':
       default:
