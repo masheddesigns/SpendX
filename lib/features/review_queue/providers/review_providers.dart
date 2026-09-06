@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/category_resolver.dart';
 import '../../../data/repositories/account_repo.dart';
 import '../../../data/repositories/review_repo.dart';
+import '../../../data/repositories/transaction_repo.dart';
 import '../../../models/review_item.dart';
 import '../../../models/transaction.dart';
 import '../../../services/smart_category_classifier.dart';
@@ -68,6 +69,19 @@ final approveReviewProvider = Provider((ref) {
         ? parsed.rawText.substring(0, 100)
         : parsed.rawText;
 
+    // Idempotency: if this item's transaction already exists (e.g. a prior
+    // approve inserted it but the item never got marked), just mark approved.
+    final externalRef = parsed.refId ??
+        'review|${item.id}|${parsed.amount.toStringAsFixed(2)}';
+    try {
+      if (await TransactionRepo().existsByExternalRef(externalRef)) {
+        await ref.read(reviewRepoProvider).approve(item.id);
+        ref.invalidate(reviewQueueProvider);
+        ref.invalidate(reviewQueueCountProvider);
+        return;
+      }
+    } catch (_) {}
+
     // Auto-resolve the category from merchant memory when the user didn't
     // pick one — repeat merchants keep the same category.
     var effectiveCategoryId = categoryId;
@@ -96,23 +110,28 @@ final approveReviewProvider = Provider((ref) {
       notes: parsed.merchant ?? fallbackNote,
       source: 'review',
       externalRef: parsed.refId ??
-          '${parsed.source ?? 'review'}|${parsed.date.millisecondsSinceEpoch}|'
-          '${parsed.amount.toStringAsFixed(2)}|${parsed.last4 ?? ''}',
+          // Unique per review item (the item id is a UUID) so two pending
+          // items with the same amount/date can't collide on the UNIQUE
+          // transactions.external_ref constraint.
+          'review|${item.id}|${parsed.amount.toStringAsFixed(2)}',
     );
 
     // 1. Insert transaction (with balance impact)
     await ref.read(addTransactionProvider)(transaction);
 
-    // 2. Learn from this approval → merchant rules
-    //    This turns every manual approval into a future auto-categorization.
+    // 2. Learn from this approval → merchant rules.
+    //    Guarded so a learning failure can never abort the approval and leave
+    //    the item stuck (which would re-collide on the next approve).
     final merchantText = parsed.merchant ?? fallbackNote;
     final learnCategoryId = effectiveCategoryId ?? transaction.categoryId;
     if (learnCategoryId != null && merchantText.isNotEmpty) {
-      await ref.read(learnMerchantRuleProvider)(
-        text: merchantText,
-        categoryId: learnCategoryId,
-        accountId: effectiveAccountId ?? transaction.accountId,
-      );
+      try {
+        await ref.read(learnMerchantRuleProvider)(
+          text: merchantText,
+          categoryId: learnCategoryId,
+          accountId: effectiveAccountId ?? transaction.accountId,
+        );
+      } catch (_) {}
     }
 
     // 3. Learn merchant memory so the same merchant keeps the same category.
@@ -126,7 +145,7 @@ final approveReviewProvider = Provider((ref) {
       } catch (_) {}
     }
 
-    // 3. Mark as approved
+    // 4. Mark as approved — always runs once the transaction is inserted.
     await ref.read(reviewRepoProvider).approve(item.id);
     ref.invalidate(reviewQueueProvider);
     ref.invalidate(reviewQueueCountProvider);

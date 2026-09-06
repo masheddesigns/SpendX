@@ -114,7 +114,7 @@ class SmsImportService {
     final balance = _detectBalance(body, sender);
 
     // Future/intent messages are not completed transactions.
-    if (_futureIntentRe.hasMatch(body.toLowerCase())) {
+    if (_nonTransactionRe.hasMatch(body.toLowerCase())) {
       return SmsClassification(balance: balance);
     }
 
@@ -187,7 +187,7 @@ class SmsImportService {
       final lower = body.toLowerCase();
 
       // Skip future/intent notifications (not completed transactions).
-      if (_futureIntentRe.hasMatch(lower)) continue;
+      if (_nonTransactionRe.hasMatch(lower)) continue;
 
       // 1. Balance statements (bank / credit card / loan) — also picks up
       //    the trailing "Bal Rs X" from transaction messages.
@@ -333,11 +333,20 @@ class SmsImportService {
 
   /// Messages that describe a future/intent action (not a completed
   /// transaction) or are clearly non-transactional — filtered out.
-  static final RegExp _futureIntentRe = RegExp(
+  static final RegExp _nonTransactionRe = RegExp(
     r'upcoming|will be debited|will be credited|has been enabled|'
-    r'loan facility|pre-approved|preapproved|eligible|expir(?:y|es)|'
+    r'loan facility|pre-approved|preapproved|eligible|expir(?:y|es|ing)|'
     r'\breminder\b|verification code|\botp\b|one time password|'
-    r'emandate registered|auto.?pay|scheduled debit|plan offer|spend limit',
+    r'emandate registered|auto.?pay|scheduled debit|plan offer|spend limit|'
+    r'\bmandate\b|mandate.*(?:creat|revok|cancel|activ)|'
+    r'successfully revok|revok(?:ed|ing)|'
+    r'\bbonus\b|claim now|free bonus|\bneu ?coins?\b|reward|points? credited|'
+    r'bill.*(?:generat|due|issued)|statement|is due for payment|'
+    r'\bregistered\b|registration|enrolled|'
+    r'credit limit|increas(?:e|ing) (?:the )?limit|limit.*(?:increas|rais)|'
+    r'fund bal|securities bal|'
+    r'\bapy\b|\bpran\b|pension|trade confirm|broker|booking info|'
+    r'offer for you|pre-approved loan',
     caseSensitive: false,
   );
 

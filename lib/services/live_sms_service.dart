@@ -25,7 +25,7 @@ class LiveSmsService {
 
   static const MethodChannel _channel = MethodChannel('spendx/sms_live');
   static const String _enabledKey = 'live_sms_detection';
-  static const String _caughtUpKey = 'live_sms_caught_up';
+  static const String _lastCatchUpKey = 'live_sms_last_catchup';
 
   bool _initialized = false;
   final List<String> _liveBuffer = [];
@@ -84,31 +84,42 @@ class LiveSmsService {
     }
   }
 
-  /// Scans the SMS inbox for past bank transactions and adds the ones not
-  /// already in the app to the Review Queue. Runs once (guarded by a flag).
+  /// Incremental catch-up: on every launch, scans the SMS inbox and adds bank
+  /// transactions newer than the last catch-up (deduped against saved + pending
+  /// items) to the Review Queue. This is what surfaces today's UPI messages
+  /// automatically without a manual scan.
   Future<void> catchUpHistorical({int daysBack = 90}) async {
     if (!await enabled) return;
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_caughtUpKey) ?? false) return;
 
     // Don't prompt at startup — only proceed if already granted.
     if (!await Permission.sms.status.isGranted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastCatchUpAt = prefs.getInt(_lastCatchUpKey);
 
     try {
       final bundle = await SmsImportService.instance.scan(
         options: SmsScanOptions(daysBack: daysBack),
       );
+      final now = DateTime.now();
       var added = 0;
       for (final t in bundle.transactions) {
+        // Skip anything that arrived before the previous catch-up.
+        if (lastCatchUpAt != null &&
+            t.parsed.date.isBefore(
+              DateTime.fromMillisecondsSinceEpoch(lastCatchUpAt),
+            )) {
+          continue;
+        }
         if (await _alreadyInApp(t.parsed)) continue;
         await _addToReviewQueue(t.parsed);
         added++;
       }
-      await prefs.setBool(_caughtUpKey, true);
+      await prefs.setInt(_lastCatchUpKey, now.millisecondsSinceEpoch);
       if (added > 0) {
         await NotificationServiceV2().showNotification(
-          title: 'Past transactions imported',
-          body: '$added past transaction${added == 1 ? '' : 's'} detected '
+          title: 'New transactions detected',
+          body: '$added new transaction${added == 1 ? '' : 's'} detected '
               'from your SMS — review to confirm.',
           category: 'generalUpdates',
           payload: jsonEncode({'source_type': 'review'}),

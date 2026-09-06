@@ -4,6 +4,7 @@ import '../models/company.dart';
 import '../models/increment.dart';
 import '../models/salary_contract.dart';
 import '../models/salary_model.dart';
+import '../models/reminder_model.dart';
 import '../models/salary_payment.dart';
 import '../models/transaction.dart' as spx;
 import '../utils/text_formatter.dart';
@@ -901,35 +902,45 @@ class SalaryService {
     final reminderId = 'salary_${payment.id}';
 
     if (payment.status == SalaryPaymentStatus.received) {
-      await reminderRepo.deleteGlobalReminder(reminderId);
+      // Mark the reminder done and cancel its scheduled notification.
+      final existing = await reminderRepo.getById(reminderId);
+      if (existing != null) {
+        await reminderRepo.update(
+          existing.copyWith(
+            recordStatus: ReminderRecordStatus.done,
+            isActive: false,
+            status: ReminderStatus.inactive,
+          ),
+        );
+      }
+      await NotificationServiceV2().cancelReminderNotifications(reminderId);
       return;
     }
 
-    final reminder = Map<String, dynamic>.from({
-      'id': reminderId,
-      'title': 'Salary Due',
-      'description': 'Incoming salary from ${company?.name ?? 'Company'}',
-      'date': payment.expectedDate
-          .subtract(const Duration(hours: 1))
-          .toIso8601String(),
-      'type': 'salary',
-      'status': 'upcoming',
-      'created_at': DateTime.now().toIso8601String(),
-    });
-    await reminderRepo.insertGlobalReminder(reminder);
-
-    // Schedule 9 PM notification if not received
-    final notificationId = payment.id.hashCode.abs();
-    if (payment.status != SalaryPaymentStatus.received) {
-      await NotificationServiceV2().scheduleSalaryDueReminder(
-        paymentId: payment.id,
-        companyName: company?.name ?? 'your company',
-        expectedDate: payment.expectedDate,
+    // Write the reminder through the unified model so scheduling + alert
+    // dispatch work end-to-end (single source of truth).
+    await reminderRepo.upsert(
+      Reminder(
+        id: reminderId,
+        type: ReminderType.salary,
+        title: 'Salary Due',
+        dueDate: payment.expectedDate,
         amount: payment.totalAmount,
-      );
-    } else {
-      await NotificationServiceV2().cancel(notificationId);
-    }
+        notes: 'Incoming salary from ${company?.name ?? 'Company'}',
+        isActive: true,
+        status: ReminderStatus.upcoming,
+        recordStatus: ReminderRecordStatus.pending,
+        sourceType: ReminderSourceType.salary,
+        sourceId: payment.id,
+        linkedEntityId: payment.id,
+      ),
+    );
+
+    // Re-sync scheduled notifications so the 9 PM salary alert carries the
+    // payload (tap -> Salary screen) and stays consistent with the reminder.
+    await NotificationServiceV2().syncNotificationsFromDB(
+      await reminderRepo.getAll(),
+    );
   }
 
   void _invalidateDashboardCache() {
