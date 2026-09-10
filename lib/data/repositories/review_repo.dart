@@ -16,6 +16,18 @@ class ReviewRepo {
     return res.map((e) => ReviewItem.fromMap(e)).toList();
   }
 
+  Future<ReviewItem?> getById(String id) async {
+    final database = await db.database;
+    final res = await database.query(
+      Tables.reviewQueue,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (res.isEmpty) return null;
+    return ReviewItem.fromMap(res.first);
+  }
+
   Future<int> getPendingCount() async {
     final database = await db.database;
     final res = await database.rawQuery(

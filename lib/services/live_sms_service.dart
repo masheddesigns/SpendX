@@ -61,16 +61,24 @@ class LiveSmsService {
     _liveBuffer.clear();
     var added = 0;
     String? balanceNote;
+    String? singleReviewId;
+    ParsedTransaction? singleTransaction;
     for (final body in batch) {
       final outcome = await _processBody(body);
-      if (outcome.added) added++;
+      if (outcome.added) {
+        added++;
+        singleReviewId = outcome.reviewId;
+        singleTransaction = outcome.transaction;
+      }
       if (outcome.balanceNote != null) balanceNote = outcome.balanceNote;
     }
-    if (added > 0) {
+    if (added == 1 && singleReviewId != null && singleTransaction != null) {
+      // Single detection → ask Expense vs Income right in the notification.
+      await _showChoice(singleReviewId, singleTransaction);
+    } else if (added > 1) {
       await NotificationServiceV2().showNotification(
-        title: 'Transaction detected',
-        body: '$added transaction${added == 1 ? '' : 's'} detected — '
-            'review to confirm or delete.',
+        title: 'Transactions detected',
+        body: '$added transactions detected — review to confirm or delete.',
         category: 'generalUpdates',
         payload: jsonEncode({'source_type': 'review'}),
       );
@@ -82,6 +90,18 @@ class LiveSmsService {
         payload: jsonEncode({'source_type': 'balances'}),
       );
     }
+  }
+
+  /// Asks "Expense or Income?" with action buttons for one detected
+  /// transaction. Tapping a button saves it; tapping the body opens review.
+  Future<void> _showChoice(String reviewId, ParsedTransaction t) async {
+    final direction = t.isCredit ? 'Received' : 'Spent';
+    await NotificationServiceV2().showTransactionChoice(
+      title: 'Add as Expense or Income?',
+      body: '$direction ${AppFormat.currency(t.amount)}'
+          '${t.merchant != null ? ' at ${t.merchant}' : ''} — choose below.',
+      payload: jsonEncode({'source_type': 'live_choice', 'review_id': reviewId}),
+    );
   }
 
   /// Incremental catch-up: on every launch, scans the SMS inbox and adds bank
@@ -181,16 +201,24 @@ class LiveSmsService {
       if (pending == null || pending.isEmpty) return;
       var added = 0;
       String? balanceNote;
+      String? singleReviewId;
+      ParsedTransaction? singleTransaction;
       for (final body in pending) {
         final outcome = await _processBody(body);
-        if (outcome.added) added++;
+        if (outcome.added) {
+          added++;
+          singleReviewId = outcome.reviewId;
+          singleTransaction = outcome.transaction;
+        }
         if (outcome.balanceNote != null) balanceNote = outcome.balanceNote;
       }
       await _channel.invokeMethod('clearPendingSms');
-      if (added > 0) {
+      if (added == 1 && singleReviewId != null && singleTransaction != null) {
+        await _showChoice(singleReviewId, singleTransaction);
+      } else if (added > 1) {
         await NotificationServiceV2().showNotification(
-          title: 'Transaction detected',
-          body: '$added transaction${added == 1 ? '' : 's'} detected — '
+          title: 'Transactions detected',
+          body: '$added transactions detected — '
               'review to confirm or delete.',
           category: 'generalUpdates',
           payload: jsonEncode({'source_type': 'review'}),
@@ -210,18 +238,34 @@ class LiveSmsService {
 
   /// Processes a single SMS body. Returns what it did so the caller can
 /// consolidate the notification.
-Future<({bool added, String? balanceNote})> _processBody(String body) async {
-  if (body.trim().isEmpty) return (added: false, balanceNote: null);
+  Future<
+    ({
+      bool added,
+      String? balanceNote,
+      String? reviewId,
+      ParsedTransaction? transaction,
+    })
+  >
+  _processBody(String body) async {
+    if (body.trim().isEmpty) {
+      return (added: false, balanceNote: null, reviewId: null, transaction: null);
+    }
 
-  final result = SmsImportService.instance.classifyMessage(body, '');
+    final result = SmsImportService.instance.classifyMessage(body, '');
 
-  if (result.transaction != null) {
-    // Auto-detect: add to the Review Queue with the parsed info. The user
-    // approves it (becomes an expense/income + updates the account balance)
-    // or rejects it to delete the error.
-    await _addToReviewQueue(result.transaction!);
-    return (added: true, balanceNote: null);
-  }
+    if (result.transaction != null) {
+      // Auto-detect: add to the Review Queue with the parsed info. The user
+      // approves it (becomes an expense/income + updates the account balance)
+      // or rejects it to delete the error — or answers Expense/Income right
+      // in the notification.
+      final reviewId = await _addToReviewQueue(result.transaction!);
+      return (
+        added: reviewId != null,
+        balanceNote: null,
+        reviewId: reviewId,
+        transaction: result.transaction,
+      );
+    }
 
   if (result.balance != null) {
     final hit = result.balance!;
@@ -234,13 +278,24 @@ Future<({bool added, String? balanceNote})> _processBody(String body) async {
     final note = applied
         ? '$kind set to ${AppFormat.currency(hit.amount)}'
         : '$kind ${AppFormat.currency(hit.amount)} detected';
-    return (added: false, balanceNote: note);
+    return (
+      added: false,
+      balanceNote: note,
+      reviewId: null,
+      transaction: null,
+    );
   }
 
-  return (added: false, balanceNote: null);
+  return (
+    added: false,
+    balanceNote: null,
+    reviewId: null,
+    transaction: null,
+  );
 }
 
-Future<void> _addToReviewQueue(ParsedTransaction parsed) async {
+/// Inserts a pending review item. Returns its id, or null on failure.
+Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
     try {
       final item = ReviewItem(
         rawSource: 'live_sms',
@@ -248,8 +303,10 @@ Future<void> _addToReviewQueue(ParsedTransaction parsed) async {
         confidence: parsed.confidence,
       );
       await ReviewRepo().insert(item);
+      return item.id;
     } catch (_) {
       // Non-fatal.
+      return null;
     }
   }
 

@@ -26,6 +26,8 @@ import '../screens/review/review_queue_screen.dart';
 import '../screens/sms_import_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../data/repositories/loan_repo.dart';
+import '../data/repositories/review_repo.dart';
+import '../features/review_queue/providers/review_providers.dart';
 import '../models/loan.dart';
 
 class NotificationServiceV2 {
@@ -71,6 +73,7 @@ class NotificationServiceV2 {
     await _plugin.initialize(
       settings: settings,
       onDidReceiveNotificationResponse: _handleNotificationTap,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     // Create Channels
@@ -401,8 +404,94 @@ class NotificationServiceV2 {
     );
   }
 
+  /// Action ids for the live-transaction choice notification.
+  static const String liveExpenseAction = 'add_expense';
+  static const String liveIncomeAction = 'add_income';
+
+  /// Shows a live-transaction notification that asks the user to file it as
+  /// an Expense or an Income, right from the shade. Body tap opens the
+  /// Review Queue. [payload] must carry source_type 'live_choice' + review_id.
+  Future<void> showTransactionChoice({
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    if (!_initialized) await init();
+    final settings = await _settingsService.load();
+    if (settings.toMap()['generalUpdates'] == false) return;
+
+    const androidDetails = AndroidNotificationDetails(
+      'spendx_channel',
+      'SpendX Notifications',
+      channelDescription: 'SpendX financial alerts & reminders',
+      icon: '@drawable/ic_notification',
+      importance: Importance.max,
+      priority: Priority.high,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          liveExpenseAction,
+          'Expense',
+          showsUserInterface: true,
+        ),
+        AndroidNotificationAction(
+          liveIncomeAction,
+          'Income',
+          showsUserInterface: true,
+        ),
+      ],
+    );
+
+    await _plugin.show(
+      id: _allocateEphemeralId(),
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(android: androidDetails),
+      payload: payload,
+    );
+  }
+
+  /// Finalizes a live-transaction choice: saves the pending review item as an
+  /// expense/income (with auto category/account + learning) and marks it
+  /// approved. Safe to call twice — already-handled items are skipped.
+  /// Returns true when there is nothing left to do.
+  static Future<bool> finalizeLiveChoice({
+    required String reviewId,
+    required bool isExpense,
+  }) async {
+    try {
+      final item = await ReviewRepo().getById(reviewId);
+      if (item == null || item.status != 'pending') return true;
+      await approveReviewItem(
+        item: item,
+        typeOverride: isExpense ? 'expense' : 'income',
+      );
+      return true;
+    } catch (e) {
+      AppLogger.d('finalizeLiveChoice failed: $e');
+      return false;
+    }
+  }
+
   void _handleNotificationTap(NotificationResponse details) {
     try {
+      // Expense/Income buttons on the live-transaction notification.
+      final actionId = details.actionId;
+      if (actionId == liveExpenseAction || actionId == liveIncomeAction) {
+        final payload = details.payload;
+        if (payload == null || payload.isEmpty) return;
+        final decoded = jsonDecode(payload);
+        if (decoded['source_type'] != 'live_choice') return;
+        final reviewId = decoded['review_id'] as String?;
+        if (reviewId == null || reviewId.isEmpty) return;
+        unawaited(
+          finalizeLiveChoice(
+            reviewId: reviewId,
+            isExpense: actionId == liveExpenseAction,
+          ).then((_) => handleNotificationNavigation('review', '')),
+        );
+        return;
+      }
+
       final payload = details.payload;
       if (payload == null || payload.isEmpty) {
         unawaited(handleNotificationNavigation('inbox', ''));
@@ -468,6 +557,7 @@ class NotificationServiceV2 {
         push(const SmsImportScreen());
         break;
       case 'review':
+      case 'live_choice':
         push(const ReviewQueueScreen());
         break;
       case 'inbox':
@@ -1275,4 +1365,29 @@ class _ReminderAlertDialog extends StatelessWidget {
     final nextTrig = DateTime(now.year, now.month, now.day + 1, 9, 0);
     return nextTrig.difference(now);
   }
+}
+
+/// Background tap handler for notification action buttons (e.g. live
+/// Expense/Income choice) when the app was terminated. Best-effort: finalizes
+/// the pending review item; if it fails the item stays pending for in-app
+/// review.
+@pragma('vm:entry-point')
+Future<void> notificationTapBackground(NotificationResponse response) async {
+  try {
+    final actionId = response.actionId;
+    if (actionId != NotificationServiceV2.liveExpenseAction &&
+        actionId != NotificationServiceV2.liveIncomeAction) {
+      return;
+    }
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+    final decoded = jsonDecode(payload);
+    if (decoded['source_type'] != 'live_choice') return;
+    final reviewId = decoded['review_id'] as String?;
+    if (reviewId == null || reviewId.isEmpty) return;
+    await NotificationServiceV2.finalizeLiveChoice(
+      reviewId: reviewId,
+      isExpense: actionId == NotificationServiceV2.liveExpenseAction,
+    );
+  } catch (_) {}
 }
