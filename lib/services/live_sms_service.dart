@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,17 +20,19 @@ import 'sms_import_service.dart';
 /// classifies each message, and surfaces it as a notification so the user can
 /// import the transaction or confirm a balance update. Also drains messages
 /// captured while the app was closed.
-class LiveSmsService {
+class LiveSmsService with WidgetsBindingObserver {
   LiveSmsService._();
   static final LiveSmsService instance = LiveSmsService._();
 
   static const MethodChannel _channel = MethodChannel('spendx/sms_live');
   static const String _enabledKey = 'live_sms_detection';
   static const String _lastCatchUpKey = 'live_sms_last_catchup';
+  static const Duration _resumeCatchUpCooldown = Duration(minutes: 5);
 
   bool _initialized = false;
   final List<String> _liveBuffer = [];
   Timer? _flushTimer;
+  DateTime? _lastResumeCatchUpAt;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -47,11 +50,28 @@ class LiveSmsService {
       }
     });
 
+    WidgetsBinding.instance.addObserver(this);
+
     // Process anything captured while the app wasn't running.
     await drainPending();
 
     // Pull in previous bank transactions from the SMS inbox (once) so the
     // app catches up on history without a manual scan.
+    unawaited(catchUpHistorical());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    // Re-run the catch-up when returning to the app so SMS that arrived
+    // while it was backgrounded are picked up (throttled).
+    final last = _lastResumeCatchUpAt;
+    if (last != null &&
+        DateTime.now().difference(last) < _resumeCatchUpCooldown) {
+      return;
+    }
+    _lastResumeCatchUpAt = DateTime.now();
+    unawaited(drainPending());
     unawaited(catchUpHistorical());
   }
 
@@ -294,9 +314,11 @@ class LiveSmsService {
   );
 }
 
-/// Inserts a pending review item. Returns its id, or null on failure.
+/// Inserts a pending review item (skipping it when the same transaction is
+/// already saved or pending). Returns its id, or null on failure/duplicate.
 Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
     try {
+      if (await _alreadyInApp(parsed)) return null;
       final item = ReviewItem(
         rawSource: 'live_sms',
         parsed: parsed,
