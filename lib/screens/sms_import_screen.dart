@@ -36,12 +36,12 @@ class SmsImportScreen extends ConsumerStatefulWidget {
 }
 
 class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
-  static const _ranges = <int?>[30, 60, 90, 180, null];
+  static const _ranges = <int?>[30, 60, 90, 180, 365, null];
 
   bool _scanning = false;
   bool _permissionDenied = false;
   bool _saving = false;
-  int? _daysBack = 90;
+  int? _daysBack = 365;
   String? _defaultAccountId;
 
   List<SmsImportResult> _transactions = const [];
@@ -428,6 +428,11 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
       Navigator.of(context).push(
         AppPageRoute(builder: (_) => const LoansScreen()),
       );
+      return;
+    }
+
+    // Wallet balances — no DB to update, just show info.
+    if (hit.kind == BalanceKind.wallet) {
       return;
     }
 
@@ -1068,6 +1073,8 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
                       ? Icons.account_balance_outlined
                       : hit.kind == BalanceKind.creditCard
                       ? Icons.credit_card_outlined
+                      : hit.kind == BalanceKind.wallet
+                      ? Icons.account_balance_wallet_outlined
                       : Icons.account_balance_rounded,
                   color: cs.primary,
                   size: 20,
@@ -1078,6 +1085,8 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
                     ? 'Bank balance'
                     : hit.kind == BalanceKind.creditCard
                     ? 'Credit card outstanding'
+                    : hit.kind == BalanceKind.wallet
+                    ? 'Wallet balance'
                     : 'Loan balance',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),

@@ -141,7 +141,7 @@ class LiveSmsService with WidgetsBindingObserver {
   /// transactions newer than the last catch-up (deduped against saved + pending
   /// items) to the Review Queue. This is what surfaces today's UPI messages
   /// automatically without a manual scan.
-  Future<void> catchUpHistorical({int daysBack = 90}) async {
+  Future<void> catchUpHistorical({int daysBack = 365}) async {
     if (!await enabled) return;
 
     // Don't prompt at startup — only proceed if already granted.
@@ -315,6 +315,8 @@ class LiveSmsService with WidgetsBindingObserver {
         ? 'Bank balance'
         : hit.kind == BalanceKind.creditCard
         ? 'Credit card outstanding'
+        : hit.kind == BalanceKind.wallet
+        ? 'Wallet balance'
         : 'Loan balance';
     final note = applied
         ? '$kind set to ${AppFormat.currency(hit.amount)}'
@@ -417,6 +419,12 @@ Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
         }
         // Return true so notification says "set to" instead of just "detected".
         return match != null;
+      }
+      // Digital wallet balances: detect and notify only (no DB to update).
+      if (hit.kind == BalanceKind.wallet) {
+        final displayName = hit.bankKeyword?.toUpperCase() ?? 'Wallet';
+        print('[LiveSms] _applyBalance: wallet $displayName balance ${hit.amount}');
+        return true;
       }
       return false;
     } catch (_) {

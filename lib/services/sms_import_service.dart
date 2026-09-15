@@ -5,7 +5,7 @@ import '../models/review_item.dart';
 import 'transaction_text_parser.dart';
 
 /// What kind of account a detected balance statement refers to.
-enum BalanceKind { bank, creditCard, loan }
+enum BalanceKind { bank, creditCard, loan, wallet }
 
 /// A bank/credit/loan balance figure detected in an SMS.
 class BalanceHit {
@@ -184,7 +184,7 @@ class SmsImportService {
 
   Future<List<SmsMessage>> _queryInbox() async {
     return SmsQuery().querySms(
-      count: 200,
+      count: 1000,
       kinds: const [SmsQueryKind.inbox],
     );
   }
@@ -229,6 +229,7 @@ class SmsImportService {
       final senderAddr = sms.address ?? '';
       final balanceHit = _detectBalance(body, senderAddr);
       if (balanceHit != null) {
+        print('[SmsScan] balance hit: ${balanceHit.kind.name} last4=${balanceHit.last4} amount=${balanceHit.amount} sender=$senderAddr');
         final balKey =
             '${balanceHit.kind.name}|${balanceHit.amount}|${balanceHit.last4}';
         if (seenBal.add(balKey)) balances.add(balanceHit);
@@ -426,6 +427,14 @@ class SmsImportService {
     caseSensitive: false,
   );
 
+  // Digital wallet balance — Amazon Pay, Paytm Wallet, IRCTC RWallet, etc.
+  static final RegExp _walletBalanceRe = RegExp(
+    r'(?:updated\s*balance(?:\s*is)?|available\s*balance|'
+    r'wallet\s*balance|current\s*balance)'
+    r'[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    caseSensitive: false,
+  );
+
   static final RegExp _last4Re = RegExp(
     r'(?:x+(\d{4,})|(?:a\/c|ac|acc|card|ending)[\s:*\-]*(\d{4,}))',
     caseSensitive: false,
@@ -465,14 +474,25 @@ class SmsImportService {
   /// shortcodes like "AD-FEDBNK-T", "VA-ICICIT-S", "JM-HDFCBK-P", etc.
   /// The format is `<3rdParty>-<BankCode>-<Type>` where Type is usually
   /// T (transactional), S (service), P (promotional).
+  /// Some senders omit the trailing type letter (e.g. "JK-HDFCBK").
   static final RegExp _bankSenderRe = RegExp(
-    r'^[A-Z]{2,4}-[A-Z]{2,8}-[A-Z]$',
+    r'^[A-Z]{2,4}-[A-Z]{2,8}(?:-[A-Z])?$',
   );
 
   /// Returns true if the sender looks like a bank SMS shortcode.
   static bool _isBankSender(String sender) {
     if (sender.isEmpty) return false;
     return _bankSenderRe.hasMatch(sender);
+  }
+
+  /// Returns true if the sender looks like a digital wallet SMS shortcode.
+  static bool _isWalletSender(String sender) {
+    if (sender.isEmpty) return false;
+    final lower = sender.toLowerCase();
+    return lower.contains('qcamzn') ||
+        lower.contains('juspay') ||
+        lower.contains('ipaytm') ||
+        lower.contains('irsmsa');
   }
 
   /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT`.
@@ -515,6 +535,25 @@ class SmsImportService {
         if (amount > 0) {
           return BalanceHit(
             kind: BalanceKind.creditCard,
+            amount: amount,
+            last4: _last4(body),
+            bankKeyword: bankKeyword,
+            sender: sender,
+            body: body,
+          );
+        }
+      }
+    }
+
+    // Digital wallet balance — check BEFORE bank balance because wallet SMS
+    // also contain "balance" which would falsely match the bank pattern.
+    if (_isWalletSender(sender) || _walletBalanceRe.hasMatch(lower)) {
+      final m = _walletBalanceRe.firstMatch(body);
+      if (m != null) {
+        final amount = _parseAmount(m.group(1)!);
+        if (amount > 0) {
+          return BalanceHit(
+            kind: BalanceKind.wallet,
             amount: amount,
             last4: _last4(body),
             bankKeyword: bankKeyword,
@@ -601,6 +640,11 @@ class SmsImportService {
     'pnb': 'Punjab National Bank',
     'idbib': 'IDBI Bank',
     'indus': 'IndusInd Bank',
+    // Digital wallets
+    'qcamzn': 'Amazon Pay',
+    'juspay': 'Amazon Pay',
+    'ipaytm': 'Paytm Wallet',
+    'irsmsa': 'IRCTC Wallet',
   };
 
   String _bankDisplayName(String? code) {
