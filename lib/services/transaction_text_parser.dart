@@ -351,6 +351,19 @@ class TransactionTextParser {
   /// a phone-number fragment, not a currency amount.
   static final _phonePrefixRe = RegExp(r'\+\d{1,3}');
 
+  /// Indian phone formats without country code prefix:
+  ///   "91 63838 16830", "916383816830", "98765 43210", "9876543210"
+  static final _indianPhoneRe = RegExp(
+    r'(?:\b91[\s-]?\d{5}[\s-]?\d{5}\b|\b\d{5}[\s-]?\d{5}\b)',
+  );
+
+  /// Phone patterns with explicit prefixes like "Ph:", "Call", "Tel:", etc.
+  /// Also catches "If not you? call XXXXXXXXXX" patterns common in bank SMS.
+  static final _phoneLabelRe = RegExp(
+    r'(?:call|ph\.?:?|tel\.?:?|mobile|contact|number|dial|sms)\s*[:\s-]?\s*[\d\s\-+()]{8,15}',
+    caseSensitive: false,
+  );
+
   static double? _extractAmountFallback(String text) {
     final decimal = <(int, double)>[];
     final integer = <(int, double)>[];
@@ -407,13 +420,50 @@ class TransactionTextParser {
   }
 
   /// True when a country-code prefix (`+91`, `+1`, `+44`, etc.)
-  /// appears within 30 chars BEFORE [pos]. UPI receipts commonly
-  /// render the recipient phone as "+91 63838 16830" — without this
-  /// guard the `63838` cluster passes the naked-number filter and
-  /// dominates the amount selection.
+  /// appears within 30 chars BEFORE [pos], OR when the candidate is part
+  /// of an Indian phone number pattern (91 XXXXX XXXXX / XXXXX XXXXX),
+  /// OR when preceded by a phone label (Call/Ph/Tel/etc.),
+  /// OR when the candidate itself looks like a standalone phone number.
+  /// UPI receipts commonly render the recipient phone as
+  /// "+91 63838 16830" — without this guard the `63838` cluster passes
+  /// the naked-number filter and dominates the amount selection.
   static bool _isPhoneAdjacent(String text, int pos) {
     final start = pos > 30 ? pos - 30 : 0;
-    return _phonePrefixRe.hasMatch(text.substring(start, pos));
+    final before = text.substring(start, pos);
+
+    // Existing check: +XX country code within 30 chars
+    if (_phonePrefixRe.hasMatch(before)) return true;
+
+    // Check if the candidate is part of a phone number (10-11 digits)
+    // by looking at a wider window around the position
+    final wideStart = pos > 15 ? pos - 15 : 0;
+    final wideEnd = pos + 15 < text.length ? pos + 15 : text.length;
+    final around = text.substring(wideStart, wideEnd);
+    if (_indianPhoneRe.hasMatch(around)) return true;
+
+    // Phone label prefix (Call/Ph/Tel/SMS/etc.) — check within 40 chars
+    final labelStart = pos > 40 ? pos - 40 : 0;
+    final labelBefore = text.substring(labelStart, pos);
+    if (_phoneLabelRe.hasMatch(labelBefore)) return true;
+
+    // Standalone phone number: the candidate itself is 10-11 digits
+    // with optional spaces/dashes, and is not near any currency symbol
+    final candidate = text.substring(
+      pos,
+      pos + 15 < text.length ? pos + 15 : text.length,
+    );
+    if (RegExp(r'^\d{10,11}(?:\s|$)').hasMatch(candidate)) {
+      // Check no currency symbol within 20 chars before
+      final currStart = pos > 20 ? pos - 20 : 0;
+      final currBefore = text.substring(currStart, pos);
+      if (!currBefore.contains('₹') &&
+          !currBefore.toLowerCase().contains('rs') &&
+          !currBefore.toLowerCase().contains('inr')) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// True when every candidate is unusually large (>100k) AND there are

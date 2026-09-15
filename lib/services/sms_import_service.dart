@@ -67,18 +67,32 @@ class DetectedCard {
   });
 }
 
+/// A loan detected from SMS (best-known outstanding balance).
+class DetectedLoan {
+  final String bank;
+  final double outstanding;
+  final String sender;
+  const DetectedLoan({
+    required this.bank,
+    required this.outstanding,
+    required this.sender,
+  });
+}
+
 /// Everything a single SMS scan found.
 class SmsScanBundle {
   final List<SmsImportResult> transactions;
   final List<BalanceHit> balances;
   final List<DetectedAccount> accounts;
   final List<DetectedCard> cards;
+  final List<DetectedLoan> loans;
 
   const SmsScanBundle({
     required this.transactions,
     required this.balances,
     this.accounts = const [],
     this.cards = const [],
+    this.loans = const [],
   });
 }
 
@@ -118,8 +132,29 @@ class SmsImportService {
       return SmsClassification(balance: balance);
     }
 
+    // Sender-based gatekeeping: if the sender doesn't look like a known bank
+    // shortcode, only allow messages with very strong transaction signals
+    // (explicit debit/credit keywords). This blocks promo SMS from random
+    // senders that happen to contain transaction-like language.
+    if (sender.isNotEmpty && !_isBankSender(sender)) {
+      final lower = body.toLowerCase();
+      final hasStrongSignal = RegExp(
+        r'\b(?:debited|credited|has been debited|has been credited|'
+        r'payment of .* (?:to|from)|transferred to|sent to|received from)\b',
+        caseSensitive: false,
+      ).hasMatch(lower);
+      if (!hasStrongSignal) {
+        return SmsClassification(balance: balance);
+      }
+    }
+
     final parsed = TransactionTextParser.parse(body, source: 'sms');
     if (parsed.amount <= 0 || parsed.confidence < 0.4) {
+      return SmsClassification(balance: balance);
+    }
+
+    // Failed/declined/cancelled payments are not completed transactions.
+    if (TransactionTextParser.isFailedPayment(body)) {
       return SmsClassification(balance: balance);
     }
 
@@ -174,6 +209,8 @@ class SmsImportService {
         <String, ({DateTime? date, String bank, String? last4, double balance, String sender})>{};
     final cardMap =
         <String, ({DateTime? date, String bank, String? last4, double outstanding, String sender})>{};
+    final loanMap =
+        <String, ({DateTime? date, String bank, double outstanding, String sender})>{};
 
     for (final sms in messages) {
       final body = sms.body ?? '';
@@ -186,12 +223,11 @@ class SmsImportService {
 
       final lower = body.toLowerCase();
 
-      // Skip future/intent notifications (not completed transactions).
-      if (_nonTransactionRe.hasMatch(lower)) continue;
-
-      // 1. Balance statements (bank / credit card / loan) — also picks up
-      //    the trailing "Bal Rs X" from transaction messages.
-      final balanceHit = _detectBalance(body, sms.address ?? '');
+      // 1. Balance statements (bank / credit card / loan) — detect BEFORE
+      //    the non-transaction filter because credit card statements contain
+      //    "statement"/"bill.*due" which would otherwise skip the balance.
+      final senderAddr = sms.address ?? '';
+      final balanceHit = _detectBalance(body, senderAddr);
       if (balanceHit != null) {
         final balKey =
             '${balanceHit.kind.name}|${balanceHit.amount}|${balanceHit.last4}';
@@ -232,12 +268,43 @@ class SmsImportService {
               );
             }
           }
+        } else if (balanceHit.kind == BalanceKind.loan) {
+          final key = balanceHit.bankKeyword ?? '';
+          if (key.isNotEmpty) {
+            final existing = loanMap[key];
+            if (existing == null ||
+                smsDate == null ||
+                existing.date == null ||
+                smsDate.isAfter(existing.date!)) {
+              loanMap[key] = (
+                date: smsDate,
+                bank: _bankDisplayName(balanceHit.bankKeyword),
+                outstanding: balanceHit.amount,
+                sender: balanceHit.sender,
+              );
+            }
+          }
         }
       }
 
-      // 2. Transaction messages.
+      // 2. Transaction messages — skip non-transaction / intent SMS.
+      if (_nonTransactionRe.hasMatch(lower)) continue;
+
+      // Sender-based gatekeeping: non-bank senders must have strong signals.
+      if (senderAddr.isNotEmpty && !_isBankSender(senderAddr)) {
+        final hasStrongSignal = RegExp(
+          r'\b(?:debited|credited|has been debited|has been credited|'
+          r'payment of .* (?:to|from)|transferred to|sent to|received from)\b',
+          caseSensitive: false,
+        ).hasMatch(lower);
+        if (!hasStrongSignal) continue;
+      }
+
       final parsed = TransactionTextParser.parse(body, source: 'sms');
       if (parsed.amount <= 0 || parsed.confidence < 0.4) continue;
+
+      // Failed/declined/cancelled payments are not completed transactions.
+      if (TransactionTextParser.isFailedPayment(body)) continue;
 
       // 3. Merchant fallback from the UPI reference when the parser missed it.
       var merchant = parsed.merchant;
@@ -275,6 +342,28 @@ class SmsImportService {
       );
     }
 
+    // Filter balances to keep only the latest per account/card.
+    // accountMap/cardMap already track the most recent by date — use them
+    // to discard older balance hits so catchUpHistorical applies the right one.
+    final latestByAccount = <String, double>{};
+    for (final entry in accountMap.entries) {
+      latestByAccount['bank|${entry.value.last4 ?? ''}'] = entry.value.balance;
+    }
+    for (final entry in cardMap.entries) {
+      latestByAccount['card|${entry.value.last4 ?? ''}'] = entry.value.outstanding;
+    }
+    final dedupedBalances = balances.where((hit) {
+      final key = hit.kind == BalanceKind.bank
+          ? 'bank|${hit.last4 ?? ''}'
+          : hit.kind == BalanceKind.creditCard
+              ? 'card|${hit.last4 ?? ''}'
+              : null;
+      if (key == null) return true; // keep loan/unknown balances
+      final latestAmount = latestByAccount[key];
+      if (latestAmount == null) return true;
+      return (hit.amount - latestAmount).abs() < 0.01;
+    }).toList();
+
     final accounts = accountMap.values
         .map(
           (a) => DetectedAccount(
@@ -295,12 +384,22 @@ class SmsImportService {
           ),
         )
         .toList();
+    final loans = loanMap.values
+        .map(
+          (l) => DetectedLoan(
+            bank: l.bank,
+            outstanding: l.outstanding,
+            sender: l.sender,
+          ),
+        )
+        .toList();
 
     return SmsScanBundle(
       transactions: transactions,
-      balances: balances,
+      balances: dedupedBalances,
       accounts: accounts,
       cards: cards,
+      loans: loans,
     );
   }
 
@@ -314,7 +413,8 @@ class SmsImportService {
 
   static final RegExp _creditDueRe = RegExp(
     r'(?:outstanding\s*(?:balance|amount|dues)?|total\s*(?:due|outstanding)|'
-    r'amount\s*due|bill\s*amount|payment\s*due|minimum\s*due|dues)'
+    r'amount\s*due|bill\s*amount|payment\s*due|minimum\s*due|dues|'
+    r'total\s+of|minimum\s+of)'
     r'[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
     caseSensitive: false,
   );
@@ -346,9 +446,34 @@ class SmsImportService {
     r'credit limit|increas(?:e|ing) (?:the )?limit|limit.*(?:increas|rais)|'
     r'fund bal|securities bal|'
     r'\bapy\b|\bpran\b|pension|trade confirm|broker|booking info|'
-    r'offer for you|pre-approved loan',
+    r'offer for you|pre-approved loan|'
+    r'download (?:the )?app|apply now|limited time|use code|'
+    r'get cashback|instant loan|personal loan|emi option|no cost|'
+    r'0% ?interest|bajaj|loan approv|credit score|check your|'
+    r'free credit|get loan|'
+    r'terms and conditions|t&c|click here|know more|'
+    r'customer care|toll free|helpline|'
+    r'has been initiated|is booked|is available|is scheduled|'
+    r'unsuccessful|failed|cancelled|canceled|'
+    r'terms.*(?:chang|revis)|fee.*revis|foreclosure|'
+    r'data usage|data quota|daily data|'
+    r'report spam|TRAI DND',
     caseSensitive: false,
   );
+
+  /// Known bank SMS sender patterns. Indian bank SMS typically come from
+  /// shortcodes like "AD-FEDBNK-T", "VA-ICICIT-S", "JM-HDFCBK-P", etc.
+  /// The format is `<3rdParty>-<BankCode>-<Type>` where Type is usually
+  /// T (transactional), S (service), P (promotional).
+  static final RegExp _bankSenderRe = RegExp(
+    r'^[A-Z]{2,4}-[A-Z]{2,8}-[A-Z]$',
+  );
+
+  /// Returns true if the sender looks like a bank SMS shortcode.
+  static bool _isBankSender(String sender) {
+    if (sender.isEmpty) return false;
+    return _bankSenderRe.hasMatch(sender);
+  }
 
   /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT`.
   static final RegExp _upiRefRe = RegExp(
@@ -362,24 +487,27 @@ class SmsImportService {
     final lower = body.toLowerCase();
     final bankKeyword = _bankKeyword(sender, lower);
 
-    // Bank balance — matches "available balance Rs X" statements as well as
-    // the trailing "Bal Rs X" on transaction messages.
-    final bankBalance = _bankBalanceRe.firstMatch(body);
-    if (bankBalance != null) {
-      final amount = _parseAmount(bankBalance.group(1)!);
-      if (amount > 0) {
-        return BalanceHit(
-          kind: BalanceKind.bank,
-          amount: amount,
-          last4: _last4(body),
-          bankKeyword: bankKeyword,
-          sender: sender,
-          body: body,
-        );
+    // Loan balance — check BEFORE credit card because loan SMS often contain
+    // "outstanding" which would falsely match the credit card pattern.
+    if (_loanBalanceRe.hasMatch(lower)) {
+      final m = _loanBalanceRe.firstMatch(body);
+      if (m != null) {
+        final amount = _parseAmount(m.group(1)!);
+        if (amount > 0) {
+          return BalanceHit(
+            kind: BalanceKind.loan,
+            amount: amount,
+            last4: _last4(body),
+            bankKeyword: bankKeyword,
+            sender: sender,
+            body: body,
+          );
+        }
       }
     }
 
-    // Credit card outstanding.
+    // Credit card outstanding — check BEFORE bank balance because credit card
+    // SMS often contain the word "balance" which would falsely match bank.
     if (_creditDueRe.hasMatch(lower)) {
       final m = _creditDueRe.firstMatch(body);
       if (m != null) {
@@ -397,21 +525,20 @@ class SmsImportService {
       }
     }
 
-    // Loan balance.
-    if (_loanBalanceRe.hasMatch(lower)) {
-      final m = _loanBalanceRe.firstMatch(body);
-      if (m != null) {
-        final amount = _parseAmount(m.group(1)!);
-        if (amount > 0) {
-          return BalanceHit(
-            kind: BalanceKind.loan,
-            amount: amount,
-            last4: _last4(body),
-            bankKeyword: bankKeyword,
-            sender: sender,
-            body: body,
-          );
-        }
+    // Bank balance — matches "available balance Rs X" statements as well as
+    // the trailing "Bal Rs X" on transaction messages.
+    final bankBalance = _bankBalanceRe.firstMatch(body);
+    if (bankBalance != null) {
+      final amount = _parseAmount(bankBalance.group(1)!);
+      if (amount > 0) {
+        return BalanceHit(
+          kind: BalanceKind.bank,
+          amount: amount,
+          last4: _last4(body),
+          bankKeyword: bankKeyword,
+          sender: sender,
+          body: body,
+        );
       }
     }
 

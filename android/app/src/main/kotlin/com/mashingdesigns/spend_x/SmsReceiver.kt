@@ -24,14 +24,20 @@ class SmsReceiver : BroadcastReceiver() {
             .filter { it.isNotBlank() }
         if (bodies.isEmpty()) return
 
+        // Extract sender from the first message segment.
+        val sender = messages.first().displayOriginatingAddress
+            ?: messages.first().originatingAddress
+            ?: ""
+
         SmsStore.queue(context, bodies)
 
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
+            // Pass [sender, body] so Dart can filter by sender.
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
                 MainActivity.CHANNEL,
-            ).invokeMethod("onSmsReceived", bodies)
+            ).invokeMethod("onSmsReceived", listOf(sender, bodies.joinToString("\n")))
         } else {
             showNotification(context, bodies)
         }

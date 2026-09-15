@@ -11,7 +11,6 @@ import '../../transactions/providers/transaction_providers.dart';
 import '../../wrapped/widgets/wrapped_story_bubbles.dart';
 import '../widgets/summary_section.dart';
 import '../widgets/system_status_strip.dart';
-import '../widgets/inline_review_strip.dart';
 
 /// Home tab — clean dashboard with breathing room.
 ///
@@ -64,9 +63,6 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
 
           // ── Breathing space ─────────────────────────────
           const SliverToBoxAdapter(child: SizedBox(height: 4)),
-
-          // ── Inline Review (conditional) ──────────────────
-          const SliverToBoxAdapter(child: InlineReviewStrip()),
 
           // ── Section break before transactions ───────────
           const SliverToBoxAdapter(child: SizedBox(height: 16)),

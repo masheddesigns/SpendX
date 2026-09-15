@@ -9,9 +9,11 @@ import '../core/utils/category_resolver.dart';
 import '../data/providers.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/credit_repo.dart';
+import '../data/repositories/loan_repo.dart';
 import '../features/transactions/providers/transaction_providers.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
+import '../models/loan.dart';
 import '../models/review_item.dart';
 import '../models/transaction.dart';
 import '../screens/loans/loans_screen.dart';
@@ -113,23 +115,25 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       _scanning = false;
     });
 
-    // Register any detected accounts/cards so they appear in the app.
-    await _autoRegisterDetected(bundle.accounts, bundle.cards);
+    // Register any detected accounts/cards/loans so they appear in the app.
+    await _autoRegisterDetected(bundle.accounts, bundle.cards, bundle.loans);
   }
 
-  /// Persists detected bank accounts and credit cards: creates ones that
-  /// aren't registered yet (matched by last4) and updates balances for the
-  /// ones that already exist.
+  /// Persists detected bank accounts, credit cards, and loans: creates ones
+  /// that aren't registered yet (matched by last4 / bank name) and updates
+  /// balances for the ones that already exist.
   Future<void> _autoRegisterDetected(
     List<DetectedAccount> accounts,
     List<DetectedCard> cards,
+    List<DetectedLoan> loans,
   ) async {
-    if (accounts.isEmpty && cards.isEmpty) return;
+    if (accounts.isEmpty && cards.isEmpty && loans.isEmpty) return;
 
     var addedAccounts = 0;
     var updatedAccounts = 0;
     var addedCards = 0;
     var updatedCards = 0;
+    var addedLoans = 0;
 
     try {
       final existingAccounts =
@@ -182,11 +186,45 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         }
       }
 
+      // Auto-register detected loans by bank name.
+      final existingLoans = await LoanRepo().getLoans();
+      for (final loan in loans) {
+        final kw = loan.bank.toLowerCase();
+        final existing = existingLoans
+            .where(
+              (l) =>
+                  l.bank.toLowerCase().contains(kw) ||
+                  l.name.toLowerCase().contains(kw),
+            )
+            .firstOrNull;
+        if (existing == null) {
+          await LoanRepo().insertLoan(
+            Loan(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              name: '${loan.bank} Loan',
+              bank: loan.bank,
+              total: loan.outstanding,
+              interestRate: 0,
+              tenureMonths: 0,
+              monthlyInstallment: 0,
+              startDate: DateTime.now(),
+              paidAmount: 0,
+              loanStatus: 'active',
+              dueDay: 1,
+            ),
+          );
+          addedLoans++;
+        }
+      }
+
       if (addedAccounts > 0 || updatedAccounts > 0) {
         ref.invalidate(accountsProvider);
       }
       if (addedCards > 0 || updatedCards > 0) {
         ref.invalidate(cardsProvider);
+      }
+      if (addedLoans > 0) {
+        ref.invalidate(loansProvider);
       }
     } catch (_) {
       // Non-fatal — import still continues.
@@ -209,6 +247,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       parts.add(
         '$updatedCards card outstanding${updatedCards == 1 ? '' : 's'} updated',
       );
+    }
+    if (addedLoans > 0) {
+      parts.add('$addedLoans loan${addedLoans == 1 ? '' : 's'} added');
     }
     if (parts.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -8,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/credit_repo.dart';
+import '../data/repositories/loan_repo.dart';
+import '../models/credit_card.dart';
+import '../models/loan.dart';
 import '../data/repositories/review_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../models/bank_account.dart';
@@ -30,7 +33,7 @@ class LiveSmsService with WidgetsBindingObserver {
   static const Duration _resumeCatchUpCooldown = Duration(minutes: 5);
 
   bool _initialized = false;
-  final List<String> _liveBuffer = [];
+  final List<({String sender, String body})> _liveBuffer = [];
   Timer? _flushTimer;
   DateTime? _lastResumeCatchUpAt;
 
@@ -40,13 +43,23 @@ class LiveSmsService with WidgetsBindingObserver {
 
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onSmsReceived') {
-        final bodies = (call.arguments as List?)?.cast<String>() ?? const <String>[];
-        // Batch bursts of incoming SMS into a single notification.
-        _liveBuffer.addAll(bodies);
-        _flushTimer?.cancel();
-        _flushTimer = Timer(const Duration(seconds: 3), () {
-          unawaited(_flushLiveBuffer());
-        });
+        final args = call.arguments as List?;
+        String sender = '';
+        String body = '';
+        if (args != null && args.length >= 2) {
+          sender = args[0]?.toString() ?? '';
+          body = args[1]?.toString() ?? '';
+        } else if (args != null && args.isNotEmpty) {
+          // Fallback: old format (bodies only)
+          body = args.cast<String>().join('\n');
+        }
+        if (body.isNotEmpty) {
+          _liveBuffer.add((sender: sender, body: body));
+          _flushTimer?.cancel();
+          _flushTimer = Timer(const Duration(seconds: 3), () {
+            unawaited(_flushLiveBuffer());
+          });
+        }
       }
     });
 
@@ -83,8 +96,8 @@ class LiveSmsService with WidgetsBindingObserver {
     String? balanceNote;
     String? singleReviewId;
     ParsedTransaction? singleTransaction;
-    for (final body in batch) {
-      final outcome = await _processBody(body);
+    for (final entry in batch) {
+      final outcome = await _processBody(entry.body, sender: entry.sender);
       if (outcome.added) {
         added++;
         singleReviewId = outcome.reviewId;
@@ -155,6 +168,20 @@ class LiveSmsService with WidgetsBindingObserver {
         await _addToReviewQueue(t.parsed);
         added++;
       }
+
+      // Apply latest balance from each account's SMS so the displayed
+      // balance reflects the most recent bank statement.
+      // scan() already deduplicates to keep only the latest per account.
+      print('[LiveSms] catchUpHistorical: applying ${bundle.balances.length} deduped balance(s)');
+      for (final hit in bundle.balances) {
+        print('[LiveSms] _applyBalance: ${hit.kind.name} last4=${hit.last4} amount=${hit.amount}');
+        await _applyBalance(hit);
+      }
+
+      // Auto-register detected credit cards and loans that don't exist yet.
+      await _autoRegisterCards(bundle.cards);
+      await _autoRegisterLoans(bundle.loans);
+
       await prefs.setInt(_lastCatchUpKey, now.millisecondsSinceEpoch);
       if (added > 0) {
         await NotificationServiceV2().showNotification(
@@ -183,13 +210,14 @@ class LiveSmsService with WidgetsBindingObserver {
         from: parsed.date.subtract(const Duration(minutes: 30)),
         to: parsed.date.add(const Duration(minutes: 30)),
       );
+      final normMerchant = _normalizeMerchantForDedup(parsed.merchant);
       for (final t in sameAmount) {
-        if (t.notes.contains(parsed.merchant ?? '\u0000')) return true;
+        if (_merchantsMatch(normMerchant, t.notes)) return true;
       }
       final pending = await ReviewRepo().getPending();
       for (final r in pending) {
         if ((r.parsed.amount - parsed.amount).abs() < 0.01 &&
-            r.parsed.merchant == parsed.merchant &&
+            _merchantsMatch(normMerchant, r.parsed.merchant) &&
             r.parsed.date.difference(parsed.date).inMinutes.abs() <= 60) {
           return true;
         }
@@ -220,17 +248,17 @@ class LiveSmsService with WidgetsBindingObserver {
       final pending = await _channel.invokeListMethod<String>('getPendingSms');
       if (pending == null || pending.isEmpty) return;
       var added = 0;
-      String? balanceNote;
       String? singleReviewId;
       ParsedTransaction? singleTransaction;
       for (final body in pending) {
-        final outcome = await _processBody(body);
+        // Skip balance-only messages here — catchUpHistorical() will apply
+        // the correct latest balance per account from the full inbox scan.
+        final outcome = await _processBody(body, skipBalance: true);
         if (outcome.added) {
           added++;
           singleReviewId = outcome.reviewId;
           singleTransaction = outcome.transaction;
         }
-        if (outcome.balanceNote != null) balanceNote = outcome.balanceNote;
       }
       await _channel.invokeMethod('clearPendingSms');
       if (added == 1 && singleReviewId != null && singleTransaction != null) {
@@ -242,13 +270,6 @@ class LiveSmsService with WidgetsBindingObserver {
               'review to confirm or delete.',
           category: 'generalUpdates',
           payload: jsonEncode({'source_type': 'review'}),
-        );
-      } else if (balanceNote != null) {
-        await NotificationServiceV2().showNotification(
-          title: 'Balance update',
-          body: '$balanceNote — tap to review.',
-          category: 'generalUpdates',
-          payload: jsonEncode({'source_type': 'balances'}),
         );
       }
     } catch (_) {
@@ -266,12 +287,12 @@ class LiveSmsService with WidgetsBindingObserver {
       ParsedTransaction? transaction,
     })
   >
-  _processBody(String body) async {
+  _processBody(String body, {String sender = '', bool skipBalance = false}) async {
     if (body.trim().isEmpty) {
       return (added: false, balanceNote: null, reviewId: null, transaction: null);
     }
 
-    final result = SmsImportService.instance.classifyMessage(body, '');
+    final result = SmsImportService.instance.classifyMessage(body, sender);
 
     if (result.transaction != null) {
       // Auto-detect: add to the Review Queue with the parsed info. The user
@@ -287,7 +308,7 @@ class LiveSmsService with WidgetsBindingObserver {
       );
     }
 
-  if (result.balance != null) {
+  if (result.balance != null && !skipBalance) {
     final hit = result.balance!;
     final applied = await _applyBalance(hit);
     final kind = hit.kind == BalanceKind.bank
@@ -339,24 +360,126 @@ Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
       if (hit.kind == BalanceKind.bank) {
         final accounts = await AccountRepo().getAll();
         final match = _matchAccount(accounts, hit);
-        if (match == null) return false;
+        if (match == null) {
+          print('[LiveSms] _applyBalance: no matching account for last4=${hit.last4} kw=${hit.bankKeyword}');
+          return false;
+        }
+        print('[LiveSms] _applyBalance: updating account ${match.id} (${match.bank} ...${match.last4}) to ${hit.amount}');
         await AccountRepo().updateBalance(match.id, hit.amount);
         return true;
       }
       if (hit.kind == BalanceKind.creditCard) {
         final cards = await CreditRepo().getAll();
-        final match = hit.last4 == null
-            ? null
-            : cards.where((c) => c.last4 == hit.last4).firstOrNull;
-        if (match == null) return false;
+        // Match by last4 first, then fall back to bank keyword.
+        CreditCard? match;
+        if (hit.last4 != null && hit.last4!.isNotEmpty) {
+          match = cards.where((c) => c.last4 == hit.last4).firstOrNull;
+        }
+        if (match == null && hit.bankKeyword != null) {
+          final kw = hit.bankKeyword!.toLowerCase();
+          final byBank = cards
+              .where(
+                (c) =>
+                    c.bank.toLowerCase().contains(kw) ||
+                    c.name.toLowerCase().contains(kw),
+              )
+              .toList();
+          if (byBank.length == 1) match = byBank.first;
+        }
+        if (match == null) {
+          print('[LiveSms] _applyBalance: no matching card for last4=${hit.last4} kw=${hit.bankKeyword}');
+          return false;
+        }
+        print('[LiveSms] _applyBalance: updating card ${match.id} (${match.bank} ...${match.last4}) usedAmount to ${hit.amount}');
         await CreditRepo().update(match.copyWith(usedAmount: hit.amount));
         return true;
       }
-      // Loan balances are handled in the Loans screen.
+      // Loan balances: match by bank name and show in notification.
+      // The actual loan record is managed through the Loans screen.
+      if (hit.kind == BalanceKind.loan) {
+        final loans = await LoanRepo().getLoans();
+        final kw = hit.bankKeyword?.toLowerCase();
+        Loan? match;
+        if (kw != null) {
+          final byBank = loans
+              .where(
+                (l) =>
+                    l.bank.toLowerCase().contains(kw) ||
+                    l.name.toLowerCase().contains(kw),
+              )
+              .toList();
+          if (byBank.length == 1) match = byBank.first;
+        }
+        if (match != null) {
+          print('[LiveSms] _applyBalance: matched loan ${match.id} (${match.bank}) — outstanding ${hit.amount}');
+        } else {
+          print('[LiveSms] _applyBalance: no matching loan for kw=${hit.bankKeyword}');
+        }
+        // Return true so notification says "set to" instead of just "detected".
+        return match != null;
+      }
       return false;
     } catch (_) {
       return false;
     }
+  }
+
+  /// Auto-registers detected credit cards that don't exist yet.
+  Future<void> _autoRegisterCards(List<DetectedCard> cards) async {
+    if (cards.isEmpty) return;
+    try {
+      final existing = await CreditRepo().getAll();
+      for (final card in cards) {
+        if (card.last4 == null || card.last4!.isEmpty) continue;
+        final alreadyExists = existing.any((c) => c.last4 == card.last4);
+        if (!alreadyExists) {
+          print('[LiveSms] _autoRegisterCards: adding ${card.bank} ...${card.last4}');
+          await CreditRepo().insert(
+            CreditCard(
+              name: '${card.bank} Card',
+              bank: card.bank,
+              last4: card.last4!,
+              limitAmount: 0,
+              usedAmount: card.outstanding,
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Auto-registers detected loans that don't exist yet.
+  Future<void> _autoRegisterLoans(List<DetectedLoan> loans) async {
+    if (loans.isEmpty) return;
+    try {
+      final existing = await LoanRepo().getLoans();
+      for (final loan in loans) {
+        final kw = loan.bank.toLowerCase();
+        final alreadyExists = existing.any(
+          (l) =>
+              l.bank.toLowerCase().contains(kw) ||
+              l.name.toLowerCase().contains(kw),
+        );
+        if (!alreadyExists) {
+          print('[LiveSms] _autoRegisterLoans: adding ${loan.bank}');
+          await LoanRepo().insertLoan(
+            Loan(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              name: '${loan.bank} Loan',
+              bank: loan.bank,
+              total: loan.outstanding,
+              interestRate: 0,
+              tenureMonths: 0,
+              monthlyInstallment: 0,
+              startDate: DateTime.now(),
+              paidAmount: 0,
+              loanStatus: 'active',
+              dueDay: 1,
+            ),
+          );
+        }
+      }
+    } catch (_) {}
   }
 
   BankAccount? _matchAccount(List<BankAccount> accounts, BalanceHit hit) {
@@ -376,5 +499,45 @@ Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
       if (byBank.length == 1) return byBank.first;
     }
     return null;
+  }
+
+  /// Normalizes a merchant name for dedup comparison: lowercases, strips
+  /// common suffixes (online, store, etc.), collapses whitespace.
+  static String _normalizeMerchantForDedup(String? merchant) {
+    if (merchant == null || merchant.trim().isEmpty) return '';
+    var m = merchant.toLowerCase().trim();
+    // Strip common suffixes that vary between bank/UPI SMS
+    m = m.replaceAll(
+      RegExp(r'\b(?:online|store|india|pvt\.?|ltd\.?|limited|llp)\b', caseSensitive: false),
+      '',
+    );
+    // Collapse whitespace
+    m = m.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return m;
+  }
+
+  /// Fuzzy merchant match for dedup: checks if the normalized merchant
+  /// names share a common prefix of ≥4 chars, or if one contains the other.
+  /// Catches "ZOMATO" vs "Zomato Online", "5 KADEEJA" vs "Kadeeja", etc.
+  static bool _merchantsMatch(String normA, String? b) {
+    if (normA.isEmpty || b == null || b.isEmpty) return false;
+    final normB = _normalizeMerchantForDedup(b);
+    if (normA == normB) return true;
+    // One contains the other (e.g., "zomato" in "zomato online")
+    if (normA.contains(normB) || normB.contains(normA)) return true;
+    // Share a common prefix of ≥5 chars (e.g., "zomato" vs "zomatoo")
+    final minLen = normA.length < normB.length ? normA.length : normB.length;
+    if (minLen >= 5) {
+      int shared = 0;
+      for (var i = 0; i < minLen; i++) {
+        if (normA[i] == normB[i]) {
+          shared++;
+        } else {
+          break;
+        }
+      }
+      if (shared >= 5) return true;
+    }
+    return false;
   }
 }
