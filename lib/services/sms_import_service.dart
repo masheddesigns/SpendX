@@ -1,8 +1,11 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../models/review_item.dart';
 import 'transaction_text_parser.dart';
+
+const _channel = MethodChannel('spendx/sms_live');
 
 /// What kind of account a detected balance statement refers to.
 enum BalanceKind { bank, creditCard, loan, wallet }
@@ -57,11 +60,13 @@ class DetectedAccount {
 class DetectedCard {
   final String bank;
   final String? last4;
+  final String? keyword;
   final double outstanding;
   final String sender;
   const DetectedCard({
     required this.bank,
     this.last4,
+    this.keyword,
     required this.outstanding,
     required this.sender,
   });
@@ -183,10 +188,28 @@ class SmsImportService {
   }
 
   Future<List<SmsMessage>> _queryInbox() async {
-    return SmsQuery().querySms(
-      count: 1000,
-      kinds: const [SmsQueryKind.inbox],
-    );
+    // Use native query with date sorting — the flutter_sms_inbox library caps
+    // at 1000 and doesn't sort, so OneCard/HDFC bills from months ago are missed.
+    try {
+      final List<dynamic> raw = await _channel.invokeMethod('queryInboxSince', {
+        'sinceEpochMs': 0,
+        'limit': 20000,
+      });
+      print('[SmsScan] Native queryInboxSince returned ${raw.length} raw messages');
+      final result = raw.map((m) {
+        final map = Map<String, dynamic>.from(m as Map);
+        return SmsMessage.fromJson(map);
+      }).toList();
+      print('[SmsScan] Parsed ${result.length} SmsMessages');
+      return result;
+    } catch (e) {
+      print('[SmsScan] Native queryInboxSince failed: $e — falling back to library');
+      // Fallback to library if native query fails
+      return SmsQuery().querySms(
+        count: 1000,
+        kinds: const [SmsQueryKind.inbox],
+      );
+    }
   }
 
   /// Scans recent SMS and returns detected transactions + balance statements.
@@ -196,6 +219,7 @@ class SmsImportService {
     }
 
     final messages = await _queryInbox();
+    print('[SmsScan] _queryInbox returned ${messages.length} messages');
 
     final cutoff = options.daysBack == null
         ? null
@@ -208,7 +232,7 @@ class SmsImportService {
     final accountMap =
         <String, ({DateTime? date, String bank, String? last4, double balance, String sender})>{};
     final cardMap =
-        <String, ({DateTime? date, String bank, String? last4, double outstanding, String sender})>{};
+        <String, ({DateTime? date, String bank, String? last4, String? keyword, double outstanding, String sender})>{};
     final loanMap =
         <String, ({DateTime? date, String bank, double outstanding, String sender})>{};
 
@@ -264,6 +288,7 @@ class SmsImportService {
                 date: smsDate,
                 bank: _bankDisplayName(balanceHit.bankKeyword),
                 last4: balanceHit.last4,
+                keyword: balanceHit.bankKeyword,
                 outstanding: balanceHit.amount,
                 sender: balanceHit.sender,
               );
@@ -351,13 +376,13 @@ class SmsImportService {
       latestByAccount['bank|${entry.value.last4 ?? ''}'] = entry.value.balance;
     }
     for (final entry in cardMap.entries) {
-      latestByAccount['card|${entry.value.last4 ?? ''}'] = entry.value.outstanding;
+      latestByAccount['card|${entry.value.last4 ?? entry.value.keyword ?? ''}'] = entry.value.outstanding;
     }
     final dedupedBalances = balances.where((hit) {
       final key = hit.kind == BalanceKind.bank
-          ? 'bank|${hit.last4 ?? ''}'
+          ? 'bank|${hit.last4 ?? hit.bankKeyword ?? ''}'
           : hit.kind == BalanceKind.creditCard
-              ? 'card|${hit.last4 ?? ''}'
+              ? 'card|${hit.last4 ?? hit.bankKeyword ?? ''}'
               : null;
       if (key == null) return true; // keep loan/unknown balances
       final latestAmount = latestByAccount[key];
@@ -380,6 +405,7 @@ class SmsImportService {
           (c) => DetectedCard(
             bank: c.bank,
             last4: c.last4,
+            keyword: c.keyword,
             outstanding: c.outstanding,
             sender: c.sender,
           ),
@@ -415,7 +441,8 @@ class SmsImportService {
   static final RegExp _creditDueRe = RegExp(
     r'(?:outstanding\s*(?:balance|amount|dues)?|total\s*(?:due|outstanding)|'
     r'amount\s*due|bill\s*amount|payment\s*due|minimum\s*due|dues|'
-    r'total\s+of|minimum\s+of)'
+    r'total\s+of|minimum\s+of|'
+    r'bill\s+(?:of|for))'
     r'[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
     caseSensitive: false,
   );
@@ -610,46 +637,69 @@ class SmsImportService {
     );
     if (letters.isNotEmpty) return letters.first;
     // Fall back to a bank name like "hdfc", "axis", "sbi", "icici" in body.
-    for (final bank in ['hdfc', 'axis', 'icici', 'sbi', 'kotak', 'yes bank']) {
+    for (final bank in ['hdfc', 'axis', 'icici', 'sbi', 'kotak', 'yes bank', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind', 'canara', 'bob']) {
       if (lower.contains(bank)) return bank.replaceAll(' ', '');
     }
     return null;
   }
 
-  static const _bankNames = <String, String>{
+  static const bankNames = <String, String>{
     'cbssbi': 'State Bank of India',
     'sbiinb': 'State Bank of India',
     'sbi': 'State Bank of India',
+    'sbicrd': 'SBI Cards',
     'fedbnk': 'Federal Bank',
     'axsbk': 'Axis Bank',
     'axisbk': 'Axis Bank',
     'axns': 'Axis Bank',
     'icicib': 'ICICI Bank',
+    'icicit': 'ICICI Bank',
     'icici': 'ICICI Bank',
     'hdfcbk': 'HDFC Bank',
+    'hdfcbn': 'HDFC Bank',
     'hdfc': 'HDFC Bank',
     'kotakb': 'Kotak Mahindra Bank',
     'kotak': 'Kotak Mahindra Bank',
     'jiopbs': 'Jio Payments Bank',
-    'onecrd': 'OneCard',
-    'onecard': 'OneCard',
+    'onecrd': 'OneCard (BOBCARD)',
+    'onecard': 'OneCard (BOBCARD)',
+    'bobcrd': 'BOBCARD',
     'csb': 'CSB Bank',
-    'jtedge': 'Jupiter',
+    'jtedge': 'Jupiter (CSB Bank)',
     'yesbk': 'YES Bank',
     'yesbank': 'YES Bank',
     'pnb': 'Punjab National Bank',
     'idbib': 'IDBI Bank',
+    'idfcfb': 'IDFC First Bank',
     'indus': 'IndusInd Bank',
+    'aubnk': 'AU Small Finance Bank',
+    'aubank': 'AU Small Finance Bank',
+    'canbnk': 'Canara Bank',
+    'bob': 'Bank of Baroda',
+    'union': 'Union Bank of India',
+    'indbnk': 'Indian Bank',
+    'cbin': 'Central Bank of India',
+    'psb': 'Punjab & Sind Bank',
+    'uco': 'UCO Bank',
+    'iob': 'Indian Overseas Bank',
+    'kvb': 'Karur Vysya Bank',
+    'cub': 'City Union Bank',
+    'sib': 'South Indian Bank',
+    'kbl': 'Karnataka Bank',
+    'tmb': 'Tamilnad Mercantile Bank',
+    'bandhan': 'Bandhan Bank',
     // Digital wallets
     'qcamzn': 'Amazon Pay',
     'juspay': 'Amazon Pay',
     'ipaytm': 'Paytm Wallet',
     'irsmsa': 'IRCTC Wallet',
+    // Other accounts
+    'prajin': 'Pension Savings (PMSY)',
   };
 
   String _bankDisplayName(String? code) {
     if (code == null) return 'Bank';
-    return _bankNames[code] ?? code.toUpperCase();
+    return bankNames[code] ?? code.toUpperCase();
   }
 
   String? _last4(String body) {

@@ -379,11 +379,17 @@ Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
         }
         if (match == null && hit.bankKeyword != null) {
           final kw = hit.bankKeyword!.toLowerCase();
+          final displayName = SmsImportService.bankNames[kw];
           final byBank = cards
               .where(
                 (c) =>
                     c.bank.toLowerCase().contains(kw) ||
-                    c.name.toLowerCase().contains(kw),
+                    c.name.toLowerCase().contains(kw) ||
+                    // Keyword embedded in brackets: "[jtedge]" in bank field.
+                    c.bank.toLowerCase().contains('[$kw]') ||
+                    // Reverse match: keyword's display name matches card's bank.
+                    (displayName != null &&
+                        c.bank.toLowerCase() == displayName.toLowerCase()),
               )
               .toList();
           if (byBank.length == 1) match = byBank.first;
@@ -438,15 +444,30 @@ Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
     try {
       final existing = await CreditRepo().getAll();
       for (final card in cards) {
-        if (card.last4 == null || card.last4!.isEmpty) continue;
-        final alreadyExists = existing.any((c) => c.last4 == card.last4);
-        if (!alreadyExists) {
-          print('[LiveSms] _autoRegisterCards: adding ${card.bank} ...${card.last4}');
+        // Match by last4 first, then by bank keyword.
+        final matchByLast4 = (card.last4 != null && card.last4!.isNotEmpty)
+            ? existing.any((c) => c.last4 == card.last4)
+            : false;
+        final matchByKw = (card.bank.isNotEmpty)
+            ? existing.any((c) =>
+                c.bank.toLowerCase().contains(card.bank.toLowerCase()) ||
+                c.name.toLowerCase().contains(card.bank.toLowerCase()))
+            : false;
+        if (!matchByLast4 && !matchByKw) {
+          final identifier = card.last4 != null && card.last4!.isNotEmpty
+              ? '...${card.last4}'
+              : '(kw: ${card.bank})';
+          // Store the sender keyword in the bank field so _applyBalance can
+          // match by keyword when last4 is unavailable (e.g. bill messages).
+          final bankField = card.keyword != null && card.keyword!.isNotEmpty
+              ? '${card.bank} [${card.keyword}]'
+              : card.bank;
+          print('[LiveSms] _autoRegisterCards: adding ${card.bank} $identifier');
           await CreditRepo().insert(
             CreditCard(
               name: '${card.bank} Card',
-              bank: card.bank,
-              last4: card.last4!,
+              bank: bankField,
+              last4: card.last4 ?? '',
               limitAmount: 0,
               usedAmount: card.outstanding,
             ),

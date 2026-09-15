@@ -163,21 +163,33 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       }
 
       for (final card in cards) {
-        if (card.last4 == null || card.last4!.isEmpty) continue;
-        final existing = existingCards
-            .where((c) => c.last4 == card.last4)
-            .firstOrNull;
+        // Match by last4 first, then by bank keyword.
+        final matchByLast4 = (card.last4 != null && card.last4!.isNotEmpty)
+            ? existingCards.where((c) => c.last4 == card.last4).firstOrNull
+            : null;
+        final matchByKw = (card.bank.isNotEmpty)
+            ? existingCards
+                .where((c) =>
+                    c.bank.toLowerCase().contains(card.bank.toLowerCase()) ||
+                    c.name.toLowerCase().contains(card.bank.toLowerCase()))
+                .firstOrNull
+            : null;
+        final existing = matchByLast4 ?? matchByKw;
         if (existing != null) {
           await CreditRepo().update(
             existing.copyWith(usedAmount: card.outstanding),
           );
           updatedCards++;
         } else {
+          // Store keyword in bank field so _applyBalance can match later.
+          final bankField = card.keyword != null && card.keyword!.isNotEmpty
+              ? '${card.bank} [${card.keyword}]'
+              : card.bank;
           await CreditRepo().insert(
             CreditCard(
               name: '${card.bank} Card',
-              bank: card.bank,
-              last4: card.last4!,
+              bank: bankField,
+              last4: card.last4 ?? '',
               limitAmount: 0,
               usedAmount: card.outstanding,
             ),
