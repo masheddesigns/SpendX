@@ -25,9 +25,6 @@ import '../shared/widgets/empty_state_widget.dart';
 import '../utils/app_format.dart';
 import 'import/import_preview_screen.dart';
 
-/// Scans bank SMS messages from the Messages app, lets the user bulk-import
-/// detected transactions (with an optional review of any single one), and
-/// offers to update linked account / credit card / loan balances.
 class SmsImportScreen extends ConsumerStatefulWidget {
   const SmsImportScreen({super.key});
 
@@ -35,12 +32,14 @@ class SmsImportScreen extends ConsumerStatefulWidget {
   ConsumerState<SmsImportScreen> createState() => _SmsImportScreenState();
 }
 
-class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
+class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
+    with SingleTickerProviderStateMixin {
   static const _ranges = <int?>[30, 60, 90, 180, 365, null];
 
   bool _scanning = false;
   bool _permissionDenied = false;
   bool _saving = false;
+  String? _scanStatus;
   int? _daysBack = 365;
   String? _defaultAccountId;
 
@@ -50,15 +49,37 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
   List<DetectedCard> _detectedCards = const [];
   Set<int> _selected = {};
 
+  int _visibleCount = 0;
+  static const _pageSize = 50;
+
+  late AnimationController _shimmerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
   Future<void> _scan() async {
     setState(() {
       _scanning = true;
       _permissionDenied = false;
+      _scanStatus = 'Requesting SMS permission…';
       _transactions = const [];
       _balances = const [];
       _detectedAccounts = const [];
       _detectedCards = const [];
       _selected = {};
+      _visibleCount = 0;
     });
 
     final granted = await SmsImportService.instance.requestPermission();
@@ -66,13 +87,15 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     if (!granted) {
       setState(() {
         _scanning = false;
+        _scanStatus = null;
         _permissionDenied = true;
       });
       return;
     }
 
-    // Also request RECEIVE_SMS so incoming SMS can be detected live.
     await LiveSmsService.instance.requestReceivePermission();
+
+    setState(() => _scanStatus = 'Scanning SMS messages…');
 
     SmsScanBundle bundle;
     try {
@@ -81,13 +104,18 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _scanning = false);
+      setState(() {
+        _scanning = false;
+        _scanStatus = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Scan failed: $e')),
       );
       return;
     }
     if (!mounted) return;
+
+    setState(() => _scanStatus = 'Processing results…');
 
     if (bundle.balances.isNotEmpty) {
       try {
@@ -102,26 +130,23 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       } catch (_) {}
     }
 
+    await _autoRegisterDetected(bundle.accounts, bundle.cards, bundle.loans);
+
     if (!mounted) return;
     setState(() {
       _transactions = bundle.transactions;
       _balances = bundle.balances;
       _detectedAccounts = bundle.accounts;
       _detectedCards = bundle.cards;
-      // Everything is included by default — bulk import is the happy path.
       _selected = {
         for (var i = 0; i < bundle.transactions.length; i++) i,
       };
+      _visibleCount = _pageSize.clamp(0, bundle.transactions.length);
       _scanning = false;
+      _scanStatus = null;
     });
-
-    // Register any detected accounts/cards/loans so they appear in the app.
-    await _autoRegisterDetected(bundle.accounts, bundle.cards, bundle.loans);
   }
 
-  /// Persists detected bank accounts, credit cards, and loans: creates ones
-  /// that aren't registered yet (matched by last4 / bank name) and updates
-  /// balances for the ones that already exist.
   Future<void> _autoRegisterDetected(
     List<DetectedAccount> accounts,
     List<DetectedCard> cards,
@@ -143,9 +168,8 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
 
       for (final acc in accounts) {
         if (acc.last4 == null || acc.last4!.isEmpty) continue;
-        final existing = existingAccounts
-            .where((a) => a.last4 == acc.last4)
-            .firstOrNull;
+        final existing =
+            existingAccounts.where((a) => a.last4 == acc.last4).firstOrNull;
         if (existing != null) {
           await AccountRepo().updateBalance(existing.id, acc.balance);
           updatedAccounts++;
@@ -163,7 +187,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       }
 
       for (final card in cards) {
-        // Match by last4 first, then by bank keyword.
         final matchByLast4 = (card.last4 != null && card.last4!.isNotEmpty)
             ? existingCards.where((c) => c.last4 == card.last4).firstOrNull
             : null;
@@ -176,12 +199,10 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
             : null;
         final existing = matchByLast4 ?? matchByKw;
         if (existing != null) {
-          await CreditRepo().update(
-            existing.copyWith(usedAmount: card.outstanding),
-          );
+          await CreditRepo()
+              .update(existing.copyWith(usedAmount: card.outstanding));
           updatedCards++;
         } else {
-          // Store keyword in bank field so _applyBalance can match later.
           final bankField = card.keyword != null && card.keyword!.isNotEmpty
               ? '${card.bank} [${card.keyword}]'
               : card.bank;
@@ -198,7 +219,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         }
       }
 
-      // Auto-register detected loans by bank name.
       final existingLoans = await LoanRepo().getLoans();
       for (final loan in loans) {
         final kw = loan.bank.toLowerCase();
@@ -238,9 +258,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       if (addedLoans > 0) {
         ref.invalidate(loansProvider);
       }
-    } catch (_) {
-      // Non-fatal — import still continues.
-    }
+    } catch (_) {}
 
     if (!mounted) return;
     final parts = <String>[];
@@ -270,8 +288,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     }
   }
 
-  // ── Selection ──────────────────────────────────────────────
-
   void _toggleSelect(int index) {
     setState(() {
       if (!_selected.add(index)) _selected.remove(index);
@@ -290,8 +306,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
 
   bool get _allSelected =>
       _transactions.isNotEmpty && _selected.length == _transactions.length;
-
-  // ── Import ─────────────────────────────────────────────────
 
   Future<void> _importSelected() async {
     if (_selected.isEmpty) return;
@@ -333,8 +347,10 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     final accounts =
         ref.read(accountsProvider).valueOrNull ?? const <BankAccount>[];
     var saved = 0;
+    final total = indices.length;
     try {
-      for (final index in indices) {
+      for (var i = 0; i < indices.length; i++) {
+        final index = indices[i];
         if (index >= _transactions.length) continue;
         final parsed = _transactions[index].parsed;
         final type = parsed.isCredit ? 'income' : 'expense';
@@ -348,8 +364,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
           amount: parsed.amount,
           date: parsed.date,
           categoryId: categoryId,
-          // Prefer the explicitly chosen account, else auto-match by the
-          // account number last4 / bank name from the SMS.
           accountId: _defaultAccountId ?? _matchAccountId(parsed, accounts),
           notes: parsed.merchant ?? parsed.rawText,
           source: 'sms',
@@ -358,10 +372,15 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         );
         await ref.read(addTransactionProvider)(txn);
         saved++;
+        // Yield to the event loop every 10 transactions so the UI stays
+        // responsive and the DB doesn't get overwhelmed.
+        if (i % 10 == 0) {
+          setState(() => _scanStatus = 'Importing $saved / $total…');
+          await Future.delayed(Duration.zero);
+          if (!mounted) return;
+        }
       }
-    } catch (_) {
-      // Non-fatal — import as many as we can.
-    }
+    } catch (_) {}
 
     if (!mounted) return;
     setState(() {
@@ -369,14 +388,14 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       _transactions = const [];
       _balances = const [];
       _selected = {};
+      _visibleCount = 0;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Imported $saved transaction${saved == 1 ? '' : 's'}.')),
+      SnackBar(
+          content: Text('Imported $saved transaction${saved == 1 ? '' : 's'}.')),
     );
   }
 
-  /// Opens a single transaction for review/edit; drops it from the list
-  /// afterwards so it can't be imported twice.
   Future<void> _openPreview(int index) async {
     if (index >= _transactions.length) return;
     await Navigator.of(context).push(
@@ -395,29 +414,31 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
         shifted.add(s > index ? s - 1 : s);
       }
       _selected = shifted;
+      _visibleCount = _visibleCount.clamp(0, _transactions.length);
     });
   }
 
   String? _matchAccountId(ParsedTransaction parsed, List<BankAccount> accounts) {
-  if (parsed.last4 != null) {
-    final byLast4 = accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
-    if (byLast4 != null) return byLast4.id;
+    if (parsed.last4 != null) {
+      final byLast4 =
+          accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
+      if (byLast4 != null) return byLast4.id;
+    }
+    if (parsed.bankName != null) {
+      final kw = parsed.bankName!.toLowerCase();
+      final byBank = accounts
+          .where(
+            (a) =>
+                a.bank.toLowerCase().contains(kw) ||
+                a.name.toLowerCase().contains(kw),
+          )
+          .toList();
+      if (byBank.length == 1) return byBank.first.id;
+    }
+    return null;
   }
-  if (parsed.bankName != null) {
-    final kw = parsed.bankName!.toLowerCase();
-    final byBank = accounts
-        .where(
-          (a) =>
-              a.bank.toLowerCase().contains(kw) ||
-              a.name.toLowerCase().contains(kw),
-        )
-        .toList();
-    if (byBank.length == 1) return byBank.first.id;
-  }
-  return null;
-}
 
-Future<String?> _resolveCategoryId(String merchant, String type) async {
+  Future<String?> _resolveCategoryId(String merchant, String type) async {
     try {
       final resolution = await resolveCategoryForText(
         rawText: merchant,
@@ -430,11 +451,11 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
     }
   }
 
-  // ── Balance updates ────────────────────────────────────────
-
   Future<void> _openBalanceUpdate(BalanceHit hit) async {
-    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
-    final cards = ref.watch(cardsProvider).valueOrNull ?? const <CreditCard>[];
+    final accounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final cards =
+        ref.watch(cardsProvider).valueOrNull ?? const <CreditCard>[];
 
     if (hit.kind == BalanceKind.loan) {
       Navigator.of(context).push(
@@ -443,7 +464,6 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
       return;
     }
 
-    // Wallet balances — no DB to update, just show info.
     if (hit.kind == BalanceKind.wallet) {
       return;
     }
@@ -472,14 +492,16 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
                 child: Text(
                   '$title to ${AppFormat.currency(hit.amount)}?',
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w800),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
                 child: Text(
                   'This keeps your net worth up to date. Tap an account to apply.',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  style:
+                      TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ),
               if (candidates.isEmpty)
@@ -533,12 +555,12 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
     final matched = kw == null
         ? <BankAccount>[]
         : accounts
-              .where(
-                (a) =>
-                    a.bank.toLowerCase().contains(kw) ||
-                    a.name.toLowerCase().contains(kw),
-              )
-              .toList();
+            .where(
+              (a) =>
+                  a.bank.toLowerCase().contains(kw) ||
+                  a.name.toLowerCase().contains(kw),
+            )
+            .toList();
     return (matched.isNotEmpty ? matched : accounts).cast<Object>();
   }
 
@@ -579,8 +601,6 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -589,10 +609,10 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
       body: _permissionDenied
           ? _permissionBanner(cs)
           : _scanning
-          ? const Center(child: CircularProgressIndicator())
-          : _transactions.isEmpty && _balances.isEmpty
-          ? _emptyState(cs)
-          : _resultsBody(cs),
+              ? _scanningBody(cs)
+              : _transactions.isEmpty && _balances.isEmpty
+                  ? _emptyState(cs)
+                  : _resultsBody(cs),
     );
   }
 
@@ -606,9 +626,10 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
           const SizedBox(height: 16),
           Text(
             'SMS permission is required',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(
@@ -626,6 +647,41 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
           const SizedBox(height: 8),
           TextButton(onPressed: _scan, child: const Text('Try again')),
         ],
+      ),
+    );
+  }
+
+  Widget _scanningBody(ColorScheme cs) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 64,
+              height: 64,
+              child: CircularProgressIndicator(
+                strokeWidth: 4,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              _scanStatus ?? 'Scanning…',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This may take a moment for large SMS inboxes.',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -648,9 +704,10 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
               const SizedBox(height: 12),
               Text(
                 'Import from Messages',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 6),
               Text(
@@ -668,7 +725,7 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
         FilledButton.icon(
           onPressed: _scan,
           icon: const Icon(Icons.search_rounded),
-          label: Text(_scanning ? 'Scanning…' : 'Scan Bank SMS'),
+          label: const Text('Scan Bank SMS'),
         ),
         const SizedBox(height: 32),
         const EmptyStateWidget(
@@ -698,104 +755,191 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
   }
 
   Widget _resultsBody(ColorScheme cs) {
-    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final accounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
     return Column(
       children: [
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${_transactions.length} transaction${_transactions.length == 1 ? '' : 's'} found',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+          child: CustomScrollView(
+            slivers: [
+              // Header
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${_transactions.length} transaction${_transactions.length == 1 ? '' : 's'} found',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      TextButton.icon(
+                        onPressed: _scan,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Scan again'),
+                      ),
+                    ],
                   ),
-                  TextButton.icon(
-                    onPressed: _scan,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Scan again'),
-                  ),
-                ],
+                ),
               ),
+
+              // Summary chips
               if (_balances.isNotEmpty ||
                   _detectedAccounts.isNotEmpty ||
                   _detectedCards.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    [
-                      if (_balances.isNotEmpty)
-                        '${_balances.length} balance${_balances.length == 1 ? '' : 's'}',
-                      if (_detectedAccounts.isNotEmpty)
-                        '${_detectedAccounts.length} account${_detectedAccounts.length == 1 ? '' : 's'}',
-                      if (_detectedCards.isNotEmpty)
-                        '${_detectedCards.length} card${_detectedCards.length == 1 ? '' : 's'}',
-                    ].join(' · '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        if (_detectedAccounts.isNotEmpty)
+                          _summaryChip(
+                            cs,
+                            Icons.account_balance_outlined,
+                            '${_detectedAccounts.length} account${_detectedAccounts.length == 1 ? '' : 's'}',
+                          ),
+                        if (_detectedCards.isNotEmpty)
+                          _summaryChip(
+                            cs,
+                            Icons.credit_card_outlined,
+                            '${_detectedCards.length} card${_detectedCards.length == 1 ? '' : 's'}',
+                          ),
+                        if (_balances.isNotEmpty)
+                          _summaryChip(
+                            cs,
+                            Icons.account_balance_wallet_outlined,
+                            '${_balances.length} balance${_balances.length == 1 ? '' : 's'}',
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
-              _rangeSelector(cs),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
-                initialValue: _defaultAccountId,
-                decoration: const InputDecoration(
-                  labelText: 'Add to account (optional)',
-                  isDense: true,
-                  border: OutlineInputBorder(),
+
+              // Range selector + account dropdown
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Column(
+                    children: [
+                      _rangeSelector(cs),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                        value: _defaultAccountId,
+                        decoration: const InputDecoration(
+                          labelText: 'Add to account (optional)',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('No account'),
+                          ),
+                          for (final a in accounts)
+                            DropdownMenuItem<String?>(
+                              value: a.id,
+                              child: Text('${a.name} (${a.bank})'),
+                            ),
+                        ],
+                        onChanged: (v) =>
+                            setState(() => _defaultAccountId = v),
+                      ),
+                    ],
+                  ),
                 ),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('No account')),
-                  for (final a in accounts)
-                    DropdownMenuItem<String?>(
-                      value: a.id,
-                      child: Text('${a.name} (${a.bank})'),
-                    ),
-                ],
-                onChanged: (v) => setState(() => _defaultAccountId = v),
               ),
-              const SizedBox(height: 12),
+
+              // Detected entities
               if (_detectedAccounts.isNotEmpty ||
-                  _detectedCards.isNotEmpty) ...[
-                _detectedEntitiesSection(cs),
-                const SizedBox(height: 12),
-              ],
-              if (_balances.isNotEmpty) ...[
-                _balancesSection(cs),
-                const SizedBox(height: 12),
-              ],
-              Row(
-                children: [
-                  Checkbox(
-                    value: _allSelected,
-                    onChanged: (_) => _toggleSelectAll(),
+                  _detectedCards.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _detectedEntitiesSection(cs),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _allSelected
-                          ? 'All ${_transactions.length} selected'
-                          : 'Select all',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+
+              // Balances
+              if (_balances.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _balancesSection(cs),
+                  ),
+                ),
+
+              // Select all row
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: _allSelected,
+                        onChanged: (_) => _toggleSelectAll(),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _allSelected
+                              ? 'All ${_transactions.length} selected'
+                              : 'Select all',
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Transaction list — use SliverList.builder for lazy rendering
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                sliver: SliverList.builder(
+                  itemCount: _visibleCount,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _transactionTile(cs, index),
+                    );
+                  },
+                ),
+              ),
+
+              // Load more button
+              if (_visibleCount < _transactions.length)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: OutlinedButton(
+                      onPressed: () {
+                        setState(() {
+                          _visibleCount =
+                              (_visibleCount + _pageSize).clamp(
+                            0,
+                            _transactions.length,
+                          );
+                        });
+                      },
+                      child: Text(
+                        'Show more (${_transactions.length - _visibleCount} remaining)',
+                      ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              for (int i = 0; i < _transactions.length; i++) ...[
-                _transactionTile(cs, i),
-                const SizedBox(height: 8),
-              ],
+                ),
+
+              // Bottom padding
+              const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
           ),
         ),
-        // Bottom import bar — the single, clear bulk action.
+        // Bottom import bar
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -804,18 +948,54 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
               child: FilledButton.icon(
                 onPressed:
                     _selected.isEmpty || _saving ? null : _importSelected,
-                icon: const Icon(Icons.done_all_rounded),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.done_all_rounded),
                 label: Text(
-                  _selected.isEmpty
-                      ? 'Select transactions to import'
-                      : 'Import ${_selected.length} transaction'
-                            '${_selected.length == 1 ? '' : 's'}',
+                  _saving
+                      ? _scanStatus ?? 'Importing…'
+                      : _selected.isEmpty
+                          ? 'Select transactions to import'
+                          : 'Import ${_selected.length} transaction'
+                              '${_selected.length == 1 ? '' : 's'}',
                 ),
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _summaryChip(ColorScheme cs, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: cs.onPrimaryContainer,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -833,11 +1013,15 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
         title: Text(
           result.parsed.merchant ?? 'Unknown merchant',
           style: const TextStyle(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           '${isCredit ? 'Received' : 'Spent'} '
           '${AppFormat.currency(result.parsed.amount)} • '
           '${AppFormat.date(result.parsed.date)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         trailing: Icon(
           isCredit ? Icons.south_west_rounded : Icons.north_east_rounded,
@@ -849,17 +1033,20 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
   }
 
   Widget _detectedEntitiesSection(ColorScheme cs) {
-    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
-    final cards = ref.watch(cardsProvider).valueOrNull ?? const <CreditCard>[];
+    final accounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final cards =
+        ref.watch(cardsProvider).valueOrNull ?? const <CreditCard>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Detected accounts & cards',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         for (final acc in _detectedAccounts) ...[
@@ -883,7 +1070,8 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
               trailing: TextButton(
                 onPressed: () => _registerOrUpdateAccount(acc, accounts),
                 child: Text(
-                  accounts.any((a) => a.last4 != null && a.last4 == acc.last4)
+                  accounts
+                          .any((a) => a.last4 != null && a.last4 == acc.last4)
                       ? 'Update'
                       : 'Register',
                 ),
@@ -909,7 +1097,8 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
                 '${card.bank}${card.last4 != null ? ' ••${card.last4}' : ''}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text('Outstanding ${AppFormat.currency(card.outstanding)}'),
+              subtitle:
+                  Text('Outstanding ${AppFormat.currency(card.outstanding)}'),
               trailing: TextButton(
                 onPressed: () => _registerOrUpdateCard(card, cards),
                 child: Text(
@@ -930,9 +1119,8 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
     DetectedAccount acc,
     List<BankAccount> accounts,
   ) async {
-    final existing = accounts
-        .where((a) => a.last4 != null && a.last4 == acc.last4)
-        .firstOrNull;
+    final existing =
+        accounts.where((a) => a.last4 != null && a.last4 == acc.last4).firstOrNull;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1028,7 +1216,8 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
 
     try {
       if (existing != null) {
-        await CreditRepo().update(existing.copyWith(usedAmount: card.outstanding));
+        await CreditRepo()
+            .update(existing.copyWith(usedAmount: card.outstanding));
       } else {
         await CreditRepo().insert(
           CreditCard(
@@ -1065,9 +1254,10 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
       children: [
         Text(
           'Balances detected (${_balances.length})',
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         for (final hit in _balances) ...[
@@ -1084,10 +1274,10 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
                   hit.kind == BalanceKind.bank
                       ? Icons.account_balance_outlined
                       : hit.kind == BalanceKind.creditCard
-                      ? Icons.credit_card_outlined
-                      : hit.kind == BalanceKind.wallet
-                      ? Icons.account_balance_wallet_outlined
-                      : Icons.account_balance_rounded,
+                          ? Icons.credit_card_outlined
+                          : hit.kind == BalanceKind.wallet
+                              ? Icons.account_balance_wallet_outlined
+                              : Icons.account_balance_rounded,
                   color: cs.primary,
                   size: 20,
                 ),
@@ -1096,10 +1286,10 @@ Future<String?> _resolveCategoryId(String merchant, String type) async {
                 hit.kind == BalanceKind.bank
                     ? 'Bank balance'
                     : hit.kind == BalanceKind.creditCard
-                    ? 'Credit card outstanding'
-                    : hit.kind == BalanceKind.wallet
-                    ? 'Wallet balance'
-                    : 'Loan balance',
+                        ? 'Credit card outstanding'
+                        : hit.kind == BalanceKind.wallet
+                            ? 'Wallet balance'
+                            : 'Loan balance',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(AppFormat.currency(hit.amount)),

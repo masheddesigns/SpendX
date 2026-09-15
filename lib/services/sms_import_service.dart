@@ -373,10 +373,10 @@ class SmsImportService {
     // to discard older balance hits so catchUpHistorical applies the right one.
     final latestByAccount = <String, double>{};
     for (final entry in accountMap.entries) {
-      latestByAccount['bank|${entry.value.last4 ?? ''}'] = entry.value.balance;
+      latestByAccount['bank|${entry.key}'] = entry.value.balance;
     }
     for (final entry in cardMap.entries) {
-      latestByAccount['card|${entry.value.last4 ?? entry.value.keyword ?? ''}'] = entry.value.outstanding;
+      latestByAccount['card|${entry.key}'] = entry.value.outstanding;
     }
     final dedupedBalances = balances.where((hit) {
       final key = hit.kind == BalanceKind.bank
@@ -533,6 +533,17 @@ class SmsImportService {
   BalanceHit? _detectBalance(String body, String sender) {
     final lower = body.toLowerCase();
     final bankKeyword = _bankKeyword(sender, lower);
+    // Known banks should not be detected as credit cards even if their SMS
+    // contains words like "total dues" / "outstanding balance".
+    // Exception: banks that also issue credit cards (ICICI, HDFC, etc.)
+    final isKnownBank = bankKeyword != null && bankNames.containsKey(bankKeyword);
+    final ccIssuers = {
+      'icicib', 'icicit', 'icici',
+      'hdfc', 'hdfcbk', 'hdfcbn',
+      'axisbk', 'axsbk', 'axns',
+      'sbicrd', 'bobcard', 'onecrd', 'jtedge', 'auccb',
+    };
+    final skipCreditCard = isKnownBank && !ccIssuers.contains(bankKeyword);
 
     // Loan balance — check BEFORE credit card because loan SMS often contain
     // "outstanding" which would falsely match the credit card pattern.
@@ -555,7 +566,8 @@ class SmsImportService {
 
     // Credit card outstanding — check BEFORE bank balance because credit card
     // SMS often contain the word "balance" which would falsely match bank.
-    if (_creditDueRe.hasMatch(lower)) {
+    // Skip if the sender is a known bank that doesn't issue credit cards.
+    if (!skipCreditCard && _creditDueRe.hasMatch(lower)) {
       final m = _creditDueRe.firstMatch(body);
       if (m != null) {
         final amount = _parseAmount(m.group(1)!);
@@ -661,6 +673,7 @@ class SmsImportService {
     'kotakb': 'Kotak Mahindra Bank',
     'kotak': 'Kotak Mahindra Bank',
     'jiopbs': 'Jio Payments Bank',
+    'jiofbr': 'Jio Payments Bank',
     'onecrd': 'OneCard (BOBCARD)',
     'onecard': 'OneCard (BOBCARD)',
     'bobcrd': 'BOBCARD',
