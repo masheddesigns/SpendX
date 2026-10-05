@@ -1,35 +1,29 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/repositories/category_repo.dart';
+import '../../../data/providers.dart' as app_data;
 import '../../../models/category.dart';
 
-final categoryRepoProvider = Provider<CategoryRepo>((ref) => CategoryRepo());
+/// Single source of truth for CategoryRepo provider — re-exported from data/providers.dart.
+final categoryRepoProvider = app_data.categoryRepoProvider;
 
-final categoriesProvider = FutureProvider<List<Category>>((ref) {
-  return ref.watch(categoryRepoProvider).getAll().then((data) {
-    debugPrint('📂 Categories fetched: ${data.length}');
-    return data;
-  });
-});
+/// Single source of truth for categoriesProvider — re-exported from data/providers.dart.
+/// All invalidations and watches across the entire application converge on this one provider.
+final categoriesProvider = app_data.categoriesProvider;
 
 final addCategoryProvider = Provider((ref) {
   return (Category category) async {
-    await ref.read(categoryRepoProvider).create(category);
-    ref.invalidate(categoriesProvider);
+    await ref.read(categoriesProvider.notifier).add(category);
   };
 });
 
 final updateCategoryProvider = Provider((ref) {
   return (Category category) async {
-    await ref.read(categoryRepoProvider).update(category);
-    ref.invalidate(categoriesProvider);
+    await ref.read(categoriesProvider.notifier).replace(category);
   };
 });
 
 final deleteCategoryProvider = Provider((ref) {
   return (Category category) async {
-    await ref.read(categoryRepoProvider).delete(category.id);
-    ref.invalidate(categoriesProvider);
+    await ref.read(categoriesProvider.notifier).remove(category);
   };
 });

@@ -45,7 +45,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
   }
 
   void _open(AppAlert alert) {
-    final Widget? screen = switch (alert.type) {
+    final Widget screen = switch (alert.type) {
       AlertType.salaryDue ||
       AlertType.salaryDelayed ||
       AlertType.partialSalary => const SalaryScreen(),
@@ -53,15 +53,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       AlertType.creditCardDue => const CreditCardScreen(),
       AlertType.subscriptionDue => const RecurringPaymentsScreen(),
       AlertType.custom => const LendingScreen(),
-      AlertType.vehicleService => null,
     };
-
-    if (screen == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vehicle reminders are paused for now.')),
-      );
-      return;
-    }
 
     Navigator.of(
       context,
@@ -100,7 +92,6 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                     AlertType.loanDue => Icons.account_balance_rounded,
                     AlertType.creditCardDue => Icons.credit_card_rounded,
                     AlertType.subscriptionDue => Icons.subscriptions_rounded,
-                    AlertType.vehicleService => Icons.directions_car_rounded,
                     AlertType.custom => Icons.handshake_rounded,
                   };
                   final color = alert.severity == AlertSeverity.critical

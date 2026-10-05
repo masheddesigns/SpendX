@@ -44,7 +44,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json'],
+        allowedExtensions: ['spendx', 'json'],
       );
 
       if (result != null && result.files.single.path != null) {

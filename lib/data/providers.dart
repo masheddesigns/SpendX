@@ -1,6 +1,7 @@
 import 'repositories/transaction_repo.dart';
 import 'repositories/lending_repo.dart';
 import 'repositories/account_repo.dart';
+import '../features/review_queue/providers/review_providers.dart';
 import '../models/reports_summary.dart';
 import '../services/reports_service.dart';
 import 'repositories/loan_repo.dart';
@@ -16,6 +17,7 @@ import 'repositories/net_worth_repo.dart';
 import 'repositories/analytics_repo.dart';
 import 'repositories/emi_plan_repo.dart';
 import 'repositories/maintenance_repo.dart';
+import 'repositories/goal_repo.dart';
 import '../services/net_worth_service.dart';
 import '../services/ledger_service.dart';
 import '../services/financial_health_service.dart';
@@ -23,6 +25,7 @@ import '../services/salary_service.dart';
 import '../services/analytics_service.dart';
 import '../services/insight_engine.dart';
 import '../services/auto_categorization_service.dart';
+import '../services/financial_transaction_service.dart';
 import '../domain/loans/loan_service.dart';
 import '../models/transaction.dart';
 import '../models/bank_account.dart';
@@ -45,13 +48,44 @@ import 'core/write_queue.dart';
 import 'core/app_data_sync_manager.dart';
 import 'core/undoable_delete.dart';
 import '../services/haptic_service.dart';
-import '../services/financial_intelligence_service.dart';
 import '../services/data_change_bus.dart';
 import 'package:flutter/widgets.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'repositories/canonical/canonical_financial_query_repository.dart';
+import 'repositories/canonical/canonical_recurring_repository.dart';
+import '../services/canonical_forecast_engine.dart';
+import '../domain/finance/finance.dart';
 
 // --- Repositories ---
+final canonicalFinancialQueryRepositoryProvider =
+    Provider((ref) => CanonicalFinancialQueryRepository());
+final canonicalRecurringRepositoryProvider =
+    Provider((ref) => CanonicalRecurringRepository());
+final canonicalForecastEngineProvider = Provider<CanonicalForecastEngine>((ref) {
+  final queryRepo = ref.watch(canonicalFinancialQueryRepositoryProvider);
+  final recurringRepo = ref.watch(canonicalRecurringRepositoryProvider);
+  final loanRepo = ref.watch(loanRepoProvider);
+  final creditRepo = ref.watch(creditRepoProvider);
+  return CanonicalForecastEngine(
+    queryRepo: queryRepo,
+    recurringRepo: recurringRepo,
+    loanRepo: loanRepo,
+    creditRepo: creditRepo,
+  );
+});
+
+final canonicalForecast30DaysProvider =
+    FutureProvider<CashflowForecast>((ref) async {
+  final engine = ref.watch(canonicalForecastEngineProvider);
+  return engine.computeForecast(horizonDays: 30);
+});
+final financialTransactionServiceProvider =
+    Provider<FinancialTransactionService>((ref) => FinancialTransactionService(
+          transactionRepo: ref.watch(transactionRepoProvider),
+          creditRepo: ref.watch(creditRepoProvider),
+          loanRepo: ref.watch(loanRepoProvider),
+        ));
 final transactionRepoProvider = Provider((ref) => TransactionRepo());
 final accountRepoProvider = Provider((ref) => AccountRepo());
 final loanRepoProvider = Provider((ref) => LoanRepo());
@@ -62,12 +96,14 @@ final netWorthRepoProvider = Provider((ref) => NetWorthRepo());
 final budgetRepoProvider = Provider((ref) => BudgetRepo());
 final recurringRepoProvider = Provider((ref) => RecurringRepo());
 final salaryRepoProvider = Provider((ref) => SalaryRepo());
+@Deprecated('Retired in Milestone C9')
 final ledgerRepoProvider = Provider((ref) => LedgerRepo());
 final lendingRepoProvider = Provider((ref) => LendingRepo());
 final reminderRepoProvider = Provider((ref) => ReminderRepo());
 final analyticsRepoProvider = Provider((ref) => AnalyticsRepo());
 final emiPlanRepoProvider = Provider((ref) => EmiPlanRepo());
 final maintenanceRepoProvider = Provider((ref) => MaintenanceRepo());
+final goalRepoProvider = Provider((ref) => GoalRepo());
 
 // --- Infrastructure ---
 final analyticsServiceProvider = Provider((ref) => AnalyticsService());
@@ -77,11 +113,10 @@ final reportsServiceProvider = Provider(
     creditRepo: ref.watch(creditRepoProvider),
     loanRepo: ref.watch(loanRepoProvider),
     lendingRepo: ref.watch(lendingRepoProvider),
-    ledgerRepo: ref.watch(ledgerRepoProvider),
   ),
 );
 final insightEngineProvider = Provider<InsightEngine>((ref) => InsightEngine());
-final writeQueueProvider = Provider((ref) => WriteQueue());
+final writeQueueProvider = Provider((ref) => WriteQueue.instance);
 final appDataSyncManagerProvider = Provider((ref) => AppDataSyncManager(ref));
 
 // --- Services ---
@@ -104,10 +139,12 @@ final financialHealthServiceProvider = Provider(
   ),
 );
 
+@Deprecated('Retired in Milestone C9')
 final ledgerServiceProvider = Provider(
   (ref) => LedgerService(ledgerRepo: ref.read(ledgerRepoProvider)),
 );
 
+@Deprecated('Retired in Milestone C9')
 final ledgerMutationProvider =
     StateNotifierProvider<LedgerMutationNotifier, AsyncValue<void>>((ref) {
       return LedgerMutationNotifier(ref);
@@ -117,6 +154,7 @@ final netWorthServiceProvider = Provider(
   (ref) => NetWorthService(
     ref.read(accountRepoProvider),
     ref.read(loanRepoProvider),
+    queryRepo: ref.watch(canonicalFinancialQueryRepositoryProvider),
   ),
 );
 
@@ -164,32 +202,28 @@ final loanByIdProvider = Provider.family<Loan?, String>((ref, loanId) {
   return null;
 });
 
+final cardByIdProvider = Provider.family<CreditCard?, String>((ref, cardId) {
+  final cards = ref.watch(cardsProvider).valueOrNull ?? const <CreditCard>[];
+  for (final card in cards) {
+    if (card.id == cardId) return card;
+  }
+  return null;
+});
+
 final loanInstallmentsProvider =
     FutureProvider.family<List<LoanInstallment>, String>((ref, loanId) async {
       return ref.watch(loanRepoProvider).getInstallments(loanId);
     });
 
+@Deprecated('Retired in Milestone C9')
 class LedgerMutationNotifier extends StateNotifier<AsyncValue<void>> {
   LedgerMutationNotifier(this._ref) : super(const AsyncData(null));
 
   final Ref _ref;
 
   Future<void> add(LedgerTransaction tx) async {
+    // Deprecated in Milestone C9: Runtime ledger_transactions writes retired.
     state = const AsyncData(null);
-    await _ref.read(writeQueueProvider).enqueue(() async {
-      try {
-        await _ref.read(ledgerRepoProvider).insert(tx);
-        DataChangeBus.instance.notify();
-        if (tx.accountId != null && tx.accountId!.isNotEmpty) {
-          unawaited(
-            FinancialIntelligenceService.instance.takeSnapshot(tx.accountId!),
-          );
-        }
-      } catch (e, st) {
-        state = AsyncError(e, st);
-        rethrow;
-      }
-    });
   }
 
   Future<void> addTransfer({
@@ -199,48 +233,22 @@ class LedgerMutationNotifier extends StateNotifier<AsyncValue<void>> {
     required DateTime date,
     String? note,
   }) async {
-    final transactions = _ref
-        .read(ledgerServiceProvider)
-        .buildTransferTransactions(
-          sourceAccountId: sourceAccountId,
-          destinationAccountId: destinationAccountId,
-          amount: amount,
-          date: date,
-          note: note,
-        );
-
-    await _ref.read(writeQueueProvider).enqueue(() async {
-      try {
-        for (final transaction in transactions) {
-          await _ref.read(ledgerRepoProvider).insert(transaction);
-        }
-        DataChangeBus.instance.notify();
-        unawaited(
-          FinancialIntelligenceService.instance.takeSnapshot(sourceAccountId),
-        );
-        unawaited(
-          FinancialIntelligenceService.instance.takeSnapshot(
-            destinationAccountId,
-          ),
-        );
-      } catch (e, st) {
-        state = AsyncError(e, st);
-        rethrow;
-      }
-    });
+    final tx = Transaction(
+      type: 'transfer',
+      amount: amount,
+      accountId: sourceAccountId,
+      relatedEntityId: destinationAccountId,
+      date: date,
+      notes: note ?? 'Internal Transfer',
+      userId: 'offline_user',
+    );
+    await _ref.read(financialTransactionServiceProvider).createTransfer(tx);
+    invalidateAllFinancialProviders(_ref);
   }
 
   Future<void> removeById(int id) async {
+    // Deprecated in Milestone C9: Runtime ledger_transactions writes retired.
     state = const AsyncData(null);
-    await _ref.read(writeQueueProvider).enqueue(() async {
-      try {
-        await _ref.read(ledgerRepoProvider).deleteById(id);
-        DataChangeBus.instance.notify();
-      } catch (e, st) {
-        state = AsyncError(e, st);
-        rethrow;
-      }
-    });
   }
 }
 
@@ -1179,19 +1187,6 @@ final remindersProvider =
 
 // --- Analytics: Batched Summary Computation ---
 
-// Diagnostic: detect rebuild storms. If this counter jumps fast in a single
-// second-window, providers are over-watching.
-int _analyticsRebuildCount = 0;
-DateTime? _analyticsLastRebuild;
-
-// Memoization: only recompute when an input length actually changes.
-// Riverpod calls this body whenever ANY watched provider emits — most of
-// those emissions are intermediate AsyncLoading→AsyncData transitions
-// where the resulting list is the same as before. Returning the cached
-// summary prevents downstream selector invalidation storms.
-String? _analyticsCacheKey;
-AnalyticsSummary? _analyticsCacheValue;
-
 final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
   // Use .select() so we only react when the value field changes,
   // not on every AsyncValue lifecycle transition.
@@ -1208,27 +1203,6 @@ final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
   final budgets =
       ref.watch(budgetsProvider.select((a) => a.valueOrNull ?? const []));
 
-  // Cheap fingerprint to skip recomputation when inputs are equivalent.
-  final key = '${txns.length}|${accounts.length}|${loans.length}|'
-      '${cards.length}|${categories.length}|${budgets.length}';
-  if (_analyticsCacheKey == key && _analyticsCacheValue != null) {
-    return _analyticsCacheValue!;
-  }
-
-  // Storm detection (only after cache miss — true rebuilds, not cached hits)
-  final now = DateTime.now();
-  if (_analyticsLastRebuild != null &&
-      now.difference(_analyticsLastRebuild!).inSeconds < 1) {
-    _analyticsRebuildCount++;
-    if (_analyticsRebuildCount >= 3) {
-      debugPrint('⚠️ FETCH STORM: analyticsSummaryProvider rebuilt '
-          '$_analyticsRebuildCount times in <1s — check provider deps');
-    }
-  } else {
-    _analyticsRebuildCount = 1;
-  }
-  _analyticsLastRebuild = now;
-
   debugPrint('\u{1F4CA} Analytics provider: txns=${txns.length}, '
       'accounts=${accounts.length}, loans=${loans.length}, cards=${cards.length}');
 
@@ -1240,22 +1214,25 @@ final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
     categories: categories,
     budgets: budgets,
   );
-  final summary = ref.read(analyticsServiceProvider).computeSummary(bundle);
-  _analyticsCacheKey = key;
-  _analyticsCacheValue = summary;
-  return summary;
+  return ref.read(analyticsServiceProvider).computeSummary(bundle);
 });
 
-// Memoized Selectors to prevent over-building widgets
-final netWorthProvider = Provider<double>(
-  (ref) => ref.watch(analyticsSummaryProvider.select((s) => s.netWorth)),
-);
+// Canonical Net Worth & Safe-to-Spend Selectors
 final netWorthSummaryProvider =
     FutureProvider<({double assets, double liabilities, double netWorth})>((
       ref,
     ) async {
-      return ref.read(netWorthServiceProvider).calculate();
+      return ref.watch(netWorthServiceProvider).calculate();
     });
+
+final netWorthProvider = Provider<double>(
+  (ref) => ref.watch(netWorthSummaryProvider).valueOrNull?.netWorth ?? 0.0,
+);
+
+final safeToSpendProvider = FutureProvider<SafeToSpendCalculation>((ref) async {
+  final queryRepo = ref.watch(canonicalFinancialQueryRepositoryProvider);
+  return queryRepo.getSafeToSpend();
+});
 final categorySpendingProvider = Provider<Map<String, double>>(
   (ref) =>
       ref.watch(analyticsSummaryProvider.select((s) => s.categorySpending)),
@@ -1313,3 +1290,43 @@ final silenceSyncProvider = Provider<void>((ref) {
     }
   });
 });
+
+// --- Centralized Financial Provider Invalidation ---
+
+/// Invalidates all financial and derived providers following a database restore or purge.
+void invalidateAllFinancialProviders(dynamic ref) {
+  ref.invalidate(accountsProvider);
+  ref.invalidate(transactionsProvider);
+  ref.invalidate(cardsProvider);
+  ref.invalidate(loansProvider);
+  ref.invalidate(categoriesProvider);
+  ref.invalidate(tagsProvider);
+  ref.invalidate(budgetsProvider);
+  ref.invalidate(recurringProvider);
+  ref.invalidate(remindersProvider);
+  ref.invalidate(reviewQueueProvider);
+  ref.invalidate(safeToSpendProvider);
+  ref.invalidate(netWorthSummaryProvider);
+  ref.invalidate(analyticsSummaryProvider);
+  ref.invalidate(canonicalForecast30DaysProvider);
+  DataChangeBus.instance.notify();
+}
+
+/// Invalidates all financial providers using a ProviderContainer.
+void invalidateAllFinancialProvidersWithContainer(ProviderContainer container) {
+  container.invalidate(accountsProvider);
+  container.invalidate(transactionsProvider);
+  container.invalidate(cardsProvider);
+  container.invalidate(loansProvider);
+  container.invalidate(categoriesProvider);
+  container.invalidate(tagsProvider);
+  container.invalidate(budgetsProvider);
+  container.invalidate(recurringProvider);
+  container.invalidate(remindersProvider);
+  container.invalidate(reviewQueueProvider);
+  container.invalidate(safeToSpendProvider);
+  container.invalidate(netWorthSummaryProvider);
+  container.invalidate(analyticsSummaryProvider);
+  container.invalidate(canonicalForecast30DaysProvider);
+  DataChangeBus.instance.notify();
+}

@@ -24,6 +24,8 @@ void main() {
   setUp(() async {
     db = await openDatabase(inMemoryDatabasePath);
     await Tables.createAll(db);
+    await TablesV24.createAllV24(db);
+    await TablesV24.seedSystemAccounts(db);
     await db.insert(Tables.bankAccounts, {
       'id': 'A',
       'user_id': 'offline_user',

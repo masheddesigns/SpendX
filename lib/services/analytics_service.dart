@@ -27,16 +27,22 @@ class AnalyticsService {
       if (inCurrentMonth) {
         if (txn.type == 'income') {
           monthlyIncome += txn.amount;
-        } else if (txn.type == 'expense') {
+        } else if (txn.type == 'expense' || txn.type == 'credit_card_purchase') {
           monthlyExpense += txn.amount;
           final catId = txn.categoryId ?? 'other';
           categorySpending[catId] = (categorySpending[catId] ?? 0.0) + txn.amount;
+        } else if (txn.type == 'refund') {
+          monthlyExpense -= txn.amount;
+          final catId = txn.categoryId ?? 'other';
+          categorySpending[catId] = (categorySpending[catId] ?? 0.0) - txn.amount;
         }
       }
       // Previous month: inclusive upper bound (don't miss last second)
       else if (!txn.date.isBefore(startOfPrevMonth) && !txn.date.isAfter(endOfPrevMonth)) {
-        if (txn.type == 'expense') {
+        if (txn.type == 'expense' || txn.type == 'credit_card_purchase') {
           previousMonthExpense += txn.amount;
+        } else if (txn.type == 'refund') {
+          previousMonthExpense -= txn.amount;
         }
       }
     }

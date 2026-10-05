@@ -1,3 +1,4 @@
+import '../../domain/finance/cashflow_forecast.dart';
 import '../../models/bank_account.dart';
 import '../../models/transaction.dart';
 
@@ -18,6 +19,28 @@ class Runway {
     required this.runwayDate,
     required this.status,
   });
+
+  factory Runway.fromCanonical(CashflowForecast c) {
+    final now = c.generatedAt;
+    final daysLeft = c.runwayDays;
+    final runwayDate = c.shortfallDate ?? now.add(Duration(days: daysLeft));
+    final RunwayStatus status;
+    if (daysLeft < 5) {
+      status = RunwayStatus.critical;
+    } else if (daysLeft < 15) {
+      status = RunwayStatus.warning;
+    } else {
+      status = RunwayStatus.safe;
+    }
+
+    return Runway(
+      totalBalance: c.startingLiquidBalance.asRupees,
+      dailyBurn: c.dailyBurnRate.asRupees,
+      daysLeft: daysLeft,
+      runwayDate: runwayDate,
+      status: status,
+    );
+  }
 }
 
 /// Calculates how many days the user can survive at current spending.

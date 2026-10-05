@@ -1,5 +1,6 @@
 import '../../../data/core/undoable_delete.dart';
 import '../../../data/providers.dart';
+import '../../../data/providers.dart' as app_data;
 import '../../../models/credit_card.dart';
 import '../../../models/credit_transaction.dart';
 import '../../../models/credit_emi.dart';
@@ -13,18 +14,20 @@ import '../../../services/haptic_service.dart';
 import '../../../core/services/service_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Provider for the list of all credit cards
+export '../../../data/providers.dart' show cardByIdProvider;
+
+/// Provider for the list of all credit cards (synchronized with canonical cardsProvider)
 final creditCardsProvider = FutureProvider<List<CreditCard>>((ref) async {
-  return await ref.watch(creditRepoProvider).getAll();
+  return await ref.watch(cardsProvider.future);
 });
 
-/// Provider for a specific credit card's outstanding balance
+/// Provider for a specific credit card's outstanding balance derived from canonical liability
 final creditOutstandingProvider = FutureProvider.family<double, String>((
   ref,
   cardId,
 ) async {
-  final creditService = ref.watch(creditCardServiceProvider);
-  return await creditService.calculateOutstanding(cardId);
+  final card = await ref.watch(creditRepoProvider).getCard(cardId);
+  return card?.usedAmount ?? 0.0;
 });
 
 /// Provider for a specific credit card's active EMIs
@@ -35,26 +38,11 @@ final creditActiveEmisProvider = FutureProvider.family<List<CreditEMI>, String>(
   },
 );
 
-/// Provider for a specific credit card's recent transactions from Unified Ledger
+/// Provider for a specific credit card's recent transactions from canonical repository
 final creditRecentTransactionsProvider =
     FutureProvider.family<List<CreditTransaction>, String>((ref, cardId) async {
-      final ledgerRepo = ref.watch(ledgerRepoProvider);
-      final ledgerTxns = await ledgerRepo.getAll(creditCardId: cardId);
-      return ledgerTxns
-          .map(
-            (lt) => CreditTransaction(
-              id: lt.referenceId ?? lt.id.toString(),
-              cardId: cardId,
-              amount: lt.amount,
-              date: lt.date,
-              category: lt.categoryId ?? 'uncategorized',
-              type: lt.type.name,
-              status: 'active',
-              note: lt.note,
-            ),
-          )
-          .take(50)
-          .toList();
+      final txns = await ref.watch(creditRepoProvider).getTransactions(cardId);
+      return txns.take(50).toList();
     });
 
 final creditPurchaseMutationProvider =
@@ -79,6 +67,8 @@ class CreditPurchaseMutationNotifier extends StateNotifier<AsyncValue<void>> {
       try {
         await _ref.read(creditRepoProvider).insertTransaction(transaction);
         await FinancialTransactionService().appendLedger(ledgerTransaction);
+        _ref.invalidate(cardsProvider);
+        _ref.invalidate(creditCardsProvider);
         _ref.invalidate(creditRecentTransactionsProvider(cardId));
         _ref.invalidate(creditOutstandingProvider(cardId));
         _ref.invalidate(liabilitiesSummaryProvider);
@@ -106,9 +96,9 @@ final creditIntelligenceProvider =
       );
     });
 
-/// Provider for the list of all loans
+/// Provider for the list of all loans (synchronized with canonical loansProvider)
 final loansProvider = FutureProvider<List<Loan>>((ref) async {
-  return await ref.watch(loanRepoProvider).getLoans();
+  return await ref.watch(app_data.loansProvider.future);
 });
 
 /// Provider for lending records
@@ -413,30 +403,7 @@ class EmiInstallmentsNotifier
             .updateInstallment(updatedInstallment);
         await _ref.read(creditRepoProvider).updateEMI(updatedEmi);
 
-        if (newStatus == 'paid') {
-          await _ref
-              .read(ledgerRepoProvider)
-              .insert(
-                LedgerTransaction(
-                  type: LedgerType.emi_installment,
-                  amount: installment.amount,
-                  date: DateTime.now(),
-                  referenceId: installment.id,
-                  creditCardId: emi.cardId,
-                  note: 'EMI Installment Paid',
-                ),
-              );
-        } else {
-          final txns = await _ref
-              .read(ledgerRepoProvider)
-              .getAll(referenceId: installment.id);
-          for (final txn in txns) {
-            if (txn.id != null) {
-              await _ref.read(ledgerRepoProvider).deleteById(txn.id!);
-            }
-          }
-        }
-
+        // Operational status update only — zero rogue ledger_transactions writes.
         _ref.invalidate(creditActiveEmisProvider(emi.cardId));
         _ref.invalidate(creditOutstandingProvider(emi.cardId));
         _ref.invalidate(liabilitiesSummaryProvider);

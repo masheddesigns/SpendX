@@ -11,12 +11,45 @@ class GeminiService {
   List<Map<String, dynamic>> _chatHistory = [];
   bool _initialized = false;
   
-  String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
-
-  // Using raw HTTP with accurate v1beta and model endpoint based on user instruction
-  String _getApiUrl(String model) {
-    return 'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$_apiKey';
+  String get _apiKey {
+    try {
+      if (dotenv.isInitialized) {
+        final key = dotenv.env['GEMINI_API_KEY'];
+        if (key != null && key.isNotEmpty) return key;
+      }
+    } catch (_) {}
+    const defineKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+    if (defineKey.isNotEmpty) return defineKey;
+    return '';
   }
+
+  /// Public getter exposing the API key (if any) for verification and testing.
+  String get apiKey => _apiKey;
+
+  // Secure HTTP endpoint with zero credentials in URL query parameters.
+  String _getApiUrl(String model) {
+    return 'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent';
+  }
+
+  /// Public getter exposing the sanitized API URL for verification tests.
+  String get apiUrl => _getApiUrl('gemini-2.5-flash');
+
+  /// Request headers authenticating via secure [x-goog-api-key] header.
+  Map<String, String> get headers => {
+        'Content-Type': 'application/json',
+        if (_apiKey.isNotEmpty) 'x-goog-api-key': _apiKey,
+      };
+
+  /// Sanitizes error messages to prevent credential leakage.
+  String _sanitizeError(String msg) {
+    if (_apiKey.isNotEmpty && msg.contains(_apiKey)) {
+      return msg.replaceAll(_apiKey, '[REDACTED_API_KEY]');
+    }
+    return msg;
+  }
+
+  /// Public helper for sanitizing errors and testing credential scrubbing.
+  String sanitizeError(String msg) => _sanitizeError(msg);
 
   void init() {
     if (_initialized) return;
@@ -72,10 +105,14 @@ class GeminiService {
       "parts": [{"text": message}]
     });
 
+    if (_apiKey.isEmpty) {
+      return 'Error: Gemini API key is not configured. AI features require an API key.';
+    }
+
     try {
       final response = await http.post(
         Uri.parse(_getApiUrl('gemini-2.5-flash')),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           "contents": _chatHistory,
         }),
@@ -92,17 +129,21 @@ class GeminiService {
         
         return reply;
       } else {
-        return 'API Error: ${response.statusCode} - ${response.body}';
+        return _sanitizeError('API Error: ${response.statusCode} - ${response.body}');
       }
     } on SocketException {
       return 'Error: No internet connection. AI features require an active network.';
     } catch (e) {
-      return 'Error: ${e.toString()}';
+      return _sanitizeError('Error: ${e.toString()}');
     }
   }
 
   Future<Map<String, String?>> scanReceipt(File imageFile) async {
     if (!_initialized) init();
+
+    if (_apiKey.isEmpty) {
+      return {'error': 'Gemini API key is not configured.'};
+    }
 
     try {
       final bytes = await imageFile.readAsBytes();
@@ -122,7 +163,7 @@ If a field is not visible, use null for its value.''';
 
       final response = await http.post(
         Uri.parse(_getApiUrl('gemini-2.5-flash')),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           "contents": [
             {
@@ -151,11 +192,11 @@ If a field is not visible, use null for its value.''';
         }
         return {'error': 'Could not parse JSON from AI response'};
       }
-      return {'error': 'API Error: ${response.statusCode} - ${response.body}'};
+      return {'error': _sanitizeError('API Error: ${response.statusCode} - ${response.body}')};
     } on SocketException {
       return {'error': 'No internet connection. AI features require an active network.'};
     } catch (e) {
-      return {'error': 'Failed to process image with Gemini. ($e)'};
+      return {'error': _sanitizeError('Failed to process image with Gemini. ($e)')};
     }
   }
 
@@ -185,6 +226,10 @@ If a field is not visible, use null for its value.''';
   Future<List<Map<String, String?>>> scanStatement(File file) async {
     if (!_initialized) init();
 
+    if (_apiKey.isEmpty) {
+      return [{'error': 'Gemini API key is not configured.'}];
+    }
+
     try {
       final bytes = await file.readAsBytes();
       final base64Image = base64Encode(bytes);
@@ -198,7 +243,7 @@ Do not wrap in markdown blocks or quotes. Just output raw JSON array.''';
 
       final response = await http.post(
         Uri.parse(_getApiUrl('gemini-2.5-flash')),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           "contents": [
             {
@@ -243,7 +288,7 @@ Do not wrap in markdown blocks or quotes. Just output raw JSON array.''';
     } on SocketException {
       return [{'error': 'No internet connection. AI features require an active network.'}];
     } catch (e) {
-      return [{'error': 'Failed to process document. ($e)'}];
+      return [{'error': _sanitizeError('Failed to process document. ($e)')}];
     }
   }
 }

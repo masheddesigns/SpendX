@@ -1,13 +1,27 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:io';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'tables.dart';
+import 'spendx_database_factory.dart' hide InvalidDatabaseKeyException;
 import '../migrations/ledger_backfill_service.dart';
+import '../migrations/migration_v24_service.dart';
+import '../security/database_key_manager.dart';
+import '../security/database_encryption_migration_service.dart';
+import '../../services/evidence_pruning_service.dart';
+import '../../services/backup_file_service.dart';
+import 'database_lifecycle_coordinator.dart';
+
 
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
+  static Future<Database>? _initFuture;
+
+  /// Test-only seam to disable automatic plaintext migration if testing
+  /// legacy plaintext schema behavior in isolation. Defaults to true.
+  static bool autoMigrateLegacyPlaintext = true;
 
   /// Test-only override for the on-disk database file name. Lets tests run the
   /// guarded reconciliation against an isolated database without colliding
@@ -17,26 +31,125 @@ class AppDatabase {
   static void setTestDatabasePath(String? path) {
     _testDbPath = path;
     _database = null;
+    _initFuture = null;
   }
 
   AppDatabase._init();
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('spendx.db');
-    return _database!;
+    if (_database != null && _database!.isOpen) return _database!;
+    _initFuture ??= _initDB('spendx.db');
+    try {
+      final db = await _initFuture!;
+      _database = db;
+      if (DatabaseLifecycleCoordinator.instance.currentState ==
+          DatabaseLifecycleState.closed) {
+        DatabaseLifecycleCoordinator.instance.markActive();
+      }
+      return db;
+    } catch (e) {
+      _initFuture = null;
+      rethrow;
+    }
   }
 
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _testDbPath ?? filePath);
 
-    return await openDatabase(
+    await SpendXDatabaseFactory.instance.initialize();
+
+    // Check for interrupted migration recovery
+    await DatabaseEncryptionMigrationService.instance.recoverInterruptedMigration(
+      dbPath: path,
+    );
+
+    final file = File(path);
+    final fileExists = await file.exists();
+    final hasBytes = fileExists && (await file.length() > 0);
+
+    // 1. LEGACY PLAINTEXT MIGRATION
+    if (hasBytes && DatabaseEncryptionMigrationService.isPlaintextSqliteFile(path)) {
+      if (autoMigrateLegacyPlaintext) {
+        // Inspect schema version of the legacy database
+        final tempDb = await SpendXDatabaseFactory.instance.openPlaintextDatabase(path);
+        int currentVersion = 0;
+        try {
+          final verRows = await tempDb.rawQuery('PRAGMA user_version;');
+          currentVersion = (verRows.first.values.first as num?)?.toInt() ?? 0;
+        } finally {
+          await tempDb.close();
+        }
+
+        if (currentVersion < 24) {
+          // Pre-v24 legacy database: upgrade schema to v24 plaintext first
+          final upgradeDb = await openDatabase(
+            path,
+            version: 24,
+            onConfigure: (db) async {
+              await db.execute('PRAGMA foreign_keys = ON;');
+              await db.rawQuery('PRAGMA busy_timeout = 5000;');
+            },
+            onUpgrade: (db, oldVersion, newVersion) async {
+              await _applyUpgrades(db, oldVersion);
+            },
+          );
+          await upgradeDb.close();
+        }
+
+        // Run the 8-checkpoint crash-safe plaintext -> SQLCipher migration
+        final result = await DatabaseEncryptionMigrationService.instance.runMigration(
+          dbPath: path,
+        );
+        if (!result.success) {
+          throw StateError(
+            'FATAL: Automatic database encryption migration failed: ${result.errorMessage}',
+          );
+        }
+      } else {
+        // Test-only bypass: open plaintext directly without auto-migrating
+        return await openDatabase(
+          path,
+          version: 24,
+          onConfigure: (db) async {
+            await db.execute('PRAGMA foreign_keys = ON;');
+            await db.rawQuery('PRAGMA busy_timeout = 5000;');
+          },
+          onCreate: _onCreate,
+          onUpgrade: (db, oldVersion, newVersion) async {
+            await _applyUpgrades(db, oldVersion);
+          },
+          onOpen: (db) async {
+            await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+            await BackupFileService.cleanOrphanedStagingDirectories();
+          },
+        );
+      }
+    }
+
+    // 2. ENCRYPTED OPEN (Fresh DB or Migrated/Encrypted DB)
+    // Both fresh installs and migrated databases MUST be opened with SQLCipher.
+    // If encrypted DB exists on disk but key is missing, getOrCreateKey FATALLY THROWS KeyLossFatalException.
+    final key = await SpendXDatabaseKeyManager.instance.getOrCreateKey(
+      encryptedDbPath: path,
+    );
+    final blobKey = SpendXDatabaseKeyManager.keyToSqlCipherBlob(key);
+
+    return await SpendXDatabaseFactory.instance.openEncryptedDatabase(
       path,
-      version: 23,
+      password: blobKey,
+      version: 24,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON;');
+        await db.rawQuery('PRAGMA busy_timeout = 5000;');
+      },
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         await _applyUpgrades(db, oldVersion);
+      },
+      onOpen: (db) async {
+        await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+        await BackupFileService.cleanOrphanedStagingDirectories();
       },
     );
   }
@@ -44,6 +157,10 @@ class AppDatabase {
   Future<void> _onCreate(Database db, int version) async {
     await _executeCreateQueries(db);
     await _migrateToV21(db);
+    await TablesV24.createAllV24(db);
+    await TablesV24.seedSystemAccounts(db);
+    await TablesV24.installTriggers(db);
+    await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
   }
 
   Future<void> _executeCreateQueries(Database db) async {
@@ -84,6 +201,9 @@ class AppDatabase {
     }
     if (oldVersion < 23) {
       await _migrateToV23(db);
+    }
+    if (oldVersion < 24) {
+      await _migrateToV24(db);
     }
     await _executeCreateQueries(db);
   }
@@ -292,8 +412,29 @@ class AppDatabase {
   }
 
   Future<void> close() async {
-    await _database?.close();
+    final db = _database;
     _database = null;
+    _initFuture = null;
+    DatabaseLifecycleCoordinator.instance.markClosed();
+    if (db != null && db.isOpen) {
+      await db.close();
+    }
+  }
+
+  /// Returns the absolute path to the active database file on disk.
+  Future<String> getDatabasePath() async {
+    final dbDir = await getDatabasesPath();
+    return join(dbDir, _testDbPath ?? 'spendx.db');
+  }
+
+  /// Flushes pending WAL frames and prepares database for atomic snapshot or swap.
+  Future<void> checkpointWal() async {
+    final db = _database;
+    if (db != null && db.isOpen) {
+      try {
+        await db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+      } catch (_) {}
+    }
   }
 
   /// V20: ensure ledger_transactions.category_id is TEXT (V17 created it as
@@ -493,6 +634,21 @@ class AppDatabase {
     } catch (_) {
       // Column already exists (idempotent migration).
     }
+  }
+
+  /// V24: SpendX 2.0 Canonical Double-Entry Migration.
+  ///
+  /// Transitions legacy single-entry records into balanced double-entry
+  /// economic events and postings, enforces the 30-day SMS privacy purge,
+  /// reconciles account balances against opening equity, and installs
+  /// the native SQLite lifecycle/immutability trigger suite.
+  Future<void> _migrateToV24(Database db) async {
+    final backupPath = await MigrationV24Service.createPreMigrationBackup(db);
+    await MigrationV24Service.migrate(
+      db,
+      allowDestructiveDrops: false,
+      backupPath: backupPath,
+    );
   }
 
   /// Explicitly (re)run the guarded Phase 1D reconciliation.

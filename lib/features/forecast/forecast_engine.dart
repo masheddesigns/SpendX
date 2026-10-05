@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import '../dashboard/insights_providers.dart';
 
+import '../../domain/finance/cashflow_forecast.dart';
+
 class Forecast {
   final double predictedIncome;
   final double predictedExpense;
@@ -13,6 +15,20 @@ class Forecast {
     required this.predictedBalance,
     required this.confidence,
   });
+
+  factory Forecast.fromCanonical(CashflowForecast c) {
+    final confDouble = switch (c.confidence) {
+      ForecastConfidence.high => 0.9,
+      ForecastConfidence.medium => 0.65,
+      ForecastConfidence.low => 0.35,
+    };
+    return Forecast(
+      predictedIncome: c.projectedIncome.asRupees,
+      predictedExpense: c.projectedTotalExpense.asRupees,
+      predictedBalance: c.projectedEndingBalance.asRupees,
+      confidence: confDouble,
+    );
+  }
 
   double get predictedSavings => predictedIncome - predictedExpense;
   String get confidenceLabel =>

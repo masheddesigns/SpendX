@@ -1,15 +1,20 @@
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../models/bank_balance_snapshot.dart';
 import '../data/repositories/bank_balance_snapshot_repo.dart';
-import '../services/ledger_service.dart';
+import '../data/repositories/account_repo.dart';
 
 class FinancialIntelligenceService {
-  FinancialIntelligenceService._();
-  static final FinancialIntelligenceService instance =
-      FinancialIntelligenceService._();
+  final AccountRepo _accountRepo;
+  final BankBalanceSnapshotRepo _snapshots;
 
-  final LedgerService _ledger = LedgerService.instance;
-  final BankBalanceSnapshotRepo _snapshots = BankBalanceSnapshotRepo();
+  FinancialIntelligenceService({
+    AccountRepo? accountRepo,
+    BankBalanceSnapshotRepo? snapshotRepo,
+  })  : _accountRepo = accountRepo ?? AccountRepo(),
+        _snapshots = snapshotRepo ?? BankBalanceSnapshotRepo();
+
+  static final FinancialIntelligenceService instance =
+      FinancialIntelligenceService();
 
   /// Takes a snapshot of the account balance if one doesn't already exist for today.
   /// Strictly throttled to 1 snapshot per account per day.
@@ -25,8 +30,9 @@ class FinancialIntelligenceService {
       );
       if (exists) return; // Throttled
 
-      // 2. Fetch current balance from Ledger (Source of Truth)
-      final balance = await _ledger.getAccountBalance(accountId);
+      // 2. Fetch current balance from Canonical Account Repository
+      final account = await _accountRepo.getById(accountId);
+      final balance = account?.balance ?? 0.0;
 
       // 3. Insert new snapshot
       final snapshot = BankBalanceSnapshot(

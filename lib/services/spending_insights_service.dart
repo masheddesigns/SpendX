@@ -10,11 +10,21 @@ import 'notification_service_v2.dart';
 /// - Daily: "You spent X today" (evening summary)
 /// - Weekly: "Your spending is up/down X% this week vs last week"
 class SpendingInsightsService {
-  SpendingInsightsService._();
-  static final instance = SpendingInsightsService._();
+  final TransactionRepo _txRepo;
+
+  SpendingInsightsService({TransactionRepo? transactionRepo})
+      : _txRepo = transactionRepo ?? TransactionRepo();
+
+  static final instance = SpendingInsightsService();
 
   static const _dailyNotifId = 42001;
   static const _weeklyNotifId = 42002;
+
+  bool _isExpenseLike(String type) =>
+      type == 'expense' || type == 'credit_card_purchase' || type == 'refund';
+
+  double _signedExpenseAmount(String type, double amount) =>
+      type == 'refund' ? -amount : amount;
 
   /// Check and send daily spending summary (call in evening ~9pm).
   /// Only sends if user had transactions today.
@@ -27,14 +37,13 @@ class SpendingInsightsService {
       // Already sent today
       if (lastDaily == today) return;
 
-      final repo = TransactionRepo();
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
 
       // Get today's transactions
-      final todayTxns = await repo.getAll();
+      final todayTxns = await _txRepo.getAll();
       final todayExpenses = todayTxns.where((t) =>
-          t.type == 'expense' &&
+          _isExpenseLike(t.type) &&
           !t.date.isBefore(startOfDay) &&
           t.date.isBefore(startOfDay.add(const Duration(days: 1))),
       ).toList();
@@ -50,11 +59,14 @@ class SpendingInsightsService {
         return;
       }
 
-      final todayTotal = todayExpenses.fold<double>(0, (s, t) => s + t.amount);
+      final todayTotal = todayExpenses.fold<double>(
+        0,
+        (s, t) => s + _signedExpenseAmount(t.type, t.amount),
+      );
       final txnCount = todayExpenses.length;
 
       // Get average daily spending (last 30 days)
-      final avgDaily = await repo.getAvgDailySpending(30);
+      final avgDaily = await _txRepo.getAvgDailySpending(30);
 
       // Build insight message
       String body;
@@ -73,7 +85,8 @@ class SpendingInsightsService {
       final categoryTotals = <String, double>{};
       for (final t in todayExpenses) {
         final cat = t.categoryId ?? 'others';
-        categoryTotals[cat] = (categoryTotals[cat] ?? 0) + t.amount;
+        categoryTotals[cat] = (categoryTotals[cat] ?? 0) +
+            _signedExpenseAmount(t.type, t.amount);
       }
       if (categoryTotals.length > 1) {
         final topEntry = categoryTotals.entries.reduce(
@@ -108,24 +121,28 @@ class SpendingInsightsService {
       // Already sent this week
       if (lastWeekly == weekKey) return;
 
-      final repo = TransactionRepo();
-
       // This week (Mon-Sun)
       final daysFromMonday = (now.weekday - 1) % 7;
       final thisMonday = DateTime(now.year, now.month, now.day - daysFromMonday);
       final lastMonday = thisMonday.subtract(const Duration(days: 7));
 
-      final allTxns = await repo.getAll();
+      final allTxns = await _txRepo.getAll();
 
       final thisWeekExpenses = allTxns.where((t) =>
-          t.type == 'expense' && !t.date.isBefore(thisMonday)).toList();
+          _isExpenseLike(t.type) && !t.date.isBefore(thisMonday)).toList();
       final lastWeekExpenses = allTxns.where((t) =>
-          t.type == 'expense' &&
+          _isExpenseLike(t.type) &&
           !t.date.isBefore(lastMonday) &&
           t.date.isBefore(thisMonday)).toList();
 
-      final thisWeekTotal = thisWeekExpenses.fold<double>(0, (s, t) => s + t.amount);
-      final lastWeekTotal = lastWeekExpenses.fold<double>(0, (s, t) => s + t.amount);
+      final thisWeekTotal = thisWeekExpenses.fold<double>(
+        0,
+        (s, t) => s + _signedExpenseAmount(t.type, t.amount),
+      );
+      final lastWeekTotal = lastWeekExpenses.fold<double>(
+        0,
+        (s, t) => s + _signedExpenseAmount(t.type, t.amount),
+      );
 
       if (thisWeekTotal == 0 && lastWeekTotal == 0) return;
 

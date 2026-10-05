@@ -12,9 +12,9 @@ import androidx.core.app.NotificationCompat
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 
-/// Captures incoming SMS. Queues the message for later processing and, when
-/// the Flutter engine is alive, pushes it live to Dart. When the app is
-/// killed it shows a notification so the user knows a bank SMS arrived.
+/// Captures incoming SMS. Filters and queues genuine financial messages for
+/// later processing and, when the Flutter engine is alive, pushes them live to Dart.
+/// Non-financial SMS (OTPs, personal chats, marketing, service alerts) are dropped.
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -29,21 +29,28 @@ class SmsReceiver : BroadcastReceiver() {
             ?: messages.first().originatingAddress
             ?: ""
 
-        SmsStore.queue(context, bodies)
+        val fullBody = bodies.joinToString("\n")
+
+        // Strictly drop non-financial SMS (OTPs, promo, personal chats, etc.)
+        if (!FinancialSmsFilter.isFinancial(sender, fullBody)) {
+            return
+        }
 
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
-            // Pass [sender, body] so Dart can filter by sender.
+            // Pass [sender, body] so Dart can process live.
             MethodChannel(
                 engine.dartExecutor.binaryMessenger,
                 MainActivity.CHANNEL,
-            ).invokeMethod("onSmsReceived", listOf(sender, bodies.joinToString("\n")))
+            ).invokeMethod("onSmsReceived", listOf(sender, fullBody))
         } else {
-            showNotification(context, bodies)
+            // App is killed / engine not cached: queue and notify user
+            SmsStore.queue(context, sender, fullBody)
+            showNotification(context, fullBody)
         }
     }
 
-    private fun showNotification(context: Context, bodies: List<String>) {
+    private fun showNotification(context: Context, body: String) {
         val manager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "spendx_sms_live"
@@ -56,14 +63,13 @@ class SmsReceiver : BroadcastReceiver() {
                 ),
             )
         }
-        val preview = bodies.first().take(120) +
-            if (bodies.size > 1) "\n+${bodies.size - 1} more" else ""
+        val preview = body.take(120)
         val launchIntent = context.packageManager.getLaunchIntentForPackage(
             context.packageName,
         )
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("New bank SMS detected")
+            .setContentTitle("Bank transaction detected")
             .setContentText(preview)
             .setStyle(NotificationCompat.BigTextStyle().bigText(preview))
             .setAutoCancel(true)

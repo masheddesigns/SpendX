@@ -57,7 +57,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await SettingsService.instance.setPrimaryCurrency(_selectedCurrency);
 
     // Enable all features by default
-    await SettingsService.instance.setEnableVehicles(true);
     await SettingsService.instance.setEnableCreditCards(true);
     await SettingsService.instance.setEnableLending(true);
 

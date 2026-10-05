@@ -440,7 +440,7 @@ class AccountListScreen extends ConsumerWidget {
 
 }
 
-class _NetWorthSummary extends StatelessWidget {
+class _NetWorthSummary extends ConsumerWidget {
   final List<BankAccount> accounts;
   final List<CreditCard> cards;
   final List<dynamic> loans;
@@ -452,23 +452,34 @@ class _NetWorthSummary extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final assets = accounts
-        .where((a) => a.isAsset)
-        .fold<double>(0, (sum, a) => sum + a.balance);
-    final accountLiabilities = accounts
-        .where((a) => !a.isAsset)
-        .fold<double>(0, (sum, a) => sum + a.balance.abs());
-    final cardOutstanding = cards.fold<double>(
-      0,
-      (sum, c) => sum + c.usedAmount,
-    );
-    final loanOutstanding = loans.fold<double>(
-      0,
-      (sum, loan) => sum + ((loan.total as num) - (loan.paidAmount as num)).toDouble().clamp(0, double.infinity),
-    );
-    final liabilities = accountLiabilities + cardOutstanding + loanOutstanding;
-    final netWorth = assets - liabilities;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summaryAsync = ref.watch(app_data.netWorthSummaryProvider);
+    final double assets;
+    final double liabilities;
+    final double netWorth;
+
+    if (summaryAsync.hasValue) {
+      assets = summaryAsync.value!.assets;
+      liabilities = summaryAsync.value!.liabilities;
+      netWorth = summaryAsync.value!.netWorth;
+    } else {
+      assets = accounts
+          .where((a) => a.isAsset)
+          .fold<double>(0, (sum, a) => sum + a.balance);
+      final accountLiabilities = accounts
+          .where((a) => !a.isAsset)
+          .fold<double>(0, (sum, a) => sum + a.balance.abs());
+      final cardOutstanding = cards.fold<double>(
+        0,
+        (sum, c) => sum + c.usedAmount,
+      );
+      final loanOutstanding = loans.fold<double>(
+        0,
+        (sum, loan) => sum + ((loan.total as num) - (loan.paidAmount as num)).toDouble().clamp(0, double.infinity),
+      );
+      liabilities = accountLiabilities + cardOutstanding + loanOutstanding;
+      netWorth = assets - liabilities;
+    }
 
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;

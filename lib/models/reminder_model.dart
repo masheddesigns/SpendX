@@ -17,7 +17,7 @@ enum ReminderStatus { overdue, dueToday, upcoming, inactive }
 
 enum ReminderRecordStatus { pending, done, snoozed }
 
-enum ReminderSourceType { salary, loan, credit, vehicle, lending, manual }
+enum ReminderSourceType { salary, loan, credit, lending, manual }
 
 class Reminder {
   Reminder({
@@ -26,7 +26,6 @@ class Reminder {
     required this.title,
     this.linkedEntityId,
     this.dueDate,
-    this.dueOdometer,
     this.recurrencePeriod = ReminderRecurrence.none,
     this.amount,
     this.notes,
@@ -48,7 +47,6 @@ class Reminder {
   final String title;
   final String? linkedEntityId;
   final DateTime? dueDate;
-  final double? dueOdometer;
   final ReminderRecurrence recurrencePeriod;
   final double? amount;
   final String? notes;
@@ -78,7 +76,6 @@ class Reminder {
     String? title,
     String? linkedEntityId,
     DateTime? dueDate,
-    double? dueOdometer,
     ReminderRecurrence? recurrencePeriod,
     double? amount,
     String? notes,
@@ -99,7 +96,6 @@ class Reminder {
       title: title ?? this.title,
       linkedEntityId: linkedEntityId ?? this.linkedEntityId,
       dueDate: dueDate ?? this.dueDate,
-      dueOdometer: dueOdometer ?? this.dueOdometer,
       recurrencePeriod: recurrencePeriod ?? this.recurrencePeriod,
       amount: amount ?? this.amount,
       notes: notes ?? this.notes,
@@ -131,7 +127,6 @@ class Reminder {
     'is_completed': recordStatus == ReminderRecordStatus.done ? 1 : 0,
     'created_at': createdAt.toIso8601String(),
     'linked_entity_id': linkedEntityId,
-    'due_odometer': dueOdometer,
     'amount': amount,
     'notes': notes,
     'is_active': isActive ? 1 : 0,
@@ -176,7 +171,6 @@ class Reminder {
       title: map['title'] as String? ?? 'Reminder',
       linkedEntityId: linkedEntityId,
       dueDate: dueDate,
-      dueOdometer: (map['due_odometer'] as num?)?.toDouble(),
       recurrencePeriod: ReminderRecurrence.values.firstWhere(
         (value) => value.name == map['repeat_type'],
         orElse: () => ReminderRecurrence.none,

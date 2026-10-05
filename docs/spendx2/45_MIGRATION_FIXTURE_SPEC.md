@@ -1,0 +1,208 @@
+# 45. Migration v24 Test Fixture Specifications
+
+## 1. Executive Summary
+
+This document specifies the exact fixture datasets, legacy inputs, and expected post-migration states required to rigorously validate **Migration v24** (`v23 -> v24`).
+Automated integration tests must execute the complete migration sequence against these 14 deterministic fixtures and verify post-migration balances down to the exact integer paisa.
+
+---
+
+## 2. Test Fixture Master Catalog
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              MIGRATION TEST FIXTURES                                   │
+├────┬─────────────────────────────┬────────────────────────────────────────────────────┤
+│ ID │ Fixture Name                │ Primary Validation Objective                       │
+├────┼─────────────────────────────┼────────────────────────────────────────────────────┤
+│ FX01 | Clean Normal Database       │ Baseline sanity: salary, grocery, utility expenses │
+│ FX02 | Inter-Account Transfers     │ Transfer zero-sum neutrality across asset accounts │
+│ FX03 | Credit Card Lifecycle       │ Card purchases + repayments (zero double-expense)  │
+│ FX04 | Matched & Unmatched Refunds │ Contra-expense postings vs general refund account  │
+│ FX05 | Loan & EMI Amortization     │ Disbursement, principal reduction, interest exp    │
+│ FX06 | Recurring Salary Contracts  │ Fixed/hourly salary contracts & payment events     │
+│ FX07 | Goals & Virtual Earmarks    │ Earmark reservations vs account cash parity        │
+│ FX08 | Categorical Budgets         │ Budget thresholds mapped to category accounts      │
+│ FX09 | Cross-Source Duplicates     │ Identical SMS + manual entry deduplication         │
+│ FX10 | Soft-Deleted Transactions   │ 100% exclusion of deleted rows from active ledger  │
+│ FX11 | Inconsistent Balances       │ Opening balance equity adjustment calculation      │
+│ FX12 | Malformed Legacy Rows       │ NULL payees, invalid types, extreme numbers        │
+│ FX13 | Legacy Vehicle Logs         │ Vehicle data dropped; fuel expenses preserved      │
+│ FX14 | Pending Review Queue        │ SMS buffer preserved in review_candidates only     │
+└────┴─────────────────────────────┴────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Detailed Fixture Specifications
+
+### FX01: Clean Normal Database
+- **Pre-Migration Input (v23)**:
+  - `bank_accounts`: `acc_1` (HDFC Savings, balance = 45000.00).
+  - `categories`: `cat_groceries` (Expense), `cat_salary` (Income).
+  - `transactions`:
+    - `tx_1`: amount = 50000.00, type = 'income', account_id = 'acc_1', category_id = 'cat_salary'.
+    - `tx_2`: amount = 5000.00, type = 'expense', account_id = 'acc_1', category_id = 'cat_groceries'.
+- **Expected Post-Migration State (v24)**:
+  - `accounts`: `acc_1` (Asset:Bank), `cat_salary` (Income:Salary), `cat_groceries` (Expense:Groceries).
+  - `economic_events`: 2 events (`tx_1`, `tx_2`), status = `'posted'`.
+  - `postings`:
+    - `tx_1`: Debit `acc_1` 5,000,000 paise; Credit `cat_salary` 5,000,000 paise.
+    - `tx_2`: Debit `cat_groceries` 500,000 paise; Credit `acc_1` 500,000 paise.
+  - **Derived Balances**:
+    - `acc_1`: 4,500,000 paise (₹45,000.00). Matches $B_{\text{legacy}}$ exactly.
+    - `cat_groceries`: 500,000 paise (₹5,000.00).
+    - `cat_salary`: 5,000,000 paise (₹50,000.00).
+
+---
+
+### FX02: Inter-Account Transfers
+- **Pre-Migration Input (v23)**:
+  - `bank_accounts`: `acc_sbi` (balance = 10000.00), `acc_icici` (balance = 20000.00).
+  - `transactions`:
+    - `tx_tr1`: amount = 5000.00, type = 'transfer', account_id = 'acc_sbi', related_entity_id = 'acc_icici'.
+- **Expected Post-Migration State (v24)**:
+  - `economic_events`: 1 event (`canonical_type = 'transfer'`).
+  - `postings`:
+    - Debit `acc_icici` 500,000 paise; Credit `acc_sbi` 500,000 paise.
+  - **Asset Category Net Impact**: $500,000 - 500,000 = 0$ paise.
+  - **Derived Balances**: `acc_sbi` = 500,000 paise (₹5,000); `acc_icici` = 2,500,000 paise (₹25,000).
+
+---
+
+### FX03: Credit Card Lifecycle
+- **Pre-Migration Input (v23)**:
+  - `bank_accounts`: `acc_bank` (balance = 40000.00).
+  - `credit_cards`: `card_hdfc` (limit = 100000.00, used_amount = 0.00).
+  - `transactions`:
+    - `tx_c1`: amount = 10000.00, type = 'expense', account_id = 'card_hdfc', category_id = 'cat_flight'.
+    - `tx_c2`: amount = 10000.00, type = 'credit_card_payment', account_id = 'acc_bank', related_entity_id = 'card_hdfc'.
+- **Expected Post-Migration State (v24)**:
+  - `accounts`: `card_hdfc` (type = 'liability', subtype = 'credit_card').
+  - `postings`:
+    - `tx_c1`: Debit `Expense:Flight` 1,000,000; Credit `card_hdfc` 1,000,000.
+    - `tx_c2`: Debit `card_hdfc` 1,000,000; Credit `acc_bank` 1,000,000.
+  - **Derived Balances**:
+    - `card_hdfc`: 0 paise liability (fully settled).
+    - `acc_bank`: 3,000,000 paise (₹30,000).
+    - `Expense:Flight`: 1,000,000 paise (₹10,000). Zero expense generated by payment!
+
+---
+
+### FX04: Matched & Unmatched Refunds
+- **Pre-Migration Input (v23)**:
+  - `transactions`:
+    - `tx_e1`: amount = 2000.00, type = 'expense', account_id = 'acc_1', category_id = 'cat_shopping', external_ref = 'AMZ_ORDER_1'.
+    - `tx_r1`: amount = 2000.00, type = 'refund', account_id = 'acc_1', external_ref = 'AMZ_REF_1', note = 'Refund for AMZ_ORDER_1'.
+    - `tx_r2`: amount = 500.00, type = 'refund', account_id = 'acc_1', external_ref = NULL, note = 'Cashback'.
+- **Expected Post-Migration State (v24)**:
+  - `tx_r1`: Debit `acc_1` 200,000; Credit `cat_shopping` 200,000 (offsets expense).
+  - `tx_r2`: Debit `acc_1` 50,000; Credit `Expense:General:Refunds` 50,000 (contra-expense).
+  - **Income Accounts**: 0 postings created. Neither refund becomes income.
+
+---
+
+### FX05: Loan & EMI Amortization
+- **Pre-Migration Input (v23)**:
+  - `loans`: `loan_1` (principal = 100000.00, total = 100000.00).
+  - `transactions`:
+    - `tx_l1`: amount = 100000.00, type = 'loan_disbursement', account_id = 'acc_bank', related_entity_id = 'loan_1'.
+    - `tx_l2`: amount = 10000.00, type = 'loan_repayment', account_id = 'acc_bank', related_entity_id = 'loan_1', note = 'Principal: 8000, Interest: 2000'.
+- **Expected Post-Migration State (v24)**:
+  - `loan_1`: type = 'liability', subtype = 'loan'.
+  - `tx_l2`:
+    - Debit `loan_1` 800,000 paise (Principal).
+    - Debit `Expense:Interest:Loan` 200,000 paise (Interest).
+    - Credit `acc_bank` 1,000,000 paise.
+  - **Derived Balances**: `loan_1` = 9,200,000 paise (₹92,000 outstanding).
+
+---
+
+### FX06: Recurring Salary Contracts
+- **Pre-Migration Input (v23)**:
+  - `salary_contracts`: `sc_1` (employer = 'Acme Corp', base_amount = 150000.00, pay_day = 1, is_active = 1).
+- **Expected Post-Migration State (v24)**:
+  - `recurring_rules`: 1 rule created (`cadence = 'monthly'`, `day_of_month = 1`, `amount_minor_units = 15000000`).
+  - `expected_events`: Next due date generated for the 1st of upcoming month.
+
+---
+
+### FX07: Goals & Virtual Earmarks
+- **Pre-Migration Input (v23)**:
+  - `bank_accounts`: `acc_savings` (balance = 50000.00).
+  - `goals`: `goal_car` (target_amount = 100000.00, current_amount = 20000.00, status = 'active').
+- **Expected Post-Migration State (v24)**:
+  - `asset_earmarks`: 1 row linking `goal_car` to `acc_savings` with `amount_minor_units = 2000000` (₹20,000).
+  - `Safe To Spend` for `acc_savings`: $50,000 - 20,000 = ₹30,000$.
+
+---
+
+### FX08: Categorical Budgets
+- **Pre-Migration Input (v23)**:
+  - `budgets`: `b_1` (category_id = 'cat_dining', limit_amount = 8000.00, period = 'monthly').
+- **Expected Post-Migration State (v24)**:
+  - `budgets`: `limit_minor_units = 800000`, referencing `cat_dining`.
+
+---
+
+### FX09: Cross-Source Duplicates
+- **Pre-Migration Input (v23)**:
+  - `transactions`: `tx_man` (amount = 450.00, date = '2026-09-01 10:00:00', note = 'Starbucks').
+  - `evidence` / SMS: SMS with identical amount ₹450, timestamp ±10 mins, merchant Starbucks.
+- **Expected Post-Migration State (v24)**:
+  - Exactly 1 `economic_event` created.
+  - 2 `evidence` records linked to the single event (`source_type = 'manual'` and `source_type = 'sms'`).
+  - Zero duplicate ledger postings.
+
+---
+
+### FX10: Soft-Deleted Transactions
+- **Pre-Migration Input (v23)**:
+  - `transactions`:
+    - `tx_active`: amount = 1000.00, is_deleted = 0.
+    - `tx_deleted`: amount = 5000.00, is_deleted = 1, deleted_at = '2026-08-15 12:00:00'.
+- **Expected Post-Migration State (v24)**:
+  - `economic_events`: Contains `tx_active`. `tx_deleted` is NOT in `economic_events`.
+  - `postings`: 0 postings exist for `tx_deleted`.
+
+---
+
+### FX11: Inconsistent Balances
+- **Pre-Migration Input (v23)**:
+  - `bank_accounts`: `acc_drift` (balance = 25000.00).
+  - `transactions`: Only 1 transaction of ₹10,000 income. ($B_{\text{txns}} = 10000 \ne B_{\text{legacy}} = 25000$).
+- **Expected Post-Migration State (v24)**:
+  - 1 Opening Balance Event created: Amount = 1,500,000 paise (₹15,000).
+    - Debit `acc_drift` 1,500,000; Credit `Equity:OpeningBalances` 1,500,000.
+  - Final Derived Balance: $10,000 + 15,000 = ₹25,000.00$. Parity achieved!
+
+---
+
+### FX12: Malformed Legacy Rows
+- **Pre-Migration Input (v23)**:
+  - `transactions`:
+    - `tx_bad_type`: amount = 100.00, type = 'UNKNOWN_TYPO_TYPE', account_id = 'acc_1'.
+    - `tx_null_acc`: amount = 200.00, type = 'expense', account_id = NULL.
+- **Expected Post-Migration State (v24)**:
+  - `tx_bad_type`: Mapped to `canonical_type = 'adjustment'`, offset `Expense:Suspense:LegacyUnmapped`, flagged `needs_review = 1`.
+  - `tx_null_acc`: Mapped to `Asset:Suspense:UnknownLegacyAccount`, flagged `needs_review = 1`.
+  - Zero unhandled exceptions. Zero aborted migrations.
+
+---
+
+### FX13: Legacy Vehicle Logs
+- **Pre-Migration Input (v23)**:
+  - Tables `vehicles`, `fuel_logs`, `vehicle_reminders` populated.
+  - `transactions`: `tx_fuel` (amount = 3000.00, type = 'expense', category_id = 'cat_fuel', is_vehicle_expense = 1).
+- **Expected Post-Migration State (v24)**:
+  - `vehicles`, `fuel_logs`, `vehicle_reminders` tables are dropped.
+  - `tx_fuel` migrated cleanly as normal Transport/Fuel expense: Debit `Expense:Transport:Fuel` 300,000 paise; Credit Bank 300,000 paise.
+
+---
+
+### FX14: Pending Review Queue
+- **Pre-Migration Input (v23)**:
+  - `review_queue`: 3 unconfirmed SMS transaction suggestions.
+- **Expected Post-Migration State (v24)**:
+  - Migrated to `review_candidates` table with `status = 'pending'`.
+  - Exactly 0 rows created in `economic_events` and `postings`.

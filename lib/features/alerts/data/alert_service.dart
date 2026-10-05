@@ -170,10 +170,6 @@ class AlertService {
           );
         }
         break;
-      case ReminderSourceType.vehicle:
-        // Already handled via reminder status update if it was a VehicleReminder.
-        // We might want to update the last_triggered_odometer if it's odo-based.
-        break;
       case ReminderSourceType.manual:
         break;
     }

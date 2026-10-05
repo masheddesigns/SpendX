@@ -1,39 +1,14 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/repositories/account_repo.dart';
+import '../../../data/providers.dart' as app_data;
 import '../../../models/bank_account.dart';
 
-final accountRepoProvider = Provider<AccountRepo>((ref) => AccountRepo());
+/// Single source of truth for AccountRepo provider.
+final accountRepoProvider = app_data.accountRepoProvider;
 
-final accountsProvider =
-    AsyncNotifierProvider<AccountsNotifier, List<BankAccount>>(
-      AccountsNotifier.new,
-    );
-
-class AccountsNotifier extends AsyncNotifier<List<BankAccount>> {
-  @override
-  Future<List<BankAccount>> build() async {
-    final data = await ref.watch(accountRepoProvider).getAll();
-    debugPrint('🏦 Accounts fetched: ${data.length}');
-    return data;
-  }
-
-  Future<void> add(BankAccount account) async {
-    await ref.read(accountRepoProvider).create(account);
-    ref.invalidateSelf();
-  }
-
-  Future<void> replace(BankAccount account) async {
-    await ref.read(accountRepoProvider).updateAccount(account);
-    ref.invalidateSelf();
-  }
-
-  Future<void> remove(String accountId) async {
-    await ref.read(accountRepoProvider).deleteAccount(accountId);
-    ref.invalidateSelf();
-  }
-}
+/// Single source of truth for accountsProvider — re-exported from data/providers.dart.
+/// All invalidations and watches across the entire application converge on this one provider.
+final accountsProvider = app_data.accountsProvider;
 
 final addAccountProvider = Provider((ref) {
   return (BankAccount account) async {

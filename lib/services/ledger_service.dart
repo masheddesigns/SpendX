@@ -1,6 +1,9 @@
 import '../data/repositories/ledger_repo.dart';
 import '../models/ledger_transaction.dart';
 
+@Deprecated(
+  'Retired in Milestone C9: Runtime financial authority resides in canonical services.',
+)
 class LedgerService {
   final LedgerRepo ledgerRepo;
 

@@ -4,6 +4,9 @@ import '../../../models/category.dart';
 import '../../../services/credit_intelligence_service.dart';
 import '../../../data/providers.dart';
 
+export '../../../data/providers.dart'
+    show safeToSpendProvider, canonicalFinancialQueryRepositoryProvider;
+
 final dashboardPeriodProvider = StateProvider<String>((ref) => '1m');
 
 final dashboardCategoryMapProvider = Provider<Map<String, Category>>((ref) {

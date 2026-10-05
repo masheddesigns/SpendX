@@ -10,6 +10,7 @@ import '../models/credit_card.dart';
 import '../models/lending.dart';
 import '../models/loan.dart';
 import '../models/net_worth_snapshot_record.dart';
+import '../models/transaction.dart' as spx;
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
 import '../widgets/custom_snackbar.dart';
@@ -242,15 +243,18 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       final amount = double.tryParse(amountController.text) ?? 0.0;
       if (amount <= 0) return;
 
-      await ref
-          .read(ledgerMutationProvider.notifier)
-          .addTransfer(
-            sourceAccountId: sourceId!,
-            destinationAccountId: destId!,
-            amount: amount,
-            date: DateTime.now(),
-            note: 'Internal Transfer',
-          );
+      final tx = spx.Transaction(
+        type: 'transfer',
+        amount: amount,
+        accountId: sourceId!,
+        relatedEntityId: destId!,
+        date: DateTime.now(),
+        notes: 'Internal Transfer',
+        userId: 'offline_user',
+      );
+
+      await ref.read(financialTransactionServiceProvider).createTransfer(tx);
+      invalidateAllFinancialProviders(ref);
 
       if (mounted) {
         CustomSnackBar.show(context, message: 'Transfer successful!');

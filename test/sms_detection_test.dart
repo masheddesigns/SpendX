@@ -111,6 +111,97 @@ void main() {
       expect(result.transaction, isNotNull);
       expect(result.transaction!.merchant, 'SONU PETRO');
     });
+
+    test('filters OTP containing transaction amount', () {
+      final result = service.classifyMessage(
+        '648280 is the OTP for txn of INR 1515.00 on your Edge CSB Bank RuPay Credit Card ending 2834 done on ICMAI. If not done by you, please call 8655055086. Thanks for using the Jupiter app.',
+        'TX-JTEDGE-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters bank login OTP', () {
+      final result = service.classifyMessage(
+        '409147 is your OTP for service - Login request on HDFC Bank MyCards. Valid for 2 mins. Never share OTP @mycards.hdfc.bank.in #409147',
+        'AD-HDFCBK-T',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters card PIN reset OTP', () {
+      final result = service.classifyMessage(
+        '2477 is the OTP to reset your card PIN for Edge CSB Bank RuPay Credit Card. If not requested by you, please reach out to us at 8655055086. Thanks for using the Jupiter app.',
+        'JD-JTEDGE-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters e-commerce app OTP', () {
+      final result = service.classifyMessage(
+        'LOGIN to your Flipkart account using OTP 611176. DO NOT SHARE this code with anyone, including delivery agents. #611176',
+        'JK-FLPKRT-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters regional language telecom recharge/plan expiration alert', () {
+      final result = service.classifyMessage(
+        'നിങ്ങളുടെ Rs899_90D_2GB/D_20GB ജിയോ നമ്പറിനായുള്ള 8089490594 എന്ന പ്ലാൻ 24-Sep-26 17:53 Hrs-ന് കാലഹരണപ്പെട്ടു. \nനിങ്ങൾ ഇതിനകം തന്നെ Rs899_90D_2GB/D_20GB പ്ലാൻ ഉപയോഗിച്ച് റീചാർജ് ചെയ്തിട്ടുണ്ട്, തടസ്സമില്ലാത്ത ജിയോ ഉറപ്പാക്കാൻ അത് സ്വയമേവ സജീവമാകും.',
+        'JL-JIOCAR-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters weather alert', () {
+      final result = service.classifyMessage(
+        'അടുത്ത 3 മണിക്കൂറിൽ IDK, TSR, PKD, MLP ജില്ലകളിൽ ഒറ്റപ്പെട്ടയിടങ്ങളിൽ ഇടിമിന്നലോട് കൂടിയ ഇടത്തരം മഴയ്ക്കും 50 kmph വരെ വേഗതയിൽ ശക്തമായ കാറ്റിനും സാധ്യത. 01.10.2026; 07.20 pm; IMD-KSDMA.',
+        'JG-NDMAEW-G',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters personal message from standard phone number', () {
+      final result = service.classifyMessage(
+        'Hey bro did you send 500 rs to my account?',
+        '+919876543210',
+      );
+      expect(result.transaction, isNull);
+      expect(result.balance, isNull);
+    });
+
+    test('filters promotional offers with amounts', () {
+      final result = service.classifyMessage(
+        'Manage spends effectively by increasing the limit on ICICI Bank Credit Card XX5007 from Rs140000 to Rs170000. SMS CRLIM 5007 to 5676766 to raise the limit',
+        'JX-ICICIT-S',
+      );
+      expect(result.transaction, isNull);
+    });
+
+    test('accepts real credit card payment confirmation', () {
+      final result = service.classifyMessage(
+        'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 2000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6366 ON 2-10-2026.YOUR AVAILABLE LIMIT IS RS. 77755.88',
+        'JM-HDFCBK-S',
+      );
+      expect(result.transaction, isNotNull);
+      expect(result.transaction!.amount, 2000.0);
+      expect(result.transaction!.isCredit, isTrue);
+    });
+
+    test('accepts real credit card spend transaction', () {
+      final result = service.classifyMessage(
+        '₹1515.00 paid from your Edge CSB Bank RuPay Credit Card to ICMAI GURGOAN dlIN on 2026-10-02T12:22:27.401024+05:30 IST. To raise an issue, call 8655055086. Thank you for using Jupiter.',
+        'TX-JTEDGE-S',
+      );
+      expect(result.transaction, isNotNull);
+      expect(result.transaction!.amount, 1515.0);
+      expect(result.transaction!.isCredit, isFalse);
+    });
   });
 
   group('SmsImportService balance detection', () {
@@ -246,6 +337,17 @@ void main() {
       expect(restored.sourceType, ReminderSourceType.loan);
       expect(restored.linkedEntityId, 'inst-123');
       expect(restored.dueDate, DateTime(2026, 10, 1, 9, 0));
+    });
+  });
+
+  group('SmsImportService balance detection', () {
+    test('known banks without CC issuance are not detected as credit cards', () {
+      final result = service.classifyMessage(
+        'Jio Payments Bank: Your total dues is Rs.500.00. Pay now.',
+        'JG-JIOFBR-S',
+      );
+      // Should NOT be detected as credit card even though "total dues" matches _creditDueRe.
+      expect(result.balance, isNull);
     });
   });
 }

@@ -5,28 +5,56 @@ import '../../alerts/providers/alert_providers.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 import '../../../models/transaction.dart' as spx;
 import '../../../data/providers.dart';
+import '../../../domain/finance/finance.dart';
 
 /// Provides a summary of the user's finances for the home screen.
-/// Mapped from the batched AnalyticsSummary for Phase 3 efficiency.
+/// Derived strictly from canonical transactionsProvider (economic events & postings).
 final homeSummaryProvider = Provider<DashboardSummaryData>((ref) {
-  final summary = ref.watch(analyticsSummaryProvider);
+  final allTxns = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  final now = DateTime.now();
+  final currentMonthStart = DateTime(now.year, now.month, 1);
+  final previousMonthStart = DateTime(now.year, now.month - 1, 1);
+  final previousMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+
+  double income = 0, expense = 0;
+  double prevMonthExp = 0;
+
+  for (final t in allTxns) {
+    if (!t.date.isBefore(currentMonthStart) && !t.date.isAfter(now)) {
+      if (t.type == 'income') {
+        income += t.amount;
+      } else if (t.type == 'expense') {
+        expense += t.amount;
+      }
+    } else if (!t.date.isBefore(previousMonthStart) &&
+        !t.date.isAfter(previousMonthEnd)) {
+      if (t.type == 'expense') {
+        prevMonthExp += t.amount;
+      }
+    }
+  }
 
   return DashboardSummaryData(
-    income: summary.monthlyIncome,
-    expense: summary.monthlyExpense,
+    income: income,
+    expense: expense,
     // Balance = income minus expense for this period (not net worth)
-    balance: summary.monthlyIncome - summary.monthlyExpense,
-    currentMonthExpense: summary.monthlyExpense,
-    previousMonthExpense: summary.previousMonthExpense,
+    balance: income - expense,
+    currentMonthExpense: expense,
+    previousMonthExpense: prevMonthExp,
   );
 });
 
 /// Provides the last 10 transactions for the home screen preview.
-/// Uses the precomputed recentTransactions from AnalyticsSummary.
+/// Uses the canonical transactions from transactionsProvider.
 final homeTransactionsProvider = Provider<List<spx.Transaction>>((ref) {
-  return ref.watch(
-    analyticsSummaryProvider.select((s) => s.recentTransactions),
-  );
+  final txns = ref.watch(transactionsProvider).valueOrNull ?? const [];
+  return txns.take(10).toList();
+});
+
+/// Re-exports canonical Safe-to-Spend calculation for home screen and widgets.
+final homeSafeToSpendProvider =
+    Provider<AsyncValue<SafeToSpendCalculation>>((ref) {
+  return ref.watch(safeToSpendProvider);
 });
 
 /// Provides active alerts for the home strip with actions.

@@ -12,14 +12,15 @@ class ReportsService {
   final CreditRepo creditRepo;
   final LoanRepo loanRepo;
   final LendingRepo lendingRepo;
-  final LedgerRepo ledgerRepo;
+  @Deprecated('Retired in Milestone C9: Non-canonical ledger retired.')
+  final LedgerRepo? ledgerRepo;
 
   ReportsService({
     required this.transactionRepo,
     required this.creditRepo,
     required this.loanRepo,
     required this.lendingRepo,
-    required this.ledgerRepo,
+    this.ledgerRepo,
   });
 
   Future<ReportsSummary> computeSummary(int monthsBack) async {
@@ -68,7 +69,7 @@ class ReportsService {
     // 3. Process Credit Summaries
     final List<CreditCardSummary> creditSummaries = [];
     for (var card in creditCards) {
-      final outstanding = await ledgerRepo.getCreditOutstanding(card.id);
+      final outstanding = (await creditRepo.getDerivedBalance(card.id)).toRupees;
       final utilPct = card.creditLimit > 0
           ? (outstanding / card.creditLimit) * 100
           : 0.0;
@@ -87,9 +88,9 @@ class ReportsService {
     // 4. Process Loan Summaries
     final List<LoanSummary> loanSummaries = [];
     for (var loan in loans) {
-      final balance = await ledgerRepo.getLoanBalance(loan.id);
-      final paid = loan.total - balance;
-      final progress = loan.total > 0 ? (paid / loan.total) : 0.0;
+      final balance = (await loanRepo.getDerivedBalance(loan.id)).toRupees;
+      final paid = (loan.total - balance).clamp(0.0, loan.total);
+      final progress = loan.total > 0 ? (paid / loan.total).clamp(0.0, 1.0) : 0.0;
 
       loanSummaries.add(
         LoanSummary(

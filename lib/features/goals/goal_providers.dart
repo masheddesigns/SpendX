@@ -1,22 +1,51 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/repositories/goal_repo.dart';
+import '../../domain/finance/asset_earmark.dart';
 import '../../models/goal.dart';
 import '../../models/goal_log.dart';
 import '../transactions/providers/transaction_providers.dart';
+import '../../data/providers.dart' as app_data;
 import 'goal_progress.dart';
 
-final goalRepoProvider = Provider<GoalRepo>((ref) => GoalRepo());
+final goalRepoProvider = app_data.goalRepoProvider;
 
-/// All goals (active and inactive).
+/// All goals (active and inactive) with canonical derived progress.
 final goalsProvider = FutureProvider<List<Goal>>((ref) {
   return ref.watch(goalRepoProvider).getAll();
 });
 
-/// Logs for a specific goal.
+/// Single goal by ID derived from canonical goals list.
+final goalByIdProvider = Provider.family<Goal?, String>((ref, goalId) {
+  final goals = ref.watch(goalsProvider).valueOrNull ?? const <Goal>[];
+  for (final goal in goals) {
+    if (goal.id == goalId) return goal;
+  }
+  return null;
+});
+
+/// Logs for a specific goal (operational history/compatibility).
 final goalLogsProvider =
     FutureProvider.family<List<GoalLog>, String>((ref, goalId) {
   return ref.watch(goalRepoProvider).getLogs(goalId);
+});
+
+/// Lists all active earmarks allocated for a specific goal.
+final goalEarmarksProvider =
+    FutureProvider.family<List<AssetEarmark>, String>((ref, goalId) async {
+  return await ref.watch(goalRepoProvider).getEarmarksForGoal(goalId);
+});
+
+/// Calculates total amount earmarked for a specific asset account.
+final accountEarmarkedTotalProvider =
+    FutureProvider.family<double, String>((ref, accountId) async {
+  final money = await ref.watch(goalRepoProvider).getTotalEarmarkedForAccount(accountId);
+  return money.toRupees;
+});
+
+/// Calculates dynamically derived progress for a goal based strictly on active earmarks.
+final goalDerivedProgressProvider =
+    FutureProvider.family<double, String>((ref, goalId) async {
+  return await ref.watch(goalRepoProvider).getDerivedProgress(goalId);
 });
 
 /// Active goals only — derived from goalsProvider so invalidating

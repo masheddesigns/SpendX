@@ -47,7 +47,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
         } else if (widget.initialMethod == 'csv') {
           _importStandardCsv();
         } else if (widget.initialMethod == 'csv_generic') {
-          // Wait for user to pick file or vehicle
+          // Wait for user to pick file
         }
         _hasTriggeredInitial = true;
       }

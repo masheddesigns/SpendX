@@ -4,6 +4,9 @@ import '../../models/ledger_transaction.dart';
 import '../core/app_database.dart';
 import '../core/tables.dart';
 
+@Deprecated(
+  'Retired in Milestone C9: Runtime financial authority resides in CanonicalEventRepository / double-entry postings.',
+)
 class LedgerRepo {
   final Database? database;
 

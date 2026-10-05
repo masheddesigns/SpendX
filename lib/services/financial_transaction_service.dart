@@ -2,35 +2,68 @@ import 'package:sqflite/sqflite.dart' hide Transaction;
 
 import '../data/core/app_database.dart';
 import '../data/core/tables.dart';
+import '../data/repositories/credit_repo.dart';
+import '../data/repositories/loan_repo.dart';
+import '../data/repositories/transaction_repo.dart';
+import '../models/credit_transaction.dart';
 import '../models/ledger_transaction.dart';
 import '../models/transaction.dart';
-import '../models/credit_transaction.dart';
 
-/// CANONICAL financial mutation boundary (Phase 2A, G1–G3).
+/// Orchestration service for financial transaction workflows in SpendX 2.0.
 ///
-/// Architecture contract (locked):
-///   - [Tables.ledgerTransactions] = canonical money-movement journal (source
-///     of truth). The ledger is APPEND-ONLY: edits and deletes emit `reversal`
-///     / `correction` events; historical rows are never mutated in place.
-///   - [Tables.transactions] = canonical user-facing event/projection.
-///   - [Tables.bankAccounts].balance = materialized cache whose correctness is
-///     enforced transactionally: every mutation writes its journal event(s)
-///     AND applies the matching balance delta inside ONE SQLite transaction,
-///     then verifies that the journal-derived delta equals the applied delta.
-///     Mismatch => throw => SQLite rolls back EVERYTHING.
-///
-/// This service is the ONLY writer of financial state. Repositories'
-/// adjust/insert primitives are invoked exclusively from within these methods.
+/// Under the canonical double-entry architecture (Milestone C3B-6):
+///   - Authoritative financial state is governed strictly by canonical repositories:
+///     [TransactionRepo], [AccountRepo], [CreditRepo], and [LoanRepo].
+///   - Authoritative accounting events are persisted in `economic_events` and `postings`.
+///   - Account balances are dynamically derived from canonical postings.
+///   - This service orchestrates cross-domain workflows (transactions, credit side-effects,
+///     and loan repayments) and delegates strictly to canonical repositories.
+///   - Direct authoritative mutations to `bank_accounts.balance`, `credit_cards.used_amount`,
+///     or `loans.paid_amount` are strictly prohibited.
 class FinancialTransactionService {
   final Database? database;
+  final TransactionRepo? _customTransactionRepo;
+  final CreditRepo? _customCreditRepo;
+  final LoanRepo? _customLoanRepo;
 
-  FinancialTransactionService({this.database});
+  FinancialTransactionService({
+    this.database,
+    TransactionRepo? transactionRepo,
+    CreditRepo? creditRepo,
+    LoanRepo? loanRepo,
+  })  : _customTransactionRepo = transactionRepo,
+        _customCreditRepo = creditRepo,
+        _customLoanRepo = loanRepo;
 
   Future<Database> get _db async =>
       database ?? await AppDatabase.instance.database;
 
+  TransactionRepo _getTransactionRepo(DatabaseExecutor executor) =>
+      _customTransactionRepo ?? TransactionRepo(executor: executor);
+
+  CreditRepo _getCreditRepo(DatabaseExecutor executor) =>
+      _customCreditRepo ?? CreditRepo(executor: executor);
+
+  LoanRepo _getLoanRepo(DatabaseExecutor executor) =>
+      _customLoanRepo ?? LoanRepo(executor: executor);
+
+  Future<bool> _hasCanonicalSchema(DatabaseExecutor db) async {
+    final rows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='${TablesV24.economicEvents}'",
+    );
+    return rows.isNotEmpty;
+  }
+
+  Future<bool> _hasTable(DatabaseExecutor db, String tableName) async {
+    final rows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+      [tableName],
+    );
+    return rows.isNotEmpty;
+  }
+
   // ---------------------------------------------------------------------------
-  // Impact + ledger helpers (single source of truth for sign policy)
+  // Impact + ledger helpers (preserved for transitional compatibility)
   // ---------------------------------------------------------------------------
 
   static const Set<LedgerType> _negative = {
@@ -70,12 +103,7 @@ class FinancialTransactionService {
     }
   }
 
-  /// Bank-account ledger legs for a transaction (empty for card-side purchases).
-  ///
-  /// [referenceId] overrides the default `tx.id` anchor — used by append-only
-  /// edits so the corrected event gets a distinct `tx.id:corr:N` reference
-  /// (never colliding with the original `tx.id` leg or any `tx.id:rev:N`
-  /// reversal), keeping the journal unambiguous for the G4 backfill.
+  /// Bank-account ledger legs for a transaction.
   List<LedgerTransaction> _bankLegs(Transaction tx, {String? referenceId}) {
     final ref = referenceId ?? tx.id;
     if (tx.source == 'credit_card_purchase') return const [];
@@ -145,7 +173,7 @@ class FinancialTransactionService {
     }
   }
 
-  /// Bank-account balance deltas for a transaction (empty for card purchases).
+  /// Bank-account balance deltas for a transaction.
   Map<String, double> _bankDeltas(Transaction tx) {
     final deltas = <String, double>{};
     if (tx.source == 'credit_card_purchase') return deltas;
@@ -187,9 +215,6 @@ class FinancialTransactionService {
     return out;
   }
 
-  /// Verify that the signed sum of [legs] per account equals [expectedDeltas].
-  /// This enforces G3: the journal event deltas must exactly produce the
-  /// applied balance delta. Throws (=> rollback) on mismatch.
   void _verifyLegsMatchDeltas(
     List<LedgerTransaction> legs,
     Map<String, double> expectedDeltas,
@@ -213,7 +238,6 @@ class FinancialTransactionService {
     }
   }
 
-  /// Apply [legs] to the materialized balances and verify against [expected].
   Future<void> _applyAndVerify(
     DatabaseExecutor t,
     List<LedgerTransaction> legs,
@@ -241,24 +265,29 @@ class FinancialTransactionService {
   }
 
   // ---------------------------------------------------------------------------
-  // Public API (backward-compatible names)
+  // Public API (CANONICAL_FINANCIAL & TRANSITIONAL_COMPATIBILITY)
   // ---------------------------------------------------------------------------
 
+  /// Creates an expense transaction. Delegates to [createTransaction].
   Future<void> createExpense(Transaction tx, {DatabaseExecutor? txn}) =>
       createTransaction(tx, txn: txn);
 
+  /// Creates an income transaction. Delegates to [createTransaction].
   Future<void> createIncome(Transaction tx, {DatabaseExecutor? txn}) =>
       createTransaction(tx, txn: txn);
 
+  /// Creates a transfer transaction. Delegates to [createTransaction].
   Future<void> createTransfer(Transaction tx, {DatabaseExecutor? txn}) =>
       createTransaction(tx, txn: txn);
 
-  /// Canonical create. Writes the source row + journal event(s) + materialized
-  /// balance delta (and optional credit/loan side-effects) atomically.
+  /// Orchestrates the creation of a financial transaction.
   ///
-  /// When [txn] is supplied the caller owns the transaction (used by bulk
-  /// import). When [insertSource] is false the source row is assumed already
-  /// inserted by the caller (bulk path).
+  /// Under canonical v24 schema:
+  /// - Delegates primary financial creation to [TransactionRepo.insert].
+  /// - Delegates credit card purchase side-effects to [CreditRepo.insertTransaction].
+  /// - Delegates loan repayment side-effects to [LoanRepo.recordRepayment].
+  /// - ZERO direct authoritative writes to `bank_accounts.balance`.
+  /// - Enclosed in an atomic transaction boundary.
   Future<void> createTransaction(
     Transaction tx, {
     CreditTransaction? creditTxn,
@@ -267,7 +296,58 @@ class FinancialTransactionService {
     DatabaseExecutor? txn,
     bool insertSource = true,
   }) async {
-    Future<void> inner(DatabaseExecutor t) async {
+    final db = txn ?? await _db;
+    final isCanonical = await _hasCanonicalSchema(db);
+
+    if (isCanonical) {
+      Future<void> canonicalFlow(DatabaseExecutor t) async {
+        if (creditTxn != null) {
+          // 1. Credit-card financial mutation routed exclusively through CreditRepo
+          final crRepo = _getCreditRepo(t);
+          await crRepo.insertTransaction(creditTxn);
+        } else if (loanId != null && loanPaidDelta != null && loanPaidDelta > 0) {
+          // 2. Loan repayment financial mutation routed exclusively through LoanRepo
+          final lnRepo = _getLoanRepo(t);
+          final assetAcc = tx.accountId ?? 'bank_default';
+          final principal = loanPaidDelta;
+          final interest = (tx.amount - loanPaidDelta).clamp(0.0, double.infinity);
+          if (interest > 0) {
+            await lnRepo.recordCombinedPayment(
+              loanId: loanId,
+              assetAccountId: assetAcc,
+              principalAmount: principal,
+              interestAmount: interest,
+              timestamp: tx.date,
+              description: tx.notes,
+            );
+          } else {
+            await lnRepo.recordRepayment(
+              loanId: loanId,
+              assetAccountId: assetAcc,
+              principalAmount: principal,
+              timestamp: tx.date,
+              description: tx.notes,
+            );
+          }
+        } else {
+          // 3. Standard transaction routed through TransactionRepo
+          final txRepo = _getTransactionRepo(t);
+          await txRepo.insert(tx);
+        }
+      }
+
+      if (txn != null) {
+        await canonicalFlow(txn);
+      } else if (db is Database) {
+        await db.transaction((t) => canonicalFlow(t));
+      } else {
+        await canonicalFlow(db);
+      }
+      return;
+    }
+
+    // Pre-v24 legacy transitional implementation
+    Future<void> legacyFlow(DatabaseExecutor t) async {
       if (insertSource) {
         await t.insert(Tables.transactions, tx.toMap());
       }
@@ -308,19 +388,42 @@ class FinancialTransactionService {
       await _applyAndVerify(t, legs, _bankDeltas(tx));
     }
 
-    if (txn != null) return inner(txn);
-    final db = await _db;
-    await db.transaction((t) => inner(t));
+    if (txn != null) return legacyFlow(txn);
+    final database = await _db;
+    await database.transaction((t) => legacyFlow(t));
   }
 
-  /// Edit = append-only: emit a `reversal` of the old event, then the corrected
-  /// event. The source row is updated; no journal row is ever deleted.
+  /// Edits an existing transaction.
+  ///
+  /// Under canonical v24 schema:
+  /// - Delegates to [TransactionRepo.update] which enforces posted immutability
+  ///   via append-only reversal and replacement events.
   Future<void> editTransaction({
     required Transaction oldTransaction,
     required Transaction newTransaction,
     DatabaseExecutor? txn,
   }) async {
-    Future<void> inner(DatabaseExecutor t) async {
+    final db = txn ?? await _db;
+    final isCanonical = await _hasCanonicalSchema(db);
+
+    if (isCanonical) {
+      Future<void> canonicalEdit(DatabaseExecutor t) async {
+        final txRepo = _getTransactionRepo(t);
+        await txRepo.update(newTransaction);
+      }
+
+      if (txn != null) {
+        await canonicalEdit(txn);
+      } else if (db is Database) {
+        await db.transaction((t) => canonicalEdit(t));
+      } else {
+        await canonicalEdit(db);
+      }
+      return;
+    }
+
+    // Pre-v24 legacy flow
+    Future<void> legacyEdit(DatabaseExecutor t) async {
       final oldLegs = _bankLegs(oldTransaction);
       final seq = await _revSeq(t, oldTransaction.id);
       final newLegs = _bankLegs(
@@ -361,19 +464,42 @@ class FinancialTransactionService {
       await _applyAndVerify(t, [...revLegs, ...newLegs], expected);
     }
 
-    if (txn != null) return inner(txn);
-    final db = await _db;
-    await db.transaction((t) => inner(t));
+    if (txn != null) return legacyEdit(txn);
+    final database = await _db;
+    await database.transaction((t) => legacyEdit(t));
   }
 
-  /// Delete = append-only: emit a `reversal` (cancel) of the old event, then
-  /// delete the source row. The journal keeps the full cancellation trail.
+  /// Deletes an existing transaction.
+  ///
+  /// Under canonical v24 schema:
+  /// - Delegates to [TransactionRepo.delete] which enforces posted immutability
+  ///   via a balanced reversal event and soft-archival.
   Future<void> deleteTransaction(
     String transactionId, {
     Transaction? oldTransaction,
     DatabaseExecutor? txn,
   }) async {
-    Future<void> inner(DatabaseExecutor t) async {
+    final db = txn ?? await _db;
+    final isCanonical = await _hasCanonicalSchema(db);
+
+    if (isCanonical) {
+      Future<void> canonicalDelete(DatabaseExecutor t) async {
+        final txRepo = _getTransactionRepo(t);
+        await txRepo.delete(transactionId);
+      }
+
+      if (txn != null) {
+        await canonicalDelete(txn);
+      } else if (db is Database) {
+        await db.transaction((t) => canonicalDelete(t));
+      } else {
+        await canonicalDelete(db);
+      }
+      return;
+    }
+
+    // Pre-v24 legacy flow
+    Future<void> legacyDelete(DatabaseExecutor t) async {
       final old = oldTransaction ??
           Transaction.fromMap(
             (await t.query(
@@ -415,56 +541,55 @@ class FinancialTransactionService {
       await _applyAndVerify(t, revLegs, expected);
     }
 
-    if (txn != null) return inner(txn);
-    final db = await _db;
-    await db.transaction((t) => inner(t));
+    if (txn != null) return legacyDelete(txn);
+    final database = await _db;
+    await database.transaction((t) => legacyDelete(t));
   }
 
-  // ---------------------------------------------------------------------------
-  // Choke-point for domain subsystems (credit / loan / salary / lending)
-  // ---------------------------------------------------------------------------
-
-  /// Single writer for any [LedgerTransaction] row. Domain subsystems
-  /// (credit-card, loan) MUST route their journal rows through here so the
-  /// canonical ledger has exactly one writer. If [leg] carries an [accountId]
-  /// the matching bank balance delta is applied and verified atomically — this
-  /// is what keeps the materialized cache correct for card payments and loan
-  /// EMIs (previously those bank-side legs were journaled but never reflected
-  /// in [Tables.bankAccounts].balance).
+  /// Appends a transitional compatibility ledger row.
+  ///
+  /// This method exists strictly for legacy domain callers (e.g. CreditCardService,
+  /// LoanService) during the transition. It writes to the compatibility
+  /// [Tables.ledgerTransactions] table and updates the legacy [Tables.bankAccounts]
+  /// balance cache as a non-authoritative projection.
+  /// Financial authority resides solely in canonical postings.
   Future<void> appendLedger(LedgerTransaction leg) async {
     final db = await _db;
     await db.transaction((t) async {
-      await t.insert(Tables.ledgerTransactions, leg.toMap());
+      final hasLedgerTable = await _hasTable(t, Tables.ledgerTransactions);
+      if (hasLedgerTable) {
+        await t.insert(Tables.ledgerTransactions, leg.toMap());
+      }
       if (leg.accountId == null || leg.accountId!.isEmpty) return;
-      final signed = _signed(leg.type, leg.amount);
-      await _applyAndVerify(t, [leg], {leg.accountId!: signed});
+      final hasBankTable = await _hasTable(t, Tables.bankAccounts);
+      if (hasBankTable) {
+        final signed = _signed(leg.type, leg.amount);
+        await _applyAndVerify(t, [leg], {leg.accountId!: signed});
+      }
     });
   }
 
-  /// Single deletion path for journal rows owned by domain subsystems
-  /// (credit/loan internal transforms such as purchase→EMI conversion).
-  /// Hard-deletes by reference (and optional type); kept as a service method
-  /// so the ledger still has exactly one writer. Append-only purity for
-  /// credit-internal transforms is tracked separately under §19 / G4.
+  /// Removes a transitional compatibility ledger row.
   Future<void> removeLedger({
     required String referenceId,
     String? type,
   }) async {
     final db = await _db;
-    await db.transaction((t) async {
-      if (type != null) {
-        await t.delete(
-          Tables.ledgerTransactions,
-          where: 'reference_id = ? AND type = ?',
-          whereArgs: [referenceId, type],
-        );
-      } else {
-        await t.delete(
-          Tables.ledgerTransactions,
-          where: 'reference_id = ?',
-          whereArgs: [referenceId],
-        );
-      }
-    });
+    final hasLedgerTable = await _hasTable(db, Tables.ledgerTransactions);
+    if (!hasLedgerTable) return;
+
+    if (type != null) {
+      await db.delete(
+        Tables.ledgerTransactions,
+        where: 'reference_id = ? AND type = ?',
+        whereArgs: [referenceId, type],
+      );
+    } else {
+      await db.delete(
+        Tables.ledgerTransactions,
+        where: 'reference_id = ?',
+        whereArgs: [referenceId],
+      );
+    }
   }
 }

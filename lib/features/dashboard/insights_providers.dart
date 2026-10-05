@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/providers.dart' show netWorthSummaryProvider;
 import '../../data/repositories/net_worth_repo.dart';
 import '../../features/categories/providers/category_providers.dart';
 import '../../features/transactions/providers/transaction_providers.dart';
@@ -31,9 +32,9 @@ final netWorthSparklineProvider =
 final netWorthChangeProvider =
     FutureProvider<({double current, double change, double changePct})>(
         (ref) async {
+  final summary = await ref.watch(netWorthSummaryProvider.future);
+  final current = summary.netWorth;
   final repo = ref.watch(netWorthRepoProvider);
-  final latest = await repo.getLatest();
-  if (latest == null) return (current: 0.0, change: 0.0, changePct: 0.0);
 
   final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
   final oldSnapshots = await repo.getRange(
@@ -41,7 +42,6 @@ final netWorthChangeProvider =
     to: thirtyDaysAgo.add(const Duration(days: 2)),
   );
 
-  final current = latest.netWorth;
   if (oldSnapshots.isEmpty) {
     return (current: current, change: 0.0, changePct: 0.0);
   }

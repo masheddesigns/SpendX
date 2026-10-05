@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../data/core/app_database.dart';
 import '../data/core/tables.dart';
+import 'canonical_backup_validator.dart';
 import '../models/bank_account.dart';
 import '../models/category.dart' as app_models;
 import '../models/credit_card.dart';
@@ -14,7 +15,6 @@ import '../models/recurring_template.dart';
 import '../models/budget.dart';
 import '../models/reminder_model.dart';
 import '../models/transaction.dart' as spx;
-import '../models/vehicle.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/budget_repo.dart';
 import '../data/repositories/category_repo.dart';
@@ -23,7 +23,6 @@ import '../data/repositories/lending_repo.dart';
 import '../data/repositories/loan_repo.dart';
 import '../data/repositories/maintenance_repo.dart';
 import '../data/repositories/transaction_repo.dart';
-import '../data/repositories/vehicle_repo.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -102,14 +101,6 @@ class DatabaseHelper {
   @Deprecated(
     'Use MaintenanceRepo via providers/notifiers. DatabaseHelper is a low-level adapter only.',
   )
-  Future<void> clearVehicles() async {
-    await _maintenanceRepo.clearVehicles();
-    notifyDataChange();
-  }
-
-  @Deprecated(
-    'Use MaintenanceRepo via providers/notifiers. DatabaseHelper is a low-level adapter only.',
-  )
   Future<void> clearCreditData() async {
     await _maintenanceRepo.clearCreditData();
     notifyDataChange();
@@ -142,15 +133,10 @@ class DatabaseHelper {
     );
   }
 
-  /// Batch insert transactions (for engine: auto-generated recurring).
+  /// Batch insert transactions — deprecated in C9, dead code.
+  @Deprecated('Dead code retired in Milestone C9')
   Future<void> batchInsertTransactions(List<spx.Transaction> txns) async {
-    final db = await database;
-    final batch = db.batch();
-    for (final t in txns) {
-      batch.insert(Tables.transactions, t.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
-    await batch.commit(noResult: true);
+    // Dead code retired in Milestone C9: zero writes to legacy tables.
   }
 
   @Deprecated('Use RecurringRepo. DatabaseHelper is a low-level adapter only.')
@@ -185,13 +171,6 @@ class DatabaseHelper {
     return maps.map(Reminder.fromMap).toList();
   }
 
-  @Deprecated(
-    'Use DataChangeBus and VehicleRepo. DatabaseHelper is a low-level adapter only.',
-  )
-  Future<void> recalculateVehicleStats(String vehicleId) async {
-    notifyDataChange();
-  }
-
   @Deprecated('Use CreditRepo. DatabaseHelper is a low-level adapter only.')
   Future<CreditTransaction?> getCreditTransactionById(String id) async {
     final db = await database;
@@ -213,27 +192,6 @@ class DatabaseHelper {
   @Deprecated('Use AccountRepo. DatabaseHelper is a low-level adapter only.')
   Future<List<BankAccount>> getAllBankAccounts() {
     return AccountRepo().getAccounts();
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<FuelLog?> getFuelLogById(String id) async {
-    final db = await database;
-    final results = await db.query(
-      Tables.fuelLogs,
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (results.isEmpty) return null;
-
-    final normalized = Map<String, dynamic>.from(results.first);
-    normalized.putIfAbsent('litres', () => normalized['quantity']);
-    normalized.putIfAbsent(
-      'price_per_litre',
-      () => normalized['price_per_unit'],
-    );
-    normalized.putIfAbsent('date', () => normalized['created_at']);
-    return FuelLog.fromMap(normalized);
   }
 
   @Deprecated('Use CategoryRepo. DatabaseHelper is a low-level adapter only.')
@@ -259,11 +217,6 @@ class DatabaseHelper {
   @Deprecated('Use LendingRepo. DatabaseHelper is a low-level adapter only.')
   Future<String> insertLending(Lending lending) {
     return LendingRepo().insert(lending);
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<void> insertFuelLog(FuelLog log) {
-    return VehicleRepo().insertFuelLog(log);
   }
 
   @Deprecated(
@@ -301,11 +254,6 @@ class DatabaseHelper {
     return TransactionRepo().getAll(limit: limit, offset: offset);
   }
 
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<Vehicle?> getVehicleById(String id) async {
-    return VehicleRepo().getVehicleById(id);
-  }
-
   @Deprecated('Use AccountRepo. DatabaseHelper is a low-level adapter only.')
   Future<int> deleteBankAccount(String id) async {
     return AccountRepo().deleteAccount(id);
@@ -339,170 +287,19 @@ class DatabaseHelper {
     return BudgetRepo().getSpentForCategory(categoryId, start, end);
   }
 
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<List<Vehicle>> getAllVehicles() async {
-    return VehicleRepo().getAllVehicles();
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<String> insertVehicle(Vehicle vehicle) async {
-    return VehicleRepo().insertVehicle(vehicle);
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<int> deleteVehicle(String id) async {
-    return VehicleRepo().deleteVehicle(id);
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<List<FuelLog>> getFuelLogsForVehicle(
-    String vehicleId, {
-    int? limit,
-    int? offset,
-  }) async {
-    final db = await database;
-    final results = await db.query(
-      Tables.fuelLogs,
-      where: 'vehicle_id = ?',
-      whereArgs: [vehicleId],
-      orderBy: 'date DESC',
-      limit: limit,
-      offset: offset,
-    );
-
-    return results.map((row) {
-      final normalized = Map<String, dynamic>.from(row);
-      normalized.putIfAbsent('litres', () => normalized['quantity']);
-      normalized.putIfAbsent(
-        'price_per_litre',
-        () => normalized['price_per_unit'],
-      );
-      normalized.putIfAbsent('date', () => normalized['created_at']);
-      return FuelLog.fromMap(normalized);
-    }).toList();
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<List<spx.Transaction>> getTransactionsForVehicle(
-    String vehicleId,
-  ) async {
-    final db = await database;
-    final results = await db.query(
-      Tables.transactions,
-      where: 'vehicle_id = ? OR (related_entity_id = ? AND source = ?)',
-      whereArgs: [vehicleId, vehicleId, 'vehicle'],
-      orderBy: 'date DESC',
-    );
-    return results.map(spx.Transaction.fromMap).toList();
-  }
-
-  @Deprecated('Use VehicleRepo. DatabaseHelper is a low-level adapter only.')
-  Future<int> deleteFuelLog(String id) async {
-    return VehicleRepo().deleteFuelLog(id);
-  }
-
-  /// Returns a full snapshot of ALL user-data tables for backup.
-  /// Keys are table names, values are `List<Map<String, dynamic>>`.
+  /// Returns database metrics for the canonical backup manifest.
   Future<Map<String, dynamic>> getFullSnapshot() async {
     final db = await database;
-    final snapshot = <String, dynamic>{};
-
-    const tables = [
-      // Core financial data
-      Tables.transactions,
-      Tables.categories,
-      Tables.bankAccounts,
-      Tables.budgets,
-      Tables.tags,
-      // Credit
-      Tables.creditCards,
-      Tables.creditTransactions,
-      Tables.creditEmis,
-      Tables.emiInstallments,
-      Tables.emiPlans,
-      Tables.cardStatements,
-      // Loans
-      Tables.loans,
-      Tables.loanInstallments,
-      // Lending
-      Tables.lendings,
-      // Vehicles
-      Tables.vehicles,
-      Tables.fuelLogs,
-      Tables.vehicleReminders,
-      // Recurring
-      Tables.recurring_templates,
-      Tables.reminders,
-      // Ledger
-      Tables.ledgerTransactions,
-      // Companies + Salary (new)
-      Tables.companies,
-      Tables.salaryContracts,
-      Tables.salaryPayments,
-      Tables.salaryIncrements,
-      Tables.salary,
-      Tables.salaryMonths,
-      Tables.salaryLedger,
-      // Goals + Streaks (new)
-      Tables.goals,
-      Tables.goalLogs,
-      Tables.streaks,
-      // Intelligence
-      Tables.merchantRules,
-      Tables.reviewQueue,
-      // History
-      Tables.netWorthHistory,
-      Tables.bankBalanceSnapshots,
-      Tables.health_score_history,
-      // Gamification
-      Tables.challenges,
-      Tables.achievements,
-      Tables.insight_compliance,
-    ];
-
-    for (final table in tables) {
-      try {
-        final rows = await db.query(table);
-        snapshot[table] = rows;
-      } catch (_) {
-        // Table might not exist yet on older DB versions — skip safely
-        snapshot[table] = <Map<String, dynamic>>[];
-      }
-    }
-
-    return snapshot;
+    return await CanonicalBackupValidator.computeDatabaseMetrics(db);
   }
 
-  /// Restore all tables from a backup snapshot. Clears existing data first.
-  /// Runs in a single transaction for atomicity.
+  /// Deprecated legacy restore entry point.
+  /// Direct table-by-table restoration is prohibited in SpendX 2.0.
+  @Deprecated('Use BackupService.instance.restoreFromFile()')
   Future<void> restoreFromSnapshot(Map<String, dynamic> data) async {
-    final db = await database;
-
-    await db.transaction((txn) async {
-      for (final entry in data.entries) {
-        final tableName = entry.key;
-        final rows = entry.value;
-        if (rows is! List) continue;
-
-        // Clear existing data
-        try {
-          await txn.delete(tableName);
-        } catch (_) {
-          // Table might not exist — skip
-          continue;
-        }
-
-        // Re-insert all rows
-        for (final row in rows) {
-          if (row is Map<String, dynamic>) {
-            try {
-              await txn.insert(tableName, row);
-            } catch (_) {
-              // Skip malformed rows
-            }
-          }
-        }
-      }
-    });
+    throw UnsupportedError(
+      'Direct row-by-row table restoration is prohibited. '
+      'Use BackupService.instance.restoreFromFile() for atomic, validated .spendx restoration.',
+    );
   }
 }

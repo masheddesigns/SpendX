@@ -170,10 +170,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
         if (acc.last4 == null || acc.last4!.isEmpty) continue;
         final existing =
             existingAccounts.where((a) => a.last4 == acc.last4).firstOrNull;
-        if (existing != null) {
-          await AccountRepo().updateBalance(existing.id, acc.balance);
-          updatedAccounts++;
-        } else {
+        if (existing == null) {
           await AccountRepo().create(
             BankAccount(
               name: '${acc.bank} Savings',
@@ -198,11 +195,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
                 .firstOrNull
             : null;
         final existing = matchByLast4 ?? matchByKw;
-        if (existing != null) {
-          await CreditRepo()
-              .update(existing.copyWith(usedAmount: card.outstanding));
-          updatedCards++;
-        } else {
+        if (existing == null) {
           final bankField = card.keyword != null && card.keyword!.isNotEmpty
               ? '${card.bank} [${card.keyword}]'
               : card.bank;
@@ -586,7 +579,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
         ref.invalidate(accountsProvider);
       } else {
         final c = account as CreditCard;
-        await CreditRepo().update(c.copyWith(usedAmount: hit.amount));
+        await CreditRepo().updateBalance(c.id, hit.amount);
         ref.invalidate(cardsProvider);
       }
       if (!mounted) return;
@@ -1216,8 +1209,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
 
     try {
       if (existing != null) {
-        await CreditRepo()
-            .update(existing.copyWith(usedAmount: card.outstanding));
+        await CreditRepo().updateBalance(existing.id, card.outstanding);
       } else {
         await CreditRepo().insert(
           CreditCard(

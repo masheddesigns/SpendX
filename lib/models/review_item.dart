@@ -23,7 +23,7 @@ class ReviewItem {
     this.status = 'pending',
     DateTime? createdAt,
   })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now();
+        createdAt = (createdAt ?? DateTime.now()).toUtc();
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -33,7 +33,7 @@ class ReviewItem {
         'parsed_json': parsed.toJson(),
         'confidence': confidence,
         'status': status,
-        'created_at': createdAt.toIso8601String(),
+        'created_at': createdAt.toUtc().toIso8601String(),
       };
 
   factory ReviewItem.fromMap(Map<String, dynamic> map) => ReviewItem(

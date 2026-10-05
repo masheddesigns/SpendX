@@ -1,16 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../accounts/providers/account_providers.dart';
-import '../transactions/providers/transaction_providers.dart';
+import '../../data/providers.dart' show canonicalForecast30DaysProvider;
 import 'runway_engine.dart';
 
-/// Predicted cashflow runway.
-final runwayProvider = FutureProvider<Runway>((ref) async {
-  final accounts = await ref.watch(accountsProvider.future);
-  final txns = await ref.watch(transactionsProvider.future);
+export 'runway_engine.dart' show Runway, RunwayStatus;
 
-  return RunwayEngine().calculate(
-    accounts: accounts,
-    transactions: txns,
-  );
+/// Canonical predicted cashflow runway provider.
+///
+/// Derives runway exclusively from [CanonicalForecastEngine], taking into account
+/// authoritative liquid balance, contractual obligations (loans/cards/rent),
+/// and median daily variable burn.
+final runwayProvider = FutureProvider<Runway>((ref) async {
+  final canonicalForecast =
+      await ref.watch(canonicalForecast30DaysProvider.future);
+
+  return Runway.fromCanonical(canonicalForecast);
 });

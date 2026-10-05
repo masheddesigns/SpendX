@@ -9,3 +9,9 @@
 -dontwarn com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 -dontwarn com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions$Builder
 -dontwarn com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
+
+# SQLCipher native JNI preservation rules for release R8 minification
+-keep class net.sqlcipher.** { *; }
+-dontwarn net.sqlcipher.**
+-keep class io.requery.android.database.** { *; }
+-dontwarn io.requery.android.database.**

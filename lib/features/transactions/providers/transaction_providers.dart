@@ -13,9 +13,12 @@ import '../../../services/data_audit_service.dart';
 import '../../accounts/providers/account_providers.dart';
 import '../../categories/providers/category_providers.dart';
 
-final transactionRepoProvider = Provider<TransactionRepo>((ref) {
-  return TransactionRepo();
-});
+/// Single source of truth for TransactionRepo provider — re-exported from data/providers.dart.
+final transactionRepoProvider = app_data.transactionRepoProvider;
+
+/// Single source of truth for FinancialTransactionService — re-exported from data/providers.dart.
+final financialTransactionServiceProvider =
+    app_data.financialTransactionServiceProvider;
 
 /// Single source of truth — re-exported from data/providers.dart.
 /// All invalidation and watches go through this one provider.
@@ -169,7 +172,7 @@ final paginatedTransactionsProvider =
 
 final addTransactionProvider = Provider((ref) {
   return (Transaction transaction) async {
-    final svc = FinancialTransactionService();
+    final svc = ref.read(financialTransactionServiceProvider);
 
     debugPrint('➡️ Adding transaction: ${transaction.amount}');
     await svc.createTransaction(transaction);
@@ -182,6 +185,8 @@ final addTransactionProvider = Provider((ref) {
 
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
+    ref.invalidate(app_data.safeToSpendProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
   };
@@ -192,7 +197,7 @@ final updateTransactionProvider = Provider((ref) {
     required Transaction oldTransaction,
     required Transaction newTransaction,
   }) async {
-    final svc = FinancialTransactionService();
+    final svc = ref.read(financialTransactionServiceProvider);
 
     // Append-only: reversal of old + corrected event, inside one transaction.
     await svc.editTransaction(
@@ -202,6 +207,8 @@ final updateTransactionProvider = Provider((ref) {
 
     ref.invalidate(accountsProvider);
     ref.invalidate(transactionsProvider);
+    ref.invalidate(app_data.safeToSpendProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
   };
@@ -210,7 +217,7 @@ final updateTransactionProvider = Provider((ref) {
 final deleteTransactionProvider = Provider((ref) {
   return (String transactionId) async {
     final txRepo = ref.read(transactionRepoProvider);
-    final svc = FinancialTransactionService();
+    final svc = ref.read(financialTransactionServiceProvider);
 
     // Fetch before delete so the reversal can reference the original event.
     final tx = await txRepo.getById(transactionId);
@@ -218,6 +225,8 @@ final deleteTransactionProvider = Provider((ref) {
 
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
+    ref.invalidate(app_data.safeToSpendProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
   };

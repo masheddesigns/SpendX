@@ -1,24 +1,24 @@
-import '../models/ledger_transaction.dart';
+import '../models/credit_transaction.dart';
 import '../models/credit_card.dart';
-import '../services/ledger_service.dart';
+import '../data/repositories/credit_repo.dart';
 
 class CreditIntelligenceService {
-  CreditIntelligenceService._();
+  CreditIntelligenceService({CreditRepo? creditRepo})
+      : _creditRepo = creditRepo ?? CreditRepo();
   static final CreditIntelligenceService instance =
-      CreditIntelligenceService._();
+      CreditIntelligenceService();
+
+  final CreditRepo _creditRepo;
 
   /// Represents the calculated intelligence for a specific card
   Future<CreditIntelligenceData> getCardIntelligence(CreditCard card) async {
-    final ledgerTxns = await LedgerService.instance.getTransactions(
-      creditCardId: card.id,
-    );
+    final cardTxns = await _creditRepo.getTransactions(card.id);
 
     // 1. Billing Cycle Detection
     final cycle = _calculateBillingCycle(card);
 
-    // 2. Outstanding Balance (Corrected for Ledger-First)
-    final double outstanding = await LedgerService.instance
-        .getCreditOutstanding(card.id);
+    // 2. Outstanding Balance (Canonical Accounting Truth derived from double-entry postings)
+    final double outstanding = card.outstanding;
 
     // 3. Utilization
     final double utilization = card.creditLimit > 0
@@ -26,7 +26,7 @@ class CreditIntelligenceService {
         : 0.0;
 
     // 4. Unbilled Amount (Transactions since last statement or start of cycle)
-    final double unbilled = await _calculateUnbilled(card, ledgerTxns, cycle);
+    final double unbilled = await _calculateUnbilled(card, cardTxns, cycle);
 
     // 5. Due Date Status
     final upcomingDueDays = _calculateUpcomingDueDays(card, outstanding);
@@ -36,7 +36,7 @@ class CreditIntelligenceService {
     final advice = _generateAdvice(card, cycle, utilization, outstanding);
 
     // 7. EMI Suggestions
-    final currentCycleTxns = ledgerTxns
+    final currentCycleTxns = cardTxns
         .where(
           (t) => t.date.isAfter(
             cycle.startDate.subtract(const Duration(seconds: 1)),
@@ -93,7 +93,7 @@ class CreditIntelligenceService {
 
   Future<double> _calculateUnbilled(
     CreditCard card,
-    List<LedgerTransaction> txns,
+    List<CreditTransaction> txns,
     BillingCycle cycle,
   ) async {
     // Sum all txns in current cycle that don't belong to a statement yet
@@ -104,15 +104,15 @@ class CreditIntelligenceService {
         cycle.startDate.subtract(const Duration(seconds: 1)),
       )) {
         if ([
-          LedgerType.credit_purchase,
-          LedgerType.emi_installment,
-          LedgerType.processing_fee,
-          LedgerType.interest_charge,
+          'purchase',
+          'emi_installment',
+          'processing_fee',
+          'interest_charge',
         ].contains(t.type)) {
           total += t.amount;
         } else if ([
-          LedgerType.credit_payment,
-          LedgerType.refund,
+          'payment',
+          'refund',
         ].contains(t.type)) {
           total -= t.amount;
         }
@@ -188,7 +188,7 @@ class CreditIntelligenceService {
   }
 
   List<EmiSuggestion> _checkEmiTrigger(
-    List<LedgerTransaction> txns,
+    List<CreditTransaction> txns,
     double utilization,
   ) {
     final suggestions = <EmiSuggestion>[];
@@ -196,11 +196,11 @@ class CreditIntelligenceService {
     // Trigger on large transactions (> 5000)
     for (var t in txns) {
       if (t.amount >= 5000 &&
-          t.type != LedgerType.credit_payment &&
-          t.type != LedgerType.emi_installment) {
+          t.type != 'payment' &&
+          t.type != 'emi_installment') {
         suggestions.add(
           EmiSuggestion(
-            transactionId: t.id?.toString() ?? '',
+            transactionId: t.id,
             amount: t.amount,
             reason: 'Large purchase detected',
           ),

@@ -41,15 +41,7 @@ class DataManagementNotifier extends StateNotifier<AsyncValue<void>> {
   }
 
   void _invalidateCaches() {
-    ref.invalidate(transactionsProvider);
-    ref.invalidate(accountsProvider);
-    ref.invalidate(cardsProvider);
-    ref.invalidate(loansProvider);
-    ref.invalidate(categoriesProvider);
-    ref.invalidate(tagsProvider);
-    ref.invalidate(budgetsProvider);
-    ref.invalidate(recurringProvider);
-    ref.invalidate(remindersProvider);
+    invalidateAllFinancialProviders(ref);
     ref.invalidate(netWorthHistoryProvider);
     ref.invalidate(lendingProvider);
     ref.invalidate(liabilitiesSummaryProvider);

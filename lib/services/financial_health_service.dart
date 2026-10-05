@@ -11,6 +11,7 @@ import '../data/repositories/salary_repo.dart';
 
 import '../data/repositories/lending_repo.dart';
 import '../data/repositories/category_repo.dart';
+import '../data/repositories/canonical/canonical_financial_query_repository.dart';
 
 class FinancialHealthService {
   final TransactionRepo transactionRepo;
@@ -19,6 +20,7 @@ class FinancialHealthService {
   final SalaryRepo salaryRepo;
   final LendingRepo lendingRepo;
   final CategoryRepo categoryRepo;
+  final CanonicalFinancialQueryRepository queryRepo;
 
   FinancialHealthService({
     required this.transactionRepo,
@@ -27,7 +29,8 @@ class FinancialHealthService {
     required this.salaryRepo,
     required this.lendingRepo,
     required this.categoryRepo,
-  });
+    CanonicalFinancialQueryRepository? queryRepo,
+  }) : queryRepo = queryRepo ?? CanonicalFinancialQueryRepository();
 
   static final FinancialHealthService instance = FinancialHealthService(
     transactionRepo: TransactionRepo(),
@@ -41,8 +44,6 @@ class FinancialHealthService {
 
   Future<Map<String, double>> calculateMetrics() async {
     final txns = await transactionRepo.getAll();
-    final accounts = await accountRepo.getAccounts();
-    final cards = await accountRepo.getCards();
     final salaries = await salaryRepo.getAll();
     
     // Lending usage is still direct if no repo, but I'll add a minimal check.
@@ -90,9 +91,11 @@ class FinancialHealthService {
         : 0.0;
     savingsRate = savingsRate.clamp(0.0, 1.0);
 
-    // 2. Debt Ratio (25%) -> Assets vs Liabilities (Real-time, no decay needed)
-    double assets = accounts.where((a) => a.isAsset).fold(0.0, (s, a) => s + a.balance);
-    double liabilities = cards.fold(0.0, (s, c) => s + c.usedAmount);
+    // 2. Debt Ratio (25%) -> Assets vs Liabilities (Real-time canonical double-entry truth)
+    final assetsMoney = await queryRepo.getTotalAssets();
+    final liabilitiesMoney = await queryRepo.getTotalLiabilities();
+    double assets = assetsMoney.toRupees;
+    double liabilities = liabilitiesMoney.toRupees;
 
     liabilities += lendings.where((l) => l.type == 'borrowed').fold(0.0, (s, l) => s + (l.originalAmount - l.paidAmount));
     
@@ -304,18 +307,13 @@ class FinancialHealthService {
   /// Calculates net worth at a specific date by subtracting transaction delta 
   /// from current real-time balances.
   Future<double> getHistoricalNetWorth(DateTime targetDate) async {
-    final accounts = await accountRepo.getAccounts();
-    final cards = await accountRepo.getCards();
     final lendings = await lendingRepo.getAll(settledFilter: false);
 
-    
-    // 1. Current Net Worth
-    double currentAssets = accounts.where((a) => a.isAsset).fold(0.0, (s, a) => s + a.balance);
-    double currentLiabilities = cards.fold(0.0, (s, c) => s + c.usedAmount);
-
-    currentLiabilities += lendings.where((l) => l.type == 'borrowed').fold(0.0, (s, l) => s + (l.originalAmount - l.paidAmount));
-    
-    double currentNetWorth = currentAssets - currentLiabilities;
+    // 1. Current Net Worth from Canonical Query Repository
+    final netWorthMoney = await queryRepo.getNetWorth();
+    double currentNetWorth = netWorthMoney.toRupees;
+    // Factor in any unmigrated active borrowed lendings
+    currentNetWorth -= lendings.where((l) => l.type == 'borrowed').fold(0.0, (s, l) => s + (l.originalAmount - l.paidAmount));
 
     // 2. Calculate Transaction Delta (Income - Expense) from targetDate to Now
     final txns = await transactionRepo.getAll();

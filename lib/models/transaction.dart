@@ -11,12 +11,9 @@ class Transaction {
   final DateTime date;
   final String notes;
   final List<String> tags; // Stored as JSON string in DB
-  final String source; // 'manual', 'vehicle', 'lending', 'credit_card', 'ai_import'
+  final String source; // 'manual', 'lending', 'credit_card', 'ai_import'
   final String? relatedEntityId;
   final String? externalRef;
-  final String? vehicleId;
-  final bool isVehicleExpense;
-  final String? fuelLogId;
   final String? location;
   final bool isDeleted;
   final DateTime createdAt;
@@ -35,9 +32,6 @@ class Transaction {
     this.source = 'manual',
     this.relatedEntityId,
     this.externalRef,
-    this.vehicleId,
-    this.isVehicleExpense = false,
-    this.fuelLogId,
     this.location,
     this.isDeleted = false,
     DateTime? createdAt,
@@ -60,9 +54,6 @@ class Transaction {
       'source': source,
       'related_entity_id': relatedEntityId,
       'external_ref': externalRef,
-      'vehicle_id': vehicleId,
-      'is_vehicle_expense': isVehicleExpense ? 1 : 0,
-      'fuel_log_id': fuelLogId,
       'location': location,
       'is_deleted': isDeleted ? 1 : 0,
       'created_at': createdAt.toIso8601String(),
@@ -84,9 +75,6 @@ class Transaction {
       source: map['source'] as String? ?? 'manual',
       relatedEntityId: map['related_entity_id'] as String?,
       externalRef: map['external_ref'] as String?,
-      vehicleId: map['vehicle_id'] as String?,
-      isVehicleExpense: (map['is_vehicle_expense'] as int? ?? 0) == 1,
-      fuelLogId: map['fuel_log_id'] as String?,
       location: map['location'] as String?,
       isDeleted: (map['is_deleted'] as int? ?? 0) == 1,
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at'] as String) : DateTime.now(),
@@ -122,9 +110,6 @@ class Transaction {
     String? source,
     String? relatedEntityId,
     String? externalRef,
-    String? vehicleId,
-    bool? isVehicleExpense,
-    String? fuelLogId,
     String? location,
     bool? isDeleted,
     DateTime? createdAt,
@@ -143,9 +128,6 @@ class Transaction {
       source: source ?? this.source,
       relatedEntityId: relatedEntityId ?? this.relatedEntityId,
       externalRef: externalRef ?? this.externalRef,
-      vehicleId: vehicleId ?? this.vehicleId,
-      isVehicleExpense: isVehicleExpense ?? this.isVehicleExpense,
-      fuelLogId: fuelLogId ?? this.fuelLogId,
       location: location ?? this.location,
       isDeleted: isDeleted ?? this.isDeleted,
       createdAt: createdAt ?? this.createdAt,

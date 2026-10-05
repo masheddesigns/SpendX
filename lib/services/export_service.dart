@@ -17,6 +17,7 @@ import '../models/company.dart';
 import '../models/salary_contract.dart';
 import '../models/salary_payment.dart';
 import 'backup_file_service.dart';
+import 'backup_service.dart';
 import 'reminder_service.dart';
 import 'salary_service.dart';
 
@@ -46,16 +47,14 @@ class ExportService {
 
   // ─── Full Backup Export ──────────────────────────────────────────────
 
-  /// Generates the canonical spendx_backup.json and opens a save dialog.
+  /// Generates the canonical spendx_backup.spendx package and opens a save dialog.
   Future<void> exportFullBackup() async {
     try {
-      final (json, _) = await BackupFileService.instance.createBackupJson();
-
       String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Save Backup',
         fileName: BackupFileService.backupFileName,
         type: FileType.custom,
-        allowedExtensions: ['json'],
+        allowedExtensions: ['spendx'],
       );
 
       if (outputFile == null) {
@@ -63,8 +62,9 @@ class ExportService {
         return;
       }
 
-      final file = File(outputFile);
-      await file.writeAsString(json);
+      await BackupService.instance.createBackupPackage(
+        outputFile: File(outputFile),
+      );
       AppLogger.d('[EXPORT] Backup saved to $outputFile');
     } catch (e) {
       AppLogger.d('[EXPORT] Failed to export backup: $e');

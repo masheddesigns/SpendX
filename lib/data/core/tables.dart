@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+export 'tables_v24.dart';
 
 class Tables {
   static const transactions = 'transactions';

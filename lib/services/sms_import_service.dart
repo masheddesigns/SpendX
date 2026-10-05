@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../core/logging/app_logger.dart';
 import '../models/review_item.dart';
 import 'transaction_text_parser.dart';
 
@@ -130,31 +131,56 @@ class SmsImportService {
   /// Classifies a single incoming SMS message (transaction / balance).
   /// Used by the live SMS detector.
   SmsClassification classifyMessage(String body, String sender) {
-    final balance = _detectBalance(body, sender);
-
-    // Future/intent messages are not completed transactions.
-    if (_nonTransactionRe.hasMatch(body.toLowerCase())) {
-      return SmsClassification(balance: balance);
+    // 0. Hard reject OTPs and verification codes — NEVER return a transaction or balance!
+    if (_isOtpOrAuth(body)) {
+      return const SmsClassification();
     }
 
-    // Sender-based gatekeeping: if the sender doesn't look like a known bank
-    // shortcode, only allow messages with very strong transaction signals
-    // (explicit debit/credit keywords). This blocks promo SMS from random
-    // senders that happen to contain transaction-like language.
-    if (sender.isNotEmpty && !_isBankSender(sender)) {
-      final lower = body.toLowerCase();
+    final lower = body.toLowerCase();
+
+    // 1. Hard reject non-transaction / promotional / telecom / weather / service messages.
+    if (_nonTransactionRe.hasMatch(lower)) {
+      return const SmsClassification();
+    }
+
+    // 2. Personal numbers: SMS from numeric mobile numbers are personal texts,
+    // not bank broadcast alerts.
+    final cleanSender = sender.trim().replaceAll('+', '').replaceAll('-', '');
+    if (cleanSender.isNotEmpty && RegExp(r'^\d+$').hasMatch(cleanSender)) {
+      return const SmsClassification();
+    }
+
+    // 3. Sender-based gatekeeping:
+    // If the sender does not match a verified bank/wallet code, only allow
+    // messages that contain both strong transaction language AND account identifiers.
+    final isBank = _isBankSender(sender);
+    if (!isBank) {
       final hasStrongSignal = RegExp(
-        r'\b(?:debited|credited|has been debited|has been credited|'
-        r'payment of .* (?:to|from)|transferred to|sent to|received from)\b',
+        r'\b(?:debited\s*(?:from|by|with)|credited\s*(?:to|with)|has been debited|has been credited|'
+        r'sent from|transferred to|received in|payment of .* (?:to|from))\b',
         caseSensitive: false,
       ).hasMatch(lower);
-      if (!hasStrongSignal) {
-        return SmsClassification(balance: balance);
+      final hasAccountSignal = RegExp(
+        r'\b(?:a/c|acct|account|card ending|ending with \d{4}|x{2,}\d{2,4}|upi/dr|upi/cr)\b',
+        caseSensitive: false,
+      ).hasMatch(lower);
+      if (!hasStrongSignal || !hasAccountSignal) {
+        return const SmsClassification();
       }
     }
 
+    final balance = _detectBalance(body, sender);
+
     final parsed = TransactionTextParser.parse(body, source: 'sms');
     if (parsed.amount <= 0 || parsed.confidence < 0.4) {
+      return SmsClassification(balance: balance);
+    }
+
+    // Must have direction signal or explicit financial verb
+    if (!parsed.hasDirectionSignal &&
+        !RegExp(r'\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded)\b',
+                caseSensitive: false)
+            .hasMatch(lower)) {
       return SmsClassification(balance: balance);
     }
 
@@ -240,8 +266,19 @@ class SmsImportService {
       final body = sms.body ?? '';
       if (body.isEmpty) continue;
 
+      // 0. Hard reject OTPs and auth messages immediately
+      if (_isOtpOrAuth(body)) continue;
+
       final smsDate = sms.date;
       if (smsDate != null && cutoff != null && smsDate.isBefore(cutoff)) {
+        continue;
+      }
+
+      final senderAddr = sms.address ?? '';
+
+      // Skip personal phone numbers
+      final cleanSender = senderAddr.trim().replaceAll('+', '').replaceAll('-', '');
+      if (cleanSender.isNotEmpty && RegExp(r'^\d+$').hasMatch(cleanSender)) {
         continue;
       }
 
@@ -250,10 +287,11 @@ class SmsImportService {
       // 1. Balance statements (bank / credit card / loan) — detect BEFORE
       //    the non-transaction filter because credit card statements contain
       //    "statement"/"bill.*due" which would otherwise skip the balance.
-      final senderAddr = sms.address ?? '';
       final balanceHit = _detectBalance(body, senderAddr);
       if (balanceHit != null) {
-        print('[SmsScan] balance hit: ${balanceHit.kind.name} last4=${balanceHit.last4} amount=${balanceHit.amount} sender=$senderAddr');
+        AppLogger.d(
+          '[SmsScan] balance hit detected (type: ${balanceHit.kind.name})',
+        );
         final balKey =
             '${balanceHit.kind.name}|${balanceHit.amount}|${balanceHit.last4}';
         if (seenBal.add(balKey)) balances.add(balanceHit);
@@ -317,17 +355,29 @@ class SmsImportService {
       if (_nonTransactionRe.hasMatch(lower)) continue;
 
       // Sender-based gatekeeping: non-bank senders must have strong signals.
-      if (senderAddr.isNotEmpty && !_isBankSender(senderAddr)) {
+      if (!_isBankSender(senderAddr)) {
         final hasStrongSignal = RegExp(
-          r'\b(?:debited|credited|has been debited|has been credited|'
-          r'payment of .* (?:to|from)|transferred to|sent to|received from)\b',
+          r'\b(?:debited\s*(?:from|by|with)|credited\s*(?:to|with)|has been debited|has been credited|'
+          r'sent from|transferred to|received in|payment of .* (?:to|from))\b',
           caseSensitive: false,
         ).hasMatch(lower);
-        if (!hasStrongSignal) continue;
+        final hasAccountSignal = RegExp(
+          r'\b(?:a/c|acct|account|card ending|ending with \d{4}|x{2,}\d{2,4}|upi/dr|upi/cr)\b',
+          caseSensitive: false,
+        ).hasMatch(lower);
+        if (!hasStrongSignal || !hasAccountSignal) continue;
       }
 
       final parsed = TransactionTextParser.parse(body, source: 'sms');
       if (parsed.amount <= 0 || parsed.confidence < 0.4) continue;
+
+      // Must have direction signal or explicit financial verb
+      if (!parsed.hasDirectionSignal &&
+          !RegExp(r'\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded)\b',
+                  caseSensitive: false)
+              .hasMatch(lower)) {
+        continue;
+      }
 
       // Failed/declined/cancelled payments are not completed transactions.
       if (TransactionTextParser.isFailedPayment(body)) continue;
@@ -467,6 +517,15 @@ class SmsImportService {
     caseSensitive: false,
   );
 
+  static final RegExp _otpAuthRe = RegExp(
+    r'\b(?:otp|one[- ]time password|verification code|security code|secret code|login code|passcode|auth code|pin reset|reset.*pin|cvv)\b|'
+    r'\b(?:is your otp|is the otp|use otp|enter otp|otp is|valid for \d+|never share|do not share|otps are secret)\b|'
+    r'#\d{4,8}\b',
+    caseSensitive: false,
+  );
+
+  static bool _isOtpOrAuth(String body) => _otpAuthRe.hasMatch(body);
+
   /// Messages that describe a future/intent action (not a completed
   /// transaction) or are clearly non-transactional — filtered out.
   static final RegExp _nonTransactionRe = RegExp(
@@ -492,7 +551,12 @@ class SmsImportService {
     r'has been initiated|is booked|is available|is scheduled|'
     r'unsuccessful|failed|cancelled|canceled|'
     r'terms.*(?:chang|revis)|fee.*revis|foreclosure|'
-    r'data usage|data quota|daily data|'
+    r'data usage|data quota|daily data|pack validity|recharge|plan expir|'
+    r'out for delivery|delivered|order placed|order confirmed|shipped|tracking id|courier|'
+    r'feedback|survey|rate us|rate your|review us|'
+    r'traded value|contract note|demat|depository|cdsl|nsdl|national stock exchange|bse ltd|'
+    r'imd|ksdma|ndma|weather|forecast|thunderstorm|'
+    r'റീചാർജ്|കാലഹരണപ്പെട്ടു|പ്ലാൻ|ജിയോ|ഡാറ്റ|ഫീഡ്‌ബാക്ക്|ഇടിമിന്നൽ|മഴ|കാറ്റ്|'
     r'report spam|TRAI DND',
     caseSensitive: false,
   );
@@ -503,13 +567,45 @@ class SmsImportService {
   /// T (transactional), S (service), P (promotional).
   /// Some senders omit the trailing type letter (e.g. "JK-HDFCBK").
   static final RegExp _bankSenderRe = RegExp(
-    r'^[A-Z]{2,4}-[A-Z]{2,8}(?:-[A-Z])?$',
+    r'^[A-Z]{2,4}-[A-Z0-9]{2,8}(?:-[A-Z])?$',
+    caseSensitive: false,
   );
+
+  static const _nonBankSenderPatterns = [
+    'FLPKRT', 'SWIGGY', 'ZOMATO', 'DOMINO', 'JIOCAR', 'JIOVOC', 'JIOFIB',
+    'AIRTEL', 'VODAFO', 'VI', 'BSNL', 'NETFLX', 'NDMAEW', 'NSETRA', 'MYNTRA',
+    'BLINKT', 'ZEPTO', 'TATASKY', 'DTH', 'UBERIN', 'OLACAB', 'POLICY', 'SHADI',
+  ];
+
+  static const _financialSenderKeywords = [
+    'HDFC', 'SBI', 'ICICI', 'AXIS', 'KOTAK', 'FEDBNK', 'JTEDGE', 'ONECRD',
+    'BOBCRD', 'BOBONE', 'JIOPBS', 'PAYTM', 'QCAMZN', 'AMZPAY', 'JUSPAY',
+    'CANBNK', 'PNBSMS', 'IDFC', 'INDUS', 'YESBK', 'YESBNK', 'UNIONB',
+    'INDIANB', 'CENTBK', 'UCOBNK', 'IOB', 'KVB', 'CUB', 'SIBLTD',
+    'KBL', 'TMB', 'BNDHAN', 'RBL', 'SCISMS', 'CITIBK', 'HSBC', 'STANBK',
+    'AUBANK', 'AUCCB', 'EQUITAS', 'UJJIVAN', 'PAYU', 'RAZORP', 'EPFO',
+    'BANK', 'BNK',
+  ];
 
   /// Returns true if the sender looks like a bank SMS shortcode.
   static bool _isBankSender(String sender) {
     if (sender.isEmpty) return false;
-    return _bankSenderRe.hasMatch(sender);
+    final upper = sender.toUpperCase().trim();
+    if (!_bankSenderRe.hasMatch(upper)) return false;
+
+    for (final pattern in _nonBankSenderPatterns) {
+      if (upper.contains(pattern)) return false;
+    }
+
+    for (final kw in _financialSenderKeywords) {
+      if (upper.contains(kw)) return true;
+    }
+
+    for (final key in bankNames.keys) {
+      if (upper.contains(key.toUpperCase())) return true;
+    }
+
+    return false;
   }
 
   /// Returns true if the sender looks like a digital wallet SMS shortcode.
@@ -608,7 +704,8 @@ class SmsImportService {
     final bankBalance = _bankBalanceRe.firstMatch(body);
     if (bankBalance != null) {
       final amount = _parseAmount(bankBalance.group(1)!);
-      if (amount > 0) {
+      if (amount > 0 &&
+          (bankKeyword != null || _last4(body) != null || _isBankSender(sender))) {
         return BalanceHit(
           kind: BalanceKind.bank,
           amount: amount,

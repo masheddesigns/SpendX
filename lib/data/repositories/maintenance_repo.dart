@@ -62,16 +62,29 @@ class MaintenanceRepo {
       Tables.streaks,
       Tables.challenges,
       Tables.achievements,
-      // Analytics
-      Tables.netWorthHistory,
-      Tables.merchantRules,
-      Tables.reviewQueue,
+      // Canonical V24 tables
+      TablesV24.assetEarmarks,
+      TablesV24.postings,
+      TablesV24.evidence,
+      TablesV24.expectedEvents,
+      TablesV24.recurringRules,
+      TablesV24.openingBalanceReconciliations,
+      TablesV24.reviewCandidates,
+      TablesV24.economicEvents,
     ];
 
     await database.transaction((txn) async {
       for (final table in tables) {
-        try { await txn.delete(table); } catch (_) {}
+        try {
+          await txn.delete(table);
+        } catch (_) {}
       }
+      try {
+        await txn.delete(
+          TablesV24.accounts,
+          where: 'is_system = 0',
+        );
+      } catch (_) {}
     });
   }
 
@@ -118,24 +131,6 @@ class MaintenanceRepo {
           LedgerType.lending_given.name,
           LedgerType.lending_received.name,
         ],
-      );
-    });
-  }
-
-  Future<void> clearVehicles() async {
-    final database = await db.database;
-    await database.transaction((txn) async {
-      await txn.delete(Tables.fuelLogs);
-      await txn.delete(Tables.vehicles);
-      await txn.delete(
-        Tables.transactions,
-        where: 'vehicle_id IS NOT NULL OR source = ?',
-        whereArgs: const ['vehicle'],
-      );
-      await txn.delete(
-        Tables.ledgerTransactions,
-        where: 'type = ?',
-        whereArgs: [LedgerType.fuel_expense.name],
       );
     });
   }

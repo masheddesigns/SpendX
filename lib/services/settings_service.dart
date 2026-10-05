@@ -5,7 +5,6 @@ class SettingsService extends ChangeNotifier {
   static const String _onboardingKey = 'onboarding_complete';
   static const String _currencyKey = 'primary_currency';
   static const String _themeModeKey = 'theme_mode';
-  static const String _enableVehiclesKey = 'enable_vehicles';
   static const String _enableLendingKey = 'enable_lending';
   static const String _enableCreditCardsKey = 'enable_credit_cards';
   static const String _enableLoansKey = 'enable_loans';
@@ -285,15 +284,6 @@ class SettingsService extends ChangeNotifier {
   }
 
   // --- Feature Toggles ---
-
-  bool get enableVehicles {
-    return _prefs.getBool(_enableVehiclesKey) ?? true; // Default enabled
-  }
-
-  Future<void> setEnableVehicles(bool val) async {
-    await _prefs.setBool(_enableVehiclesKey, val);
-    notifyListeners();
-  }
 
   bool get enableLending {
     return _prefs.getBool(_enableLendingKey) ?? true;
@@ -628,7 +618,6 @@ class SettingsService extends ChangeNotifier {
   Map<String, dynamic> getSyncedSettings() {
     return {
       _currencyKey: primaryCurrency,
-      _enableVehiclesKey: enableVehicles,
       _enableLendingKey: enableLending,
       _enableCreditCardsKey: enableCreditCards,
       _enableLoansKey: enableLoans,
@@ -649,9 +638,6 @@ class SettingsService extends ChangeNotifier {
   Future<void> applySyncedSettings(Map<String, dynamic> settings) async {
     if (settings.containsKey(_currencyKey)) {
       await setPrimaryCurrency(settings[_currencyKey]);
-    }
-    if (settings.containsKey(_enableVehiclesKey)) {
-      await setEnableVehicles(settings[_enableVehiclesKey]);
     }
     if (settings.containsKey(_enableLendingKey)) {
       await setEnableLending(settings[_enableLendingKey]);

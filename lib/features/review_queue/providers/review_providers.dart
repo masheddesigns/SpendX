@@ -67,7 +67,13 @@ Future<void> approveReviewItem({
   String? categoryId,
   String? accountId,
   String? typeOverride,
+  FinancialTransactionService? financialService,
+  ReviewRepo? reviewRepo,
+  TransactionRepo? transactionRepo,
 }) async {
+  final txRepo = transactionRepo ?? TransactionRepo();
+  final rRepo = reviewRepo ?? ReviewRepo();
+  final fSvc = financialService ?? FinancialTransactionService();
   final parsed = item.parsed;
   final fallbackNote = parsed.rawText.length > 100
       ? parsed.rawText.substring(0, 100)
@@ -79,8 +85,8 @@ Future<void> approveReviewItem({
   final externalRef = parsed.refId ??
       'review|${item.id}|${parsed.amount.toStringAsFixed(2)}';
   try {
-    if (await TransactionRepo().existsByExternalRef(externalRef)) {
-      await ReviewRepo().approve(item.id);
+    if (await txRepo.existsByExternalRef(externalRef)) {
+      await rRepo.approve(item.id);
       return;
     }
   } catch (_) {}
@@ -116,7 +122,7 @@ Future<void> approveReviewItem({
   );
 
   // 1. Insert transaction (with balance impact)
-  await FinancialTransactionService().createTransaction(transaction);
+  await fSvc.createTransaction(transaction);
   try {
     await GamificationService.instance.addXP(10, isTransaction: true);
   } catch (_) {}
@@ -151,7 +157,7 @@ Future<void> approveReviewItem({
   }
 
   // 4. Mark as approved — always runs once the transaction is inserted.
-  await ReviewRepo().approve(item.id);
+  await rRepo.approve(item.id);
 }
 
 /// Approve a review item: insert as transaction, learn from it, remove from queue.
@@ -163,13 +169,21 @@ final approveReviewProvider = Provider((ref) {
     String? categoryId,
     String? accountId,
   }) async {
+    final financialService = ref.read(financialTransactionServiceProvider);
+    final reviewRepo = ref.read(reviewRepoProvider);
+    final txRepo = ref.read(transactionRepoProvider);
     await approveReviewItem(
       item: item,
       categoryId: categoryId,
       accountId: accountId,
+      financialService: financialService,
+      reviewRepo: reviewRepo,
+      transactionRepo: txRepo,
     );
     ref.invalidate(reviewQueueProvider);
     ref.invalidate(reviewQueueCountProvider);
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(accountsProvider);
   };
 });
 

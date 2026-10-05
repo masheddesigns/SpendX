@@ -91,24 +91,36 @@ class MainActivity : FlutterActivity() {
     }
 }
 
-/// Tiny shared-prefs queue for SMS captured while the app isn't running.
+/// Tiny shared-prefs queue for financial SMS captured while the app isn't running.
 object SmsStore {
     private const val PREFS = "spendx_sms"
     private const val KEY = "pending_sms_queue"
-    private const val SEP = "\u0001"
+    private const val ENTRY_SEP = "\u0001"
+    private const val FIELD_SEP = "\u0002"
 
-    fun queue(context: Context, bodies: List<String>) {
+    fun queue(context: Context, sender: String, body: String) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val existing = prefs.getString(KEY, "") ?: ""
-        val merged = (existing.split(SEP) + bodies)
-            .filter { it.isNotBlank() }
-            .distinct()
-        prefs.edit().putString(KEY, merged.joinToString(SEP)).apply()
+        val entry = "$sender$FIELD_SEP$body"
+        val existingEntries = existing.split(ENTRY_SEP).filter { it.isNotBlank() }
+        val merged = (existingEntries + entry).distinct()
+        prefs.edit().putString(KEY, merged.joinToString(ENTRY_SEP)).apply()
     }
 
-    fun all(context: Context): List<String> {
+    fun all(context: Context): List<Map<String, String>> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return (prefs.getString(KEY, "") ?: "").split(SEP).filter { it.isNotBlank() }
+        val raw = prefs.getString(KEY, "") ?: ""
+        if (raw.isBlank()) return emptyList()
+        return raw.split(ENTRY_SEP)
+            .filter { it.isNotBlank() }
+            .map { entry ->
+                if (entry.contains(FIELD_SEP)) {
+                    val parts = entry.split(FIELD_SEP, limit = 2)
+                    mapOf("sender" to parts[0], "body" to parts[1])
+                } else {
+                    mapOf("sender" to "", "body" to entry)
+                }
+            }
     }
 
     fun clear(context: Context) {

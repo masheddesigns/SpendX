@@ -1,5 +1,4 @@
-import '../core/app_database.dart';
-import '../core/tables.dart';
+import 'package:sqflite/sqflite.dart' hide Transaction;
 import '../../models/analytics_bundle.dart';
 import '../../models/transaction.dart';
 import '../../models/bank_account.dart';
@@ -7,34 +6,51 @@ import '../../models/loan.dart';
 import '../../models/credit_card.dart';
 import '../../models/category.dart';
 import '../../models/budget.dart';
+import 'transaction_repo.dart';
+import 'account_repo.dart';
+import 'loan_repo.dart';
+import 'credit_repo.dart';
+import 'category_repo.dart';
+import 'budget_repo.dart';
 
 class AnalyticsRepo {
-  final _dbProvider = AppDatabase.instance;
+  final DatabaseExecutor? _customExecutor;
+
+  AnalyticsRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
 
   /// Fetches a complete snapshot of all core financial data in a single sequence.
-  /// This optimizes performance by reusing the same database connection and
-  /// reducing the number of round-trips between the app and SQLite.
-  Future<AnalyticsBundle> getDashboardBundle() async {
-    final db = await _dbProvider.database;
+  /// Derived strictly from canonical repositories and accounts.
+  Future<AnalyticsBundle> getDashboardBundle({
+    TransactionRepo? transactionRepo,
+    AccountRepo? accountRepo,
+    LoanRepo? loanRepo,
+    CreditRepo? creditRepo,
+    CategoryRepo? categoryRepo,
+    BudgetRepo? budgetRepo,
+  }) async {
+    final txRepo = transactionRepo ?? TransactionRepo(executor: _customExecutor);
+    final accRepo = accountRepo ?? AccountRepo(executor: _customExecutor);
+    final lRepo = loanRepo ?? LoanRepo(executor: _customExecutor);
+    final cRepo = creditRepo ?? CreditRepo(executor: _customExecutor);
+    final catRepo = categoryRepo ?? CategoryRepo();
+    final bRepo = budgetRepo ?? BudgetRepo(executor: _customExecutor);
 
-    // Fetch all tables in parallel-ish (sequentially on one connection but 
-    // minimizing overhead or potentially using transaction for consistency)
-    final results = await Future.wait([
-      db.query(Tables.transactions, where: 'is_deleted = 0', orderBy: 'date DESC'),
-      db.query(Tables.bankAccounts),
-      db.query(Tables.loans),
-      db.query(Tables.creditCards),
-      db.query(Tables.categories),
-      db.query(Tables.budgets),
+    final results = await Future.wait<dynamic>([
+      txRepo.getAll(),
+      accRepo.getAccounts(),
+      lRepo.getLoans(),
+      cRepo.getAll(),
+      catRepo.getAll(),
+      bRepo.getAll(),
     ]);
 
     return AnalyticsBundle(
-      transactions: results[0].map((m) => Transaction.fromMap(m)).toList(),
-      accounts: results[1].map((m) => BankAccount.fromMap(m)).toList(),
-      loans: results[2].map((m) => Loan.fromMap(m)).toList(),
-      cards: results[3].map((m) => CreditCard.fromMap(m)).toList(),
-      categories: results[4].map((m) => Category.fromMap(m)).toList(),
-      budgets: results[5].map((m) => Budget.fromMap(m)).toList(),
+      transactions: results[0] as List<Transaction>,
+      accounts: results[1] as List<BankAccount>,
+      loans: results[2] as List<Loan>,
+      cards: results[3] as List<CreditCard>,
+      categories: results[4] as List<Category>,
+      budgets: results[5] as List<Budget>,
     );
   }
 }

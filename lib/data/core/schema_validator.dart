@@ -123,10 +123,21 @@ class SchemaValidator {
       },
     };
 
+    final verResult = await db.rawQuery('PRAGMA user_version;');
+    final version = verResult.isNotEmpty
+        ? (verResult.first.values.first as int? ?? 0)
+        : 0;
+
     for (final entry in required.entries) {
       final table = entry.key;
       final exists = await tableExists(table);
       if (!exists) {
+        if (version >= 24 &&
+            (table == Tables.vehicleReminders ||
+                table == Tables.bankBalanceSnapshots)) {
+          // Obsolete tables intentionally dropped in v24 destructive cleanup
+          continue;
+        }
         throw Exception('Missing table: $table');
       }
 

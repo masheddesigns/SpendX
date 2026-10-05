@@ -12,7 +12,6 @@ import '../../services/financial_transaction_service.dart';
 
 class CreditCardService {
   final CreditRepo _creditRepo;
-  final LedgerRepo _ledgerRepo;
   final ReminderRepo _reminderRepo;
   final FinancialTransactionService _svc;
 
@@ -22,7 +21,6 @@ class CreditCardService {
     ReminderRepo? reminderRepo,
     FinancialTransactionService? financialService,
   })  : _creditRepo = creditRepo ?? CreditRepo(),
-        _ledgerRepo = ledgerRepo ?? LedgerRepo(),
         _reminderRepo = reminderRepo ?? ReminderRepo(),
         _svc = financialService ?? FinancialTransactionService();
 
@@ -45,7 +43,7 @@ class CreditCardService {
     final card = await _creditRepo.getCard(tx.cardId);
     if (card != null) {
       final nextDue = card.nextDueDate;
-      final outstanding = await _ledgerRepo.getCreditOutstanding(card.id);
+      final outstanding = await calculateOutstanding(card.id);
       
       await _reminderRepo.insertGlobalReminder(
         Reminder(
@@ -126,9 +124,10 @@ class CreditCardService {
     }
   }
 
-  /// Calculates the real-time outstanding balance directly from the ledger
+  /// Calculates the real-time outstanding balance directly from canonical liability
   Future<double> calculateOutstanding(String cardId) async {
-    return _ledgerRepo.getCreditOutstanding(cardId);
+    final card = await _creditRepo.getCard(cardId);
+    return card?.usedAmount ?? 0.0;
   }
 
   /// Processes a payment, allocating it according to strict rules:

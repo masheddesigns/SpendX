@@ -274,13 +274,6 @@ class NotificationServiceV2 {
     final hour = _parseReminderHour(reminderTime);
     final minute = _parseReminderMinute(reminderTime);
 
-    // Vehicle service/insurance reminders are paused while the Vehicles
-    // feature is hidden — never schedule notifications for them.
-    if (reminder.type == ReminderType.service ||
-        reminder.type == ReminderType.insurance) {
-      return;
-    }
-
     final payload = jsonEncode({
       'source_type': reminder.type.name,
       'source_id': reminder.sourceId ?? reminder.linkedEntityId ?? '',
@@ -340,7 +333,7 @@ class NotificationServiceV2 {
 
       case ReminderType.service:
       case ReminderType.insurance:
-        // Rule: Date-based vehicle/insurance
+        // Rule: Date-based service/insurance
         if (reminder.dueDate != null) {
           final dueAt = _scheduleAt(reminder.dueDate!, hour, minute);
           await _safeSchedule(
@@ -544,9 +537,6 @@ class NotificationServiceV2 {
         break;
       case 'service':
       case 'insurance':
-      case 'vehicle':
-        // Vehicle/service screens are intentionally de-emphasized right now;
-        // land in the notifications inbox instead.
         push(const NotificationsInboxScreen());
         break;
       case 'lending':
@@ -1086,7 +1076,7 @@ class _ReminderAlertDialog extends StatelessWidget {
       ReminderType.loan || ReminderType.emi => Icons.account_balance_rounded,
       ReminderType.credit => Icons.credit_card_rounded,
       ReminderType.service ||
-      ReminderType.insurance => Icons.directions_car_rounded,
+      ReminderType.insurance => Icons.build_circle_outlined,
       ReminderType.lending => Icons.handshake_rounded,
       ReminderType.custom => Icons.notifications_active_rounded,
     };

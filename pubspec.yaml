@@ -56,12 +56,14 @@ dependencies:
   receive_sharing_intent: ^1.8.1
   in_app_review: ^2.0.11
   flutter_sms_inbox: ^1.0.5
+  sqlcipher_flutter_libs: ^0.7.0+eol
+  sqflite_common_ffi: ^2.4.0+3
+  sqlite3: ^3.5.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  sqflite_common_ffi: ^2.4.0+3
   sqlite3_flutter_libs: ^0.6.0+eol
   integration_test:
     sdk: flutter
@@ -82,5 +84,9 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .env
     - assets/logo.svg
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher

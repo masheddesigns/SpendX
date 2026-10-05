@@ -66,11 +66,18 @@ class SmartBudgetEngine {
     // Simpler: just total per category over 3 months, divide by 3
     final categoryTotal = <String, double>{};
     for (final tx in transactions) {
-      if (tx.type != 'expense' || tx.categoryId == null) continue;
+      final isExp = tx.type == 'expense' || tx.type == 'credit_card_purchase';
+      final isRefund = tx.type == 'refund';
+      if ((!isExp && !isRefund) || tx.categoryId == null) continue;
       if (tx.date.isBefore(threeMonthsAgo)) continue;
       if (!tx.date.isBefore(startOfMonth)) continue;
-      categoryTotal[tx.categoryId!] =
-          (categoryTotal[tx.categoryId!] ?? 0) + tx.amount;
+      if (isExp) {
+        categoryTotal[tx.categoryId!] =
+            (categoryTotal[tx.categoryId!] ?? 0) + tx.amount;
+      } else if (isRefund) {
+        categoryTotal[tx.categoryId!] =
+            (categoryTotal[tx.categoryId!] ?? 0) - tx.amount;
+      }
     }
 
     final monthCount = _countMonths(threeMonthsAgo, startOfMonth);
@@ -78,10 +85,17 @@ class SmartBudgetEngine {
     // ── Step 2: Current month spend ──────────────────────────────────
     final currentSpend = <String, double>{};
     for (final tx in transactions) {
-      if (tx.type != 'expense' || tx.categoryId == null) continue;
+      final isExp = tx.type == 'expense' || tx.type == 'credit_card_purchase';
+      final isRefund = tx.type == 'refund';
+      if ((!isExp && !isRefund) || tx.categoryId == null) continue;
       if (tx.date.isBefore(startOfMonth)) continue;
-      currentSpend[tx.categoryId!] =
-          (currentSpend[tx.categoryId!] ?? 0) + tx.amount;
+      if (isExp) {
+        currentSpend[tx.categoryId!] =
+            (currentSpend[tx.categoryId!] ?? 0) + tx.amount;
+      } else if (isRefund) {
+        currentSpend[tx.categoryId!] =
+            (currentSpend[tx.categoryId!] ?? 0) - tx.amount;
+      }
     }
 
     // ── Step 3: Generate budgets ─────────────────────────────────────

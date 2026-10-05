@@ -12,7 +12,6 @@ import 'dart:math';
 
 class LoanService {
   final LoanRepo _loanRepo;
-  final LedgerRepo _ledgerRepo;
   final ReminderRepo _reminderRepo;
   final FinancialTransactionService _svc;
 
@@ -22,7 +21,6 @@ class LoanService {
     ReminderRepo? reminderRepo,
     FinancialTransactionService? financialService,
   })  : _loanRepo = loanRepo ?? LoanRepo(),
-        _ledgerRepo = ledgerRepo ?? LedgerRepo(),
         _reminderRepo = reminderRepo ?? ReminderRepo(),
         _svc = financialService ?? FinancialTransactionService();
 
@@ -159,8 +157,10 @@ class LoanService {
     }
   }
 
+  /// Calculates the real-time remaining loan balance directly from canonical liability postings
   Future<double> getRemainingBalance(String loanId) async {
-    return _ledgerRepo.getLoanBalance(loanId);
+    final balance = await _loanRepo.getDerivedBalance(loanId);
+    return balance.toRupees;
   }
 
   /// Marks the reminder for a paid installment as done and cancels its

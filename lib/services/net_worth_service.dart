@@ -1,48 +1,27 @@
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/loan_repo.dart';
+import '../data/repositories/canonical/canonical_financial_query_repository.dart';
 
 class NetWorthService {
   final AccountRepo accountRepo;
   final LoanRepo loanRepo;
+  final CanonicalFinancialQueryRepository _queryRepo;
 
-  NetWorthService(this.accountRepo, this.loanRepo);
+  NetWorthService(
+    this.accountRepo,
+    this.loanRepo, {
+    CanonicalFinancialQueryRepository? queryRepo,
+  }) : _queryRepo = queryRepo ?? CanonicalFinancialQueryRepository();
 
   Future<({double assets, double liabilities, double netWorth})> calculate() async {
-    final accounts = await accountRepo.getAccounts();
-    final cards = await accountRepo.getCards();
-    final loans = await loanRepo.getLoans();
-
-    // Assets: Total balance from all bank accounts marked as assets
-    final assets = accounts.where((a) => a.isAsset).fold<double>(
-      0.0,
-      (sum, a) => sum + a.balance,
-    );
-
-    // liabilities from accounts marked as liabilities
-    final accountLiabilities = accounts.where((a) => !a.isAsset).fold<double>(
-      0.0,
-      (sum, a) => sum + a.balance,
-    );
-
-    // Credit Card Liabilities: Total outstanding (used amount)
-    final creditUsed = cards.fold<double>(
-      0.0,
-      (sum, c) => sum + c.usedAmount,
-    );
-
-    // Loan Liabilities: Total principal amounts
-    final loanTotal = loans.fold<double>(
-      0.0,
-      (sum, l) => sum + l.total,
-    );
-
-    final totalLiabilities = accountLiabilities + creditUsed + loanTotal;
+    final assetsMoney = await _queryRepo.getTotalAssets();
+    final liabilitiesMoney = await _queryRepo.getTotalLiabilities();
+    final netWorthMoney = await _queryRepo.getNetWorth();
 
     return (
-      assets: assets,
-      liabilities: totalLiabilities,
-      netWorth: assets - totalLiabilities,
+      assets: assetsMoney.toRupees,
+      liabilities: liabilitiesMoney.toRupees,
+      netWorth: netWorthMoney.toRupees,
     );
   }
-
 }

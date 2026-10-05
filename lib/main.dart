@@ -35,9 +35,12 @@ void main() {
         AppLogger.e('Platform Error', error, stack);
         return true;
       };
-
-      await dotenv.load(fileName: ".env");
-
+      // Optional .env loading for local development; gracefully skipped in production.
+      try {
+        await dotenv.load(fileName: ".env");
+      } catch (_) {
+        // Non-fatal: .env is intentionally omitted from release bundle assets.
+      }
       // 1. Critical Settings & Theme Init (Immediate)
       try {
         await SettingsService.instance.init().timeout(

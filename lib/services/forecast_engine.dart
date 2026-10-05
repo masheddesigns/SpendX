@@ -1,10 +1,18 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show debugPrint;
 
-import '../data/repositories/transaction_repo.dart';
+import '../data/repositories/canonical/canonical_financial_query_repository.dart';
+import '../domain/finance/finance.dart';
+import 'canonical_forecast_engine.dart';
 
-/// End-of-month financial forecast based on current spending velocity.
+/// End-of-month financial forecast adapter.
 ///
-/// Deterministic, explainable, fast. No ML — just math.
+/// Refactored in Milestone C6 to delegate to [CanonicalForecastEngine]
+/// and [CanonicalFinancialQueryRepository].
+///
+/// CRITICAL FIX: The catastrophic linear salary velocity multiplier
+/// ((monthIncome / daysElapsed) * daysInMonth) has been eliminated.
+/// Projections are derived strictly from canonical accounting truth and contractual dates.
 class Forecast {
   final double projectedIncome;
   final double projectedExpense;
@@ -29,10 +37,15 @@ class Forecast {
   });
 
   static const empty = Forecast(
-    projectedIncome: 0, projectedExpense: 0, projectedSavings: 0,
-    categoryForecasts: {}, dailyBurnRate: 0,
-    daysElapsed: 0, daysInMonth: 30,
-    isOverspendRisk: false, overspendAmount: 0,
+    projectedIncome: 0,
+    projectedExpense: 0,
+    projectedSavings: 0,
+    categoryForecasts: {},
+    dailyBurnRate: 0,
+    daysElapsed: 0,
+    daysInMonth: 30,
+    isOverspendRisk: false,
+    overspendAmount: 0,
   );
 }
 
@@ -54,7 +67,7 @@ class CategoryForecast {
   bool get isTrendingUp => driftPercent > 15;
 }
 
-/// Forecast computation engine.
+/// Forecast computation engine compatibility adapter.
 class ForecastEngine {
   ForecastEngine._();
   static final instance = ForecastEngine._();
@@ -68,115 +81,129 @@ class ForecastEngine {
     _cacheTime = null;
   }
 
-  /// Compute end-of-month forecast from current data.
-  Future<Forecast> compute() async {
-    // Use 5-minute cache
-    if (_cache != null && _cacheTime != null &&
+  /// Compute end-of-month forecast derived from canonical accounting truth.
+  Future<Forecast> compute({
+    CanonicalFinancialQueryRepository? queryRepository,
+    CanonicalForecastEngine? forecastEngine,
+  }) async {
+    // 5-minute cache
+    if (queryRepository == null &&
+        forecastEngine == null &&
+        _cache != null &&
+        _cacheTime != null &&
         DateTime.now().difference(_cacheTime!) < const Duration(minutes: 5)) {
       return _cache!;
     }
 
-    final repo = TransactionRepo();
+    final queryRepo = queryRepository ?? CanonicalFinancialQueryRepository();
+    final engine = forecastEngine ?? CanonicalForecastEngine.instance;
     final now = DateTime.now();
     final startOfMonth = DateTime(now.year, now.month, 1);
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final endOfMonth = DateTime(now.year, now.month, daysInMonth, 23, 59, 59);
     final daysElapsed = now.day.clamp(1, daysInMonth);
+    final remainingDays = (daysInMonth - daysElapsed).clamp(0, daysInMonth);
 
-    // Previous month for comparison
+    // Compute canonical forecast
+    final canonicalForecast = await engine.computeForecast(
+      horizonDays: remainingDays > 0 ? remainingDays : 1,
+      referenceDate: now,
+    );
+
+    // Actual posted MTD figures from canonical ledger
+    final mtdIncome = await queryRepo.getTotalIncome(
+      startDate: startOfMonth,
+      endDate: now,
+    );
+    final mtdExpense = await queryRepo.getTotalExpenses(
+      startDate: startOfMonth,
+      endDate: now,
+    );
+
+    // Contractual upcoming inflows and commitments until month end
+    final upcomingIncome = await queryRepo.getUpcomingExpectedInflows(
+      fromDate: now,
+      toDate: endOfMonth,
+    );
+    final upcomingCommitments = await queryRepo.getUpcomingExpectedCommitments(
+      fromDate: now,
+      toDate: endOfMonth,
+    );
+
+    // Projected totals: actual MTD + known upcoming + remaining discretionary burn
+    final remainingDiscretionary =
+        canonicalForecast.dailyBurnRate.minorUnits * remainingDays;
+    final totalProjectedIncome = mtdIncome + upcomingIncome;
+    final totalProjectedExpense = mtdExpense +
+        upcomingCommitments +
+        Money.fromMinorUnits(remainingDiscretionary);
+    final totalProjectedSavings = totalProjectedIncome - totalProjectedExpense;
+
+    // Previous month total expenses for overspend comparison
     final startOfPrevMonth = DateTime(now.year, now.month - 1, 1);
     final endOfPrevMonth = DateTime(now.year, now.month, 0, 23, 59, 59);
+    final prevTotalExpense = await queryRepo.getTotalExpenses(
+      startDate: startOfPrevMonth,
+      endDate: endOfPrevMonth,
+    );
 
-    final allTxns = await repo.getAll();
+    // Category breakdown derived from canonical postings
+    final currentCatSpending = await queryRepo.getAllCategorySpending(
+      startDate: startOfMonth,
+      endDate: now,
+    );
+    final prevCatSpending = await queryRepo.getAllCategorySpending(
+      startDate: startOfPrevMonth,
+      endDate: endOfPrevMonth,
+    );
 
-    // Current month
-    double monthIncome = 0;
-    double monthExpense = 0;
-    final catSpending = <String, double>{};
-
-    // Previous month
-    double prevExpense = 0;
-    final prevCatSpending = <String, double>{};
-
-    for (final t in allTxns) {
-      // Current month
-      if (!t.date.isBefore(startOfMonth) && !t.date.isAfter(now)) {
-        if (t.type == 'income') {
-          monthIncome += t.amount;
-        } else if (t.type == 'expense') {
-          monthExpense += t.amount;
-          final cat = t.categoryId ?? 'other';
-          catSpending[cat] = (catSpending[cat] ?? 0) + t.amount;
-        }
-      }
-      // Previous month
-      else if (!t.date.isBefore(startOfPrevMonth) &&
-          !t.date.isAfter(endOfPrevMonth)) {
-        if (t.type == 'expense') {
-          prevExpense += t.amount;
-          final cat = t.categoryId ?? 'other';
-          prevCatSpending[cat] = (prevCatSpending[cat] ?? 0) + t.amount;
-        }
-      }
-    }
-
-    // Daily rates
-    final dailyExpense = daysElapsed > 0 ? monthExpense / daysElapsed : 0.0;
-    final dailyIncome = daysElapsed > 0 ? monthIncome / daysElapsed : 0.0;
-
-    // Projections
-    final projectedExpense = dailyExpense * daysInMonth;
-    final projectedIncome = dailyIncome * daysInMonth;
-    final projectedSavings = projectedIncome - projectedExpense;
-
-    // Overspend risk — true if EITHER:
-    //   (a) projected spending exceeds last month by >10%, OR
-    //   (b) projected savings is negative (spending more than earning).
-    // The second condition catches the "you're losing money but it's fine"
-    // bug where prev-month was low so the 10% threshold never triggered.
-    final exceedsPrevMonth =
-        prevExpense > 0 && projectedExpense > prevExpense * 1.1;
-    final negativeSavings = projectedSavings < 0;
-    final isOverspendRisk = exceedsPrevMonth || negativeSavings;
-    final overspendAmount = isOverspendRisk
-        ? (negativeSavings
-            ? projectedExpense - projectedIncome
-            : projectedExpense - prevExpense)
-        : 0.0;
-
-    // Category forecasts with drift
     final categoryForecasts = <String, CategoryForecast>{};
-    for (final entry in catSpending.entries) {
-      final catProjected = (entry.value / daysElapsed) * daysInMonth;
-      final prevTotal = prevCatSpending[entry.key] ?? 0;
-      final drift = prevTotal > 0
-          ? ((catProjected - prevTotal) / prevTotal) * 100
-          : 0.0;
+    for (final entry in currentCatSpending.entries) {
+      final spent = entry.value.asRupees;
+      final prev = prevCatSpending[entry.key]?.asRupees ?? 0.0;
+      final daily = daysElapsed > 0 ? spent / daysElapsed : 0.0;
+      final proj = daily * daysInMonth;
+      final drift = prev > 0 ? ((proj - prev) / prev) * 100 : 0.0;
 
       categoryForecasts[entry.key] = CategoryForecast(
         categoryName: entry.key,
-        spentSoFar: entry.value,
-        projected: catProjected,
-        previousMonthTotal: prevTotal,
+        spentSoFar: spent,
+        projected: proj,
+        previousMonthTotal: prev,
         driftPercent: drift,
       );
     }
 
+    final projectedExpenseRupees = totalProjectedExpense.asRupees;
+    final projectedIncomeRupees = totalProjectedIncome.asRupees;
+    final projectedSavingsRupees = totalProjectedSavings.asRupees;
+
+    final exceedsPrevMonth = prevTotalExpense.asRupees > 0 &&
+        projectedExpenseRupees > prevTotalExpense.asRupees * 1.1;
+    final negativeSavings = projectedSavingsRupees < 0;
+    final isOverspendRisk = exceedsPrevMonth || negativeSavings;
+    final overspendAmount = isOverspendRisk
+        ? (negativeSavings
+            ? projectedExpenseRupees - projectedIncomeRupees
+            : projectedExpenseRupees - prevTotalExpense.asRupees)
+        : 0.0;
+
     final result = Forecast(
-      projectedIncome: projectedIncome,
-      projectedExpense: projectedExpense,
-      projectedSavings: projectedSavings,
+      projectedIncome: projectedIncomeRupees,
+      projectedExpense: projectedExpenseRupees,
+      projectedSavings: projectedSavingsRupees,
       categoryForecasts: categoryForecasts,
-      dailyBurnRate: dailyExpense,
+      dailyBurnRate: canonicalForecast.dailyBurnRate.asRupees,
       daysElapsed: daysElapsed,
       daysInMonth: daysInMonth,
       isOverspendRisk: isOverspendRisk,
-      overspendAmount: overspendAmount,
+      overspendAmount: math.max(0, overspendAmount),
     );
 
     _cache = result;
     _cacheTime = DateTime.now();
-    debugPrint('\u{1F4C8} Forecast: projected expense=${projectedExpense.toStringAsFixed(0)}, '
-        'savings=${projectedSavings.toStringAsFixed(0)}, '
+    debugPrint('📈 Canonical Forecast: projected expense=${projectedExpenseRupees.toStringAsFixed(0)}, '
+        'savings=${projectedSavingsRupees.toStringAsFixed(0)}, '
         'overspend=${isOverspendRisk ? overspendAmount.toStringAsFixed(0) : "no"}');
     return result;
   }

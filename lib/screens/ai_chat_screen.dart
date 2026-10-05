@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../features/ai/ai_action.dart';
 import '../features/ai/ai_data_bridge.dart';
 import '../data/providers.dart';
+import '../features/dashboard/insights_providers.dart';
 import '../services/gemini_service.dart';
 import '../utils/app_format.dart';
 import '../services/salary_service.dart';
@@ -56,20 +57,18 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         if (a.isAsset) totalBalance += a.balance;
       }
 
-      final now = DateTime.now();
-      final thisMonthTxns = txns
-          .where((t) => t.date.year == now.year && t.date.month == now.month)
-          .toList();
-      double monthlyIncome = thisMonthTxns
-          .where((t) => t.type == 'income')
-          .fold<double>(0.0, (sum, t) => sum + t.amount);
-      double monthlyExpense = thisMonthTxns
-          .where((t) => t.type == 'expense')
-          .fold<double>(0.0, (sum, t) => sum + t.amount);
+      final stats = await ref.read(currentMonthStatsProvider.future);
+      final monthlyIncome = stats?.income ?? 0.0;
+      final monthlyExpense = stats?.expense ?? 0.0;
+      final netWorth = ref.read(netWorthProvider);
+      final stsCalc = await ref.read(safeToSpendProvider.future);
+      final safeToSpend = stsCalc.discretionaryCash.toRupees;
 
       final sb = StringBuffer();
       sb.writeln('CURRENT FINANCIAL CONTEXT:');
       sb.writeln('Total Asset Balance: ${AppFormat.currency(totalBalance)}');
+      sb.writeln('Net Worth: ${AppFormat.currency(netWorth)}');
+      sb.writeln('Safe to Spend: ${AppFormat.currency(safeToSpend)}');
       sb.writeln('This Month Income: ${AppFormat.currency(monthlyIncome)}');
       sb.writeln('This Month Expenses: ${AppFormat.currency(monthlyExpense)}');
 
@@ -81,7 +80,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       sb.writeln('\nCredit Cards:');
       for (var c in cards) {
         sb.writeln(
-          '- ${c.bank}: Outstanding ${AppFormat.currency(c.outstanding)}',
+          '- ${c.bank}: Outstanding ${AppFormat.currency(c.usedAmount)}',
         );
       }
 

@@ -6,7 +6,6 @@ enum AlertType {
   partialSalary,
   loanDue,
   creditCardDue,
-  vehicleService,
   subscriptionDue,
   custom,
 }
@@ -58,7 +57,6 @@ AlertType alertTypeFromReminder(Reminder reminder) {
       return AlertType.creditCardDue;
     case ReminderType.service:
     case ReminderType.insurance:
-      return AlertType.vehicleService;
     case ReminderType.custom:
       return AlertType.subscriptionDue;
     case ReminderType.lending:
