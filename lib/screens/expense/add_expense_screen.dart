@@ -15,12 +15,10 @@ import '../../models/category.dart';
 import '../../services/settings_service.dart';
 import '../../services/haptic_service.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/app_text_field.dart' as shared;
 import '../../shared/widgets/app_amount_field.dart';
 import '../../shared/widgets/app_category_picker.dart';
 import '../../shared/widgets/app_date_selector.dart';
-import '../../shared/widgets/app_section_header.dart';
 import '../../shared/widgets/app_payment_method_picker.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_dialog.dart';
@@ -31,6 +29,10 @@ import '../../widgets/receipt_scan_overlay.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../bank/add_bank_account_screen.dart';
+import '../../shared/widgets/glass/spendx_scaffold.dart';
+import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../theme/app_theme.dart' as modern_theme;
 import '../../widgets/form/add_category_sheet.dart';
 import '../../shared/widgets/app_page_route.dart';
 
@@ -404,11 +406,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Widget _buildTypeToggle() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xs),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.medium),
+        color: isDark ? const Color(0x1AFFFFFF) : const Color(0x40FFFFFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+          width: 0.75,
+        ),
       ),
       child: Row(
         children: [
@@ -424,25 +431,34 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: _selectedType == 'expense'
-                      ? Theme.of(context).colorScheme.error
+                      ? modern_theme.AppTheme.semanticExpense.withValues(alpha: isDark ? 0.30 : 0.20)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.small),
+                  borderRadius: BorderRadius.circular(12),
+                  border: _selectedType == 'expense'
+                      ? Border.all(
+                          color: modern_theme.AppTheme.semanticExpense.withValues(alpha: 0.6),
+                          width: 1.0,
+                        )
+                      : null,
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   'Expense',
-                  style: AppTextStyles.labelMedium.copyWith(
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     color: _selectedType == 'expense'
-                        ? Theme.of(context).colorScheme.onSurface
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ? modern_theme.AppTheme.semanticExpense
+                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                   ),
                 ),
               ),
             ),
           ),
+          const SizedBox(width: 4),
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -455,20 +471,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: _selectedType == 'income'
-                      ? Theme.of(context).colorScheme.primary
+                      ? modern_theme.AppTheme.semanticIncome.withValues(alpha: isDark ? 0.30 : 0.20)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.small),
+                  borderRadius: BorderRadius.circular(12),
+                  border: _selectedType == 'income'
+                      ? Border.all(
+                          color: modern_theme.AppTheme.semanticIncome.withValues(alpha: 0.6),
+                          width: 1.0,
+                        )
+                      : null,
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   'Income',
-                  style: AppTextStyles.labelMedium.copyWith(
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     color: _selectedType == 'income'
-                        ? Theme.of(context).colorScheme.onSurface
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ? modern_theme.AppTheme.semanticIncome
+                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                   ),
                 ),
               ),
@@ -482,14 +506,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
-    Color headerColor;
-    if (_selectedType == 'expense') {
-      headerColor = Theme.of(context).colorScheme.error;
-    } else {
-      headerColor = Theme.of(context).colorScheme.primary;
-    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerColor = _selectedType == 'expense'
+        ? modern_theme.AppTheme.semanticExpense
+        : modern_theme.AppTheme.semanticIncome;
 
-    return Scaffold(
+    return SpendXScaffold(
       appBar: SpendXAppBar(
         title: widget.existingTransaction != null
             ? 'Edit ${_selectedType == 'expense' ? 'Expense' : 'Income'}'
@@ -497,15 +519,19 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         actions: [
           if (widget.existingTransaction == null)
             IconButton(
-              icon: const Icon(Icons.document_scanner_rounded, size: 20),
+              icon: Icon(
+                Icons.document_scanner_rounded,
+                size: 20,
+                color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+              ),
               tooltip: 'Scan Receipt',
               onPressed: _scanReceipt,
             ),
           if (widget.existingTransaction != null)
             IconButton(
-              icon: Icon(
-                Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error,
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: modern_theme.AppTheme.semanticExpense,
                 size: 20,
               ),
               tooltip: 'Delete Transaction',
@@ -513,182 +539,251 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.m,
-            AppSpacing.m,
-            AppSpacing.m,
-            132,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTypeToggle(),
-              const SizedBox(height: AppSpacing.l),
-
-              // Amount Input
-              const AppSectionHeader(
-                title: 'Amount',
-                padding: EdgeInsets.only(bottom: AppSpacing.sm),
-              ),
-              AppAmountField(
-                controller: _amountController,
-                amountColor: headerColor,
-              ),
-              if (_recentAmounts.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.s),
-                Wrap(
-                  spacing: AppSpacing.s,
-                  runSpacing: AppSpacing.s,
-                  children: _recentAmounts.map((amount) {
-                    return ActionChip(
-                      label: Text(
-                        '${settings.currencySymbol}${_formatQuickAmount(amount)}',
-                      ),
-                      onPressed: () => _applyQuickAmount(amount),
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHigh,
-                      side: BorderSide(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outline.withValues(alpha: 0.16),
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-
-              Divider(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1), height: 32),
-
-              // Category Selector
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Section 1: Type & Amount Card ────────────
+            SpendXGlassSurface(
+              level: SpendXGlassLevel.elevated,
+              borderRadius: BorderRadius.circular(AppRadius.l),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const AppSectionHeader(title: 'Category'),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final newCat = await showModalBottomSheet<Category>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) =>
-                            AddCategorySheet(initialType: _selectedType),
-                      );
-                      if (newCat != null) {
-                        await _loadInitialData();
-                        setState(() {
-                          _selectedCategoryId = newCat.id;
-                          _didExplicitCategorySelection = true;
-                        });
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.add_circle_outline_rounded,
-                      size: 18,
+                  _buildTypeToggle(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Amount',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? modern_theme.AppTheme.darkTextMuted : modern_theme.AppTheme.lightTextMuted,
                     ),
-                    label: const Text('Add New'),
+                  ),
+                  const SizedBox(height: 8),
+                  AppAmountField(
+                    controller: _amountController,
+                    amountColor: headerColor,
+                  ),
+                  if (_recentAmounts.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _recentAmounts.map((amount) {
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => _applyQuickAmount(amount),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0x1FFFFFFF) : const Color(0x40FFFFFF),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                                width: 0.75,
+                              ),
+                            ),
+                            child: Text(
+                              '${settings.currencySymbol}${_formatQuickAmount(amount)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Section 2: Category & Payment Source ────
+            SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              borderRadius: BorderRadius.circular(AppRadius.l),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Category',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                        ),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () async {
+                          final newCat = await showModalBottomSheet<Category>(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => AddCategorySheet(initialType: _selectedType),
+                          );
+                          if (newCat != null) {
+                            await _loadInitialData();
+                            setState(() {
+                              _selectedCategoryId = newCat.id;
+                              _didExplicitCategorySelection = true;
+                            });
+                          }
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.add_circle_outline_rounded,
+                                size: 16,
+                                color: modern_theme.AppTheme.primaryBlue,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Add New',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: modern_theme.AppTheme.primaryBlue,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  AppCategoryPicker(
+                    availableCategories: _availableCategories,
+                    selectedCategoryId: _selectedCategoryId,
+                    activeColor: headerColor,
+                    onCategorySelected: (id) => setState(() {
+                      _selectedCategoryId = id;
+                      _didExplicitCategorySelection = true;
+                    }),
+                  ),
+
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 16),
+                    height: 0.5,
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                  ),
+
+                  Text(
+                    'Payment Source',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_availablePaymentMethods.isNotEmpty)
+                    AppPaymentMethodPicker(
+                      availableMethods: _availablePaymentMethods,
+                      selectedMethodId: _selectedPaymentMethodId,
+                      activeColor: headerColor,
+                      onMethodSelected: (id) {
+                        setState(() {
+                          _selectedPaymentMethodId = id;
+                        });
+                      },
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0x14FFFFFF) : const Color(0x33000000),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'No accounts found.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? modern_theme.AppTheme.darkTextSecondary : modern_theme.AppTheme.lightTextSecondary,
+                              ),
+                            ),
+                          ),
+                          SpendXGlassButton(
+                            variant: SpendXGlassButtonVariant.tonal,
+                            onPressed: () async {
+                              final result = await Navigator.push(
+                                context,
+                                AppPageRoute(builder: (_) => const AddBankAccountScreen()),
+                              );
+                              if (result == true) await _loadInitialData();
+                            },
+                            child: const Text('Add Account'),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Section 3: Date & Notes ───────────────────
+            SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              borderRadius: BorderRadius.circular(AppRadius.l),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Transaction Date',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AppDateSelector(
+                    selectedDate: _selectedDate,
+                    onDateSelected: (date) => setState(() => _selectedDate = date),
+                  ),
+                  const SizedBox(height: 16),
+                  shared.AppTextField(
+                    controller: _notesController,
+                    label: 'Notes (Optional)',
+                    prefix: const Icon(Icons.notes_rounded),
                   ),
                 ],
               ),
-              AppCategoryPicker(
-                availableCategories: _availableCategories,
-                selectedCategoryId: _selectedCategoryId,
-                activeColor: headerColor,
-                onCategorySelected: (id) => setState(() {
-                  _selectedCategoryId = id;
-                  _didExplicitCategorySelection = true;
-                }),
+            ),
+
+            const SizedBox(height: 24),
+
+            SpendXGlassButton(
+              variant: SpendXGlassButtonVariant.primary,
+              onPressed: _isValid ? _saveTransaction : null,
+              child: Text(
+                widget.existingTransaction != null ? 'Update Transaction' : 'Save Transaction',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
-
-              AppSpacing.sectionSpacer,
-
-              // Payment Method Selector
-              if (_availablePaymentMethods.isNotEmpty) ...[
-                const AppSectionHeader(title: 'Payment Method'),
-                AppPaymentMethodPicker(
-                  availableMethods: _availablePaymentMethods,
-                  selectedMethodId: _selectedPaymentMethodId,
-                  activeColor: headerColor,
-                  onMethodSelected: (id) {
-                    setState(() {
-                      _selectedPaymentMethodId = id;
-                    });
-                  },
-                ),
-                AppSpacing.sectionSpacer,
-              ] else ...[
-                const AppSectionHeader(title: 'Payment Method'),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.m),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Add an account before saving transactions.',
-                        ),
-                        const SizedBox(height: AppSpacing.s),
-                        OutlinedButton.icon(
-                          onPressed: () async {
-                            final result = await Navigator.push(
-                              context,
-                              AppPageRoute(
-                                builder: (_) => const AddBankAccountScreen(),
-                              ),
-                            );
-                            if (result == true) {
-                              await _loadInitialData();
-                            }
-                          },
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('Add Account'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                AppSpacing.sectionSpacer,
-              ],
-
-              AppSpacing.sectionSpacer,
-
-              // Date Picker
-              const AppSectionHeader(title: 'Date'),
-              AppDateSelector(
-                selectedDate: _selectedDate,
-                onDateSelected: (date) => setState(() => _selectedDate = date),
-              ),
-
-              AppSpacing.itemSpacer,
-
-              shared.AppTextField(
-                controller: _notesController,
-                label: 'Notes (Optional)',
-                prefix: const Icon(Icons.notes_rounded),
-              ),
-
-              const SizedBox(height: AppSpacing.m),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: EdgeInsets.fromLTRB(
-          AppSpacing.m,
-          AppSpacing.s,
-          AppSpacing.m,
-          AppSpacing.m + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: PrimaryButton(
-          label: 'Save Transaction',
-          onPressed: _isValid ? _saveTransaction : null,
-          backgroundColor: headerColor,
-          fullWidth: true,
+            ),
+          ],
         ),
       ),
     );

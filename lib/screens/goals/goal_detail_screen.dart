@@ -12,6 +12,13 @@ import '../../models/transaction.dart';
 import '../../utils/app_format.dart';
 import 'add_goal_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../theme/app_theme.dart';
+import '../../shared/widgets/app_confirm_dialog.dart';
+import '../../shared/widgets/spendx_app_bar.dart';
+import '../../shared/widgets/glass/spendx_scaffold.dart';
+import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_glass_dialog.dart';
+import '../../shared/widgets/glass/spendx_glass_button.dart';
 
 class GoalDetailScreen extends ConsumerStatefulWidget {
   final Goal goal;
@@ -42,66 +49,75 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   Future<void> _logProgress() async {
     final amountCtrl = TextEditingController();
     final noteCtrl = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final result = await showDialog<({double amount, String? note})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          _goal.type == GoalType.debtPayoff ? 'Log Payment' : 'Log Savings',
-        ),
+      builder: (ctx) => SpendXGlassDialog(
+        title: _goal.type == GoalType.debtPayoff ? 'Log Payment' : 'Log Savings',
+        message: 'Record contribution towards ${_goal.title}',
+        primaryLabel: 'Add',
+        secondaryLabel: 'Cancel',
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: amountCtrl,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
               decoration: InputDecoration(
                 labelText: 'Amount',
-                prefixText: '\u20b9 ',
+                prefixText: '₹ ',
                 filled: true,
-                fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                    width: 0.75,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: noteCtrl,
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                fontSize: 14,
+              ),
               decoration: InputDecoration(
                 labelText: 'Note (optional)',
                 filled: true,
-                fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                    width: 0.75,
+                  ),
                 ),
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final raw = amountCtrl.text.trim().replaceAll(',', '');
-              final val = double.tryParse(raw);
-              if (val != null && val > 0) {
-                Navigator.pop(ctx, (
-                  amount: val,
-                  note: noteCtrl.text.trim().isNotEmpty
-                      ? noteCtrl.text.trim()
-                      : null,
-                ));
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
+        onPrimary: () {
+          final raw = amountCtrl.text.trim().replaceAll(',', '');
+          final val = double.tryParse(raw);
+          if (val != null && val > 0) {
+            Navigator.pop(ctx, (
+              amount: val,
+              note: noteCtrl.text.trim().isNotEmpty
+                  ? noteCtrl.text.trim()
+                  : null,
+            ));
+          }
+        },
       ),
     );
 
@@ -115,26 +131,16 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
       ref.invalidate(goalsProvider);
       ref.invalidate(goalLogsProvider(_goal.id));
       _refreshGoal();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added ${AppFormat.currency(result.amount)}')),
-        );
-      }
     }
   }
 
   Future<void> _deleteLog(GoalLog log) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Entry?'),
-        content: Text('Remove ${AppFormat.currency(log.amount)} from this goal?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
-        ],
-      ),
+    final confirm = await AppConfirmDialog.show(
+      context,
+      title: 'Delete Entry?',
+      message: 'Remove ${AppFormat.currency(log.amount)} from this goal?',
+      confirmLabel: 'Delete',
+      isDangerous: true,
     );
     if (confirm == true) {
       await ref.read(goalRepoProvider).deleteLog(log);
@@ -145,16 +151,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   }
 
   Future<void> _deleteGoal() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Goal?'),
-        content: Text('Delete "${_goal.title}"? All progress logs will be removed.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
-        ],
-      ),
+    final confirm = await AppConfirmDialog.show(
+      context,
+      title: 'Delete Goal?',
+      message: 'Delete "${_goal.title}"? All progress logs will be removed.',
+      confirmLabel: 'Delete',
+      isDangerous: true,
     );
     if (confirm == true) {
       await ref.read(goalRepoProvider).delete(_goal.id);
@@ -185,6 +187,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final progress = ref.watch(goalProgressProvider(_goal));
     final logsAsync = ref.watch(goalLogsProvider(_goal.id));
     final nudgesAsync = ref.watch(goalInsightsProvider);
@@ -209,9 +212,9 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     final isManualProgress =
         _goal.type == GoalType.savings || _goal.type == GoalType.debtPayoff;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_goal.title),
+    return SpendXScaffold(
+      appBar: SpendXAppBar(
+        title: _goal.title,
         actions: [
           IconButton(
             onPressed: _editGoal,
@@ -220,20 +223,23 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           ),
           IconButton(
             onPressed: _deleteGoal,
-            icon: const Icon(Icons.delete_outline_rounded),
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              color: AppColors.danger,
+            ),
             tooltip: 'Delete goal',
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
           // ── Edge State Banners ─────────────────────────────────────
           if (progress.isCompleted)
-            _Banner(
+            const _Banner(
               icon: Icons.check_circle_rounded,
               text: 'Goal Achieved!',
-              color: const Color(0xFF22C55E),
+              color: AppColors.success,
             ),
           if (isOverdue)
             _Banner(
@@ -242,90 +248,98 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               color: cs.error,
             ),
 
-          // ── Progress Ring ──────────────────────────────────────────
-          const SizedBox(height: 8),
-          Center(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: pct),
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, _) => SizedBox(
-                width: 150,
-                height: 150,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 150,
-                      height: 150,
-                      child: CircularProgressIndicator(
-                        value: value,
-                        strokeWidth: 12,
-                        backgroundColor: cs.surfaceContainerHighest,
-                        valueColor: AlwaysStoppedAnimation(barColor),
-                        strokeCap: StrokeCap.round,
+          // ── Progress Ring & Metrics Hero ──────────────────────────
+          SpendXGlassSurface(
+            level: SpendXGlassLevel.elevated,
+            borderRadius: BorderRadius.circular(20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              children: [
+                Center(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: pct),
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 140,
+                            height: 140,
+                            child: CircularProgressIndicator(
+                              value: value,
+                              strokeWidth: 10,
+                              backgroundColor: isDark ? const Color(0x1FFFFFFF) : const Color(0x18000000),
+                              valueColor: AlwaysStoppedAnimation(barColor),
+                              strokeCap: StrokeCap.round,
+                            ),
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '$pctText%',
+                                style: TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w800,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  color: barColor,
+                                ),
+                              ),
+                              Text(
+                                progress.isCompleted
+                                    ? 'Done!'
+                                    : isOverdue
+                                        ? 'Overdue'
+                                        : '${progress.daysLeft}d left',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$pctText%',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            color: barColor,
-                          ),
-                        ),
-                        Text(
-                          progress.isCompleted
-                              ? 'Done!'
-                              : isOverdue
-                                  ? 'Overdue'
-                                  : '${progress.daysLeft}d left',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Metrics Row ───────────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MetricTile(
+                        label: _goal.type == GoalType.spendingLimit ? 'Spent' : 'Saved',
+                        value: _goal.type == GoalType.spendingLimit
+                            ? AppFormat.currency(progress.currentSpent ?? 0)
+                            : AppFormat.currency(_goal.currentAmount),
+                        color: progress.isOverBudget ? cs.error : AppColors.success,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _MetricTile(
+                        label: 'Remaining',
+                        value: AppFormat.currency(progress.remaining),
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _MetricTile(
+                        label: _goal.type == GoalType.spendingLimit ? '/day left' : '/day needed',
+                        value: AppFormat.currency(progress.requiredDaily),
+                        color: progress.isBehindSchedule ? cs.error : const Color(0xFFF59E0B),
+                      ),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ── Metrics Row ───────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: _MetricTile(
-                  label: _goal.type == GoalType.spendingLimit ? 'Spent' : 'Saved',
-                  value: _goal.type == GoalType.spendingLimit
-                      ? AppFormat.currency(progress.currentSpent ?? 0)
-                      : AppFormat.currency(_goal.currentAmount),
-                  color: progress.isOverBudget ? cs.error : const Color(0xFF22C55E),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MetricTile(
-                  label: 'Remaining',
-                  value: AppFormat.currency(progress.remaining),
-                  color: cs.primary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MetricTile(
-                  label: _goal.type == GoalType.spendingLimit ? '/day left' : '/day needed',
-                  value: AppFormat.currency(progress.requiredDaily),
-                  color: progress.isBehindSchedule ? cs.error : const Color(0xFFF59E0B),
-                ),
-              ),
-            ],
           ),
 
           const SizedBox(height: 16),
@@ -355,39 +369,41 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               if (relevant.isEmpty) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      children: relevant.map((n) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              n.type == NudgeType.positive
-                                  ? Icons.check_circle_rounded
-                                  : n.type == NudgeType.warning
-                                      ? Icons.warning_amber_rounded
-                                      : Icons.lightbulb_outline_rounded,
-                              size: 16,
-                              color: n.type == NudgeType.positive
-                                  ? const Color(0xFF22C55E)
-                                  : n.type == NudgeType.warning
-                                      ? const Color(0xFFF59E0B)
-                                      : cs.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                n.text,
-                                style: Theme.of(context).textTheme.bodySmall,
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  borderRadius: BorderRadius.circular(16),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: relevant.map((n) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            n.type == NudgeType.positive
+                                ? Icons.check_circle_rounded
+                                : n.type == NudgeType.warning
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.lightbulb_outline_rounded,
+                            size: 16,
+                            color: n.type == NudgeType.positive
+                                ? AppColors.success
+                                : n.type == NudgeType.warning
+                                    ? const Color(0xFFF59E0B)
+                                    : AppColors.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              n.text,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
                               ),
                             ),
-                          ],
-                        ),
-                      )).toList(),
-                    ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
                   ),
                 ),
               );
@@ -398,26 +414,26 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
 
           // ── Action Buttons ────────────────────────────────────────
           if (isManualProgress && !progress.isCompleted)
-            FilledButton.icon(
+            SpendXGlassButton(
+              variant: SpendXGlassButtonVariant.primary,
               onPressed: _logProgress,
-              icon: const Icon(Icons.add_rounded),
-              label: Text(
-                _goal.type == GoalType.debtPayoff ? 'Log Payment' : 'Log Savings',
-              ),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.add_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    _goal.type == GoalType.debtPayoff ? 'Log Payment' : 'Log Savings',
+                  ),
+                ],
               ),
             ),
 
           if (!progress.isCompleted && !isOverdue) ...[
-            const SizedBox(height: 8),
-            OutlinedButton(
+            const SizedBox(height: 10),
+            SpendXGlassButton(
+              variant: SpendXGlassButtonVariant.tonal,
               onPressed: _markComplete,
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 46),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
               child: const Text('Mark as Complete'),
             ),
           ],
@@ -427,7 +443,9 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
             Text(
               'Spending limit updates automatically from transactions.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+              ),
             ),
           ],
 
@@ -437,31 +455,42 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           if (isManualProgress) ...[
             Text(
               'Progress Log',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             logsAsync.when(
               data: (logs) {
                 if (logs.isEmpty) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Center(
-                        child: Text(
-                          'No entries yet. Tap the button above to log progress.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                          textAlign: TextAlign.center,
+                  return SpendXGlassSurface(
+                    level: SpendXGlassLevel.base,
+                    borderRadius: BorderRadius.circular(16),
+                    padding: const EdgeInsets.all(24),
+                    child: Center(
+                      child: Text(
+                        'No entries yet. Tap the button above to log progress.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   );
                 }
-                return Card(
+                return SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  borderRadius: BorderRadius.circular(16),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Column(
                     children: [
                       for (var i = 0; i < logs.length; i++) ...[
                         _LogTile(log: logs[i], onDelete: () => _deleteLog(logs[i])),
-                        if (i < logs.length - 1) const Divider(height: 1, indent: 16, endIndent: 16),
+                        if (i < logs.length - 1)
+                          Divider(
+                            height: 1,
+                            color: isDark ? const Color(0x1AFFFFFF) : const Color(0x14000000),
+                            indent: 16,
+                            endIndent: 16,
+                          ),
                       ],
                     ],
                   ),
@@ -478,18 +507,24 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
 
           // ── Date Info ─────────────────────────────────────────────
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _StatRow(label: 'Start Date', value: AppFormat.date(_goal.startDate)),
-                  const Divider(height: 16),
-                  _StatRow(label: 'End Date', value: AppFormat.date(_goal.endDate)),
-                  const Divider(height: 16),
-                  _StatRow(label: 'Target', value: AppFormat.currency(_goal.targetAmount)),
-                ],
-              ),
+          SpendXGlassSurface(
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _StatRow(label: 'Start Date', value: AppFormat.date(_goal.startDate)),
+                Divider(
+                  height: 16,
+                  color: isDark ? const Color(0x1AFFFFFF) : const Color(0x14000000),
+                ),
+                _StatRow(label: 'End Date', value: AppFormat.date(_goal.endDate)),
+                Divider(
+                  height: 16,
+                  color: isDark ? const Color(0x1AFFFFFF) : const Color(0x14000000),
+                ),
+                _StatRow(label: 'Target', value: AppFormat.currency(_goal.targetAmount)),
+              ],
             ),
           ),
         ],
@@ -538,24 +573,30 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return SpendXGlassSurface(
+      level: SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       child: Column(
         children: [
           Text(
             value,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            style: TextStyle(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppColors.secondaryText
+                  : const Color(0xFF64748B),
               fontSize: 11,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],

@@ -45,11 +45,13 @@ class _PrimaryButtonState extends State<PrimaryButton> {
     final cs = Theme.of(context).colorScheme;
     final isDisabled = widget.onPressed == null || widget.isLoading;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final foregroundColor = widget.tone == PrimaryButtonTone.primary
         ? cs.onPrimary
         : (widget.tone == PrimaryButtonTone.outline
-              ? cs.primary
-              : cs.onSurface);
+              ? (isDark ? const Color(0xFF38BDF8) : cs.primary)
+              : (isDark ? Colors.white : const Color(0xFF0F172A)));
 
     final backgroundColor = widget.backgroundColor ??
         widget.color ??
@@ -57,18 +59,20 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         ? cs.primary
         : (widget.tone == PrimaryButtonTone.outline
               ? Colors.transparent
-              : cs.surfaceContainer));
+              : (isDark ? const Color(0x1FFFFFFF) : const Color(0x40FFFFFF))));
 
     final border = widget.tone == PrimaryButtonTone.outline
-        ? BorderSide(color: cs.primary, width: 1.5)
-        : BorderSide.none;
+        ? BorderSide(color: isDark ? const Color(0xFF38BDF8) : cs.primary, width: 1.25)
+        : (widget.tone == PrimaryButtonTone.secondary
+            ? BorderSide(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x1F000000), width: 0.75)
+            : BorderSide.none);
 
     final button = GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
+        scale: _isPressed ? 0.96 : 1.0,
         duration: const Duration(milliseconds: 100),
         child: SizedBox(
           height: widget.height,
@@ -116,7 +120,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                 horizontal: 16.0,
               ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.0),
+                borderRadius: BorderRadius.circular(16.0),
               ),
             ),
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'glass/spendx_glass_dialog.dart';
 
 class AppConfirmDialog extends StatelessWidget {
   final String title;
@@ -27,6 +28,7 @@ class AppConfirmDialog extends StatelessWidget {
   }) {
     return showDialog<bool>(
       context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
       builder: (context) => AppConfirmDialog(
         title: title,
         message: message,
@@ -39,28 +41,15 @@ class AppConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      title: Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
-      content: Text(message, style: Theme.of(context).textTheme.bodyMedium),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(cancelLabel, style: TextStyle(color: cs.onSurfaceVariant)),
-        ),
-        ElevatedButton(
-          onPressed: onConfirm,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isDangerous ? cs.error : cs.primary,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(100, 40),
-          ),
-          child: Text(confirmLabel),
-        ),
-      ],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
-      backgroundColor: cs.surfaceContainerHigh,
+    return SpendXGlassDialog(
+      title: title,
+      message: message,
+      primaryLabel: confirmLabel,
+      onPrimary: onConfirm,
+      secondaryLabel: cancelLabel,
+      onSecondary: () => Navigator.of(context).pop(false),
+      isDestructive: isDangerous,
+      icon: isDangerous ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
     );
   }
 }

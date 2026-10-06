@@ -3,15 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/accounts/providers/account_providers.dart';
 import '../../models/bank_account.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/app_card.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
-import '../../shared/widgets/app_section_header.dart';
 import '../../shared/widgets/app_amount_field.dart';
 import '../../utils/text_formatter.dart';
 import '../credit_card/add_credit_card_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/app_confirm_dialog.dart';
+import '../../shared/widgets/glass/spendx_scaffold.dart';
+import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_glass_button.dart';
 
 class AddBankAccountScreen extends ConsumerStatefulWidget {
   final BankAccount? existing;
@@ -91,22 +92,12 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     final existing = widget.existing;
     if (existing == null) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Account?'),
-        content: Text('Delete ${existing.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirm = await AppConfirmDialog.show(
+      context,
+      title: 'Delete Account?',
+      message: 'Are you sure you want to delete ${existing.name}? All associated transaction links will be detached.',
+      confirmLabel: 'Delete',
+      isDangerous: true,
     );
 
     if (confirm == true) {
@@ -119,25 +110,11 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     final existing = widget.existing;
     if (existing == null) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Convert to Credit Card?'),
-        content: Text(
-          'Convert "${existing.name}" to a credit card? '
-          'The bank account will be removed and a new credit card created.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Convert'),
-          ),
-        ],
-      ),
+    final confirm = await AppConfirmDialog.show(
+      context,
+      title: 'Convert to Credit Card?',
+      message: 'Convert "${existing.name}" to a credit card? The bank account will be removed and a new credit card created.',
+      confirmLabel: 'Convert',
     );
     if (confirm != true) return;
 
@@ -171,9 +148,11 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SpendXScaffold(
       appBar: SpendXAppBar(
-        title: 'Account',
+        title: widget.existing == null ? 'Add Account' : 'Edit Account',
         actions: widget.existing == null
             ? null
             : [
@@ -184,136 +163,174 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                 ),
                 IconButton(
                   onPressed: _delete,
-                  icon: const Icon(Icons.delete_outline_rounded),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppColors.danger,
+                  ),
                   tooltip: 'Delete account',
                 ),
               ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppSectionHeader(
-                  title: 'Account Name',
-                  padding: EdgeInsets.only(bottom: AppSpacing.s),
-                ),
-                AppTextField(
-                  controller: _nameCtrl,
-                  hintText: 'e.g. SBI Savings, Zerodha Stocks',
-                ),
-                const SizedBox(height: AppSpacing.m),
-
-                const AppSectionHeader(
-                  title: 'Institution / Bank',
-                  padding: EdgeInsets.only(bottom: AppSpacing.s),
-                ),
-                AppTextField(
-                  controller: _bankCtrl,
-                  hintText: 'e.g. SBI, HDFC, Zerodha',
-                ),
-                const SizedBox(height: AppSpacing.m),
-
-                const AppSectionHeader(
-                  title: 'Balance / Current Value',
-                  padding: EdgeInsets.only(bottom: AppSpacing.s),
-                ),
-                AppAmountField(controller: _balanceCtrl),
-                const SizedBox(height: AppSpacing.m),
-
-                const AppSectionHeader(
-                  title: 'Account Type',
-                  padding: EdgeInsets.only(bottom: AppSpacing.s),
-                ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _types.map((t) {
-                    final isSelected = _accountType == t['key'];
-                    final cleanHex = BankAccount.colorForType(
-                      t['key']!,
-                    ).replaceAll('#', '');
-                    final color = Color(int.parse('0xFF$cleanHex'));
-                    return GestureDetector(
-                      onTap: () => setState(() {
-                        _accountType = t['key']!;
-                        // Liabilities default off for these types
-                        _isAsset = true;
-                      }),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? color.withValues(alpha: 0.25)
-                              : Theme.of(context).colorScheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(AppRadius.m),
-                          border: Border.all(
-                            color: isSelected
-                                ? color
-                                : Theme.of(context).colorScheme.outlineVariant,
-                          ),
-                        ),
-                        child: Text(
-                          t['label']!,
-                          style: TextStyle(
-                            color: isSelected
-                                ? color
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                            fontSize: 13,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Details Card ──────────────────────────────
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.base,
+                borderRadius: BorderRadius.circular(AppRadius.l),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Account Details',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      controller: _nameCtrl,
+                      hintText: 'e.g. SBI Savings, Zerodha Stocks',
+                    ),
+                    const SizedBox(height: 14),
+                    AppTextField(
+                      controller: _bankCtrl,
+                      hintText: 'e.g. SBI, HDFC, Zerodha',
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Initial Balance',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    AppAmountField(controller: _balanceCtrl),
+                  ],
                 ),
-                const SizedBox(height: 20),
+              ),
 
-                // Asset or Liability toggle
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.m),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Count as Asset',
-                              style: AppTextStyles.titleSmall,
+              const SizedBox(height: 16),
+
+              // ── Account Type Card ─────────────────────────
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.base,
+                borderRadius: BorderRadius.circular(AppRadius.l),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Account Type',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _types.map((t) {
+                        final isSelected = _accountType == t['key'];
+                        final cleanHex = BankAccount.colorForType(
+                          t['key']!,
+                        ).replaceAll('#', '');
+                        final color = Color(int.parse('0xFF$cleanHex'));
+                        return GestureDetector(
+                          onTap: () => setState(() {
+                            _accountType = t['key']!;
+                            _isAsset = true;
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
                             ),
-                            Text(
-                              'Disable for loan/liability accounts',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? color.withValues(alpha: isDark ? 0.25 : 0.18)
+                                  : (isDark ? const Color(0x14FFFFFF) : const Color(0x40FFFFFF)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? color
+                                    : (isDark ? const Color(0x24FFFFFF) : const Color(0x18000000)),
+                                width: isSelected ? 1.25 : 0.75,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        value: _isAsset,
-                        onChanged: (v) => setState(() => _isAsset = v),
-                        activeTrackColor: Theme.of(context).colorScheme.primary,
-                      ),
-                    ],
-                  ),
+                            child: Text(
+                              t['label']!,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? color
+                                    : (isDark ? AppColors.secondaryText : const Color(0xFF475569)),
+                                fontSize: 13,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-              ],
-            ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Asset or Liability toggle ─────────────────
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.base,
+                borderRadius: BorderRadius.circular(AppRadius.l),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Count as Asset',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Disable for loan or liability accounts',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.mutedText : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _isAsset,
+                      onChanged: (v) => setState(() => _isAsset = v),
+                      activeThumbColor: AppColors.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -323,29 +340,19 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
           child: Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: SpendXGlassButton(
+                  variant: SpendXGlassButtonVariant.tonal,
                   onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    foregroundColor: Theme.of(
-                      context,
-                    ).colorScheme.onSurfaceVariant,
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('Cancel'),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                child: PrimaryButton(
-                  label: 'Save Account',
+                child: SpendXGlassButton(
+                  variant: SpendXGlassButtonVariant.primary,
                   onPressed: _isValid ? _save : null,
+                  child: const Text('Save Account'),
                 ),
               ),
             ],

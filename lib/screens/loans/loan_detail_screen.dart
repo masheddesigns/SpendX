@@ -8,8 +8,6 @@ import '../../models/loan_installment.dart';
 import '../../models/bank_account.dart';
 import '../../domain/loans/loan_service.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/app_card.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_dialog.dart';
 import 'add_loan_screen.dart';
@@ -18,6 +16,11 @@ import '../../utils/text_formatter.dart';
 import '../../utils/app_format.dart';
 import '../../shared/widgets/app_account_picker.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/glass/spendx_scaffold.dart';
+import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_glass_sheet.dart';
+import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../widgets/custom_snackbar.dart';
 
 enum LoanDetailAction { deleted }
 
@@ -37,42 +40,42 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
     LoanInstallment inst,
     List<BankAccount> accounts,
   ) async {
-    final option = await showModalBottomSheet<String>(
+    final option = await SpendXGlassSheet.show<String>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AppCard(
-        padding: const EdgeInsets.all(AppSpacing.l),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppRadius.xl),
-        ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Choose Payment Method', style: AppTextStyles.titleLarge),
-            const SizedBox(height: AppSpacing.s),
+            Text(
+              'Choose Payment Method',
+              style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
             Text(
               'EMI Amount: ${AppFormat.currency(inst.amount)}',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              style: AppTextStyles.body.copyWith(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.secondaryText
+                    : const Color(0xFF64748B),
               ),
             ),
-            const SizedBox(height: AppSpacing.l),
-
+            const SizedBox(height: 20),
             _buildPaymentOption(
               icon: Icons.account_balance_wallet_rounded,
               title: 'Pay via Account',
               subtitle: 'Deduct from bank and sync with ledger',
-              onTap: () => Navigator.pop(context, 'account'),
+              onTap: () => Navigator.pop(sheetContext, 'account'),
             ),
-            const SizedBox(height: AppSpacing.m),
+            const SizedBox(height: 12),
             _buildPaymentOption(
               icon: Icons.check_circle_outline_rounded,
               title: 'Mark as Paid',
               subtitle: 'Manually mark without affecting ledger',
-              onTap: () => Navigator.pop(context, 'manual'),
+              onTap: () => Navigator.pop(sheetContext, 'manual'),
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -83,36 +86,35 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
     }
 
     if (option == 'account') {
-      final confirmed = await showModalBottomSheet<bool>(
+      final confirmed = await SpendXGlassSheet.show<bool>(
         context: context,
-        backgroundColor: Colors.transparent,
-        builder: (_) => AppCard(
-          padding: const EdgeInsets.all(AppSpacing.l),
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius.xl),
-          ),
+        builder: (sheetContext) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Select Bank Account', style: AppTextStyles.titleMedium),
-              const SizedBox(height: AppSpacing.m),
+              Text(
+                'Select Bank Account',
+                style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
               StatefulBuilder(
                 builder: (ctx, setDs) => AppAccountPicker(
                   availableAccounts: accounts,
                   selectedAccountId: _selectedAccountId,
                   onAccountSelected: (id) =>
                       setDs(() => _selectedAccountId = id),
-                  activeColor: Colors.green,
+                  activeColor: AppColors.success,
                 ),
               ),
-              const SizedBox(height: AppSpacing.l),
-              PrimaryButton(
-                onPressed: () => Navigator.pop(context, true),
-                label: 'Confirm Payment',
-                color: Colors.green,
+              const SizedBox(height: 20),
+              SpendXGlassButton(
+                variant: SpendXGlassButtonVariant.primary,
+                onPressed: () => Navigator.pop(sheetContext, true),
+                child: const Text('Confirm Payment'),
               ),
-              const SizedBox(height: AppSpacing.m),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -130,9 +132,10 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
         if (!mounted) {
           return;
         }
-        ScaffoldMessenger.of(
+        CustomSnackBar.show(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Payment recorded')));
+          message: 'Payment recorded successfully',
+        );
         ref.invalidate(loanInstallmentsProvider(widget.loan.id));
         ref.invalidate(loansProvider);
       }
@@ -141,8 +144,9 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Installment marked as paid')),
+      CustomSnackBar.show(
+        context,
+        message: 'Installment marked as paid',
       );
       ref.invalidate(loanInstallmentsProvider(widget.loan.id));
       ref.invalidate(loansProvider);
@@ -155,33 +159,55 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return AppCard(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
       onTap: onTap,
-      padding: const EdgeInsets.all(AppSpacing.m),
-      child: Row(
-        children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: AppSpacing.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.titleSmall),
-                Text(
-                  subtitle,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+      child: SpendXGlassSurface(
+        level: SpendXGlassLevel.interactive,
+        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.primary.withValues(alpha: isDark ? 0.20 : 0.12),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 20),
             ),
-          ),
-          Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 12,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -217,7 +243,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
         ? (loan.paidAmount / loan.principalAmount).clamp(0.0, 1.0)
         : 0.0;
 
-    return Scaffold(
+    return SpendXScaffold(
       appBar: SpendXAppBar(
         title: TextFormatter.toSmartTitleCase(loan.name),
         actions: [
@@ -238,7 +264,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
             onPressed: _deleteLoan,
           ),
         ],
@@ -247,22 +273,28 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => const Center(child: Text('Failed to load loan details')),
         data: (installments) => SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Overview Card
-                  AppCard(
-                    padding: const EdgeInsets.all(AppSpacing.l),
-                    color: cs.surfaceContainerHigh,
+                  SpendXGlassSurface(
+                    level: SpendXGlassLevel.elevated,
+                    borderRadius: BorderRadius.circular(20),
+                    padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
                         Text(
                           AppFormat.currency(remaining),
-                          style: AppTextStyles.headingLarge.copyWith(
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w700,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            letterSpacing: -0.6,
                             color: cs.primary,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           'Remaining Balance',
                           style: AppTextStyles.bodySmall.copyWith(
@@ -355,12 +387,12 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 32),
-                  const Text(
+                  const SizedBox(height: 28),
+                  Text(
                     'Upcoming & History',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   if (installments.isEmpty)
                     const Center(
@@ -377,74 +409,96 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                       itemBuilder: (ctx, i) {
                         final inst = installments[i];
                         final isPaid = inst.status == 'paid';
-                        return AppCard(
-                          margin: const EdgeInsets.only(bottom: AppSpacing.m),
-                          padding: const EdgeInsets.all(AppSpacing.m),
-                          border: isPaid
-                              ? BorderSide(
-                                  color: Colors.green.withValues(alpha: 0.3),
-                                )
-                              : null,
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: isPaid
-                                    ? Colors.green.withValues(alpha: 0.1)
-                                    : cs.primary.withValues(alpha: 0.1),
-                                child: Icon(
-                                  isPaid ? Icons.check : Icons.schedule,
-                                  color: isPaid ? Colors.green : cs.primary,
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SpendXGlassSurface(
+                            level: SpendXGlassLevel.base,
+                            borderRadius: BorderRadius.circular(16),
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: isPaid
+                                      ? AppColors.success.withValues(alpha: 0.15)
+                                      : cs.primary.withValues(alpha: 0.12),
+                                  child: Icon(
+                                    isPaid ? Icons.check_rounded : Icons.schedule_rounded,
+                                    color: isPaid ? AppColors.success : cs.primary,
+                                    size: 18,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Month ${i + 1}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        DateFormat(
+                                          'MMM dd, yyyy',
+                                        ).format(inst.dueDate),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context).brightness == Brightness.dark
+                                              ? AppColors.secondaryText
+                                              : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      'Month ${i + 1}',
+                                      AppFormat.currency(inst.amount),
                                       style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14.5,
+                                        fontFeatures: [FontFeature.tabularFigures()],
                                       ),
                                     ),
-                                    Text(
-                                      DateFormat(
-                                        'MMM dd, yyyy',
-                                      ).format(inst.dueDate),
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
+                                    const SizedBox(height: 2),
+                                    if (!isPaid)
+                                      GestureDetector(
+                                        onTap: () => _payInstallment(inst, accounts),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            'PAY',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: cs.primary,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      const Text(
+                                        'PAID',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.success,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    AppFormat.currency(inst.amount),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  if (!isPaid)
-                                  TextButton(
-                                      onPressed: () => _payInstallment(inst, accounts),
-                                      child: const Text('PAY'),
-                                    )
-                                  else
-                                    const Text(
-                                      'PAID',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       },

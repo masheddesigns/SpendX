@@ -10,6 +10,10 @@ import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/error_state_widget.dart';
 import '../../utils/app_format.dart';
+import '../../shared/widgets/glass/spendx_scaffold.dart';
+import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../shared/widgets/spendx_app_bar.dart';
 
 class ReviewQueueScreen extends ConsumerStatefulWidget {
   const ReviewQueueScreen({super.key});
@@ -46,20 +50,20 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     final cs = Theme.of(context).colorScheme;
     final hasItems = queueAsync.valueOrNull?.isNotEmpty ?? false;
 
-    return Scaffold(
+    return SpendXScaffold(
       bottomNavigationBar: hasItems && !_isSelectionMode
           ? _bottomBulkBar(context, cs, queueAsync.valueOrNull!.length)
           : null,
-      appBar: AppBar(
+      appBar: SpendXAppBar(
         leading: _isSelectionMode
             ? IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: _clearSelection,
               )
             : null,
-        title: Text(_isSelectionMode
+        title: _isSelectionMode
             ? '${_selected.length} selected'
-            : 'Review Queue'),
+            : 'Review Queue',
         actions: [
           queueAsync.when(
             data: (items) {
@@ -128,69 +132,75 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
           return Column(
             children: [
               if (!_isSelectionMode)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  color: cs.surfaceContainerHigh,
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          size: 16, color: cs.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${items.length} transaction${items.length == 1 ? '' : 's'} need your review. '
-                          'Long-press to select multiple.',
-                          style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 12,
-                              height: 1.4),
-                        ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: SpendXGlassSurface(
+                    level: SpendXGlassLevel.base,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              size: 16, color: cs.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${items.length} transaction${items.length == 1 ? '' : 's'} need your review. '
+                              'Long-press to select multiple.',
+                              style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12,
+                                  height: 1.4),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               if (smartSuggestion != null && !_isSelectionMode)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer.withValues(alpha: 0.3),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: SpendXGlassSurface(
+                    level: SpendXGlassLevel.elevated,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: cs.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.auto_awesome,
-                          size: 18, color: cs.primary),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${smartSuggestion.count} similar ${smartSuggestion.merchant} transactions found',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: cs.onSurface),
-                        ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.auto_awesome,
+                              size: 18, color: cs.primary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '${smartSuggestion.count} similar ${smartSuggestion.merchant} transactions found',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurface),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _selected.addAll(smartSuggestion.ids);
+                              });
+                            },
+                            child: const Text('Select all',
+                                style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
                       ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _selected.addAll(smartSuggestion.ids);
-                          });
-                        },
-                        child: const Text('Select all',
-                            style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               Expanded(
                 child: ListView.separated(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final item = items[index];
                     return _ReviewCard(
@@ -213,25 +223,33 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmRejectAll(context, ref, count),
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Reject all'),
-                style: OutlinedButton.styleFrom(foregroundColor: cs.error),
-              ),
+        child: SpendXGlassSurface(
+          level: SpendXGlassLevel.floating,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SpendXGlassButton(
+                    onPressed: () => _confirmRejectAll(context, ref, count),
+                    icon: Icons.delete_outline,
+                    variant: SpendXGlassButtonVariant.danger,
+                    child: const Text('Reject all'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SpendXGlassButton(
+                    onPressed: () => _confirmBulkApprove(context, ref, count),
+                    icon: Icons.done_all_rounded,
+                    variant: SpendXGlassButtonVariant.primary,
+                    child: const Text('Approve all'),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: () => _confirmBulkApprove(context, ref, count),
-                icon: const Icon(Icons.done_all_rounded, size: 18),
-                label: const Text('Approve all'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -406,16 +424,15 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
     final reasonLabel = _reviewReason(item);
     final kindLabel = _methodLabel(parsed.method);
 
-    return Card(
-      color: widget.isSelected
-          ? cs.primaryContainer.withValues(alpha: 0.3)
-          : null,
+    return SpendXGlassSurface(
+      level: widget.isSelected ? SpendXGlassLevel.elevated : SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: widget.isSelectionMode ? widget.onSelect : null,
         onLongPress: widget.onSelect,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -529,7 +546,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                       style: TextStyle(
                           color: amountColor,
                           fontWeight: FontWeight.w700,
-                          fontSize: 18),
+                          fontSize: 18,
+                          fontFeatures: const [FontFeature.tabularFigures()]),
                     ),
                   ),
                   if (kindLabel != null)
@@ -580,7 +598,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -617,22 +635,21 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: SpendXGlassButton(
                         onPressed: () {
                           ref.read(rejectReviewProvider)(item.id);
                           RetentionEvents.instance
                               .log(RetentionEvent.reviewItemRejected);
                         },
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        label: const Text('Reject'),
-                        style:
-                            OutlinedButton.styleFrom(foregroundColor: cs.error),
+                        icon: Icons.close_rounded,
+                        variant: SpendXGlassButtonVariant.secondary,
+                        child: const Text('Reject'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
-                      child: FilledButton.icon(
+                      child: SpendXGlassButton(
                         onPressed: () async {
                           await ref.read(approveReviewProvider)(item);
                           RetentionEvents.instance
@@ -647,8 +664,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                             );
                           }
                         },
-                        icon: const Icon(Icons.check_rounded, size: 18),
-                        label: const Text('Approve'),
+                        icon: Icons.check_rounded,
+                        variant: SpendXGlassButtonVariant.primary,
+                        child: const Text('Approve'),
                       ),
                     ),
                   ],

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'primary_button.dart';
+import 'glass/spendx_glass_dialog.dart';
 
 class AppDialog extends StatelessWidget {
   final String title;
@@ -76,66 +76,15 @@ class AppDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Dialog(
-      backgroundColor: cs.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20.0),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: (iconColor ?? cs.primary).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 32, color: iconColor ?? cs.primary),
-              ),
-              const SizedBox(height: 16.0),
-            ],
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: cs.onSurface),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12.0),
-            Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24.0),
-            Row(
-              children: [
-                if (secondaryLabel != null)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 12.0),
-                      child: SecondaryButton(
-                        label: secondaryLabel!,
-                        onPressed: onSecondary ?? () => Navigator.pop(context),
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: PrimaryButton(
-                    label: primaryLabel,
-                    onPressed: onPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return SpendXGlassDialog(
+      title: title,
+      message: message,
+      primaryLabel: primaryLabel,
+      onPrimary: onPrimary,
+      secondaryLabel: secondaryLabel,
+      onSecondary: onSecondary,
+      icon: icon,
+      iconColor: iconColor,
     );
   }
 }

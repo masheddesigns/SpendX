@@ -4,107 +4,188 @@ import '../services/settings_service.dart';
 export 'app_spacing.dart';
 
 class AppRadius {
-  static const double xs = 6.0;
-  static const double button = 12.0;
-  static const double card = 16.0;
+  static const double xs = 4.0;
   static const double s = 8.0;
   static const double small = s;
+  static const double sm = s;
   static const double m = 12.0;
   static const double medium = m;
+  static const double md = m;
   static const double l = 16.0;
   static const double large = l;
-  static const double xl = 24.0;
+  static const double lg = l;
+  static const double xl = 20.0;
+  static const double card = 14.0;
+  static const double button = 10.0;
   static const double full = 999.0;
 }
 
 class AppTextStyles {
+  static const TextStyle displayBalance = TextStyle(
+    fontSize: 34,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -1.0,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  static const TextStyle largeAmount = TextStyle(
+    fontSize: 26,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
   static const TextStyle heading = TextStyle(
     fontSize: 20,
-    fontWeight: FontWeight.bold,
-    letterSpacing: -0.2,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.3,
   );
 
   static const TextStyle subheading = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
+    letterSpacing: -0.2,
+  );
+
+  static const TextStyle sectionHeading = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.2,
   );
 
   static const TextStyle body = TextStyle(
     fontSize: 14,
-    fontWeight: FontWeight.normal,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.0,
+  );
+
+  static const TextStyle bodyMedium = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0.0,
   );
 
   static const TextStyle caption = TextStyle(
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
+  );
+
+  static const TextStyle navigation = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.1,
+  );
+
+  static const TextStyle button = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.1,
+  );
+
+  static const TextStyle numericData = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.2,
+    fontFeatures: [FontFeature.tabularFigures()],
   );
 
   // Compatibility aliases
-  static const TextStyle headingLarge = heading;
-  static const TextStyle titleLarge = subheading;
+  static const TextStyle headingLarge = displayBalance;
+  static const TextStyle titleLarge = heading;
   static const TextStyle titleMedium = subheading;
-  static const TextStyle titleSmall = subheading;
+  static const TextStyle titleSmall = sectionHeading;
   static const TextStyle bodyLarge = body;
-  static const TextStyle bodyMedium = body;
-  static const TextStyle bodySmall = body;
-  static const TextStyle labelLarge = caption;
+  static const TextStyle bodySmall = bodyMedium;
+  static const TextStyle labelLarge = button;
   static const TextStyle labelMedium = caption;
   static const TextStyle labelSmall = caption;
   static const TextStyle headlineSmall = heading;
-  static const TextStyle headlineLarge = heading;
+  static const TextStyle headlineLarge = displayBalance;
 }
 
 class AppColors {
   static const Color primary = AppTheme.primaryBlue;
-  static const Color success = AppTheme.successGreen;
-  static const Color warning = AppTheme.warningAmber;
-  static const Color danger = AppTheme.dangerRed;
+  static const Color success = AppTheme.semanticIncome;
+  static const Color warning = AppTheme.semanticWarning;
+  static const Color danger = AppTheme.semanticExpense;
+  static const Color transfer = AppTheme.semanticTransfer;
+  static const Color shortfall = AppTheme.semanticShortfall;
   static const Color primaryText = AppTheme.darkTextPrimary;
   static const Color secondaryText = AppTheme.darkTextSecondary;
   static const Color mutedText = AppTheme.darkTextMuted;
 }
 
 /// Controlled dark theme for full-screen immersive experiences.
-/// Only allowed in: Wrapped, Salary dashboard, cinematic modals.
-/// NOT for: forms, lists, cards, settings, transactions.
 class CinematicTheme {
   CinematicTheme._();
-  static const Color bg = Color(0xFF0A0A0A);
-  static const Color surface = Color(0xFF121212);
-  static const Color surfaceElevated = Color(0xFF1E1E1E);
-  static const Color border = Color(0x1FFFFFFF);
+  static const Color bg = Color(0xFF0A0C10);
+  static const Color surface = Color(0xFF12151D);
+  static const Color surfaceElevated = Color(0xFF191D28);
+  static const Color border = Color(0xFF1E2330);
   static const Color textPrimary = Colors.white;
   static const Color textSecondary = Color(0x99FFFFFF); // 60%
   static const Color textMuted = Color(0x66FFFFFF); // 40%
 }
 
 class AppTheme extends ChangeNotifier {
-  // --- Production Premium System ---
-  static const Color darkBg = Color(0xFF0D0F14);
-  static const Color darkSurface = Color(0xFF151821);
-  static const Color darkCard = Color(0xFF1B1F2A);
-  static const Color darkBorder = Color(0xFF262B38);
+  // --- Production Liquid Glass Tokens ---
+  static const Color darkCanvas = Color(0xFF0A0C10);
+  static const Color darkSurface = Color(0xFF12151D);
+  static const Color darkElevated = Color(0xFF191D28);
+  static const Color darkBorder = Color(0xFF1E2330);
+  static const Color darkCard = darkSurface;
+  static const Color darkBg = darkCanvas;
 
-  static const Color lightBg = Color(0xFFF7F9FC);
+  static const Color lightCanvas = Color(0xFFF1F5F9);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightCard = Color(0xFFFFFFFF);
-  static const Color lightBorder = Color(0xFFE5E7EB);
+  static const Color lightElevated = Color(0xFFF8FAFC);
+  static const Color lightBorder = Color(0xFFE2E8F0);
+  static const Color lightCard = lightSurface;
+  static const Color lightBg = lightCanvas;
 
-  static const Color primaryBlue = Color(0xFF4DA3FF);
-  static const Color successGreen = Color(0xFF22C55E);
-  static const Color warningAmber = Color(0xFFF59E0B);
-  static const Color dangerRed = Color(0xFFEF4444);
+  static const Color primaryBlue = Color(0xFF3B82F6);
+  static const Color primaryBlueMuted = Color(0xFF1D3A6B);
 
-  static const Color darkTextPrimary = Color(0xFFFFFFFF);
-  static const Color darkTextSecondary = Color(0xFFA1A7B3);
-  static const Color darkTextMuted = Color(0xFF6B7280);
+  // Financial Semantics (LOCKED)
+  static const Color semanticIncome = Color(0xFF10B981);
+  static const Color semanticExpense = Color(0xFFF43F5E);
+  static const Color semanticTransfer = Color(0xFF64748B);
+  static const Color semanticWarning = Color(0xFFF59E0B);
+  static const Color semanticShortfall = Color(0xFFE11D48);
 
-  static const Color lightTextPrimary = Color(0xFF111827);
-  static const Color lightTextSecondary = Color(0xFF4B5563);
-  static const Color lightTextMuted = Color(0xFF9CA3AF);
+  static const Color successGreen = semanticIncome;
+  static const Color warningAmber = semanticWarning;
+  static const Color dangerRed = semanticExpense;
+
+  static const Color darkTextPrimary = Color(0xFFF8FAFC);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
+  static const Color darkTextMuted = Color(0xFF64748B);
+
+  static const Color lightTextPrimary = Color(0xFF0F172A);
+  static const Color lightTextSecondary = Color(0xFF475569);
+  static const Color lightTextMuted = Color(0xFF94A3B8);
+
+  // Liquid Glass Specific Surface Tokens
+  static const Color glassDarkSurface = Color(0xCC12151D); // ~80%
+  static const Color glassDarkElevated = Color(0xD9191D28); // ~85%
+  static const Color glassDarkNav = Color(0xE610131A); // ~90%
+  static const Color glassDarkBorder = Color(0x2EFFFFFF); // 18% white highlight
+  static const Color glassDarkBorderSubtle = Color(0x1AFFFFFF); // 10% white
+
+  static const Color glassLightSurface = Color(0xD9FFFFFF); // ~85%
+  static const Color glassLightElevated = Color(0xEBFFFFFF); // ~92%
+  static const Color glassLightNav = Color(0xF2FFFFFF); // ~95%
+  static const Color glassLightBorder = Color(0x26000000); // 15% black
+  static const Color glassLightBorderSubtle = Color(0x14000000); // 8% black
+
+  static const double glassBlur = 16.0;
+  static const double glassNavBlur = 20.0;
+  static const double glassControlBlur = 12.0;
 
   static const List<Map<String, dynamic>> availableThemes = [
-    {'id': 'premium_dark', 'name': 'Premium Dark', 'color': Color(0xFF4DA3FF)},
+    {'id': 'liquid_glass_dark', 'name': 'Liquid Glass Dark', 'color': Color(0xFF3B82F6)},
+    {'id': 'premium_dark', 'name': 'Premium Dark', 'color': Color(0xFF3B82F6)},
   ];
 
   AppTheme() {

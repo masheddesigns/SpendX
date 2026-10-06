@@ -5,7 +5,6 @@ import '../../data/providers.dart';
 import '../../models/category.dart';
 import '../../models/recurring_template.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/app_card.dart';
 import '../../shared/widgets/app_amount_field.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -13,6 +12,10 @@ import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../utils/app_format.dart';
 import '../../widgets/common/spendx_fab.dart';
+import '../../shared/widgets/glass/spendx_scaffold.dart';
+import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_states.dart';
+import '../../shared/widgets/app_confirm_dialog.dart';
 
 class RecurringPaymentsScreen extends ConsumerStatefulWidget {
   const RecurringPaymentsScreen({super.key});
@@ -246,22 +249,12 @@ class _RecurringPaymentsScreenState
   }
 
   Future<void> _deleteTemplate(RecurringTemplate template) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Recurring Payment?'),
-        content: Text("Delete '${template.name}'?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: 'Delete Recurring Payment?',
+      message: "Are you sure you want to delete '${template.name}'?",
+      confirmLabel: 'Delete',
+      isDangerous: true,
     );
 
     if (confirmed == true) {
@@ -305,7 +298,9 @@ class _RecurringPaymentsScreenState
         category.id: category,
     };
 
-    return Scaffold(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SpendXScaffold(
       appBar: const SpendXAppBar(title: 'Recurring Payments'),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: SpendXFAB(
@@ -313,114 +308,111 @@ class _RecurringPaymentsScreenState
         label: 'Add Recurring',
         onPressed: () => _showAddDialog(categoriesMap),
       ),
-      body: SafeArea(
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : templates.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.repeat,
-                      size: 72,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No recurring payments',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tap + to add rent, subscriptions, salary etc.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: templates.length,
-                itemBuilder: (context, index) {
-                  final template = templates[index];
-                  final category = template.categoryId != null
-                      ? categoriesMap[template.categoryId]
-                      : null;
-                  final isExpense = template.type == 'expense';
-                  final color = isExpense
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).colorScheme.primary;
+      body: isLoading
+          ? const Center(child: SpendXLoadingState(count: 4, itemHeight: 72))
+          : templates.isEmpty
+          ? const SpendXEmptyState(
+              icon: Icons.repeat_rounded,
+              title: 'No recurring payments',
+              subtitle: 'Tap the button below to add rent, subscriptions, salary etc.',
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+              itemCount: templates.length,
+              itemBuilder: (context, index) {
+                final template = templates[index];
+                final category = template.categoryId != null
+                    ? categoriesMap[template.categoryId]
+                    : null;
+                final isExpense = template.type == 'expense';
+                final color = isExpense
+                    ? AppColors.danger
+                    : AppColors.success;
 
-                  return AppCard(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: EdgeInsets.zero,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: CircleAvatar(
-                        backgroundColor: color.withValues(alpha: 0.15),
-                        child: Icon(Icons.repeat, color: color, size: 20),
-                      ),
-                      title: Text(
-                        template.name,
-                        style: AppTextStyles.titleSmall,
-                      ),
-                      subtitle: Text(
-                        '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}'
-                        '\nStarts ${AppFormat.date(template.startDate)}',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: SpendXGlassSurface(
+                    level: SpendXGlassLevel.base,
+                    borderRadius: BorderRadius.circular(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: color.withValues(alpha: isDark ? 0.20 : 0.12),
+                          ),
+                          child: Icon(Icons.repeat_rounded, color: color, size: 20),
                         ),
-                      ),
-                      isThreeLine: true,
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount)}',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: color,
-                            ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                template.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14.5,
+                                  color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.edit_outlined,
-                              size: 18,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: color,
+                              ),
                             ),
-                            onPressed: () =>
-                                _showAddDialog(categoriesMap, template),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.delete_outline,
-                              size: 18,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.error.withValues(alpha: 0.7),
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => _showAddDialog(categoriesMap, template),
+                                  child: Icon(
+                                    Icons.edit_outlined,
+                                    size: 17,
+                                    color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                GestureDetector(
+                                  onTap: () => _deleteTemplate(template),
+                                  child: Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 17,
+                                    color: AppColors.danger.withValues(alpha: 0.8),
+                                  ),
+                                ),
+                              ],
                             ),
-                            onPressed: () => _deleteTemplate(template),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-      ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

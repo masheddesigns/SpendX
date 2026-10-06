@@ -1,3 +1,4 @@
+import 'dart:ui';
 import '../services/haptic_service.dart';
 import 'package:flutter/material.dart';
 
@@ -36,6 +37,8 @@ class CustomSnackBar {
             ? const Duration(seconds: 4)
             : const Duration(seconds: 3);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final snackBar = SnackBar(
       padding: EdgeInsets.zero,
       backgroundColor: Colors.transparent,
@@ -43,52 +46,66 @@ class CustomSnackBar {
       behavior: SnackBarBehavior.floating,
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       duration: duration,
-      content: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: bgColor.withValues(alpha: 0.4)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 4,
-              height: 40,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(2),
+      content: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xD41A2333)
+                  : const Color(0xEEFFFFFF),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : Colors.black.withValues(alpha: 0.12),
+                width: 0.75,
               ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: bgColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: bgColor, size: 18),
-            ),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  height: 1.3,
-                  decoration: TextDecoration.none,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-              ),
+              ],
             ),
-          ],
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: bgColor.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: bgColor, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      height: 1.3,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

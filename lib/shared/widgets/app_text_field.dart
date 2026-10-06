@@ -45,8 +45,21 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
+    final fillColor = isDark
+        ? const Color(0x1AFFFFFF) // ~10% white
+        : const Color(0x66FFFFFF); // ~40% white
+
+    final borderColor = isDark
+        ? const Color(0x2EFFFFFF) // ~18% white
+        : const Color(0x1F000000); // ~12% black
+
+    final focusColor = isDark
+        ? const Color(0xFF38BDF8) // AppTheme.accentCyan
+        : const Color(0xFF0284C7); // AppTheme.darkAccentCyan
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,7 +70,9 @@ class AppTextField extends StatelessWidget {
             child: Text(
               label,
               style: textTheme.labelLarge?.copyWith(
-                color: cs.onSurfaceVariant,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
               ),
             ),
           ),
@@ -72,35 +87,47 @@ class AppTextField extends StatelessWidget {
           autofocus: autofocus,
           readOnly: readOnly,
           onTap: onTap,
-          style: textTheme.bodyLarge?.copyWith(color: cs.onSurface),
+          style: textTheme.bodyLarge?.copyWith(
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+            fontWeight: FontWeight.w500,
+          ),
           decoration: InputDecoration(
             hintText: hint,
             errorText: errorText,
             prefixIcon: prefix ??
                 (prefixIcon is IconData
-                ? Icon(prefixIcon as IconData)
+                ? Icon(
+                    prefixIcon as IconData,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  )
                 : prefixIcon as Widget?),
             suffixIcon: suffix ?? suffixIcon,
             hintStyle: textTheme.bodyLarge?.copyWith(
-              color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+              color: isDark
+                  ? const Color(0x7094A3B8)
+                  : const Color(0x8064748B),
             ),
-            contentPadding: const EdgeInsets.all(16.0),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 15.0),
             filled: true,
-            fillColor: cs.surfaceContainerHigh,
+            fillColor: fillColor,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(16.0),
+              borderSide: BorderSide(color: borderColor, width: 0.75),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(16.0),
+              borderSide: BorderSide(color: borderColor, width: 0.75),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: BorderSide(color: cs.primary, width: 1.5),
+              borderRadius: BorderRadius.circular(16.0),
+              borderSide: BorderSide(color: focusColor, width: 1.25),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
+              borderRadius: BorderRadius.circular(16.0),
+              borderSide: BorderSide(color: cs.error, width: 1.25),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16.0),
               borderSide: BorderSide(color: cs.error, width: 1.5),
             ),
           ),

@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/review_queue/providers/review_providers.dart';
 import '../../features/alerts/providers/alert_providers.dart';
+import '../../features/review_queue/providers/review_providers.dart';
+import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/spendx_glass.dart';
+import '../../theme/app_theme.dart';
 import '../ai_chat_screen.dart';
-import '../review/review_queue_screen.dart';
-import '../gamification_detail_screen.dart';
-import '../settings/profile_settings_screen.dart';
-import '../settings/backup_hub_screen.dart';
-import '../feedback_screen.dart';
 import '../data_health_screen.dart';
+import '../feedback_screen.dart';
+import '../gamification_detail_screen.dart';
+import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
+import '../review/review_queue_screen.dart';
+import '../settings/backup_hub_screen.dart';
+import '../settings/profile_settings_screen.dart';
 import '../smart_import_screen.dart';
 import '../sms_import_screen.dart';
-import '../../shared/widgets/app_page_route.dart';
-import '../insights/insights_tab.dart';
 
+/// SpendX 2.0 System & Intelligence Workspace (More Screen).
+///
+/// Implements Section 7 of C15-B:
+/// - Cohesive grouped Liquid Glass surfaces for related functional areas
+/// - Direct canvas headers with strong typography
+/// - Preserves 100% of existing Intelligence, Insights, and System actions
+/// - Translucent icon pills, clear subtitles, and interactive feedback
+/// - Generous bottom clearance above floating navigation bar
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
@@ -23,112 +33,193 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final reviewCount = ref.watch(reviewQueueCountProvider);
     final alertCount = ref.watch(activeAlertsProvider).valueOrNull?.length ?? 0;
-    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        // ── AI & Intelligence ─────────────────────────────────────────
-        _SectionHeader(title: 'Intelligence'),
-        _MoreTile(
-          icon: Icons.auto_awesome_rounded,
-          title: 'AI Assistant',
-          subtitle: 'Ask about your finances',
-          iconColor: cs.primary,
-          onTap: () => _push(context, const AiChatScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.rate_review_rounded,
-          title: 'Review Queue',
-          subtitle: 'Approve imported transactions',
-          iconColor: cs.tertiary,
-          badge: reviewCount.when(
-            data: (count) => count > 0 ? count : null,
-            loading: () => null,
-            error: (_, _) => null,
+    final pendingReviewCount = reviewCount.valueOrNull ?? 0;
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        // ── Group 1: Intelligence & Ingestion ──────────────────────
+        const SliverToBoxAdapter(
+          child: SpendXSectionHeader(
+            title: 'Intelligence & Import',
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 6),
           ),
-          onTap: () => _push(context, const ReviewQueueScreen()),
         ),
-        _MoreTile(
-          icon: Icons.notifications_rounded,
-          title: 'Notifications',
-          subtitle: 'Due reminders & alerts',
-          iconColor: const Color(0xFFF59E0B),
-          badge: alertCount > 0 ? alertCount : null,
-          onTap: () => _push(context, const NotificationsInboxScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.upload_file_rounded,
-          title: 'Smart Import',
-          subtitle: 'Import from files or shared content',
-          iconColor: const Color(0xFF0EA5E9),
-          onTap: () => _push(context, const SmartImportScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.sms_rounded,
-          title: 'SMS Import',
-          subtitle: 'Scan bank SMS from your Messages app',
-          iconColor: const Color(0xFF22C55E),
-          onTap: () => _push(context, const SmsImportScreen()),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _MoreGlassRow(
+                    icon: Icons.auto_awesome_rounded,
+                    iconColor: AppTheme.primaryBlue,
+                    title: 'AI Financial Assistant',
+                    subtitle: 'Ask questions about your finances & trends',
+                    isDark: isDark,
+                    onTap: () => _push(context, const AiChatScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.rate_review_rounded,
+                    iconColor: AppTheme.semanticWarning,
+                    title: 'Review Queue',
+                    subtitle: 'Approve & confirm imported transactions',
+                    badgeCount: pendingReviewCount > 0 ? pendingReviewCount : null,
+                    badgeColor: AppTheme.semanticWarning,
+                    isDark: isDark,
+                    onTap: () => _push(context, const ReviewQueueScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.notifications_rounded,
+                    iconColor: const Color(0xFFF59E0B),
+                    title: 'Notifications & Alerts',
+                    subtitle: 'Due reminders, recurring bills, and alerts',
+                    badgeCount: alertCount > 0 ? alertCount : null,
+                    badgeColor: AppTheme.semanticExpense,
+                    isDark: isDark,
+                    onTap: () => _push(context, const NotificationsInboxScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.upload_file_rounded,
+                    iconColor: const Color(0xFF0EA5E9),
+                    title: 'Smart Import',
+                    subtitle: 'Import CSV bank statements or shared receipts',
+                    isDark: isDark,
+                    onTap: () => _push(context, const SmartImportScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.sms_rounded,
+                    iconColor: const Color(0xFF10B981),
+                    title: 'SMS Import',
+                    subtitle: 'Scan and process transaction SMS messages',
+                    isDark: isDark,
+                    onTap: () => _push(context, const SmsImportScreen()),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
 
-        const Divider(height: 32, indent: 16, endIndent: 16),
+        const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
-        // ── Insights ──────────────────────────────────────────────────
-        _SectionHeader(title: 'Insights'),
-        _MoreTile(
-          icon: Icons.auto_graph_rounded,
-          title: 'Insights',
-          subtitle: 'Health score, net worth, forecasts',
-          iconColor: cs.primary,
-          onTap: () => _push(context, const _InsightsScreen()),
+        // ── Group 2: Insights & Engagement ─────────────────────────
+        const SliverToBoxAdapter(
+          child: SpendXSectionHeader(
+            title: 'Insights & Activity',
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 6),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _MoreGlassRow(
+                    icon: Icons.auto_graph_rounded,
+                    iconColor: AppTheme.primaryBlue,
+                    title: 'Financial Insights',
+                    subtitle: 'Health score, net worth evolution, category breakdown',
+                    isDark: isDark,
+                    onTap: () => _push(context, const _InsightsScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.emoji_events_rounded,
+                    iconColor: const Color(0xFFF59E0B),
+                    title: 'Rewards & Daily Streaks',
+                    subtitle: 'Financial consistency milestones and achievements',
+                    isDark: isDark,
+                    onTap: () => _push(context, const GamificationDetailScreen()),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
 
-        const Divider(height: 32, indent: 16, endIndent: 16),
+        const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
-        // ── Rewards ──────────────────────────────────────────────────
-        _SectionHeader(title: 'Rewards'),
-        _MoreTile(
-          icon: Icons.emoji_events_rounded,
-          title: 'Rewards & Activity',
-          subtitle: 'Achievements, levels, daily streaks',
-          iconColor: const Color(0xFFF59E0B),
-          onTap: () => _push(context, const GamificationDetailScreen()),
+        // ── Group 3: System & Safety ───────────────────────────────
+        const SliverToBoxAdapter(
+          child: SpendXSectionHeader(
+            title: 'System & Safety',
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 6),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _MoreGlassRow(
+                    icon: Icons.settings_rounded,
+                    iconColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    title: 'App Settings',
+                    subtitle: 'Categories, theme preferences, currency, notifications',
+                    isDark: isDark,
+                    onTap: () => _push(context, const ProfileSettingsScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.cloud_sync_rounded,
+                    iconColor: const Color(0xFF3B82F6),
+                    title: 'Backup & Cloud Sync',
+                    subtitle: 'Encrypted Google Drive and local JSON backups',
+                    isDark: isDark,
+                    onTap: () => _push(context, const BackupHubScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.health_and_safety_outlined,
+                    iconColor: const Color(0xFF10B981),
+                    title: 'Data Health & Integrity',
+                    subtitle: 'Audit ledger balance parity and schema diagnostics',
+                    isDark: isDark,
+                    onTap: () => _push(context, const DataHealthScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    iconColor: Colors.teal,
+                    title: 'Feedback & Support',
+                    subtitle: 'Share feedback, report issues, or rate the app',
+                    isDark: isDark,
+                    onTap: () => _push(context, const FeedbackScreen()),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
 
-        const Divider(height: 32, indent: 16, endIndent: 16),
-
-        // ── App Settings ──────────────────────────────────────────────
-        _SectionHeader(title: 'Settings'),
-        _MoreTile(
-          icon: Icons.settings_rounded,
-          title: 'Settings',
-          subtitle: 'Categories, budgets, notifications',
-          iconColor: cs.onSurfaceVariant,
-          onTap: () => _push(context, const ProfileSettingsScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.cloud_sync_rounded,
-          title: 'Backup & Sync',
-          subtitle: 'Google Drive backup',
-          iconColor: const Color(0xFF3B82F6),
-          onTap: () => _push(context, const BackupHubScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.chat_bubble_outline_rounded,
-          title: 'Feedback & Support',
-          subtitle: 'Rate, share, report bugs',
-          iconColor: Colors.teal,
-          onTap: () => _push(context, const FeedbackScreen()),
-        ),
-        _MoreTile(
-          icon: Icons.health_and_safety_outlined,
-          title: 'Data Health',
-          subtitle: 'Audit data accuracy',
-          iconColor: const Color(0xFF22C55E),
-          onTap: () => _push(context, const DataHealthScreen()),
-        ),
+        // Generous bottom clearance above floating navigation bar
+        const SliverToBoxAdapter(child: SizedBox(height: 110)),
       ],
+    );
+  }
+
+  static Widget _buildDivider(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(left: 64, right: 16),
+      height: 0.5,
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.black.withValues(alpha: 0.06),
     );
   }
 
@@ -140,99 +231,146 @@ class MoreScreen extends ConsumerWidget {
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
+// ── More Glass Row Item ──────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-}
-
-class _MoreTile extends StatelessWidget {
+class _MoreGlassRow extends StatelessWidget {
   final IconData icon;
+  final Color iconColor;
   final String title;
   final String subtitle;
-  final Color iconColor;
+  final int? badgeCount;
+  final Color? badgeColor;
+  final bool isDark;
   final VoidCallback onTap;
-  final int? badge;
 
-  const _MoreTile({
+  const _MoreGlassRow({
     required this.icon,
+    required this.iconColor,
     required this.title,
     required this.subtitle,
-    required this.iconColor,
+    this.badgeCount,
+    this.badgeColor,
+    required this.isDark,
     required this.onTap,
-    this.badge,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: iconColor, size: 22),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: Text(
-        subtitle,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
-      trailing: badge != null
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    return InkWell(
+      onTap: onTap,
+      splashColor: isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.03),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            // Translucent Glass Icon Pill
+            Container(
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.error,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$badge',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onError,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                color: iconColor.withValues(alpha: isDark ? 0.16 : 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: iconColor.withValues(alpha: isDark ? 0.28 : 0.20),
+                  width: 0.5,
                 ),
               ),
-            )
-          : Icon(
-              Icons.chevron_right_rounded,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              child: Icon(icon, size: 19, color: iconColor),
             ),
-      onTap: onTap,
+            const SizedBox(width: 12),
+
+            // Title & Subtitle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w400,
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Optional Badge Pill or Chevron
+            if (badgeCount != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.25 : 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  border: Border.all(
+                    color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.5 : 0.3),
+                    width: 0.5,
+                  ),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: badgeColor ?? AppTheme.primaryBlue,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
+
+// ── Standalone Insights Screen wrapper ───────────────────────────
 
 class _InsightsScreen extends StatelessWidget {
   const _InsightsScreen();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Insights')),
+    return SpendXScaffold(
+      extendBody: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(
+          'Insights',
+          style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [InsightsTab(embedded: true)],
+        children: const [InsightsTab(embedded: true)],
       ),
     );
   }

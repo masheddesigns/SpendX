@@ -1,23 +1,30 @@
-import '../../services/haptic_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/providers.dart' as app_data;
 import '../../features/accounts/providers/account_providers.dart';
+import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../models/bank_account.dart';
 import '../../models/credit_card.dart';
-import '../../features/liabilities/providers/liabilities_providers.dart';
+import '../../services/haptic_service.dart';
+import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/spendx_glass.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/app_format.dart';
 import '../credit_card/add_credit_card_screen.dart';
 import '../loans/loans_screen.dart';
 import '../net_worth_screen.dart';
-import '../../shared/widgets/empty_state_widget.dart';
-import '../../shared/widgets/skeleton_loader.dart';
-import '../../shared/widgets/error_state_widget.dart';
-import '../../theme/app_theme.dart';
-import '../../utils/app_format.dart';
 import 'add_bank_account_screen.dart';
-import '../../shared/widgets/app_page_route.dart';
 
+/// SpendX 2.0 Financial Position Surface (Accounts Screen).
+///
+/// Implements Section 5 of C15-B:
+/// - Financial Position Hero (Material 2 — Elevated Glass): Net worth, total assets, liabilities
+/// - Restrained interactive glass quick actions (+ Account, + Card, Loans)
+/// - Bank Accounts grouped Liquid Glass container with high-density instrument rows
+/// - Credit Cards grouped Liquid Glass container with outstanding vs limit context
+/// - Loans & Liabilities summary
+/// - Strictly consumes existing canonical providers with zero UI-side financial recalculations
 class AccountListScreen extends ConsumerWidget {
   final bool isEmbedded;
 
@@ -30,218 +37,270 @@ class AccountListScreen extends ConsumerWidget {
     final loansAsync = ref.watch(loansProvider);
 
     if (accountsAsync.isLoading || cardsAsync.isLoading || loansAsync.isLoading) {
-      return const SkeletonLoader();
+      return const Center(
+        child: SpendXLoadingState(count: 5, itemHeight: 70),
+      );
     }
+
     if (accountsAsync.hasError) {
-      return ErrorStateWidget(
-        error: accountsAsync.error!,
-        onRetry: () => ref.invalidate(accountsProvider),
+      return Center(
+        child: SpendXErrorState(
+          message: accountsAsync.error.toString(),
+          onRetry: () => ref.invalidate(accountsProvider),
+        ),
       );
     }
     if (cardsAsync.hasError) {
-      return ErrorStateWidget(
-        error: cardsAsync.error!,
-        onRetry: () => ref.invalidate(creditCardsProvider),
+      return Center(
+        child: SpendXErrorState(
+          message: cardsAsync.error.toString(),
+          onRetry: () => ref.invalidate(creditCardsProvider),
+        ),
       );
     }
     if (loansAsync.hasError) {
-      return ErrorStateWidget(
-        error: loansAsync.error!,
-        onRetry: () => ref.invalidate(loansProvider),
+      return Center(
+        child: SpendXErrorState(
+          message: loansAsync.error.toString(),
+          onRetry: () => ref.invalidate(loansProvider),
+        ),
       );
     }
 
-    return Builder(builder: (context) {
-      final accounts = accountsAsync.value!;
-      final cards = cardsAsync.value!;
-      final loans = loansAsync.value!;
-      {
-          if (accounts.isEmpty && cards.isEmpty) {
-            return EmptyStateWidget(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'No accounts yet',
-              description:
-                  'Add your first account or credit card to start tracking balances.',
-              ctaLabel: '+ Add Account',
-              onCtaTap: () => _openAddAccount(context, ref),
-            );
-          }
+    final accounts = accountsAsync.value ?? [];
+    final cards = cardsAsync.value ?? [];
+    final loans = loansAsync.value ?? [];
 
-          final content = RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(accountsProvider);
-              ref.invalidate(creditCardsProvider);
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.m),
-              children: [
-                _NetWorthSummary(
-                  accounts: accounts,
-                  cards: cards,
-                  loans: loans,
-                ),
-                const SizedBox(height: AppSpacing.m),
+    if (accounts.isEmpty && cards.isEmpty && loans.isEmpty) {
+      return SpendXEmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: 'No accounts yet',
+        subtitle:
+            'Add your bank accounts and credit cards to establish your financial position.',
+        actionLabel: '+ Add Account',
+        onAction: () => _openAddAccount(context, ref),
+      );
+    }
 
-                // ── Monthly Flow Row ──────────────────────────
-                const _MonthlyFlowRow(),
-                const SizedBox(height: AppSpacing.m),
-
-                // ── Quick Add Row (compact) ────────────────────
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () { HapticService.instance.tap(); _openAddAccount(context, ref); },
-                        icon: const Icon(Icons.account_balance_rounded, size: 16),
-                        label: const Text('Account', style: TextStyle(fontSize: 12)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () { HapticService.instance.tap(); _openAddCreditCard(context, ref); },
-                        icon: const Icon(Icons.credit_card_rounded, size: 16),
-                        label: const Text('Card', style: TextStyle(fontSize: 12)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => Navigator.push(context,
-                            AppPageRoute(builder: (_) => const LoansScreen())),
-                        icon: const Icon(Icons.account_balance_outlined, size: 16),
-                        label: const Text('Loan', style: TextStyle(fontSize: 12)),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // ── Bank Accounts ──────────────────────────────
-                if (accounts.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sectionGap),
-                  Text('Bank Accounts',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: AppSpacing.sectionHeaderGap),
-                  ...accounts.map(
-                    (account) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.cardGap),
-                      child: _AccountCard(
-                        account: account,
-                        onTap: () => _openEditAccount(context, ref, account),
-                        onConvertToCard: () => _convertAccountToCard(context, ref, account),
-                        onDelete: () => _deleteAccount(context, ref, account),
-                      ),
-                    ),
-                  ),
-                ],
-
-                // ── Credit Cards ───────────────────────────────
-                if (cards.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sectionGap),
-                  Text('Credit Cards',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: AppSpacing.sectionHeaderGap),
-                  ...cards.map(
-                    (card) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.cardGap),
-                      child: _CreditCardItem(
-                        card: card,
-                        onTap: () => _openEditCreditCard(context, ref, card),
-                        onConvertToAccount: () => _convertCardToAccount(context, ref, card),
-                        onDelete: () => _deleteCard(context, ref, card),
-                      ),
-                    ),
-                  ),
-                ],
-                if (loans.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sectionGap),
-                  Row(
-                    children: [
-                      Text('Loans',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.push(context,
-                            AppPageRoute(builder: (_) => const LoansScreen())),
-                        child: const Text('View All'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sectionHeaderGap),
-                  ...loans.map((loan) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.cardGap),
-                        child: Card(
-                          margin: EdgeInsets.zero,
-                          child: ListTile(
-                            dense: true,
-                            visualDensity: VisualDensity.compact,
-                            leading: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .error
-                                  .withValues(alpha: 0.12),
-                              child: Icon(Icons.account_balance_rounded,
-                                  color:
-                                      Theme.of(context).colorScheme.error,
-                                  size: 20),
-                            ),
-                            title: Text(loan.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                            subtitle: Text(
-                                '${AppFormat.currency(loan.paidAmount)} / ${AppFormat.currency(loan.total)}'
-                                '\nStarted ${loan.startDate.day}/${loan.startDate.month}/${loan.startDate.year}'),
-                            isThreeLine: true,
-                            trailing: Text(
-                                AppFormat.currency(
-                                    (loan.total - loan.paidAmount)
-                                        .clamp(0, double.infinity)),
-                                style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.error,
-                                    fontWeight: FontWeight.w600)),
-                            onTap: () => Navigator.push(context,
-                                AppPageRoute(
-                                    builder: (_) => const LoansScreen())),
-                          ),
-                        ),
-                      )),
-                ],
-              ],
-            ),
-          );
-
-          if (isEmbedded) {
-            return content;
-          }
-
-          return Scaffold(
-            appBar: AppBar(title: const Text('Accounts')),
-            body: SafeArea(child: content),
-            floatingActionButton: FloatingActionButton.extended(
-              onPressed: () { HapticService.instance.tap(); _openAddAccount(context, ref); },
-              icon: const Icon(Icons.add),
-              label: const Text('Add Account'),
-            ),
-          );
-        }
+    Widget content = RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(accountsProvider);
+        ref.invalidate(creditCardsProvider);
+        ref.invalidate(loansProvider);
+        ref.invalidate(app_data.netWorthSummaryProvider);
       },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          // ── Financial Position Hero (Elevated Glass) ──────
+          SliverToBoxAdapter(
+            child: _NetPositionHero(
+              accounts: accounts,
+              cards: cards,
+              loans: loans,
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 6)),
+
+          // ── Quick Controls (Interactive Glass) ───────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SpendXGlassButton(
+                      height: 40,
+                      accentColor: AppTheme.primaryBlue,
+                      icon: Icons.account_balance_rounded,
+                      onPressed: () => _openAddAccount(context, ref),
+                      child: const Text('Account'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SpendXGlassButton(
+                      height: 40,
+                      accentColor: AppTheme.semanticExpense,
+                      icon: Icons.credit_card_rounded,
+                      onPressed: () => _openAddCreditCard(context, ref),
+                      child: const Text('Card'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SpendXGlassButton(
+                      height: 40,
+                      accentColor: AppTheme.semanticTransfer,
+                      icon: Icons.account_balance_outlined,
+                      onPressed: () => Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const LoansScreen()),
+                      ),
+                      child: const Text('Loan'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+          // ── Bank Accounts Section ────────────────────────
+          if (accounts.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: SpendXSectionHeader(
+                title: 'Bank Accounts',
+                count: accounts.length,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: List.generate(accounts.length, (index) {
+                      final acc = accounts[index];
+                      final isLast = index == accounts.length - 1;
+                      return _BankAccountRow(
+                        account: acc,
+                        showDivider: !isLast,
+                        onTap: () => _openEditAccount(context, ref, acc),
+                        onConvertToCard: () =>
+                            _convertAccountToCard(context, ref, acc),
+                        onDelete: () => _deleteAccount(context, ref, acc),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          // ── Credit Cards Section ─────────────────────────
+          if (cards.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(
+              child: SpendXSectionHeader(
+                title: 'Credit Cards',
+                count: cards.length,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: List.generate(cards.length, (index) {
+                      final card = cards[index];
+                      final isLast = index == cards.length - 1;
+                      return _CreditCardRow(
+                        card: card,
+                        showDivider: !isLast,
+                        onTap: () => _openEditCreditCard(context, ref, card),
+                        onConvertToAccount: () =>
+                            _convertCardToAccount(context, ref, card),
+                        onDelete: () => _deleteCard(context, ref, card),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          // ── Loans & Liabilities Section ───────────────────
+          if (loans.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverToBoxAdapter(
+              child: SpendXSectionHeader(
+                title: 'Active Loans',
+                count: loans.length,
+                actionLabel: 'Manage',
+                onAction: () => Navigator.push(
+                  context,
+                  AppPageRoute(builder: (_) => const LoansScreen()),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: List.generate(loans.length, (index) {
+                      final loan = loans[index];
+                      final isLast = index == loans.length - 1;
+                      final remaining =
+                          ((loan.total as num) - (loan.paidAmount as num))
+                              .toDouble()
+                              .clamp(0.0, double.infinity);
+                      return _LoanRow(
+                        loan: loan,
+                        remaining: remaining,
+                        showDivider: !isLast,
+                        onTap: () => Navigator.push(
+                          context,
+                          AppPageRoute(builder: (_) => const LoansScreen()),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          // Generous bottom clearance above floating glass navigation bar
+          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+        ],
+      ),
     );
+
+    if (!isEmbedded) {
+      return SpendXScaffold(
+        extendBody: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          title: Text(
+            'Accounts',
+            style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add_rounded),
+              onPressed: () => _openAddAccount(context, ref),
+            ),
+          ],
+        ),
+        body: content,
+      );
+    }
+
+    return content;
   }
 
+  // ── Actions ──────────────────────────────────────────────────
+
   Future<void> _openAddAccount(BuildContext context, WidgetRef ref) async {
+    HapticService.instance.tap();
     final result = await Navigator.push(
       context,
       AppPageRoute(builder: (_) => const AddBankAccountScreen()),
     );
     if (result == true) {
       ref.invalidate(accountsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
@@ -252,20 +311,25 @@ class AccountListScreen extends ConsumerWidget {
   ) async {
     final result = await Navigator.push(
       context,
-      AppPageRoute(builder: (_) => AddBankAccountScreen(existing: account)),
+      AppPageRoute(
+        builder: (_) => AddBankAccountScreen(existing: account),
+      ),
     );
     if (result == true) {
       ref.invalidate(accountsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
   Future<void> _openAddCreditCard(BuildContext context, WidgetRef ref) async {
+    HapticService.instance.tap();
     final result = await Navigator.push(
       context,
       AppPageRoute(builder: (_) => const AddCreditCardScreen()),
     );
     if (result == true) {
       ref.invalidate(creditCardsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
@@ -282,11 +346,13 @@ class AccountListScreen extends ConsumerWidget {
     );
     if (result == true) {
       ref.invalidate(creditCardsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
       return;
     }
     if (result == CreditCardFormAction.deleted) {
       await ref.read(app_data.cardsProvider.notifier).remove(card.id);
       ref.invalidate(creditCardsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
@@ -300,8 +366,7 @@ class AccountListScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Convert to Credit Card?'),
         content: Text(
-          'Convert "${account.name}" from a bank account to a credit card? '
-          'You can edit the card details after conversion.',
+          'Convert "${account.name}" from a bank account to a credit card? You can edit the card details after conversion.',
         ),
         actions: [
           TextButton(
@@ -321,9 +386,9 @@ class AccountListScreen extends ConsumerWidget {
     final newCardId = await repo.convertAccountToCard(account);
     ref.invalidate(accountsProvider);
     ref.invalidate(creditCardsProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
     if (!context.mounted) return;
 
-    // Open the new card for editing
     final cards = await repo.getCards();
     final newCard = cards.where((c) => c.id == newCardId).firstOrNull;
     if (newCard != null && context.mounted) {
@@ -334,6 +399,7 @@ class AccountListScreen extends ConsumerWidget {
         ),
       );
       ref.invalidate(creditCardsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
@@ -347,8 +413,7 @@ class AccountListScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Convert to Bank Account?'),
         content: Text(
-          'Convert "${card.name}" from a credit card to a bank account? '
-          'You can edit the account details after conversion.',
+          'Convert "${card.name}" from a credit card to a bank account?',
         ),
         actions: [
           TextButton(
@@ -368,10 +433,11 @@ class AccountListScreen extends ConsumerWidget {
     final newAccountId = await repo.convertCardToAccount(card);
     ref.invalidate(accountsProvider);
     ref.invalidate(creditCardsProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
     if (!context.mounted) return;
 
-    // Open the new account for editing
-    final newAccount = await repo.getById(newAccountId);
+    final accounts = await repo.getAccounts();
+    final newAccount = accounts.where((a) => a.id == newAccountId).firstOrNull;
     if (newAccount != null && context.mounted) {
       await Navigator.push(
         context,
@@ -380,6 +446,7 @@ class AccountListScreen extends ConsumerWidget {
         ),
       );
       ref.invalidate(accountsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
@@ -407,6 +474,7 @@ class AccountListScreen extends ConsumerWidget {
     );
     if (confirm == true) {
       await ref.read(accountsProvider.notifier).remove(account.id);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
 
@@ -435,17 +503,19 @@ class AccountListScreen extends ConsumerWidget {
     if (confirm == true) {
       await ref.read(app_data.cardsProvider.notifier).remove(card.id);
       ref.invalidate(creditCardsProvider);
+      ref.invalidate(app_data.netWorthSummaryProvider);
     }
   }
-
 }
 
-class _NetWorthSummary extends ConsumerWidget {
+// ── Financial Position Hero ─────────────────────────────────────
+
+class _NetPositionHero extends ConsumerWidget {
   final List<BankAccount> accounts;
   final List<CreditCard> cards;
   final List<dynamic> loans;
 
-  const _NetWorthSummary({
+  const _NetPositionHero({
     required this.accounts,
     required this.cards,
     required this.loans,
@@ -469,241 +539,332 @@ class _NetWorthSummary extends ConsumerWidget {
       final accountLiabilities = accounts
           .where((a) => !a.isAsset)
           .fold<double>(0, (sum, a) => sum + a.balance.abs());
-      final cardOutstanding = cards.fold<double>(
-        0,
-        (sum, c) => sum + c.usedAmount,
-      );
+      final cardOutstanding =
+          cards.fold<double>(0, (sum, c) => sum + c.usedAmount);
       final loanOutstanding = loans.fold<double>(
         0,
-        (sum, loan) => sum + ((loan.total as num) - (loan.paidAmount as num)).toDouble().clamp(0, double.infinity),
+        (sum, loan) =>
+            sum +
+            ((loan.total as num) - (loan.paidAmount as num))
+                .toDouble()
+                .clamp(0, double.infinity),
       );
       liabilities = accountLiabilities + cardOutstanding + loanOutstanding;
       netWorth = assets - liabilities;
     }
 
-    final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isPositive = netWorth >= 0;
 
-    return Container(
+    return SpendXGlassCard(
+      level: SpendXGlassLevel.elevated,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1D2E) : const Color(0xFFF0F4FF),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? cs.primary.withValues(alpha: 0.2)
-              : cs.primary.withValues(alpha: 0.15),
-        ),
+      onTap: () => Navigator.push(
+        context,
+        AppPageRoute(builder: (_) => const NetWorthScreen()),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Net Worth',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
+          // Header Label + Details Action
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'NET POSITION',
+                style: AppTextStyles.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: isDark
+                      ? const Color(0xFFCBD5E1)
+                      : const Color(0xFF475569),
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Breakdown',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryBlue,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 14,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Net Worth Display
+          SpendXFinancialAmount(
+            amount: netWorth,
+            semanticType: netWorth >= 0
+                ? FinancialSemanticType.neutral
+                : FinancialSemanticType.shortfall,
+            size: FinancialAmountSize.hero,
+            showSign: false,
+          ),
+
+          const SizedBox(height: 4),
+
           Text(
-            AppFormat.currency(netWorth),
+            'Combined balance across liquid assets & liabilities',
             style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: isPositive ? cs.primary : cs.error,
-              letterSpacing: -0.5,
+              fontSize: 12.5,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 18),
+
+          // Hairline Divider
+          Container(
+            height: 0.5,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  isDark
+                      ? Colors.white.withValues(alpha: 0.15)
+                      : Colors.black.withValues(alpha: 0.10),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Assets & Liabilities Split Strip
           Row(
             children: [
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF0D2818)
-                        : const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Assets',
-                          style: TextStyle(
-                              color: cs.onSurfaceVariant, fontSize: 11)),
-                      const SizedBox(height: 4),
-                      Text(AppFormat.currency(assets),
-                          style: TextStyle(
-                              color: isDark
-                                  ? const Color(0xFF4CAF50)
-                                  : const Color(0xFF2E7D32),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF2D1215)
-                        : const Color(0xFFFCE4EC),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Liabilities',
-                          style: TextStyle(
-                              color: cs.onSurfaceVariant, fontSize: 11)),
-                      const SizedBox(height: 4),
-                      Text(AppFormat.currency(liabilities),
-                          style: TextStyle(
-                              color: isDark
-                                  ? const Color(0xFFEF5350)
-                                  : const Color(0xFFC62828),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15)),
-                    ],
-                  ),
-                ),
-              ),
-              ],
-            ),
-          const SizedBox(height: 14),
-          Align(
-            alignment: Alignment.centerRight,
-            child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                AppPageRoute(builder: (_) => const NetWorthScreen()),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('View details',
-                      style: TextStyle(
-                          color: cs.primary, fontWeight: FontWeight.w600, fontSize: 12)),
-                  Icon(Icons.chevron_right_rounded, color: cs.primary, size: 16),
-                ],
-              ),
-            ),
-          ),
-          ],
-      ),
-    );
-  }
-
-}
-
-// _BucketChip and _BucketData removed — data shown on home page instead
-
-class _AccountCard extends StatelessWidget {
-  final BankAccount account;
-  final VoidCallback? onTap;
-  final VoidCallback? onConvertToCard;
-  final VoidCallback? onDelete;
-
-  const _AccountCard({
-    required this.account,
-    this.onTap,
-    this.onConvertToCard,
-    this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final amountColor = account.balance >= 0
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.error;
-    final needsReview = _needsReview(account.name);
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: AppSpacing.cardPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: amountColor.withValues(alpha: 0.12),
-                    child: Icon(_iconForAccount(account.icon), color: amountColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(account.name, style: Theme.of(context).textTheme.titleSmall),
-                        Text(
-                          account.bank.isEmpty ? account.accountType : account.bank,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    AppFormat.currency(account.balance),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: amountColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              if (needsReview) ...[
-                const SizedBox(height: 8),
-                Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 14,
-                      color: Theme.of(context).colorScheme.tertiary),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Imported — is this a bank account or credit card?',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.tertiary,
-                        ),
+                    Text(
+                      'Total Assets',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '+${AppFormat.currency(assets)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.semanticIncome,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Row(
+              ),
+              Container(
+                width: 0.5,
+                height: 28,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.08),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ReviewActionChip(
-                      icon: Icons.edit_outlined,
-                      label: 'Edit',
-                      onTap: onTap,
+                    Text(
+                      'Total Liabilities',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    _ReviewActionChip(
-                      icon: Icons.credit_card_rounded,
-                      label: 'Convert to Card',
-                      onTap: onConvertToCard,
-                    ),
-                    const SizedBox(width: 8),
-                    _ReviewActionChip(
-                      icon: Icons.delete_outline_rounded,
-                      label: 'Delete',
-                      onTap: onDelete,
-                      isDestructive: true,
+                    const SizedBox(height: 2),
+                    Text(
+                      '-${AppFormat.currency(liabilities)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.semanticExpense,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ],
           ),
-        ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Bank Account Row Item ───────────────────────────────────────
+
+class _BankAccountRow extends StatelessWidget {
+  final BankAccount account;
+  final bool showDivider;
+  final VoidCallback onTap;
+  final VoidCallback onConvertToCard;
+  final VoidCallback onDelete;
+
+  const _BankAccountRow({
+    required this.account,
+    required this.showDivider,
+    required this.onTap,
+    required this.onConvertToCard,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAsset = account.isAsset;
+    final balanceColor = isAsset
+        ? (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary)
+        : AppTheme.semanticExpense;
+
+    final iconData = _iconForAccount(account.icon);
+    final typeLabel = account.accountType.isNotEmpty
+        ? account.accountType.toUpperCase()
+        : 'BANK';
+
+    return InkWell(
+      onTap: onTap,
+      splashColor: isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.03),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
+              children: [
+                // Account Icon Pill
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryBlue
+                        .withValues(alpha: isDark ? 0.16 : 0.10),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(
+                      color: AppTheme.primaryBlue
+                          .withValues(alpha: isDark ? 0.28 : 0.18),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Icon(
+                    iconData,
+                    size: 19,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Name and Type
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        account.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            typeLabel,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? AppTheme.darkTextSecondary
+                                  : AppTheme.lightTextSecondary,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          if (account.last4 != null && account.last4!.isNotEmpty) ...[
+                            const SizedBox(width: 5),
+                            Text(
+                              '•',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isDark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '••${account.last4}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Exact Balance
+                Text(
+                  AppFormat.currency(account.balance),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: balanceColor,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (showDivider)
+            Container(
+              margin: const EdgeInsets.only(left: 66, right: 16),
+              height: 0.5,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+        ],
       ),
     );
   }
@@ -722,240 +883,291 @@ class _AccountCard extends StatelessWidget {
         return Icons.savings_rounded;
       case 'lock':
         return Icons.lock_rounded;
-      case 'account_balance_wallet':
-        return Icons.account_balance_wallet_rounded;
       default:
         return Icons.account_balance_rounded;
     }
   }
-
-  bool _needsReview(String name) {
-    final lower = name.toLowerCase();
-    final hasLast4 = RegExp(r'\b\d{4}\b').hasMatch(lower);
-    return (lower.contains('account') || lower.contains('imported')) && !hasLast4;
-  }
 }
 
-// _AccountActionsRow removed — replaced with inline FilledButton.tonalIcon row
+// ── Credit Card Row Item ────────────────────────────────────────
 
-class _CreditCardItem extends StatelessWidget {
+class _CreditCardRow extends StatelessWidget {
   final CreditCard card;
-  final VoidCallback? onTap;
-  final VoidCallback? onConvertToAccount;
-  final VoidCallback? onDelete;
+  final bool showDivider;
+  final VoidCallback onTap;
+  final VoidCallback onConvertToAccount;
+  final VoidCallback onDelete;
 
-  const _CreditCardItem({
+  const _CreditCardRow({
     required this.card,
-    this.onTap,
-    this.onConvertToAccount,
-    this.onDelete,
+    required this.showDivider,
+    required this.onTap,
+    required this.onConvertToAccount,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final outstandingColor = card.usedAmount > 0
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.primary;
-    final needsReview = _needsReview(card);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final outstandingColor =
+        card.usedAmount > 0 ? AppTheme.semanticExpense : AppTheme.primaryBlue;
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: AppSpacing.cardPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: outstandingColor.withValues(alpha: 0.12),
-                    child: Icon(Icons.credit_card_rounded, color: outstandingColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(card.name, style: Theme.of(context).textTheme.titleSmall),
-                        Text(
-                          '${card.bank.isEmpty ? 'Credit Card' : card.bank} • ${card.last4}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+    return InkWell(
+      onTap: onTap,
+      splashColor: isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.03),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
+              children: [
+                // Card Icon Pill
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: outstandingColor
+                        .withValues(alpha: isDark ? 0.16 : 0.10),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(
+                      color: outstandingColor
+                          .withValues(alpha: isDark ? 0.30 : 0.20),
+                      width: 0.5,
                     ),
                   ),
-                  Column(
+                  child: Icon(
+                    Icons.credit_card_rounded,
+                    size: 19,
+                    color: outstandingColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Name & Metadata
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        AppFormat.currency(card.usedAmount),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: outstandingColor,
-                          fontWeight: FontWeight.w700,
+                        card.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
+                          letterSpacing: -0.2,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        'Limit ${AppFormat.currency(card.limitAmount)}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                      Row(
+                        children: [
+                          Text(
+                            card.bank.isNotEmpty ? card.bank : 'Credit Card',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? AppTheme.darkTextSecondary
+                                  : AppTheme.lightTextSecondary,
+                            ),
+                          ),
+                          if (card.last4.isNotEmpty) ...[
+                            const SizedBox(width: 5),
+                            Text(
+                              '•',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isDark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '••${card.last4}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-              if (needsReview) ...[
-                const SizedBox(height: 8),
-                Row(
+                ),
+
+                // Outstanding Balance & Limit
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 14,
-                      color: Theme.of(context).colorScheme.tertiary),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Imported — is this a credit card or bank account?',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.tertiary,
-                        ),
+                    Text(
+                      AppFormat.currency(card.usedAmount),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: outstandingColor,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _ReviewActionChip(
-                      icon: Icons.edit_outlined,
-                      label: 'Edit',
-                      onTap: onTap,
-                    ),
-                    const SizedBox(width: 8),
-                    _ReviewActionChip(
-                      icon: Icons.account_balance_rounded,
-                      label: 'Convert to Account',
-                      onTap: onConvertToAccount,
-                    ),
-                    const SizedBox(width: 8),
-                    _ReviewActionChip(
-                      icon: Icons.delete_outline_rounded,
-                      label: 'Delete',
-                      onTap: onDelete,
-                      isDestructive: true,
+                    const SizedBox(height: 2),
+                    Text(
+                      'Limit ${AppFormat.currency(card.limitAmount)}',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: isDark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ],
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+          if (showDivider)
+            Container(
+              margin: const EdgeInsets.only(left: 66, right: 16),
+              height: 0.5,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+        ],
       ),
     );
   }
-
-  bool _needsReview(CreditCard card) {
-    final lower = card.name.toLowerCase();
-    return (card.last4 == '0000' || !RegExp(r'^\d{4}$').hasMatch(card.last4)) &&
-        lower.contains('credit card');
-  }
 }
 
-class _ReviewActionChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool isDestructive;
+// ── Loan Row Item ───────────────────────────────────────────────
 
-  const _ReviewActionChip({
-    required this.icon,
-    required this.label,
-    this.onTap,
-    this.isDestructive = false,
+class _LoanRow extends StatelessWidget {
+  final dynamic loan;
+  final double remaining;
+  final bool showDivider;
+  final VoidCallback onTap;
+
+  const _LoanRow({
+    required this.loan,
+    required this.remaining,
+    required this.showDivider,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive
-        ? Theme.of(context).colorScheme.error
-        : Theme.of(context).colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final loanName = (loan.name ?? 'Loan') as String;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.m),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(AppRadius.m),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Monthly Flow Row (connects transactions → accounts) ─────────────────
-
-class _MonthlyFlowRow extends ConsumerWidget {
-  const _MonthlyFlowRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final summary = ref.watch(app_data.analyticsSummaryProvider);
-    final cs = Theme.of(context).colorScheme;
-    final income = summary.monthlyIncome;
-    final expense = summary.monthlyExpense;
-    final net = income - expense;
-
-    return Row(
-      children: [
-        Expanded(child: _FlowChip('Income', AppFormat.currency(income), Colors.green)),
-        const SizedBox(width: 8),
-        Expanded(child: _FlowChip('Expense', AppFormat.currency(expense), cs.error)),
-        const SizedBox(width: 8),
-        Expanded(child: _FlowChip('Net', '${net >= 0 ? "+" : ""}${AppFormat.currency(net)}',
-            net >= 0 ? Colors.blue : cs.error)),
-      ],
-    );
-  }
-}
-
-class _FlowChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _FlowChip(this.label, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
+      splashColor: isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.03),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 3),
-          Text(value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppTheme.semanticTransfer
+                        .withValues(alpha: isDark ? 0.16 : 0.10),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(
+                      color: AppTheme.semanticTransfer
+                          .withValues(alpha: isDark ? 0.28 : 0.18),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_outlined,
+                    size: 19,
+                    color: AppTheme.semanticTransfer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        loanName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Total: ${AppFormat.currency((loan.total as num).toDouble())}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark
+                              ? AppTheme.darkTextSecondary
+                              : AppTheme.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      AppFormat.currency(remaining),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.semanticExpense,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Outstanding',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: isDark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (showDivider)
+            Container(
+              margin: const EdgeInsets.only(left: 66, right: 16),
+              height: 0.5,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
         ],
       ),
     );

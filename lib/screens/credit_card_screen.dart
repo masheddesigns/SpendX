@@ -20,6 +20,9 @@ import '../utils/text_formatter.dart';
 import '../features/liabilities/providers/liabilities_providers.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../shared/widgets/app_tap_scale.dart';
+import '../shared/widgets/spendx_app_bar.dart';
+import '../shared/widgets/glass/spendx_scaffold.dart';
+import '../shared/widgets/glass/spendx_glass_surface.dart';
 
 class CreditCardScreen extends ConsumerStatefulWidget {
   const CreditCardScreen({super.key});
@@ -48,8 +51,8 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
       onUndone: (_) => _invalidateAll(),
     );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Credit Cards')),
+    return SpendXScaffold(
+      appBar: const SpendXAppBar(title: 'Credit Cards'),
       body: cardsAsync.when(
         loading: () => const SkeletonLoader.transactions(),
         error: (err, _) => ErrorStateWidget(
@@ -308,12 +311,10 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         : 0.0;
     final isUsageHigh = hasLimit && usagePercent > 0.3;
 
-    return Container(
+    return SpendXGlassSurface(
+      level: SpendXGlassLevel.elevated,
+      borderRadius: BorderRadius.circular(20),
       padding: AppSpacing.cardPadding,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Column(
         children: [
           Row(
@@ -493,23 +494,23 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     Color color,
     VoidCallback onTap,
   ) {
-    return InkWell(
+    return AppTapScale(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
+      child: SpendXGlassSurface(
+        level: SpendXGlassLevel.interactive,
+        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         child: Column(
           children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 8),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 6),
             Text(
               label,
-              style: TextStyle(fontWeight: FontWeight.w600, color: color),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: color,
+              ),
             ),
           ],
         ),
@@ -621,10 +622,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   Widget _buildEMICard(CreditEMI emi) {
     final progress = (emi.totalMonths - emi.remainingMonths) / emi.totalMonths;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppTapScale(
         onTap: () {
           Navigator.push(
             context,
@@ -633,8 +633,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             ),
           ).then((_) => _invalidateAll());
         },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
+        child: SpendXGlassSurface(
+          level: SpendXGlassLevel.base,
+          borderRadius: BorderRadius.circular(16),
           padding: AppSpacing.cardPadding,
           child: Column(
             children: [

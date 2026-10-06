@@ -3,27 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/home/transactions_screen.dart';
+import '../../../screens/review/review_queue_screen.dart';
 import '../../../shared/widgets/app_page_route.dart';
-import '../../../shared/widgets/skeleton_loader.dart';
-import '../../../widgets/transaction_tile.dart';
-import '../../../theme/app_theme.dart';
+import '../../../shared/widgets/spendx_glass.dart';
+import '../../accounts/providers/account_providers.dart';
+import '../../review_queue/providers/review_providers.dart';
 import '../../transactions/providers/transaction_providers.dart';
 import '../../wrapped/widgets/wrapped_story_bubbles.dart';
-import '../widgets/summary_section.dart';
-import '../widgets/system_status_strip.dart';
+import '../widgets/quick_actions_row.dart';
+import '../widgets/safe_to_spend_card.dart';
 
-/// Home tab — clean dashboard with breathing room.
+/// Decision-First Home Dashboard with Layered Liquid Glass Materials.
 ///
-/// Layout:
-///   Wrapped (conditional)
-///   ↓ 24px
-///   Summary (dominant)
-///   ↓ 12px
-///   Status (thin, secondary)
-///   ↓ 12px
-///   Review (conditional)
-///   ↓ 24px
-///   Transactions
+/// Implements Sections 7 & 8 of C15-A-R1:
+/// - Recomposed around layered depth rather than disjoint cards
+/// - Environmental background shines through translucent layers
+/// - Safe-to-Spend Hero as elevated decision surface
+/// - Floating interactive Quick Actions
+/// - Grouped Translucent Transaction Container with single blur surface
+/// - Direct canvas typography for headers and metadata
 class HomeDashboard extends ConsumerStatefulWidget {
   const HomeDashboard({super.key});
 
@@ -36,140 +34,130 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
   Widget build(BuildContext context) {
     final paginatedState = ref.watch(paginatedTransactionsProvider);
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
+    final accountsAsync = ref.watch(accountsProvider);
+    final reviewCountAsync = ref.watch(reviewQueueCountProvider);
+
     final categoriesMap = categoryMapAsync.valueOrNull ?? {};
-    final recentTxns = paginatedState.items.take(10).toList();
+    final accountsMap = {
+      for (final a in (accountsAsync.valueOrNull ?? [])) a.id: a.name,
+    };
+
+    final recentTxns = paginatedState.items.take(8).toList();
     final isLoading = paginatedState.items.isEmpty && paginatedState.hasMore;
+    final pendingReviewCount = reviewCountAsync.valueOrNull ?? 0;
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(transactionsProvider);
         ref.invalidate(transactionCategoryMapProvider);
+        ref.invalidate(reviewQueueCountProvider);
         await ref.read(paginatedTransactionsProvider.notifier).refresh();
       },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          // ── Wrapped Story Bubbles ────────────────────────
+          // ── Compact Wrapped Story Bubbles (Canvas Direct) ──
           const SliverToBoxAdapter(child: WrappedStoryBubbles()),
 
-          // ── Financial Summary (dominant) ─────────────────
-          const SliverToBoxAdapter(child: SummarySection()),
+          // ── Primary Decision Hero: Safe-to-Spend ─────────
+          const SliverToBoxAdapter(child: SafeToSpendCard()),
 
-          // ── Breathing space ─────────────────────────────
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          // ── Staged Review Banner (Conditional) ───────────
+          if (pendingReviewCount > 0)
+            SliverToBoxAdapter(
+              child: SpendXReviewBanner(
+                count: pendingReviewCount,
+                onTap: () => Navigator.push(
+                  context,
+                  AppPageRoute(builder: (_) => const ReviewQueueScreen()),
+                ),
+              ),
+            ),
 
-          // ── System Status (single priority, thin) ───────
-          const SliverToBoxAdapter(child: SystemStatusStrip()),
+          const SliverToBoxAdapter(child: SizedBox(height: 6)),
 
-          // ── Breathing space ─────────────────────────────
-          const SliverToBoxAdapter(child: SizedBox(height: 4)),
+          // ── Floating Quick Actions Row ───────────────────
+          const SliverToBoxAdapter(child: QuickActionsRow()),
 
-          // ── Section break before transactions ───────────
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
-          // ── Recent Transactions header ────────────────────
+          // ── Recent Activity Section Header (Canvas Direct)
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Row(
-                children: [
-                  Text(
-                    'Recent Transactions',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      AppPageRoute(
-                        builder: (_) =>
-                            const TransactionListScreen(isFullScreen: true),
-                      ),
-                    ),
-                    child: const Text('View All'),
-                  ),
-                ],
+            child: SpendXSectionHeader(
+              title: 'Recent Activity',
+              actionLabel: recentTxns.isNotEmpty ? 'View All' : null,
+              onAction: () => Navigator.push(
+                context,
+                AppPageRoute(
+                  builder: (_) => const TransactionListScreen(isFullScreen: true),
+                ),
               ),
             ),
           ),
 
-          // ── Skeleton loader (while loading) ──────────────
+          // ── Shimmer Skeleton Loader ──────────────────────
           if (isLoading)
-            const SliverToBoxAdapter(child: SkeletonLoader.transactions()),
+            const SliverToBoxAdapter(
+              child: SpendXLoadingState(count: 4, itemHeight: 64),
+            ),
 
-          // ── Empty state ──────────────────────────────────
+          // ── Clean Empty State ─────────────────────────────
           if (!isLoading && recentTxns.isEmpty)
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(40),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.receipt_long_outlined,
-                        size: 48,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No transactions yet',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tap + to add your first one',
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+              child: SpendXEmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: 'No transactions yet',
+                subtitle: 'Tap Expense or Income above to start tracking your finances.',
+                actionLabel: 'Add Expense',
+                onAction: () => Navigator.push(
+                  context,
+                  AppPageRoute(
+                    builder: (_) => const AddExpenseScreen(initialType: 'expense'),
                   ),
                 ),
               ),
             ),
 
-          // ── Transaction List ──────────────────────────────
+          // ── Grouped Liquid Glass Transaction Container ───
           if (!isLoading && recentTxns.isNotEmpty)
-            SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final t = recentTxns[index];
-                return Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.listHorizontalPadding,
-                    vertical: AppSpacing.cardGap / 2,
-                  ),
-                  child: TransactionTile(
-                    transaction: t,
-                    category: categoriesMap[t.categoryId],
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        AppPageRoute(
-                          builder: (_) => AddExpenseScreen(
-                            initialType: t.type,
-                            existingTransaction: t,
-                          ),
-                        ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: List.generate(recentTxns.length, (index) {
+                      final t = recentTxns[index];
+                      final isLast = index == recentTxns.length - 1;
+                      return SpendXTransactionTile(
+                        transaction: t,
+                        category: categoriesMap[t.categoryId],
+                        accountName: accountsMap[t.accountId],
+                        showDivider: !isLast,
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            AppPageRoute(
+                              builder: (_) => AddExpenseScreen(
+                                initialType: t.type,
+                                existingTransaction: t,
+                              ),
+                            ),
+                          );
+                          await ref
+                              .read(paginatedTransactionsProvider.notifier)
+                              .refresh();
+                        },
                       );
-                      await ref
-                          .read(paginatedTransactionsProvider.notifier)
-                          .refresh();
-                    },
+                    }),
                   ),
-                );
-              }, childCount: recentTxns.length),
+                ),
+              ),
             ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 96)),
+          // Generous bottom clearance above floating glass navigation bar
+          const SliverToBoxAdapter(child: SizedBox(height: 110)),
         ],
       ),
     );

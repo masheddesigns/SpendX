@@ -1,23 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:spend_x/widgets/transaction_tile.dart';
-import 'package:spend_x/screens/expense/add_expense_screen.dart';
-import '../../features/transactions/providers/transaction_providers.dart';
-import '../transaction_detail_screen.dart';
-import '../../theme/app_theme.dart';
-import '../../shared/widgets/primary_button.dart';
-import '../../shared/widgets/empty_state_widget.dart';
-import '../../shared/widgets/skeleton_loader.dart';
-import '../../shared/widgets/error_state_widget.dart';
-import 'search_filter_screen.dart';
-import '../../shared/widgets/app_page_route.dart';
+import 'package:intl/intl.dart';
 
+import '../../features/accounts/providers/account_providers.dart';
+import '../../features/transactions/providers/transaction_providers.dart';
+import '../../models/transaction.dart';
+import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/spendx_glass.dart';
+import '../../theme/app_theme.dart';
+import '../expense/add_expense_screen.dart';
+import '../transaction_detail_screen.dart';
+import 'search_filter_screen.dart';
+
+/// SpendX 2.0 Canonical Transaction Ledger (Activity Screen).
+///
+/// Implements Section 4 of C15-B:
+/// - Financial timeline experience rather than disjoint cards
+/// - Floating filter controls (All, Expenses, Income, Transfers)
+/// - Transactions grouped by date into single-layer Liquid Glass surfaces
+/// - High-density rows with category icon pills, clear typography, and tabular figures
+/// - Pull-to-refresh and smooth pagination
+/// - Retains 100% canonical ledger provider contracts
 class TransactionListScreen extends ConsumerStatefulWidget {
   final bool isFullScreen;
+
   /// If set, only shows transactions with these IDs (audit fix flow).
   final List<String>? filterIds;
+
   /// Title override for filtered views.
   final String? title;
+
   const TransactionListScreen({
     super.key,
     this.isFullScreen = false,
@@ -32,6 +44,7 @@ class TransactionListScreen extends ConsumerStatefulWidget {
 
 class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
   final _scrollController = ScrollController();
+  String _selectedFilter = 'all'; // 'all', 'expense', 'income', 'transfer'
 
   @override
   void initState() {
@@ -56,6 +69,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
   Future<void> _onRefresh() async {
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
     ref.invalidate(transactionCategoryMapProvider);
+    ref.invalidate(accountsProvider);
   }
 
   Future<void> _onAddTransaction() async {
@@ -66,8 +80,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
       ),
     );
     if (result == true) {
-      ref.read(paginatedTransactionsProvider.notifier).refresh();
-      ref.invalidate(transactionsProvider); // for analytics
+      await _onRefresh();
     }
   }
 
@@ -75,127 +88,291 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
   Widget build(BuildContext context) {
     final paginatedState = ref.watch(paginatedTransactionsProvider);
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
+    final accountsAsync = ref.watch(accountsProvider);
 
     return categoryMapAsync.when(
-      loading: () => const Scaffold(body: SkeletonLoader.transactions()),
-      error: (err, _) => Scaffold(
-        body: ErrorStateWidget(
-          error: err,
+      loading: () => const Center(
+        child: SpendXLoadingState(count: 6, itemHeight: 64),
+      ),
+      error: (err, _) => Center(
+        child: SpendXErrorState(
+          message: err.toString(),
           onRetry: () => ref.invalidate(transactionCategoryMapProvider),
         ),
       ),
       data: (categoriesMap) {
+        final accountsMap = <String, String>{
+          for (final a in (accountsAsync.valueOrNull ?? [])) a.id: a.name,
+        };
+
         // Filter by IDs if provided (audit fix flow)
-        List transactions;
+        List<Transaction> sourceTxns;
         if (widget.filterIds != null) {
-          // Use full transaction list for filtered views
           final allTxns = ref.watch(transactionsProvider).valueOrNull ?? [];
           final filterSet = widget.filterIds!.toSet();
-          transactions = allTxns.where((t) => filterSet.contains(t.id)).toList();
+          sourceTxns = allTxns.where((t) => filterSet.contains(t.id)).toList();
         } else {
-          transactions = paginatedState.items;
+          sourceTxns = paginatedState.items;
         }
 
-        if (transactions.isEmpty && !paginatedState.hasMore) {
-          return EmptyStateWidget(
-            icon: Icons.account_balance_wallet_outlined,
-            title: "No transactions yet",
-            description: "Start adding transactions to track your spending.",
-            ctaLabel: "+ Add Transaction",
-            onCtaTap: _onAddTransaction,
-          );
-        }
+        // Apply active filter pill
+        final filteredTxns = _selectedFilter == 'all'
+            ? sourceTxns
+            : sourceTxns.where((t) => t.type == _selectedFilter).toList();
 
-        final content = RefreshIndicator(
+        final isInitialLoading =
+            paginatedState.items.isEmpty && paginatedState.hasMore;
+
+        Widget content = RefreshIndicator(
           onRefresh: _onRefresh,
-          child: ListView.separated(
+          child: CustomScrollView(
             controller: _scrollController,
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.listHorizontalPadding,
-              vertical: AppSpacing.listHorizontalPadding,
-            ),
-            itemCount: transactions.length + (paginatedState.hasMore ? 1 : 0),
-            separatorBuilder: (_, _) => SizedBox(height: AppSpacing.cardGap),
-            itemBuilder: (context, index) {
-              // Loading indicator at the end
-              if (index >= transactions.length) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(
-                      child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2))),
-                );
-              }
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // ── Filter & Search Header ─────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              SpendXGlassChip(
+                                label: 'All',
+                                isSelected: _selectedFilter == 'all',
+                                onTap: () =>
+                                    setState(() => _selectedFilter = 'all'),
+                              ),
+                              const SizedBox(width: 6),
+                              SpendXGlassChip(
+                                label: 'Expenses',
+                                isSelected: _selectedFilter == 'expense',
+                                onTap: () =>
+                                    setState(() => _selectedFilter = 'expense'),
+                              ),
+                              const SizedBox(width: 6),
+                              SpendXGlassChip(
+                                label: 'Income',
+                                isSelected: _selectedFilter == 'income',
+                                onTap: () =>
+                                    setState(() => _selectedFilter = 'income'),
+                              ),
+                              const SizedBox(width: 6),
+                              SpendXGlassChip(
+                                label: 'Transfers',
+                                isSelected: _selectedFilter == 'transfer',
+                                onTap: () =>
+                                    setState(() => _selectedFilter = 'transfer'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Search Trigger Button
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          AppPageRoute(
+                            builder: (_) => const SearchFilterScreen(),
+                          ),
+                        ),
+                        child: SpendXGlassSurface(
+                          level: SpendXGlassLevel.interactive,
+                          width: 36,
+                          height: 36,
+                          borderRadius: BorderRadius.circular(AppRadius.full),
+                          child: const Center(
+                            child: Icon(
+                              Icons.search_rounded,
+                              size: 18,
+                              color: AppTheme.primaryBlue,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
-              final t = transactions[index];
-              return TransactionTile(
-                transaction: t,
-                category: categoriesMap[t.categoryId],
-                onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    AppPageRoute(
-                      builder: (_) => UnifiedTransactionDetailScreen(
-                        transaction: t,
-                        category: categoriesMap[t.categoryId],
+              // ── Loading Skeleton ───────────────────────────
+              if (isInitialLoading)
+                const SliverToBoxAdapter(
+                  child: SpendXLoadingState(count: 6, itemHeight: 64),
+                ),
+
+              // ── Empty State ────────────────────────────────
+              if (!isInitialLoading && filteredTxns.isEmpty)
+                SliverToBoxAdapter(
+                  child: SpendXEmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: _selectedFilter == 'all'
+                        ? 'No transactions yet'
+                        : 'No ${_selectedFilter}s found',
+                    subtitle:
+                        'Transactions recorded from manual entry, SMS, or recurring will appear here.',
+                    actionLabel: '+ Add Transaction',
+                    onAction: _onAddTransaction,
+                  ),
+                ),
+
+              // ── Timeline Date Groups ───────────────────────
+              if (!isInitialLoading && filteredTxns.isNotEmpty)
+                ..._buildTimelineSlivers(
+                  filteredTxns,
+                  categoriesMap,
+                  accountsMap,
+                ),
+
+              // ── Pagination Loading Spinner ─────────────────
+              if (paginatedState.hasMore)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  );
-                  if (result == true) _onRefresh();
-                },
-                onEdit: () async {
-                  final result = await Navigator.push(
-                    context,
-                    AppPageRoute(
-                      builder: (_) => AddExpenseScreen(
-                        initialType: t.type,
-                        existingTransaction: t,
-                      ),
-                    ),
-                  );
-                  if (result == true) _onRefresh();
-                },
-                onDelete: () async {
-                  await ref.read(deleteTransactionProvider)(t.id);
-                  _onRefresh();
-                },
-              );
-            },
+                  ),
+                ),
+
+              // Generous bottom clearance above floating navigation
+              const SliverToBoxAdapter(child: SizedBox(height: 110)),
+            ],
           ),
         );
 
         if (widget.isFullScreen) {
-          return Scaffold(
+          return SpendXScaffold(
+            extendBody: true,
             appBar: AppBar(
-              title: Text(widget.title ?? 'All Transactions'),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              title: Text(
+                widget.title ?? 'Activity',
+                style: AppTextStyles.heading.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.search_rounded),
-                  tooltip: 'Search & Filter',
-                  onPressed: () => Navigator.push(
-                    context,
-                    AppPageRoute(
-                        builder: (_) => const SearchFilterScreen()),
-                  ),
+                  icon: const Icon(Icons.add_rounded),
+                  tooltip: 'Add Transaction',
+                  onPressed: _onAddTransaction,
                 ),
               ],
             ),
-            floatingActionButtonLocation:
-                FloatingActionButtonLocation.centerFloat,
-            floatingActionButton: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-              child: PrimaryButton(
-                label: 'Add Transaction',
-                onPressed: _onAddTransaction,
-              ),
-            ),
-            body: SafeArea(child: content),
+            body: content,
           );
         }
+
         return content;
       },
     );
+  }
+
+  /// Groups transactions by calendar date and builds grouped Liquid Glass surfaces.
+  List<Widget> _buildTimelineSlivers(
+    List<Transaction> transactions,
+    Map<String, dynamic> categoriesMap,
+    Map<String, String> accountsMap,
+  ) {
+    // Group transactions by date string
+    final Map<String, List<Transaction>> grouped = {};
+    for (final t in transactions) {
+      final key = _formatDateHeader(t.date);
+      grouped.putIfAbsent(key, () => []).add(t);
+    }
+
+    final slivers = <Widget>[];
+
+    for (final entry in grouped.entries) {
+      final dateHeader = entry.key;
+      final txns = entry.value;
+
+      // Date Header (direct canvas typography)
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+            child: Text(
+              dateHeader,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Grouped Liquid Glass Container for this date
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            child: SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: List.generate(txns.length, (index) {
+                  final t = txns[index];
+                  final isLast = index == txns.length - 1;
+                  return SpendXTransactionTile(
+                    transaction: t,
+                    category: categoriesMap[t.categoryId],
+                    accountName: accountsMap[t.accountId],
+                    showDivider: !isLast,
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        AppPageRoute(
+                          builder: (_) => UnifiedTransactionDetailScreen(
+                            transaction: t,
+                            category: categoriesMap[t.categoryId],
+                          ),
+                        ),
+                      );
+                      if (result == true) _onRefresh();
+                    },
+                  );
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return slivers;
+  }
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+
+    final diffDays = today.difference(target).inDays;
+    if (diffDays == 0) return 'TODAY';
+    if (diffDays == 1) return 'YESTERDAY';
+
+    if (date.year == now.year) {
+      return DateFormat('EEEE, d MMMM').format(date).toUpperCase();
+    }
+    return DateFormat('d MMMM yyyy').format(date).toUpperCase();
   }
 }
