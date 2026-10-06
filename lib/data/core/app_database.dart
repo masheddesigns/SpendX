@@ -432,7 +432,7 @@ class AppDatabase {
     final db = _database;
     if (db != null && db.isOpen) {
       try {
-        await db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+        await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
       } catch (_) {}
     }
   }

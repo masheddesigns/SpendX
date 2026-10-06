@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../core/logging/app_logger.dart';
 import '../data/repositories/category_repo.dart';
 import '../data/repositories/review_repo.dart';
 import '../services/app_session_service.dart';
@@ -37,6 +38,11 @@ class _SplashScreenState extends State<SplashScreen>
   /// the topmost route to actually navigate. Set after
   /// [_checkInitialState] completes; gates the home-nav recheck loop.
   bool _initWorkDone = false;
+
+  /// Holds startup initialization error if database/key retrieval fails,
+  /// preventing unbounded progress indicator hang.
+  String? _initError;
+  bool _isRetrying = false;
 
   /// Recheck timer used when share flow is on top of splash. Polls
   /// every 400ms until splash becomes the visible route again, then
@@ -102,69 +108,91 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkInitialState() async {
-    await Future.delayed(const Duration(milliseconds: 1400));
+    try {
+      if (_initError != null) {
+        setState(() {
+          _initError = null;
+          _isRetrying = true;
+        });
+      }
 
-    if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 1400));
 
-    // ALWAYS seed categories first
-    debugPrint('\u{1F331} Seeding categories');
-    await CategoryRepo().ensureDefaults();
-    debugPrint('\u2705 Categories seeded');
+      if (!mounted) return;
 
-    if (!mounted) return;
+      // ALWAYS seed categories first with bounded timeout
+      debugPrint('\u{1F331} Seeding categories');
+      await CategoryRepo().ensureDefaults().timeout(
+        const Duration(seconds: 6),
+        onTimeout: () {
+          throw TimeoutException('Database initialization timed out after 6 seconds');
+        },
+      );
+      debugPrint('\u2705 Categories seeded');
 
-    final onboardingComplete = SettingsService.instance.isOnboardingComplete;
+      if (!mounted) return;
 
-    if (!onboardingComplete) {
-      // Defensive guard: only replace if splash is still the topmost
-      // route. A share intent received during the splash delay can
-      // push ImportProcessingScreen on top; replacing in that state
-      // would silently destroy the share flow.
-      if (ModalRoute.of(context)?.isCurrent != true) {
-        debugPrint('[Splash] Share flow on top — skipping onboarding nav');
+      final onboardingComplete = SettingsService.instance.isOnboardingComplete;
+
+      if (!onboardingComplete) {
+        // Defensive guard: only replace if splash is still the topmost
+        // route. A share intent received during the splash delay can
+        // push ImportProcessingScreen on top; replacing in that state
+        // would silently destroy the share flow.
+        if (ModalRoute.of(context)?.isCurrent != true) {
+          debugPrint('[Splash] Share flow on top — skipping onboarding nav');
+          return;
+        }
+        Navigator.of(context).pushReplacement(
+          AppPageRoute(builder: (_) => const OnboardingScreen()),
+        );
         return;
       }
-      Navigator.of(context).pushReplacement(
-        AppPageRoute(builder: (_) => const OnboardingScreen()),
+
+      // Start session tracking
+      AppSessionService.instance.init();
+
+      // Mark today as active (streak + last-active timestamp)
+      await RetentionService.instance.markActiveToday();
+      // Observation: app open event
+      await RetentionEvents.instance.log(RetentionEvent.appOpen);
+      // Re-arm the 24h re-engagement notification — only if actionable.
+      // Empty "just checking in" notifications degrade trust.
+      final pendingReviews = await ReviewRepo().getPendingCount();
+      await RetentionService.instance.scheduleReengagementCheck(
+        pendingReviews: pendingReviews,
       );
-      return;
+
+      // Schedule wrapped notifications
+      _scheduleWrappedNotifications();
+
+      // Schedule daily/weekly spending insights
+      _scheduleSpendingInsights();
+
+      // Request permissions (non-blocking)
+      _requestPermissions();
+
+      // Generate recurring transactions (non-blocking)
+      RecurringEngine.checkAndGenerate().then((changed) {
+        if (changed) debugPrint('\u{1F501} Recurring transactions generated');
+      }).catchError((e) {
+        debugPrint('\u26A0\uFE0F Recurring engine error (non-fatal): $e');
+      });
+
+      // Daily net worth snapshot
+      SnapshotTrigger.instance.onAppOpen();
+
+      _initWorkDone = true;
+      _attemptHomeNavigation();
+    } catch (e, st) {
+      AppLogger.e('SplashScreen initialization failed', e, st);
+      if (mounted) {
+        setState(() {
+          _initError = e.toString();
+          _isRetrying = false;
+        });
+      }
     }
-
-    // Start session tracking
-    AppSessionService.instance.init();
-
-    // Mark today as active (streak + last-active timestamp)
-    await RetentionService.instance.markActiveToday();
-    // Observation: app open event
-    await RetentionEvents.instance.log(RetentionEvent.appOpen);
-    // Re-arm the 24h re-engagement notification — only if actionable.
-    // Empty "just checking in" notifications degrade trust.
-    final pendingReviews = await ReviewRepo().getPendingCount();
-    await RetentionService.instance.scheduleReengagementCheck(
-      pendingReviews: pendingReviews,
-    );
-
-    // Schedule wrapped notifications
-    _scheduleWrappedNotifications();
-
-    // Schedule daily/weekly spending insights
-    _scheduleSpendingInsights();
-
-    // Request permissions (non-blocking)
-    _requestPermissions();
-
-    // Generate recurring transactions (non-blocking)
-    RecurringEngine.checkAndGenerate().then((changed) {
-      if (changed) debugPrint('\u{1F501} Recurring transactions generated');
-    }).catchError((e) {
-      debugPrint('\u26A0\uFE0F Recurring engine error (non-fatal): $e');
-    });
-
-    // Daily net worth snapshot
-    SnapshotTrigger.instance.onAppOpen();
-
-    _initWorkDone = true;
-    _attemptHomeNavigation();
   }
 
   /// Push HomeScreen IF splash is currently the visible route.
@@ -420,18 +448,96 @@ class _SplashScreenState extends State<SplashScreen>
 
                     const SizedBox(height: 48),
 
-                    // Loading indicator
-                    Opacity(
-                      opacity: _subtitleFade.value,
-                      child: const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0x6623BE62),
+                    // Loading indicator / Error action card
+                    if (_initError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.5),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Color(0xFFEF4444),
+                                size: 36,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Startup Initialization Error',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _initError!,
+                                textAlign: TextAlign.center,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isRetrying ? null : _checkInitialState,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF23BE62),
+                                    foregroundColor: const Color(0xFF060D1B),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                  child: Text(
+                                    _isRetrying ? 'Retrying...' : 'Retry Startup',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      Opacity(
+                        opacity: _subtitleFade.value,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0x6623BE62),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

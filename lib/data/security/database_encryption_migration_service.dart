@@ -745,7 +745,7 @@ class DatabaseEncryptionMigrationService {
           directoryPath: dbDir,
           targetDbPath: sourcePath,
         );
-        await plainDb.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+        await plainDb.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
       } finally {
         await plainDb.close();
       }

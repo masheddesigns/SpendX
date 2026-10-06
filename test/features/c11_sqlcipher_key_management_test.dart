@@ -376,5 +376,26 @@ void main() {
       await km.deleteKey(encryptedDbPath: encDbPath, force: true);
       expect(await km.hasKey(), isFalse);
     });
+
+    test('C11-P2-19: Unreadable SecureStorage converts to DatabaseKeyAccessException without overwriting', () async {
+      final encDbPath = join(tempDir.path, 'existing.db');
+      final encFile = File(encDbPath);
+      await encFile.writeAsBytes([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      final storage = InMemorySecureStorageAdapter();
+      storage.shouldThrowOnRead = true;
+      storage.readExceptionMessage = 'SecureStorage timeout / unreadable';
+
+      final km = SpendXDatabaseKeyManager(storageAdapter: storage);
+
+      final state = await km.getState(encryptedDbPath: encDbPath);
+      expect(state, equals(DatabaseKeyState.unreadable));
+
+      // Attempting to get or create key must throw DatabaseKeyAccessException and NOT wipe or regenerate
+      await expectLater(
+        km.getOrCreateKey(encryptedDbPath: encDbPath),
+        throwsA(isA<DatabaseKeyAccessException>()),
+      );
+    });
   });
 }

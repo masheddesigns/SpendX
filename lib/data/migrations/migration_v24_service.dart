@@ -132,7 +132,7 @@ class MigrationV24Service {
     }
 
     try {
-      await db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+      await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
       await db.execute("VACUUM INTO '$backupPath';");
     } catch (_) {
       // Fallback: file copy after checkpoint if VACUUM INTO is unsupported

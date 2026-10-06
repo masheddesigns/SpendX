@@ -128,7 +128,10 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   const FlutterSecureStorageAdapter([FlutterSecureStorage? storage])
       : _storage = storage ??
             const FlutterSecureStorage(
-              aOptions: AndroidOptions(),
+              aOptions: AndroidOptions(
+                resetOnError: false,
+                migrateOnAlgorithmChange: false,
+              ),
               iOptions: IOSOptions(
                 accessibility: KeychainAccessibility.first_unlock,
               ),
@@ -137,10 +140,16 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
               ),
             );
 
+  static const Duration _storageTimeout = Duration(seconds: 4);
+
   @override
   Future<String?> read(String key) async {
     try {
-      return await _storage.read(key: key);
+      return await _storage.read(key: key).timeout(_storageTimeout);
+    } on TimeoutException {
+      throw DatabaseKeyAccessException(
+        'SecureStorage read operation timed out after ${_storageTimeout.inSeconds}s',
+      );
     } catch (e) {
       if (_isTestEnvironmentError(e)) {
         _loadTestStorage();
@@ -153,7 +162,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   @override
   Future<void> write(String key, String value) async {
     try {
-      await _storage.write(key: key, value: value);
+      await _storage.write(key: key, value: value).timeout(_storageTimeout);
+    } on TimeoutException {
+      throw DatabaseKeyAccessException(
+        'SecureStorage write operation timed out after ${_storageTimeout.inSeconds}s',
+      );
     } catch (e) {
       if (_isTestEnvironmentError(e)) {
         _loadTestStorage();
@@ -168,7 +181,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   @override
   Future<void> delete(String key) async {
     try {
-      await _storage.delete(key: key);
+      await _storage.delete(key: key).timeout(_storageTimeout);
+    } on TimeoutException {
+      throw DatabaseKeyAccessException(
+        'SecureStorage delete operation timed out after ${_storageTimeout.inSeconds}s',
+      );
     } catch (e) {
       if (_isTestEnvironmentError(e)) {
         _loadTestStorage();
@@ -183,7 +200,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   @override
   Future<bool> containsKey(String key) async {
     try {
-      return await _storage.containsKey(key: key);
+      return await _storage.containsKey(key: key).timeout(_storageTimeout);
+    } on TimeoutException {
+      throw DatabaseKeyAccessException(
+        'SecureStorage containsKey operation timed out after ${_storageTimeout.inSeconds}s',
+      );
     } catch (e) {
       if (_isTestEnvironmentError(e)) {
         _loadTestStorage();

@@ -23,6 +23,8 @@ class TransactionRepo {
 
   TransactionRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
 
+  DatabaseExecutor? get executor => _customExecutor;
+
   Future<DatabaseExecutor> get _db async {
     if (_customExecutor != null) return _customExecutor;
     return await AppDatabase.instance.database;

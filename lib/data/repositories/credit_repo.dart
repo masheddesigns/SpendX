@@ -32,6 +32,8 @@ class CreditRepo {
   CreditRepo({DatabaseExecutor? database, DatabaseExecutor? executor})
       : _customExecutor = executor ?? database;
 
+  DatabaseExecutor? get executor => _customExecutor;
+
   Future<DatabaseExecutor> get _db async =>
       _customExecutor ?? await AppDatabase.instance.database;
 

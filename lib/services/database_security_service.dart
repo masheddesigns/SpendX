@@ -37,7 +37,12 @@ class DatabaseKeyManager {
 
   static const String keyStorageName = 'spendx_database_master_key';
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      resetOnError: false,
+      migrateOnAlgorithmChange: false,
+    ),
+  );
   String? _inMemoryTestKey;
 
   /// Test hook to inject or override the master key.
@@ -494,7 +499,7 @@ class DatabaseSecurityService {
       // 7. Atomic promotion
       if (activeConnection != null && activeConnection.isOpen) {
         try {
-          await activeConnection.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+          await activeConnection.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
         } catch (_) {}
       }
 

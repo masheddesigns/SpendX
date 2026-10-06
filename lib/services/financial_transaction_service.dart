@@ -38,14 +38,26 @@ class FinancialTransactionService {
   Future<Database> get _db async =>
       database ?? await AppDatabase.instance.database;
 
-  TransactionRepo _getTransactionRepo(DatabaseExecutor executor) =>
-      _customTransactionRepo ?? TransactionRepo(executor: executor);
+  TransactionRepo _getTransactionRepo(DatabaseExecutor executor) {
+    if (_customTransactionRepo?.executor != null) {
+      return _customTransactionRepo!;
+    }
+    return TransactionRepo(executor: executor);
+  }
 
-  CreditRepo _getCreditRepo(DatabaseExecutor executor) =>
-      _customCreditRepo ?? CreditRepo(executor: executor);
+  CreditRepo _getCreditRepo(DatabaseExecutor executor) {
+    if (_customCreditRepo?.executor != null) {
+      return _customCreditRepo!;
+    }
+    return CreditRepo(executor: executor);
+  }
 
-  LoanRepo _getLoanRepo(DatabaseExecutor executor) =>
-      _customLoanRepo ?? LoanRepo(executor: executor);
+  LoanRepo _getLoanRepo(DatabaseExecutor executor) {
+    if (_customLoanRepo?.executor != null) {
+      return _customLoanRepo!;
+    }
+    return LoanRepo(executor: executor);
+  }
 
   Future<bool> _hasCanonicalSchema(DatabaseExecutor db) async {
     final rows = await db.rawQuery(

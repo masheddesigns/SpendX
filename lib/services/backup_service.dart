@@ -192,7 +192,7 @@ class BackupService {
 
     // 2. Checkpoint WAL
     try {
-      await db.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+      await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
     } catch (_) {}
 
     // 3. Create point-in-time consistent SQLite snapshot
@@ -578,7 +578,7 @@ class BackupService {
 
     if (targetDb != null && targetDb.isOpen) {
       try {
-        await targetDb.execute('PRAGMA wal_checkpoint(TRUNCATE);');
+        await targetDb.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
       } catch (_) {}
       await targetDb.close();
     }

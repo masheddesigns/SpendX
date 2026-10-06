@@ -26,7 +26,8 @@ class AppLogger {
     } else {
       // PROD: Only log Warning and Error to console/analytics
       if (level == LogLevel.warning || level == LogLevel.error) {
-         // analytics.logEvent(name: 'app_error', parameters: {'msg': message});
+        // Output sanitized message to system log for release diagnostics
+        debugPrint('[$label] $message${error != null ? ': $error' : ''}');
       }
     }
   }

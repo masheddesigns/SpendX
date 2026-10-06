@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqlite3/sqlite3.dart' as ffi;
 
@@ -49,11 +48,9 @@ class SpendXDatabaseFactory {
     if (_initialized) return;
 
     try {
-      // 1. Initialize FFI for desktop and headless test environments
-      if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
-        sqfliteFfiInit();
-        databaseFactory = databaseFactoryFfi;
-      }
+      // 1. Initialize FFI database factory with SQLCipher backend
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
 
       // 2. Runtime verification: verify sqlite3 is backed by SQLCipher
       _detectedCipherVersion = _detectSqlCipherVersion();

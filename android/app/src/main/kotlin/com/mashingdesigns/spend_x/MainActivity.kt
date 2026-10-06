@@ -3,6 +3,7 @@ package com.mashingdesigns.spend_x
 import android.Manifest
 import android.content.Context
 import android.os.Build
+import android.os.Bundle
 import android.provider.Telephony
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -15,6 +16,25 @@ class MainActivity : FlutterActivity() {
         const val CHANNEL = "spendx/sms_live"
         const val ENGINE_ID = "spendx_engine"
         private const val RECEIVE_SMS_REQUEST_CODE = 5001
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        ensureSecureStorageAlgorithmMarkers()
+    }
+
+    private fun ensureSecureStorageAlgorithmMarkers() {
+        try {
+            val configPrefs = getSharedPreferences("FlutterSecureStorageConfiguration", Context.MODE_PRIVATE)
+            if (!configPrefs.contains("FlutterSecureSAlgorithmKey")) {
+                configPrefs.edit()
+                    .putString("FlutterSecureSAlgorithmKey", "RSA_ECB_OAEPwithSHA_256andMGF1Padding")
+                    .putString("FlutterSecureSAlgorithmStorage", "AES_GCM_NoPadding")
+                    .commit()
+            }
+        } catch (_: Exception) {
+            // Defensive ignore
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
