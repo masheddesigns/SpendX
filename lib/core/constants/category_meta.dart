@@ -30,6 +30,7 @@ class CategoryMetaMap {
       Color(0xFF7CB342),
     ),
     'Others': CategoryMeta(Icons.category_rounded, Color(0xFF757575)),
+    'Miscellaneous': CategoryMeta(Icons.category_outlined, Color(0xFF607D8B)),
   };
 
   static const Map<String, CategoryMeta> income = {
@@ -43,6 +44,7 @@ class CategoryMetaMap {
     'Gift': CategoryMeta(Icons.card_giftcard_rounded, Color(0xFFC2185B)),
     'Refund': CategoryMeta(Icons.replay_rounded, Color(0xFFEF6C00)),
     'Other Income': CategoryMeta(Icons.payments_rounded, Color(0xFF2E7D32)),
+    'Miscellaneous': CategoryMeta(Icons.category_outlined, Color(0xFF607D8B)),
   };
 
   static CategoryMeta resolve(String name, String type) {

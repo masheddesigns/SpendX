@@ -5,8 +5,6 @@ import 'package:spend_x/services/settings_service.dart';
 import 'package:spend_x/services/notification_service_v2.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
 import 'package:spend_x/widgets/app_button.dart';
-import 'package:spend_x/main.dart';
-import 'package:spend_x/screens/sms_import_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -68,17 +66,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     Navigator.of(context).pushReplacement(
       AppPageRoute(builder: (_) => const HomeScreen()),
     );
-
-    // Offer an SMS import scan right after setup when the user opted in.
-    if (_smsImportOptIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final navContext = MyApp.navigatorKey.currentContext;
-        if (navContext == null) return;
-        Navigator.of(
-          navContext,
-        ).push(AppPageRoute(builder: (_) => const SmsImportScreen()));
-      });
-    }
   }
 
   Widget _buildStepIndicator() {
@@ -230,8 +217,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             _buildSmallFeature(Icons.auto_awesome_rounded, 'Smart Import',
                 'Share screenshots or text from any payment app'),
             const SizedBox(height: 14),
-            _buildSmallFeature(Icons.sms_rounded, 'SMS Import',
-                'Scan bank SMS to auto-import transactions'),
+            _buildSmallFeature(Icons.sms_rounded, 'Live SMS Tracking',
+                'Track incoming bank & card SMS automatically'),
             const SizedBox(height: 14),
             _buildSmallFeature(Icons.emoji_events_rounded, 'Gamification',
                 'Earn XP, level up, and view Wrapped summaries'),
@@ -604,10 +591,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: SwitchListTile(
                 secondary: Icon(Icons.sms_rounded,
                     color: Theme.of(context).colorScheme.primary),
-                title: const Text('Import my bank SMS',
+                title: const Text('Track bank & card SMS',
                     style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: const Text(
-                    'Scan your Messages app for past bank transactions & balances'),
+                    'Automatically record incoming transaction messages as they arrive'),
                 value: _smsImportOptIn,
                 onChanged: (v) => setState(() => _smsImportOptIn = v),
               ),

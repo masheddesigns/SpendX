@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/home/transactions_screen.dart';
-import '../../../screens/review/review_queue_screen.dart';
 import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../accounts/providers/account_providers.dart';
-import '../../review_queue/providers/review_providers.dart';
 import '../../transactions/providers/transaction_providers.dart';
 import '../../wrapped/widgets/wrapped_story_bubbles.dart';
 import '../widgets/quick_actions_row.dart';
@@ -35,7 +33,6 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     final paginatedState = ref.watch(paginatedTransactionsProvider);
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
     final accountsAsync = ref.watch(accountsProvider);
-    final reviewCountAsync = ref.watch(reviewQueueCountProvider);
 
     final categoriesMap = categoryMapAsync.valueOrNull ?? {};
     final accountsMap = {
@@ -44,13 +41,11 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
 
     final recentTxns = paginatedState.items.take(8).toList();
     final isLoading = paginatedState.items.isEmpty && paginatedState.hasMore;
-    final pendingReviewCount = reviewCountAsync.valueOrNull ?? 0;
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(transactionsProvider);
         ref.invalidate(transactionCategoryMapProvider);
-        ref.invalidate(reviewQueueCountProvider);
         await ref.read(paginatedTransactionsProvider.notifier).refresh();
       },
       child: CustomScrollView(
@@ -61,18 +56,6 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
 
           // ── Primary Decision Hero: Safe-to-Spend ─────────
           const SliverToBoxAdapter(child: SafeToSpendCard()),
-
-          // ── Staged Review Banner (Conditional) ───────────
-          if (pendingReviewCount > 0)
-            SliverToBoxAdapter(
-              child: SpendXReviewBanner(
-                count: pendingReviewCount,
-                onTap: () => Navigator.push(
-                  context,
-                  AppPageRoute(builder: (_) => const ReviewQueueScreen()),
-                ),
-              ),
-            ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 6)),
 

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
 import 'package:uuid/uuid.dart';
 
 import '../../../data/core/app_database.dart';
@@ -35,7 +36,14 @@ class MerchantRule {
 }
 
 class MerchantRuleRepo {
-  final _db = AppDatabase.instance;
+  final DatabaseExecutor? _customExecutor;
+
+  MerchantRuleRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
+
+  Future<DatabaseExecutor> get _database async {
+    if (_customExecutor != null) return _customExecutor!;
+    return await AppDatabase.instance.database;
+  }
 
   // ── Lookup ──────────────────────────────────────────────────────────
 
@@ -44,7 +52,7 @@ class MerchantRuleRepo {
     final normalized = keyword.trim().toLowerCase();
     if (normalized.length < 3) return null;
 
-    final db = await _db.database;
+    final db = await _database;
     final res = await db.query(
       Tables.merchantRules,
       where: 'keyword = ?',
@@ -61,7 +69,7 @@ class MerchantRuleRepo {
     final lower = text.trim().toLowerCase();
     if (lower.length < 3) return null;
 
-    final db = await _db.database;
+    final db = await _database;
     // Use LIKE for contains matching. We limit to top-10 by usage to keep
     // this fast and deterministic — the most-used rule wins.
     final res = await db.rawQuery(
@@ -92,7 +100,7 @@ class MerchantRuleRepo {
   // ── Read all ────────────────────────────────────────────────────────
 
   Future<List<MerchantRule>> getAll() async {
-    final db = await _db.database;
+    final db = await _database;
     final res = await db.query(
       Tables.merchantRules,
       orderBy: 'usage_count DESC',
@@ -114,7 +122,7 @@ class MerchantRuleRepo {
 
     final existing = await getByKeyword(normalized);
     final now = DateTime.now().toIso8601String();
-    final db = await _db.database;
+    final db = await _database;
 
     if (existing == null) {
       await db.insert(Tables.merchantRules, {
@@ -151,7 +159,7 @@ class MerchantRuleRepo {
   // ── Delete ──────────────────────────────────────────────────────────
 
   Future<void> delete(String id) async {
-    final db = await _db.database;
+    final db = await _database;
     await db.delete(
       Tables.merchantRules,
       where: 'id = ?',

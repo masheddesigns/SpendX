@@ -12,6 +12,7 @@ class DefaultCategories {
     'Travel',
     'Subscriptions',
     'Others',
+    'Miscellaneous',
   ];
 
   static const income = [
@@ -22,5 +23,6 @@ class DefaultCategories {
     'Gift',
     'Refund',
     'Other Income',
+    'Miscellaneous',
   ];
 }

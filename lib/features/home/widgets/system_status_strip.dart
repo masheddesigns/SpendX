@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/system_alerts_provider.dart';
-import '../../../screens/review/review_queue_screen.dart';
-import '../../../shared/widgets/app_page_route.dart';
 
 /// Single-priority system status strip on Home.
 ///
 /// Shows ONE message at a time based on priority:
 ///   1. Safe Mode (blocking)
 ///   2. Drift (financial inconsistency)
-///   3. Review needed (user action)
-///   4. Sync success (passive info)
+///   3. Sync success (passive info)
 ///
 /// Never shows multiple chips — one message = one mental model.
 class SystemStatusStrip extends ConsumerWidget {
@@ -43,18 +40,7 @@ class SystemStatusStrip extends ConsumerWidget {
           );
         }
 
-        // Priority 3: Review needed
-        if (alerts.reviewCount > 0) {
-          return _StatusBanner(
-            icon: Icons.rate_review_rounded,
-            label: '${alerts.reviewCount} transaction${alerts.reviewCount == 1 ? '' : 's'} need review',
-            color: Colors.orange,
-            onTap: () => Navigator.push(context,
-                AppPageRoute(builder: (_) => const ReviewQueueScreen())),
-          );
-        }
-
-        // Priority 4: Sync info (subtle, passive)
+        // Priority 3: Sync info (subtle, passive)
         if (alerts.hasSync) {
           return _SyncInfo(
             lastSync: alerts.lastSyncAgo!,
@@ -72,41 +58,34 @@ class _StatusBanner extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  final VoidCallback? onTap;
 
   const _StatusBanner({
     required this.icon,
     required this.label,
     required this.color,
-    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(label,
-                    style: TextStyle(
-                        color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-              if (onTap != null)
-                Icon(Icons.chevron_right, size: 16, color: color),
-            ],
-          ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            ),
+          ],
         ),
       ),
     );

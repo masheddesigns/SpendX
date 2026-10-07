@@ -22,8 +22,8 @@ import '../screens/credit_card_screen.dart';
 import '../screens/lending/lending_screen.dart';
 import '../screens/loans/loan_detail_screen.dart';
 import '../screens/notifications_inbox_screen.dart';
-import '../screens/review/review_queue_screen.dart';
-import '../screens/sms_import_screen.dart';
+import '../screens/bank/account_list_screen.dart';
+import '../screens/home/transactions_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../data/repositories/loan_repo.dart';
 import '../data/repositories/review_repo.dart';
@@ -543,12 +543,13 @@ class NotificationServiceV2 {
         push(const LendingScreen());
         break;
       case 'balances':
-      case 'sms':
-        push(const SmsImportScreen());
+        push(const AccountListScreen());
         break;
+      case 'sms':
+      case 'activity':
       case 'review':
       case 'live_choice':
-        push(const ReviewQueueScreen());
+        push(const TransactionListScreen(isFullScreen: true));
         break;
       case 'inbox':
       default:

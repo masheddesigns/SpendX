@@ -19,7 +19,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 import '../goals/add_goal_screen.dart';
 import '../goals/goals_screen.dart';
-import '../review/review_queue_screen.dart';
+import '../home/transactions_screen.dart';
 
 /// SpendX 2.0 Forward-Looking Financial Workspace (Planning Screen).
 ///
@@ -67,7 +67,10 @@ class PlanTab extends ConsumerWidget {
                   topInsight: timeline.topInsight,
                   onActionTap: () => Navigator.push(
                     context,
-                    AppPageRoute(builder: (_) => const ReviewQueueScreen()),
+                    AppPageRoute(
+                      builder: (_) =>
+                          const TransactionListScreen(isFullScreen: true),
+                    ),
                   ),
                 ),
               ),

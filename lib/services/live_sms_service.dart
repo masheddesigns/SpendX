@@ -3,43 +3,45 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
-import '../core/logging/app_logger.dart';
+import '../core/utils/category_resolver.dart';
+import '../core/utils/merchant_extractor.dart';
 import '../data/core/database_lifecycle_coordinator.dart';
+import '../data/repositories/account_repo.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/credit_repo.dart';
-import '../data/repositories/loan_repo.dart';
-import '../data/repositories/review_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../domain/finance/finance.dart';
+import '../features/merchant_rules/data/merchant_rule_repo.dart';
+import '../models/bank_account.dart';
 import '../models/credit_card.dart';
-import '../models/loan.dart';
 import '../models/review_item.dart';
+import '../models/transaction.dart';
 import '../utils/app_format.dart';
+import '../utils/text_formatter.dart';
+import 'financial_transaction_service.dart';
+import 'gamification_service.dart';
 import 'notification_service_v2.dart';
+import 'smart_category_classifier.dart';
 import 'sms_import_service.dart';
-import 'package:uuid/uuid.dart';
 
-/// Live SMS detection: receives incoming bank SMS (via a native receiver),
-/// classifies each message, and surfaces it as a notification so the user can
-/// import the transaction or confirm a balance update. Also drains messages
-/// captured while the app was closed.
+/// Live SMS detection: receives incoming bank/card/wallet SMS (via a native receiver),
+/// automatically classifies the transaction and instrument (credit card, bank, or wallet),
+/// assigns category via merchant memory or static rules (defaulting to Miscellaneous),
+/// learns merchant associations, updates balances, and notifies the user.
 class LiveSmsService with WidgetsBindingObserver {
   LiveSmsService._();
   static final LiveSmsService instance = LiveSmsService._();
 
   static const MethodChannel _channel = MethodChannel('spendx/sms_live');
   static const String _enabledKey = 'live_sms_detection';
-  static const String _lastCatchUpKey = 'live_sms_last_catchup';
-  static const Duration _resumeCatchUpCooldown = Duration(minutes: 5);
 
   bool _initialized = false;
   final List<({String sender, String body})> _liveBuffer = [];
   Timer? _flushTimer;
-  DateTime? _lastResumeCatchUpAt;
 
   int get bufferCountForTesting => _liveBuffer.length;
   void addLiveBufferForTesting(String sender, String body) {
@@ -61,7 +63,6 @@ class LiveSmsService with WidgetsBindingObserver {
           sender = args[0]?.toString() ?? '';
           body = args[1]?.toString() ?? '';
         } else if (args != null && args.isNotEmpty) {
-          // Fallback: old format (bodies only)
           body = args.cast<String>().join('\n');
         }
         if (body.isNotEmpty) {
@@ -76,27 +77,14 @@ class LiveSmsService with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addObserver(this);
 
-    // Process anything captured while the app wasn't running.
+    // Drain any pending messages received while the app was closed.
     await drainPending();
-
-    // Pull in previous bank transactions from the SMS inbox (once) so the
-    // app catches up on history without a manual scan.
-    unawaited(catchUpHistorical());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
-    // Re-run the catch-up when returning to the app so SMS that arrived
-    // while it was backgrounded are picked up (throttled).
-    final last = _lastResumeCatchUpAt;
-    if (last != null &&
-        DateTime.now().difference(last) < _resumeCatchUpCooldown) {
-      return;
-    }
-    _lastResumeCatchUpAt = DateTime.now();
     unawaited(drainPending());
-    unawaited(catchUpHistorical());
   }
 
   Future<void> _flushLiveBuffer() async {
@@ -106,151 +94,39 @@ class LiveSmsService with WidgetsBindingObserver {
     _liveBuffer.clear();
     var added = 0;
     String? balanceNote;
-    String? singleReviewId;
-    ParsedTransaction? singleTransaction;
+    Transaction? singleTransaction;
     for (final entry in batch) {
       final outcome = await _processBody(entry.body, sender: entry.sender);
       if (outcome.added) {
         added++;
-        singleReviewId = outcome.reviewId;
         singleTransaction = outcome.transaction;
       }
       if (outcome.balanceNote != null) balanceNote = outcome.balanceNote;
     }
-    if (added == 1 && singleReviewId != null && singleTransaction != null) {
-      // Single detection → ask Expense vs Income right in the notification.
-      await _showChoice(singleReviewId, singleTransaction);
+    if (added == 1 && singleTransaction != null) {
+      final dir = singleTransaction.type == 'income' ? 'Received' : 'Spent';
+      final merchant = singleTransaction.notes.isNotEmpty ? ' at ${singleTransaction.notes}' : '';
+      await NotificationServiceV2().showNotification(
+        title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
+        body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+        category: 'generalUpdates',
+        payload: jsonEncode({'source_type': 'activity'}),
+      );
     } else if (added > 1) {
       await NotificationServiceV2().showNotification(
-        title: 'Transactions detected',
-        body: '$added transactions detected — review to confirm or delete.',
+        title: '$added transactions recorded',
+        body: '$added new transactions added from SMS — tap to view in Activity.',
         category: 'generalUpdates',
-        payload: jsonEncode({'source_type': 'review'}),
+        payload: jsonEncode({'source_type': 'activity'}),
       );
     } else if (balanceNote != null) {
       await NotificationServiceV2().showNotification(
-        title: 'Balance update',
-        body: '$balanceNote — tap to review.',
+        title: 'Balance updated',
+        body: '$balanceNote — tap to view Accounts.',
         category: 'generalUpdates',
         payload: jsonEncode({'source_type': 'balances'}),
       );
     }
-  }
-
-  /// Asks "Expense or Income?" with action buttons for one detected
-  /// transaction. Tapping a button saves it; tapping the body opens review.
-  Future<void> _showChoice(String reviewId, ParsedTransaction t) async {
-    final direction = t.isCredit ? 'Received' : 'Spent';
-    await NotificationServiceV2().showTransactionChoice(
-      title: 'Add as Expense or Income?',
-      body: '$direction ${AppFormat.currency(t.amount)}'
-          '${t.merchant != null ? ' at ${t.merchant}' : ''} — choose below.',
-      payload: jsonEncode({'source_type': 'live_choice', 'review_id': reviewId}),
-    );
-  }
-
-  /// Incremental catch-up: on every launch, scans the SMS inbox and adds bank
-  /// transactions newer than the last catch-up (deduped against saved + pending
-  /// items) to the Review Queue. This is what surfaces today's UPI messages
-  /// automatically without a manual scan.
-  Future<void> catchUpHistorical({int daysBack = 365}) async {
-    if (!await enabled) return;
-    await DatabaseLifecycleCoordinator.instance.waitUntilWritable();
-
-    // Don't prompt at startup — only proceed if already granted.
-    if (!await Permission.sms.status.isGranted) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final lastCatchUpAt = prefs.getInt(_lastCatchUpKey);
-
-    try {
-      final bundle = await SmsImportService.instance.scan(
-        options: SmsScanOptions(daysBack: daysBack),
-      );
-      final now = DateTime.now();
-      var added = 0;
-      for (final t in bundle.transactions) {
-        // Skip anything that arrived before the previous catch-up.
-        if (lastCatchUpAt != null &&
-            t.parsed.date.isBefore(
-              DateTime.fromMillisecondsSinceEpoch(lastCatchUpAt),
-            )) {
-          continue;
-        }
-        if (await _alreadyInApp(t.parsed)) continue;
-        await _addToReviewQueue(t.parsed);
-        added++;
-      }
-
-      // Record latest balance statements from SMS as canonical Evidence.
-      // Ingestion never directly mutates canonical account balances.
-      for (final hit in bundle.balances) {
-        await _applyBalance(hit);
-      }
-
-      // Auto-register detected credit cards and loans that don't exist yet.
-      await _autoRegisterCards(bundle.cards);
-      await _autoRegisterLoans(bundle.loans);
-
-      await prefs.setInt(_lastCatchUpKey, now.millisecondsSinceEpoch);
-      if (added > 0) {
-        await NotificationServiceV2().showNotification(
-          title: 'New transactions detected',
-          body: '$added new transaction${added == 1 ? '' : 's'} detected '
-              'from your SMS — review to confirm.',
-          category: 'generalUpdates',
-          payload: jsonEncode({'source_type': 'review'}),
-        );
-      }
-    } catch (_) {
-      // Non-fatal — the user can scan manually from SMS Import.
-    }
-  }
-
-  /// True when this parsed transaction already exists in the app (as a saved
-  /// canonical transaction or a pending review item) — avoids duplicates.
-  Future<bool> _alreadyInApp(ParsedTransaction parsed) async {
-    try {
-      final eventRepo = CanonicalEventRepository();
-      if (parsed.refId != null && parsed.refId!.trim().isNotEmpty) {
-        final existingRef =
-            await eventRepo.getEvidenceByExternalReference(parsed.refId!.trim());
-        if (existingRef != null) return true;
-      }
-      final fingerprint =
-          CanonicalTransactionAdapter.computeSha256(parsed.rawText);
-      final existingHash =
-          await eventRepo.getEvidenceByFingerprint(fingerprint);
-      if (existingHash != null) return true;
-
-      final sameAmount = await TransactionRepo().findByAmountAndDateRange(
-        amount: parsed.amount,
-        from: parsed.date.subtract(const Duration(minutes: 30)),
-        to: parsed.date.add(const Duration(minutes: 30)),
-      );
-      final normMerchant = _normalizeMerchantForDedup(parsed.merchant);
-      for (final t in sameAmount) {
-        if (_merchantsMatch(normMerchant, t.notes)) return true;
-      }
-      final pending = await ReviewRepo().getPending();
-      for (final r in pending) {
-        if (parsed.refId != null &&
-            parsed.refId!.trim().isNotEmpty &&
-            r.parsed.refId != null &&
-            r.parsed.refId!.trim() == parsed.refId!.trim()) {
-          return true;
-        }
-        final rHash =
-            CanonicalTransactionAdapter.computeSha256(r.parsed.rawText);
-        if (rHash == fingerprint) return true;
-        if ((r.parsed.amount - parsed.amount).abs() < 0.01 &&
-            _merchantsMatch(normMerchant, r.parsed.merchant) &&
-            r.parsed.date.difference(parsed.date).inMinutes.abs() <= 60) {
-          return true;
-        }
-      }
-    } catch (_) {}
-    return false;
   }
 
   Future<bool> get enabled async =>
@@ -276,8 +152,7 @@ class LiveSmsService with WidgetsBindingObserver {
       final pending = await _channel.invokeListMethod<dynamic>('getPendingSms');
       if (pending == null || pending.isEmpty) return;
       var added = 0;
-      String? singleReviewId;
-      ParsedTransaction? singleTransaction;
+      Transaction? singleTransaction;
       for (final item in pending) {
         String sender = '';
         String body = '';
@@ -295,25 +170,28 @@ class LiveSmsService with WidgetsBindingObserver {
         }
         if (body.trim().isEmpty) continue;
 
-        // Skip balance-only messages here — catchUpHistorical() will apply
-        // the correct latest balance per account from the full inbox scan.
-        final outcome = await _processBody(body, sender: sender, skipBalance: true);
+        final outcome = await _processBody(body, sender: sender, skipBalance: false);
         if (outcome.added) {
           added++;
-          singleReviewId = outcome.reviewId;
           singleTransaction = outcome.transaction;
         }
       }
       await _channel.invokeMethod('clearPendingSms');
-      if (added == 1 && singleReviewId != null && singleTransaction != null) {
-        await _showChoice(singleReviewId, singleTransaction);
+      if (added == 1 && singleTransaction != null) {
+        final dir = singleTransaction.type == 'income' ? 'Received' : 'Spent';
+        final merchant = singleTransaction.notes.isNotEmpty ? ' at ${singleTransaction.notes}' : '';
+        await NotificationServiceV2().showNotification(
+          title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
+          body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+          category: 'generalUpdates',
+          payload: jsonEncode({'source_type': 'activity'}),
+        );
       } else if (added > 1) {
         await NotificationServiceV2().showNotification(
-          title: 'Transactions detected',
-          body: '$added transactions detected — '
-              'review to confirm or delete.',
+          title: '$added transactions recorded',
+          body: '$added new transactions added from SMS — tap to view in Activity.',
           category: 'generalUpdates',
-          payload: jsonEncode({'source_type': 'review'}),
+          payload: jsonEncode({'source_type': 'activity'}),
         );
       }
     } catch (_) {
@@ -321,37 +199,263 @@ class LiveSmsService with WidgetsBindingObserver {
     }
   }
 
-  /// Processes a single SMS body. Returns what it did so the caller can
-  /// consolidate the notification.
+  /// Resolves the instrument (credit card, bank, or digital wallet) for a transaction.
+  Future<({String? accountId, String source, String instrumentType})> _classifyAndResolveAccount({
+    required ParsedTransaction parsed,
+    required String sender,
+    required String body,
+    BalanceHit? balanceHit,
+  }) async {
+    final lowerSender = sender.toLowerCase();
+    final lowerBody = body.toLowerCase();
+
+    // 1. Check for Credit Card
+    final cards = await CreditRepo().getAll();
+    final matchedCardByLast4 = (parsed.last4 != null && parsed.last4!.isNotEmpty)
+        ? cards.where((c) => c.last4 == parsed.last4).firstOrNull
+        : null;
+
+    final isCcSignal = matchedCardByLast4 != null ||
+        balanceHit?.kind == BalanceKind.creditCard ||
+        lowerSender.contains('crd') ||
+        lowerSender.contains('card') ||
+        lowerSender.contains('cc') ||
+        lowerSender.contains('onecrd') ||
+        lowerSender.contains('bobcrd') ||
+        lowerSender.contains('sbicrd') ||
+        lowerSender.contains('jtedge') ||
+        lowerBody.contains('credit card') ||
+        lowerBody.contains('card ending') ||
+        lowerBody.contains('credit card ending');
+
+    if (isCcSignal) {
+      CreditCard? matchedCard = matchedCardByLast4;
+      if (matchedCard == null && parsed.last4 != null && parsed.last4!.isNotEmpty) {
+        matchedCard = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      }
+      if (matchedCard == null && parsed.bankName != null) {
+        final kw = parsed.bankName!.toLowerCase();
+        matchedCard = cards.where((c) =>
+          c.name.toLowerCase().contains(kw) ||
+          c.bank.toLowerCase().contains(kw),
+        ).firstOrNull;
+      }
+      if (matchedCard != null) {
+        return (
+          accountId: matchedCard.id,
+          source: 'credit_card_purchase',
+          instrumentType: 'credit_card',
+        );
+      }
+      // If recognized as credit card but not yet in CreditRepo, auto-create
+      if (parsed.bankName != null || parsed.last4 != null) {
+        final cardName = '${parsed.bankName ?? 'Credit'} Card';
+        final newCard = CreditCard(
+          name: cardName,
+          bank: parsed.bankName ?? 'Credit Card',
+          last4: parsed.last4 ?? '',
+          limitAmount: 0,
+          usedAmount: 0,
+        );
+        final newId = await CreditRepo().insert(newCard);
+        return (
+          accountId: newId,
+          source: 'credit_card_purchase',
+          instrumentType: 'credit_card',
+        );
+      }
+    }
+
+    // 2. Check for Digital Wallet
+    final isWalletSignal = balanceHit?.kind == BalanceKind.wallet ||
+        lowerSender.contains('qcamzn') ||
+        lowerSender.contains('juspay') ||
+        lowerSender.contains('ipaytm') ||
+        lowerSender.contains('irsmsa') ||
+        lowerBody.contains('wallet');
+
+    if (isWalletSignal) {
+      final accounts = await AccountRepo().getAll();
+      final walletAcc = accounts.where((a) =>
+        a.accountType == 'wallet' ||
+        a.name.toLowerCase().contains('wallet') ||
+        a.bank.toLowerCase().contains('wallet') ||
+        a.name.toLowerCase().contains('paytm') ||
+        a.name.toLowerCase().contains('amazon pay'),
+      ).firstOrNull;
+      if (walletAcc != null) {
+        return (
+          accountId: walletAcc.id,
+          source: 'sms',
+          instrumentType: 'wallet',
+        );
+      }
+      // Auto-create wallet account
+      final walletName = lowerSender.contains('qcamzn')
+          ? 'Amazon Pay Wallet'
+          : (lowerSender.contains('ipaytm') ? 'Paytm Wallet' : 'Digital Wallet');
+      final newWallet = BankAccount(
+        name: walletName,
+        bank: walletName,
+        accountType: 'wallet',
+        balance: 0,
+      );
+      final newId = await AccountRepo().insertAccount(newWallet);
+      return (
+        accountId: newId,
+        source: 'sms',
+        instrumentType: 'wallet',
+      );
+    }
+
+    // 3. Bank Account matching
+    final accounts = await AccountRepo().getAll();
+    BankAccount? matchedBank;
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      matchedBank = accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
+    }
+    if (matchedBank == null && parsed.bankName != null) {
+      final kw = parsed.bankName!.toLowerCase();
+      final matching = accounts.where((a) =>
+        a.bank.toLowerCase().contains(kw) ||
+        a.name.toLowerCase().contains(kw),
+      ).toList();
+      if (matching.isNotEmpty) matchedBank = matching.first;
+    }
+
+    if (matchedBank != null) {
+      return (
+        accountId: matchedBank.id,
+        source: 'sms',
+        instrumentType: matchedBank.accountType == 'wallet' ? 'wallet' : 'bank',
+      );
+    }
+
+    // If explicit bank name or last4 was detected, auto-create bank account
+    if (parsed.bankName != null || (parsed.last4 != null && parsed.last4!.isNotEmpty)) {
+      final bankTitle = parsed.bankName ?? 'Bank';
+      final accName = '$bankTitle Account${parsed.last4 != null && parsed.last4!.isNotEmpty ? ' (..${parsed.last4})' : ''}';
+      final newAcc = BankAccount(
+        name: accName,
+        bank: bankTitle,
+        last4: parsed.last4 ?? '',
+        accountType: 'savings',
+        balance: 0,
+      );
+      final newId = await AccountRepo().insertAccount(newAcc);
+      return (
+        accountId: newId,
+        source: 'sms',
+        instrumentType: 'bank',
+      );
+    }
+
+    // 4. Safe Unknown: When instrument cannot be safely determined, do NOT arbitrarily corrupt an account
+    return (
+      accountId: null,
+      source: 'sms',
+      instrumentType: 'unknown',
+    );
+  }
+
+  /// Processes a single SMS body.
+  /// Automatically creates canonical transaction, applies balance update,
+  /// learns merchant category associations, and returns the result.
   Future<
     ({
       bool added,
       String? balanceNote,
-      String? reviewId,
-      ParsedTransaction? transaction,
+      Transaction? transaction,
     })
   >
   _processBody(String body, {String sender = '', bool skipBalance = false}) async {
     if (body.trim().isEmpty) {
-      return (added: false, balanceNote: null, reviewId: null, transaction: null);
+      return (added: false, balanceNote: null, transaction: null);
     }
 
     final result = SmsImportService.instance.classifyMessage(body, sender);
+    Transaction? createdTx;
+    String? balanceNote;
 
+    // 1. Transaction processing
     if (result.transaction != null) {
-      // Auto-detect: add to the Review Queue with the parsed info. The user
-      // approves it (becomes an expense/income + updates the account balance)
-      // or rejects it to delete the error — or answers Expense/Income right
-      // in the notification.
-      final reviewId = await _addToReviewQueue(result.transaction!);
-      return (
-        added: reviewId != null,
-        balanceNote: null,
-        reviewId: reviewId,
-        transaction: result.transaction,
-      );
+      final parsed = result.transaction!;
+      if (!await _alreadyInApp(parsed)) {
+        final type = parsed.isCredit ? 'income' : 'expense';
+
+        // Resolve Category: Merchant memory -> static rules -> 'Miscellaneous'
+        final resolution = await resolveCategoryForText(
+          rawText: parsed.rawText,
+          merchant: parsed.merchant,
+          type: type,
+        );
+
+        // Classify Instrument & Resolve Account (Credit Card, Bank, or Wallet)
+        final instrument = await _classifyAndResolveAccount(
+          parsed: parsed,
+          sender: sender,
+          body: body,
+          balanceHit: result.balance,
+        );
+
+        final rawMerchantOrNote = parsed.merchant ??
+            (parsed.rawText.length > 80 ? parsed.rawText.substring(0, 80) : parsed.rawText);
+        final notes = TextFormatter.normalizeName(rawMerchantOrNote);
+
+        final isCreditCardPurchase = instrument.source == 'credit_card_purchase' && type == 'expense';
+
+        final externalRef = parsed.refId ??
+            'live_sms|${parsed.date.millisecondsSinceEpoch}|${parsed.amount.toStringAsFixed(2)}';
+
+        final tx = Transaction(
+          amount: parsed.amount,
+          userId: 'offline_user',
+          type: type,
+          categoryId: resolution.id,
+          accountId: instrument.accountId,
+          date: parsed.date,
+          notes: notes,
+          source: isCreditCardPurchase ? 'credit_card_purchase' : 'sms',
+          externalRef: externalRef,
+        );
+
+        // Create transaction in canonical double-entry ledger
+        await FinancialTransactionService().createTransaction(tx);
+        createdTx = tx;
+
+        // Gamification XP
+        try {
+          await GamificationService.instance.addXP(10, isTransaction: true);
+        } catch (_) {}
+
+        // Learn Merchant Rule (notes/keyword -> category & account)
+        if (resolution.id != null && notes.isNotEmpty) {
+          try {
+            final keyword = MerchantExtractor.extract(notes);
+            if (keyword.length >= 3) {
+              await MerchantRuleRepo().upsert(
+                keyword,
+                resolution.id!,
+                accountId: instrument.accountId,
+              );
+            }
+          } catch (_) {}
+        }
+
+        // Learn Merchant Memory for repeat transactions
+        if (parsed.merchant != null && resolution.name != null) {
+          try {
+            await SmartCategoryClassifier.instance.learn(
+              rawText: parsed.rawText,
+              merchant: parsed.merchant,
+              category: resolution.name!,
+            );
+          } catch (_) {}
+        }
+      }
     }
 
+    // 2. Balance update from message itself
     if (result.balance != null && !skipBalance) {
       final hit = result.balance!;
       final applied = await _applyBalance(hit);
@@ -363,44 +467,18 @@ class LiveSmsService with WidgetsBindingObserver {
             : hit.kind == BalanceKind.wallet
             ? 'Wallet balance'
             : 'Loan balance';
-        final note = '$kind set to ${AppFormat.currency(hit.amount)}';
-        return (
-          added: false,
-          balanceNote: note,
-          reviewId: null,
-          transaction: null,
-        );
+        balanceNote = '$kind set to ${AppFormat.currency(hit.amount)}';
       }
     }
 
     return (
-      added: false,
-      balanceNote: null,
-      reviewId: null,
-      transaction: null,
+      added: createdTx != null,
+      balanceNote: balanceNote,
+      transaction: createdTx,
     );
   }
 
-/// Inserts a pending review item (skipping it when the same transaction is
-/// already saved or pending). Returns its id, or null on failure/duplicate.
-Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
-    try {
-      if (await _alreadyInApp(parsed)) return null;
-      final item = ReviewItem(
-        rawSource: 'live_sms',
-        parsed: parsed,
-        confidence: parsed.confidence,
-      );
-      await ReviewRepo().insert(item);
-      return item.id;
-    } catch (_) {
-      // Non-fatal.
-      return null;
-    }
-  }
-
-  /// Records a detected balance statement as canonical [Evidence] without mutating
-  /// account balances directly. Returns true when recorded.
+  /// Records a detected balance statement and updates the canonical account/card balance.
   Future<bool> _applyBalance(BalanceHit hit) async {
     try {
       final fingerprint = CanonicalTransactionAdapter.computeSha256(hit.body);
@@ -419,85 +497,81 @@ Future<String?> _addToReviewQueue(ParsedTransaction parsed) async {
         createdAt: DateTime.now().toUtc(),
       );
       await CanonicalEventRepository().insertEvidence(ev);
+
+      // Reconcile and update account balance in canonical repositories
+      if (hit.kind == BalanceKind.creditCard) {
+        final cards = await CreditRepo().getAll();
+        CreditCard? card;
+        if (hit.last4 != null && hit.last4!.isNotEmpty) {
+          card = cards.where((c) => c.last4 == hit.last4).firstOrNull;
+        }
+        if (card == null && hit.bankKeyword != null) {
+          final kw = hit.bankKeyword!.toLowerCase();
+          card = cards.where((c) =>
+            c.name.toLowerCase().contains(kw) ||
+            c.bank.toLowerCase().contains(kw),
+          ).firstOrNull;
+        }
+        if (card != null) {
+          await CreditRepo().updateBalance(card.id, hit.amount);
+          return true;
+        }
+      } else {
+        // Bank or Wallet
+        final accounts = await AccountRepo().getAll();
+        BankAccount? account;
+        if (hit.last4 != null && hit.last4!.isNotEmpty) {
+          account = accounts.where((a) => a.last4 == hit.last4).firstOrNull;
+        }
+        if (account == null && hit.kind == BalanceKind.wallet) {
+          account = accounts.where((a) => a.accountType == 'wallet').firstOrNull;
+        }
+        if (account == null && hit.bankKeyword != null) {
+          final kw = hit.bankKeyword!.toLowerCase();
+          account = accounts.where((a) =>
+            a.name.toLowerCase().contains(kw) ||
+            a.bank.toLowerCase().contains(kw),
+          ).firstOrNull;
+        }
+        if (account != null) {
+          await AccountRepo().updateBalance(account.id, hit.amount);
+          return true;
+        }
+      }
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  /// Auto-registers detected credit cards that don't exist yet.
-  Future<void> _autoRegisterCards(List<DetectedCard> cards) async {
-    if (cards.isEmpty) return;
+  /// True when this parsed transaction already exists in the app — avoids duplicates.
+  Future<bool> _alreadyInApp(ParsedTransaction parsed) async {
     try {
-      final existing = await CreditRepo().getAll();
-      for (final card in cards) {
-        // Match by last4 first, then by bank keyword.
-        final matchByLast4 = (card.last4 != null && card.last4!.isNotEmpty)
-            ? existing.any((c) => c.last4 == card.last4)
-            : false;
-        final matchByKw = (card.bank.isNotEmpty)
-            ? existing.any((c) =>
-                c.bank.toLowerCase().contains(card.bank.toLowerCase()) ||
-                c.name.toLowerCase().contains(card.bank.toLowerCase()))
-            : false;
-        if (!matchByLast4 && !matchByKw) {
-          // Store the sender keyword in the bank field so _applyBalance can
-          // match by keyword when last4 is unavailable (e.g. bill messages).
-          final bankField = card.keyword != null && card.keyword!.isNotEmpty
-              ? '${card.bank} [${card.keyword}]'
-              : card.bank;
-          AppLogger.d(
-            '[LiveSms] _autoRegisterCards: auto-registering detected credit card',
-          );
-          await CreditRepo().insert(
-            CreditCard(
-              name: '${card.bank} Card',
-              bank: bankField,
-              last4: card.last4 ?? '',
-              limitAmount: 0,
-              usedAmount: card.outstanding,
-            ),
-          );
-        }
+      final eventRepo = CanonicalEventRepository();
+      if (parsed.refId != null && parsed.refId!.trim().isNotEmpty) {
+        final existingRef =
+            await eventRepo.getEvidenceByExternalReference(parsed.refId!.trim());
+        if (existingRef != null) return true;
+      }
+      final fingerprint =
+          CanonicalTransactionAdapter.computeSha256(parsed.rawText);
+      final existingHash =
+          await eventRepo.getEvidenceByFingerprint(fingerprint);
+      if (existingHash != null) return true;
+
+      final sameAmount = await TransactionRepo().findByAmountAndDateRange(
+        amount: parsed.amount,
+        from: parsed.date.subtract(const Duration(minutes: 30)),
+        to: parsed.date.add(const Duration(minutes: 30)),
+      );
+      final normMerchant = _normalizeMerchantForDedup(parsed.merchant);
+      for (final t in sameAmount) {
+        if (_merchantsMatch(normMerchant, t.notes)) return true;
       }
     } catch (_) {}
+    return false;
   }
 
-  /// Auto-registers detected loans that don't exist yet.
-  Future<void> _autoRegisterLoans(List<DetectedLoan> loans) async {
-    if (loans.isEmpty) return;
-    try {
-      final existing = await LoanRepo().getLoans();
-      for (final loan in loans) {
-        final kw = loan.bank.toLowerCase();
-        final alreadyExists = existing.any(
-          (l) =>
-              l.bank.toLowerCase().contains(kw) ||
-              l.name.toLowerCase().contains(kw),
-        );
-        if (!alreadyExists) {
-          AppLogger.d(
-            '[LiveSms] _autoRegisterLoans: auto-registering detected loan',
-          );
-          await LoanRepo().insertLoan(
-            Loan(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              name: '${loan.bank} Loan',
-              bank: loan.bank,
-              total: loan.outstanding,
-              interestRate: 0,
-              tenureMonths: 0,
-              monthlyInstallment: 0,
-              startDate: DateTime.now(),
-              paidAmount: 0,
-              loanStatus: 'active',
-              dueDay: 1,
-            ),
-          );
-        }
-      }
-    } catch (_) {}
-  }
 
 
   /// Normalizes a merchant name for dedup comparison: lowercases, strips

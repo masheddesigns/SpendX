@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/alerts/providers/alert_providers.dart';
-import '../../features/review_queue/providers/review_providers.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
@@ -12,11 +11,9 @@ import '../feedback_screen.dart';
 import '../gamification_detail_screen.dart';
 import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
-import '../review/review_queue_screen.dart';
 import '../settings/backup_hub_screen.dart';
 import '../settings/profile_settings_screen.dart';
 import '../smart_import_screen.dart';
-import '../sms_import_screen.dart';
 
 /// SpendX 2.0 System & Intelligence Workspace (More Screen).
 ///
@@ -31,11 +28,8 @@ class MoreScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reviewCount = ref.watch(reviewQueueCountProvider);
     final alertCount = ref.watch(activeAlertsProvider).valueOrNull?.length ?? 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final pendingReviewCount = reviewCount.valueOrNull ?? 0;
 
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -65,17 +59,6 @@ class MoreScreen extends ConsumerWidget {
                   ),
                   _buildDivider(isDark),
                   _MoreGlassRow(
-                    icon: Icons.rate_review_rounded,
-                    iconColor: AppTheme.semanticWarning,
-                    title: 'Review Queue',
-                    subtitle: 'Approve & confirm imported transactions',
-                    badgeCount: pendingReviewCount > 0 ? pendingReviewCount : null,
-                    badgeColor: AppTheme.semanticWarning,
-                    isDark: isDark,
-                    onTap: () => _push(context, const ReviewQueueScreen()),
-                  ),
-                  _buildDivider(isDark),
-                  _MoreGlassRow(
                     icon: Icons.notifications_rounded,
                     iconColor: const Color(0xFFF59E0B),
                     title: 'Notifications & Alerts',
@@ -93,15 +76,6 @@ class MoreScreen extends ConsumerWidget {
                     subtitle: 'Import CSV bank statements or shared receipts',
                     isDark: isDark,
                     onTap: () => _push(context, const SmartImportScreen()),
-                  ),
-                  _buildDivider(isDark),
-                  _MoreGlassRow(
-                    icon: Icons.sms_rounded,
-                    iconColor: const Color(0xFF10B981),
-                    title: 'SMS Import',
-                    subtitle: 'Scan and process transaction SMS messages',
-                    isDark: isDark,
-                    onTap: () => _push(context, const SmsImportScreen()),
                   ),
                 ],
               ),

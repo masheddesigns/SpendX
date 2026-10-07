@@ -13,6 +13,7 @@ import '../../models/credit_card.dart';
 import '../../models/transaction.dart';
 import '../../models/category.dart';
 import '../../services/settings_service.dart';
+import '../../services/smart_category_classifier.dart';
 import '../../services/haptic_service.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/app_text_field.dart' as shared;
@@ -192,7 +193,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _maybeAutoSelectCategoryFromNotes() async {
-    if (_selectedCategoryId != null || _availableCategories.isEmpty) {
+    if (_didExplicitCategorySelection ||
+        _selectedCategoryId != null ||
+        _availableCategories.isEmpty) {
       return;
     }
 
@@ -267,6 +270,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     // Account is optional — transaction can exist without a linked account
 
+    final selectedMethod = _availablePaymentMethods.where((m) => m.id == _selectedPaymentMethodId).firstOrNull;
+    final isCreditCard = selectedMethod?.type == 'credit_card';
+
     final newTransaction = Transaction(
       id: widget.existingTransaction?.id,
       userId: widget.existingTransaction?.userId ?? 'offline_user',
@@ -277,7 +283,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       date: _selectedDate,
       notes: TextFormatter.normalizeName(_notesController.text),
       tags: const [],
-      source: 'manual',
+      source: isCreditCard ? 'credit_card_purchase' : (widget.existingTransaction?.source ?? 'manual'),
       relatedEntityId: null,
       location: null,
       createdAt: widget.existingTransaction?.createdAt,
@@ -292,15 +298,25 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       await ref.read(addTransactionProvider)(newTransaction);
     }
 
-    if (_didExplicitCategorySelection &&
-        _selectedCategoryId != null &&
+    if (_selectedCategoryId != null &&
         _notesController.text.trim().isNotEmpty) {
       unawaited(
         ref.read(learnMerchantRuleProvider)(
           text: _notesController.text,
           categoryId: _selectedCategoryId!,
+          accountId: _selectedPaymentMethodId,
         ),
       );
+      final cat = _availableCategories.where((c) => c.id == _selectedCategoryId).firstOrNull;
+      if (cat != null) {
+        unawaited(
+          SmartCategoryClassifier.instance.learn(
+            rawText: _notesController.text,
+            merchant: _notesController.text,
+            category: cat.name,
+          ),
+        );
+      }
     }
 
     unawaited(
