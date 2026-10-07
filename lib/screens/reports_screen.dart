@@ -12,6 +12,7 @@ import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/skeleton_loader.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
 import '../shared/widgets/glass/spendx_scaffold.dart';
+import '../shared/widgets/glass/spendx_states.dart';
 import '../shared/widgets/spendx_app_bar.dart';
 
 /// Full financial reports screen with 5 tabs.
@@ -625,18 +626,13 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 60, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: 16),
-          Text(text, style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16)),
-        ],
+    return Center(
+      child: SpendXEmptyState(
+        icon: icon,
+        title: text,
+        subtitle: 'Data will appear here once relevant records are added.',
       ),
-    ));
+    );
   }
 }
 
