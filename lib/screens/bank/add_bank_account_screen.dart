@@ -16,7 +16,8 @@ import '../../shared/widgets/glass/spendx_glass_button.dart';
 
 class AddBankAccountScreen extends ConsumerStatefulWidget {
   final BankAccount? existing;
-  const AddBankAccountScreen({super.key, this.existing});
+  final String? initialType;
+  const AddBankAccountScreen({super.key, this.existing, this.initialType});
 
   @override
   ConsumerState<AddBankAccountScreen> createState() =>
@@ -51,7 +52,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     _balanceCtrl = TextEditingController(
       text: e?.balance.toStringAsFixed(0) ?? '',
     );
-    _accountType = e?.accountType ?? 'savings';
+    _accountType = e?.accountType ?? widget.initialType ?? 'savings';
     _isAsset = e?.isAsset ?? true;
 
     _nameCtrl.addListener(() => setState(() {}));

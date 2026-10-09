@@ -100,3 +100,5 @@ android/keystore/
 *.jks
 *.keystore
 
+# Test run environments and generated validation artifacts
+test/rdv_validation/

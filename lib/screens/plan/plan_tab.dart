@@ -12,6 +12,7 @@ import '../../features/timeline/financial_timeline_provider.dart';
 import '../../models/goal.dart';
 import '../../services/adaptive_personality.dart';
 import '../../services/financial_identity_service.dart';
+import '../../features/salary/screens/salary_screen.dart';
 import '../../services/money_score_service.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/spendx_glass.dart';
@@ -20,6 +21,7 @@ import '../../utils/app_format.dart';
 import '../goals/add_goal_screen.dart';
 import '../goals/goals_screen.dart';
 import '../home/transactions_screen.dart';
+import '../recurring/recurring_payments_screen.dart';
 
 /// SpendX 2.0 Forward-Looking Financial Workspace (Planning Screen).
 ///
@@ -246,6 +248,72 @@ class PlanTab extends ConsumerWidget {
             },
             loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
             error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+          ),
+
+          // ── Recurring Payments Section ─────────────────────
+          const SliverToBoxAdapter(child: SizedBox(height: 14)),
+          SliverToBoxAdapter(
+            child: SpendXSectionHeader(
+              title: 'Recurring Payments',
+              actionLabel: 'View All',
+              onAction: () => Navigator.push(
+                context,
+                AppPageRoute(
+                  builder: (_) => const RecurringPaymentsScreen(),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: _PlanFeatureLinkTile(
+                icon: Icons.repeat_rounded,
+                iconColor: const Color(0xFF6366F1),
+                title: 'Subscriptions & Bills',
+                subtitle: 'Manage upcoming recurring charges, subscriptions & bills',
+                isDark: isDark,
+                onTap: () => Navigator.push(
+                  context,
+                  AppPageRoute(
+                    builder: (_) => const RecurringPaymentsScreen(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Income & Salary Section ─────────────────────────
+          const SliverToBoxAdapter(child: SizedBox(height: 14)),
+          SliverToBoxAdapter(
+            child: SpendXSectionHeader(
+              title: 'Income & Salary',
+              actionLabel: 'Details',
+              onAction: () => Navigator.push(
+                context,
+                AppPageRoute(
+                  builder: (_) => const SalaryScreen(),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: _PlanFeatureLinkTile(
+                icon: Icons.payments_rounded,
+                iconColor: const Color(0xFF10B981),
+                title: 'Salary & Paycheck Structure',
+                subtitle: 'Employer details, salary schedule, deductions & pay history',
+                isDark: isDark,
+                onTap: () => Navigator.push(
+                  context,
+                  AppPageRoute(
+                    builder: (_) => const SalaryScreen(),
+                  ),
+                ),
+              ),
+            ),
           ),
 
           // Generous bottom clearance above floating navigation bar
@@ -884,6 +952,88 @@ class _EmptyGoalsGlassCard extends StatelessWidget {
               child: const Text('Create Goal'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanFeatureLinkTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _PlanFeatureLinkTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: SpendXGlassSurface(
+          level: SpendXGlassLevel.base,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppTheme.darkTextPrimary
+                            : AppTheme.lightTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: isDark
+                    ? const Color(0xFF64748B)
+                    : const Color(0xFF94A3B8),
+              ),
+            ],
+          ),
         ),
       ),
     );

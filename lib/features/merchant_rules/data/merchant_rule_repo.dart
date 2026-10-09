@@ -41,7 +41,7 @@ class MerchantRuleRepo {
   MerchantRuleRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
 
   Future<DatabaseExecutor> get _database async {
-    if (_customExecutor != null) return _customExecutor!;
+    if (_customExecutor != null) return _customExecutor;
     return await AppDatabase.instance.database;
   }
 

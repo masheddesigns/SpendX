@@ -222,44 +222,23 @@ class LiveSmsService with WidgetsBindingObserver {
         lowerSender.contains('cc') ||
         lowerSender.contains('onecrd') ||
         lowerSender.contains('bobcrd') ||
+        lowerSender.contains('bobone') ||
         lowerSender.contains('sbicrd') ||
         lowerSender.contains('jtedge') ||
         lowerBody.contains('credit card') ||
         lowerBody.contains('card ending') ||
+        lowerBody.contains('card xx') ||
         lowerBody.contains('credit card ending');
 
     if (isCcSignal) {
-      CreditCard? matchedCard = matchedCardByLast4;
-      if (matchedCard == null && parsed.last4 != null && parsed.last4!.isNotEmpty) {
-        matchedCard = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
-      }
-      if (matchedCard == null && parsed.bankName != null) {
-        final kw = parsed.bankName!.toLowerCase();
-        matchedCard = cards.where((c) =>
-          c.name.toLowerCase().contains(kw) ||
-          c.bank.toLowerCase().contains(kw),
-        ).firstOrNull;
-      }
-      if (matchedCard != null) {
+      final card = await _resolveOrCreateCard(
+        parsed: parsed,
+        matchedCardByLast4: matchedCardByLast4,
+        cards: cards,
+      );
+      if (card != null) {
         return (
-          accountId: matchedCard.id,
-          source: 'credit_card_purchase',
-          instrumentType: 'credit_card',
-        );
-      }
-      // If recognized as credit card but not yet in CreditRepo, auto-create
-      if (parsed.bankName != null || parsed.last4 != null) {
-        final cardName = '${parsed.bankName ?? 'Credit'} Card';
-        final newCard = CreditCard(
-          name: cardName,
-          bank: parsed.bankName ?? 'Credit Card',
-          last4: parsed.last4 ?? '',
-          limitAmount: 0,
-          usedAmount: 0,
-        );
-        final newId = await CreditRepo().insert(newCard);
-        return (
-          accountId: newId,
+          accountId: card.id,
           source: 'credit_card_purchase',
           instrumentType: 'credit_card',
         );
@@ -378,19 +357,89 @@ class LiveSmsService with WidgetsBindingObserver {
     String? balanceNote;
 
     // 1. Transaction processing
-    if (result.transaction != null) {
+    if (result.transaction != null && result.eventType != SmsEventType.failed) {
       final parsed = result.transaction!;
-      if (!await _alreadyInApp(parsed)) {
-        final type = parsed.isCredit ? 'income' : 'expense';
 
-        // Resolve Category: Merchant memory -> static rules -> 'Miscellaneous'
+      if (result.eventType == SmsEventType.creditCardPayment) {
+        // --- CREDIT CARD BILL PAYMENT ---
+        // Zero income, zero expense.
+        // Decreases card liability (relatedEntityId), decreases paying bank asset (accountId).
+        final matchedCard = await _resolveTargetCard(parsed: parsed, sender: sender, body: body);
+
+        // Check if we can match an existing bank debit for this same payment
+        final matchedDebit = await _findRecentBankDebitForCcPayment(
+          amount: parsed.amount,
+          date: parsed.date,
+          cardLast4: parsed.last4 ?? matchedCard?.last4,
+          issuer: parsed.bankName ?? matchedCard?.bank,
+          confirmationRef: parsed.refId,
+        );
+
+        if (matchedDebit != null) {
+          // Cross-message matching: We already recorded the bank debit (e.g. UPI spend to CC).
+          // Convert that bank debit into a canonical credit_payment event pointing to this card,
+          // instead of creating duplicate transactions!
+          final updatedTx = matchedDebit.copyWith(
+            type: 'credit_payment',
+            source: 'credit_card_payment',
+            relatedEntityId: matchedCard?.id,
+            notes: 'Credit Card Bill Payment (${matchedCard?.name ?? "Card"})',
+          );
+          await FinancialTransactionService().editTransaction(
+            oldTransaction: matchedDebit,
+            newTransaction: updatedTx,
+          );
+          createdTx = updatedTx;
+        } else if (!await _alreadyInApp(parsed)) {
+          // Standalone CC payment confirmation received
+          final externalRef = parsed.refId ??
+              'live_sms_cc_pay|${parsed.date.millisecondsSinceEpoch}|${parsed.amount.toStringAsFixed(2)}';
+
+          // Try to deduce paying bank if mentioned in SMS
+          final payingBankId = await _findPayingBankFromText(body);
+
+          final tx = Transaction(
+            amount: parsed.amount,
+            userId: 'offline_user',
+            type: 'credit_payment',
+            accountId: payingBankId, // paying bank (credited leg) or null (suspense)
+            relatedEntityId: matchedCard?.id, // card liability (debited leg)
+            date: parsed.date,
+            notes: 'Payment towards ${matchedCard?.name ?? (parsed.bankName != null ? "${parsed.bankName} Credit Card" : "Credit Card")}',
+            source: 'credit_card_payment',
+            externalRef: externalRef,
+          );
+
+          await FinancialTransactionService().createTransaction(tx);
+          createdTx = tx;
+        }
+      } else if (!await _alreadyInApp(parsed)) {
+        // --- OTHER TRANSACTIONS (Card purchase, refund, bank expense/income, etc.) ---
+        final isCcRefund = result.eventType == SmsEventType.refund &&
+            (parsed.method == 'card' || body.toLowerCase().contains('card'));
+
+        final String type;
+        final String source;
+
+        if (isCcRefund) {
+          type = 'refund';
+          source = 'credit_card_purchase';
+        } else if (result.eventType == SmsEventType.creditCardPurchase) {
+          type = 'credit_card_purchase';
+          source = 'credit_card_purchase';
+        } else {
+          type = parsed.isCredit ? 'income' : 'expense';
+          source = 'sms';
+        }
+
+        // Resolve Category
         final resolution = await resolveCategoryForText(
           rawText: parsed.rawText,
           merchant: parsed.merchant,
-          type: type,
+          type: (type == 'credit_card_purchase') ? 'expense' : (type == 'refund' ? 'expense' : type),
         );
 
-        // Classify Instrument & Resolve Account (Credit Card, Bank, or Wallet)
+        // Classify Instrument & Resolve Account
         final instrument = await _classifyAndResolveAccount(
           parsed: parsed,
           sender: sender,
@@ -402,10 +451,12 @@ class LiveSmsService with WidgetsBindingObserver {
             (parsed.rawText.length > 80 ? parsed.rawText.substring(0, 80) : parsed.rawText);
         final notes = TextFormatter.normalizeName(rawMerchantOrNote);
 
-        final isCreditCardPurchase = instrument.source == 'credit_card_purchase' && type == 'expense';
-
         final externalRef = parsed.refId ??
             'live_sms|${parsed.date.millisecondsSinceEpoch}|${parsed.amount.toStringAsFixed(2)}';
+
+        final effectiveSource = (instrument.instrumentType == 'credit_card')
+            ? 'credit_card_purchase'
+            : source;
 
         final tx = Transaction(
           amount: parsed.amount,
@@ -415,7 +466,7 @@ class LiveSmsService with WidgetsBindingObserver {
           accountId: instrument.accountId,
           date: parsed.date,
           notes: notes,
-          source: isCreditCardPurchase ? 'credit_card_purchase' : 'sms',
+          source: effectiveSource,
           externalRef: externalRef,
         );
 
@@ -428,7 +479,7 @@ class LiveSmsService with WidgetsBindingObserver {
           await GamificationService.instance.addXP(10, isTransaction: true);
         } catch (_) {}
 
-        // Learn Merchant Rule (notes/keyword -> category & account)
+        // Learn Merchant Rule
         if (resolution.id != null && notes.isNotEmpty) {
           try {
             final keyword = MerchantExtractor.extract(notes);
@@ -442,7 +493,7 @@ class LiveSmsService with WidgetsBindingObserver {
           } catch (_) {}
         }
 
-        // Learn Merchant Memory for repeat transactions
+        // Learn Merchant Memory
         if (parsed.merchant != null && resolution.name != null) {
           try {
             await SmartCategoryClassifier.instance.learn(
@@ -463,7 +514,7 @@ class LiveSmsService with WidgetsBindingObserver {
         final kind = hit.kind == BalanceKind.bank
             ? 'Bank balance'
             : hit.kind == BalanceKind.creditCard
-            ? 'Credit card outstanding'
+            ? (hit.isAvailableLimit ? 'Available credit limit' : 'Credit card outstanding')
             : hit.kind == BalanceKind.wallet
             ? 'Wallet balance'
             : 'Loan balance';
@@ -513,7 +564,16 @@ class LiveSmsService with WidgetsBindingObserver {
           ).firstOrNull;
         }
         if (card != null) {
-          await CreditRepo().updateBalance(card.id, hit.amount);
+          if (hit.isAvailableLimit) {
+            // If card limit is known and > 0, derived outstanding = limit - available limit
+            if (card.limitAmount > 0 && hit.amount <= card.limitAmount) {
+              final derivedOutstanding = card.limitAmount - hit.amount;
+              await CreditRepo().updateBalance(card.id, derivedOutstanding);
+            }
+          } else {
+            // Direct outstanding dues reported
+            await CreditRepo().updateBalance(card.id, hit.amount);
+          }
           return true;
         }
       } else {
@@ -612,5 +672,172 @@ class LiveSmsService with WidgetsBindingObserver {
       if (shared >= 5) return true;
     }
     return false;
+  }
+
+  /// Resolves an existing card or auto-creates a new one in CreditRepo.
+  Future<CreditCard?> _resolveOrCreateCard({
+    required ParsedTransaction parsed,
+    CreditCard? matchedCardByLast4,
+    required List<CreditCard> cards,
+  }) async {
+    CreditCard? matchedCard = matchedCardByLast4;
+    if (matchedCard == null && parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      matchedCard = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
+    }
+    if (matchedCard == null && parsed.bankName != null) {
+      final kw = parsed.bankName!.toLowerCase();
+      matchedCard = cards.where((c) =>
+        c.name.toLowerCase().contains(kw) ||
+        c.bank.toLowerCase().contains(kw),
+      ).firstOrNull;
+    }
+    if (matchedCard != null) return matchedCard;
+
+    if (parsed.bankName != null || parsed.last4 != null) {
+      final cardName = '${parsed.bankName ?? 'Credit'} Card';
+      final newCard = CreditCard(
+        name: cardName,
+        bank: parsed.bankName ?? 'Credit Card',
+        last4: parsed.last4 ?? '',
+        limitAmount: 0,
+        usedAmount: 0,
+      );
+      final newId = await CreditRepo().insert(newCard);
+      return newCard.copyWith(id: newId);
+    }
+    return null;
+  }
+
+  /// Resolves the target card for a credit card bill payment.
+  Future<CreditCard?> _resolveTargetCard({
+    required ParsedTransaction parsed,
+    required String sender,
+    required String body,
+  }) async {
+    final cards = await CreditRepo().getAll();
+    final lower = body.toLowerCase();
+    final lowerSender = sender.toLowerCase();
+
+    // 1. Match by last 4
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      final match = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      if (match != null) return match;
+    }
+
+    // 2. Match by issuer / bank in sender or text
+    for (final card in cards) {
+      final bankKw = card.bank.toLowerCase();
+      final nameKw = card.name.toLowerCase();
+      if ((bankKw.isNotEmpty && (lower.contains(bankKw) || lowerSender.contains(bankKw))) ||
+          (nameKw.isNotEmpty && lower.contains(nameKw))) {
+        return card;
+      }
+    }
+
+    // 3. Fallback: create card if we know issuer or last4
+    return _resolveOrCreateCard(
+      parsed: parsed,
+      cards: cards,
+    );
+  }
+
+  /// Normalizes a reference ID: removes whitespace, punctuation, and lowercases.
+  static String normalizeReference(String? ref) {
+    if (ref == null) return '';
+    return ref.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  /// Extracts reference ID from a free-text notes string if present.
+  static String? extractReferenceFromText(String text) {
+    final lower = text.toLowerCase();
+    // Common patterns: upi/123456789012, ref:123456, utr:123456, rrn:123456
+    final match = RegExp(
+      r'(?:upi/|ref(?::|\s+)|utr(?::|\s+)|rrn(?::|\s+)|txn(?::|\s+))([a-z0-9]{4,})',
+      caseSensitive: false,
+    ).firstMatch(lower);
+    if (match != null) {
+      return match.group(1);
+    }
+    return null;
+  }
+
+  /// Looks for a recent bank debit (within 30 mins) with the same amount that safely matches
+  /// the bank-side leg of this credit card payment (e.g. UPI transfer to CC / BBPS).
+  Future<Transaction?> _findRecentBankDebitForCcPayment({
+    required double amount,
+    required DateTime date,
+    String? cardLast4,
+    String? issuer,
+    String? confirmationRef,
+  }) async {
+    try {
+      final candidateDebits = await TransactionRepo().findByAmountAndDateRange(
+        amount: amount,
+        from: date.subtract(const Duration(minutes: 30)),
+        to: date.add(const Duration(minutes: 30)),
+      );
+
+      final matching = <Transaction>[];
+      final normConfirmationRef = normalizeReference(confirmationRef);
+
+      for (final tx in candidateDebits) {
+        if (tx.type != 'expense' && tx.type != 'transfer') continue;
+        final notes = tx.notes.toLowerCase();
+        final normExtRef = normalizeReference(tx.externalRef);
+        final extractedNotesRef = normalizeReference(extractReferenceFromText(notes));
+
+        // 1. If confirmation carries a reliable reference:
+        if (normConfirmationRef.isNotEmpty) {
+          // Check externalRef:
+          if (normExtRef.isNotEmpty) {
+            // Require exact equality to prevent false matches like R1 vs R10
+            if (normExtRef != normConfirmationRef) continue;
+          }
+
+          // Check notes reference:
+          if (extractedNotesRef.isNotEmpty) {
+            // Require exact equality
+            if (extractedNotesRef != normConfirmationRef) continue;
+          } else if (notes.contains('upi/') || notes.contains('ref:')) {
+            // Debit has a reference pattern in notes that didn't match confirmationRef
+            continue;
+          }
+        }
+
+        // 2. Safe evidence matching:
+        // If cardLast4 is known, debit notes MUST contain that last4 or an issuer-specific payment marker.
+        // Prohibit generic words like "card" from accidentally matching debit cards or merchant names!
+        final matchesLast4 = cardLast4 != null && cardLast4.isNotEmpty && notes.contains(cardLast4);
+        final matchesIssuerCc = issuer != null && issuer.isNotEmpty && notes.contains(issuer.toLowerCase()) &&
+            (notes.contains('cc') || notes.contains('credit') || notes.contains('bill') || notes.contains('pay'));
+        final matchesBbpsOrBillDesk = notes.contains('bbps') || notes.contains('billdesk') || notes.contains('pz hdfc');
+
+        if (matchesLast4 || matchesIssuerCc || matchesBbpsOrBillDesk) {
+          matching.add(tx);
+        }
+      }
+
+      // Rule: When evidence cannot reliably distinguish between multiple candidate payments
+      // (e.g. multiple debits for same amount and card within 30 min with ambiguous references),
+      // do NOT force a match. Return null to preserve separate events safely!
+      if (matching.length == 1) {
+        return matching.first;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Deduce paying bank account ID from message text if available (e.g. "from a/c X8434").
+  Future<String?> _findPayingBankFromText(String body) async {
+    try {
+      final last4Match = RegExp(r'(?:from|debited\s+from)\s+(?:a/c|acct|acc\.?)\s*(?:x+|\*+)?(\d{4})', caseSensitive: false).firstMatch(body);
+      if (last4Match != null) {
+        final last4 = last4Match.group(1)!;
+        final accounts = await AccountRepo().getAll();
+        final acc = accounts.where((a) => a.last4 == last4).firstOrNull;
+        if (acc != null) return acc.id;
+      }
+    } catch (_) {}
+    return null;
   }
 }

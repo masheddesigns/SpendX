@@ -190,7 +190,9 @@ void main() {
       );
       expect(result.transaction, isNotNull);
       expect(result.transaction!.amount, 2000.0);
-      expect(result.transaction!.isCredit, isTrue);
+      expect(result.eventType, SmsEventType.creditCardPayment);
+      // Credit card payment reduces card liability — zero income / not an income credit
+      expect(result.transaction!.isCredit, isFalse);
     });
 
     test('accepts real credit card spend transaction', () {

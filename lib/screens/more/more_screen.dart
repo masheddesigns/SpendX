@@ -11,6 +11,7 @@ import '../feedback_screen.dart';
 import '../gamification_detail_screen.dart';
 import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
+import '../reports_screen.dart';
 import '../settings/backup_hub_screen.dart';
 import '../settings/profile_settings_screen.dart';
 import '../smart_import_screen.dart';
@@ -107,6 +108,15 @@ class MoreScreen extends ConsumerWidget {
                     subtitle: 'Health score, net worth evolution, category breakdown',
                     isDark: isDark,
                     onTap: () => _push(context, const _InsightsScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.bar_chart_rounded,
+                    iconColor: const Color(0xFF0D9488),
+                    title: 'Reports & Cash Flow',
+                    subtitle: 'Income vs expense breakdown, monthly cash flow analysis',
+                    isDark: isDark,
+                    onTap: () => _push(context, const ReportsScreen()),
                   ),
                   _buildDivider(isDark),
                   _MoreGlassRow(

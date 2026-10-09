@@ -19,6 +19,7 @@ class BalanceHit {
   final String? bankKeyword;
   final String sender;
   final String body;
+  final bool isAvailableLimit;
 
   const BalanceHit({
     required this.kind,
@@ -27,6 +28,7 @@ class BalanceHit {
     this.bankKeyword,
     required this.sender,
     required this.body,
+    this.isAvailableLimit = false,
   });
 }
 
@@ -109,11 +111,44 @@ class SmsScanOptions {
   const SmsScanOptions({this.daysBack});
 }
 
+/// High-level financial event type classified from an incoming SMS.
+enum SmsEventType {
+  /// General expense (bank debit, cash spend, etc.)
+  expense,
+
+  /// General income (salary, deposit, incoming UPI, etc.)
+  income,
+
+  /// Bill payment / payment received towards a credit card (liability settlement)
+  creditCardPayment,
+
+  /// Purchase made using a credit card (liability increase)
+  creditCardPurchase,
+
+  /// Refund credited back to a card or bank
+  refund,
+
+  /// Transfer between accounts or wallet top-up
+  transfer,
+
+  /// Failed, declined, or cancelled transaction attempt
+  failed,
+
+  /// Non-transactional notification, statement summary, or balance update only
+  infoOnly,
+}
+
 /// Result of classifying a single SMS message (used by the live detector).
 class SmsClassification {
   final ParsedTransaction? transaction;
   final BalanceHit? balance;
-  const SmsClassification({this.transaction, this.balance});
+  final SmsEventType eventType;
+
+  const SmsClassification({
+    this.transaction,
+    this.balance,
+    this.eventType = SmsEventType.infoOnly,
+  });
 }
 
 /// Scans the device's SMS inbox for bank transaction messages and balance
@@ -138,8 +173,17 @@ class SmsImportService {
 
     final lower = body.toLowerCase();
 
-    // 1. Hard reject non-transaction / promotional / telecom / weather / service messages.
-    if (_nonTransactionRe.hasMatch(lower)) {
+    // 1. Check for failed/declined/cancelled payments first so they are properly classified as failed
+    if (TransactionTextParser.isFailedPayment(body)) {
+      final balance = _detectBalance(body, sender);
+      return SmsClassification(balance: balance, eventType: SmsEventType.failed);
+    }
+
+    // 2. Hard reject non-transaction / promotional / telecom / weather / service messages.
+    // Exception: Do not reject credit card payment confirmations or refunds.
+    final isCcPaymentCandidate = _isCreditCardPaymentText(lower, sender);
+    final isCcRefundCandidate = _isCreditCardRefundText(lower);
+    if (!isCcPaymentCandidate && !isCcRefundCandidate && _nonTransactionRe.hasMatch(lower)) {
       return const SmsClassification();
     }
 
@@ -176,8 +220,10 @@ class SmsImportService {
       return SmsClassification(balance: balance);
     }
 
-    // Must have direction signal or explicit financial verb
+    // Must have direction signal or explicit financial verb (or be an identified CC payment / refund)
     if (!parsed.hasDirectionSignal &&
+        !isCcPaymentCandidate &&
+        !isCcRefundCandidate &&
         !RegExp(r'\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded)\b',
                 caseSensitive: false)
             .hasMatch(lower)) {
@@ -186,7 +232,7 @@ class SmsImportService {
 
     // Failed/declined/cancelled payments are not completed transactions.
     if (TransactionTextParser.isFailedPayment(body)) {
-      return SmsClassification(balance: balance);
+      return SmsClassification(balance: balance, eventType: SmsEventType.failed);
     }
 
     var merchant = parsed.merchant;
@@ -194,23 +240,59 @@ class SmsImportService {
       merchant = _merchantFromUpi(body);
     }
 
+    // Determine high-level financial event type
+    final isCcPayment = _isCreditCardPaymentText(lower, sender);
+    final isCcRefund = _isCreditCardRefundText(lower);
+    final isCardSpend = parsed.method == 'card' ||
+        lower.contains('spent using') ||
+        lower.contains('spent at') ||
+        lower.contains('paid from your edge') ||
+        lower.contains('credit card') ||
+        lower.contains('card xx') ||
+        sender.toLowerCase().contains('crd') ||
+        sender.toLowerCase().contains('jtedge');
+
+    final SmsEventType eventType;
+    final bool effectiveIsCredit;
+
+    if (isCcPayment) {
+      eventType = SmsEventType.creditCardPayment;
+      effectiveIsCredit = false; // Zero income / liability reduction
+    } else if (isCcRefund) {
+      eventType = SmsEventType.refund;
+      effectiveIsCredit = true; // Refund credit
+    } else if (isCardSpend && !parsed.isCredit) {
+      eventType = SmsEventType.creditCardPurchase;
+      effectiveIsCredit = false;
+    } else if (parsed.isCredit) {
+      eventType = SmsEventType.income;
+      effectiveIsCredit = true;
+    } else {
+      eventType = SmsEventType.expense;
+      effectiveIsCredit = false;
+    }
+
     final effective = ParsedTransaction(
       amount: parsed.amount,
-      isCredit: parsed.isCredit,
+      isCredit: effectiveIsCredit,
       rawText: parsed.rawText,
       date: parsed.date,
       merchant: merchant,
       refId: parsed.refId,
-      last4: parsed.last4,
+      last4: parsed.last4 ?? _last4(body),
       bankName: parsed.bankName,
-      method: parsed.method,
+      method: (isCcPayment || isCardSpend || isCcRefund) ? 'card' : parsed.method,
       source: 'sms',
       confidence: parsed.confidence,
       merchantSource: parsed.merchantSource,
       hasDirectionSignal: parsed.hasDirectionSignal,
     );
 
-    return SmsClassification(transaction: effective, balance: balance);
+    return SmsClassification(
+      transaction: effective,
+      balance: balance,
+      eventType: eventType,
+    );
   }
 
   Future<List<SmsMessage>> _queryInbox() async {
@@ -489,7 +571,7 @@ class SmsImportService {
   );
 
   static final RegExp _creditDueRe = RegExp(
-    r'(?:outstanding\s*(?:balance|amount|dues)?|total\s*(?:due|outstanding)|'
+    r'(?:revised\s+total\s+due|outstanding\s*(?:balance|amount|dues)?|total\s*(?:due|outstanding)|'
     r'amount\s*due|bill\s*amount|payment\s*due|minimum\s*due|dues|'
     r'total\s+of|minimum\s+of|'
     r'bill\s+(?:of|for))'
@@ -504,6 +586,65 @@ class SmsImportService {
     caseSensitive: false,
   );
 
+  // Credit card available limit detection: "Avl Limit: INR 82,933.13", "YOUR AVAILABLE LIMIT IS RS. 77755.88"
+  static final RegExp _ccAvailableLimitRe = RegExp(
+    r'(?:available\s*limit|avl\s*limit|avail(?:able)?\s*crd\s*lmt)[^\d₹]*?(?:inr|rs\.?)?\s*([\d,]+(?:\.\d+)?)',
+    caseSensitive: false,
+  );
+
+  /// Credit card bill payment detection:
+  /// - "Payment of Rs 10,000.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System"
+  /// - "DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 2000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6366"
+  /// - "Your payment of Rs 13.02 for your Edge CSB Bank RuPay Credit Card was successful"
+  /// - "Payment towards your card was successful"
+  static final RegExp _ccPaymentRe = RegExp(
+    r'(?:'
+    r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?received\s+(?:on|towards)\s+.*?(?:credit\s*card|card\s*ending)|'
+    r'payment\s+(?:of\s+.*?)?(?:towards|for)\s+.*?(?:credit\s*card|card\s*ending).*?(?:was\s+successful|received|processed|completed)|'
+    r'payment\s+received\s+towards\s+your\s+credit\s+card|'
+    r'received\s+on\s+your\s+(?:[A-Za-z0-9]+\s+)?credit\s+card|'
+    r'payment\s+towards\s+credit\s+card\s+is\s+successful|'
+    r'bill\s+payment\s+of\s+.*?(?:received|successful|credited\s+to\s+.*?(?:card|cc))'
+    r')',
+    caseSensitive: false,
+  );
+
+  /// Credit card refund detection:
+  /// - "AMAZON PAY IN E COMMERC refund of Rs 189.00 credited to ICICI Bank Credit Card XX5007"
+  /// - "refund of Rs X credited to ... Card"
+  /// - "credited to your ... Card ... for reversal of transaction"
+  static final RegExp _ccRefundRe = RegExp(
+    r'(?:'
+    r'refund\s+of\s+.*?(?:credited\s+to|received\s+on)\s+.*?(?:credit\s*card|card)|'
+    r'credited\s+to\s+.*?(?:credit\s*card|card\s*ending).*?(?:refund|reversal)|'
+    r'reversal\s+of\s+.*?(?:credited\s+to|card\s*ending)'
+    r')',
+    caseSensitive: false,
+  );
+
+  /// Returns true if text indicates a credit card bill payment confirmation.
+  static bool _isCreditCardPaymentText(String lower, [String sender = '']) {
+    if (_ccPaymentRe.hasMatch(lower)) return true;
+    final hasCardSignal = lower.contains('credit card') ||
+        lower.contains('card ending') ||
+        lower.contains('cardmember') ||
+        lower.contains('card xx') ||
+        sender.toLowerCase().contains('crd') ||
+        sender.toLowerCase().contains('jtedge');
+    final hasPaymentSignal = lower.contains('payment') &&
+        (lower.contains('received') || lower.contains('successful') || lower.contains('processed'));
+    return hasCardSignal && hasPaymentSignal;
+  }
+
+  /// Returns true if text indicates a credit card refund or reversal.
+  static bool _isCreditCardRefundText(String lower) {
+    if (_ccRefundRe.hasMatch(lower)) return true;
+    final hasCard = lower.contains('credit card') || lower.contains('card ending') || lower.contains('card xx');
+    final hasRefund = lower.contains('refund') || lower.contains('reversal');
+    final hasCredit = lower.contains('credited') || lower.contains('received');
+    return hasCard && hasRefund && hasCredit;
+  }
+
   // Digital wallet balance — Amazon Pay, Paytm Wallet, IRCTC RWallet, etc.
   static final RegExp _walletBalanceRe = RegExp(
     r'(?:updated\s*balance(?:\s*is)?|available\s*balance|'
@@ -513,7 +654,7 @@ class SmsImportService {
   );
 
   static final RegExp _last4Re = RegExp(
-    r'(?:x+(\d{4,})|(?:a\/c|ac|acc|card|ending)[\s:*\-]*(\d{4,}))',
+    r'(?:x+(\d{4,})|(?:a\/c|ac|acc|card|ending(?:\s+with)?)[\s:*\-]*(\d{4,}))',
     caseSensitive: false,
   );
 
@@ -660,22 +801,42 @@ class SmsImportService {
       }
     }
 
-    // Credit card outstanding — check BEFORE bank balance because credit card
-    // SMS often contain the word "balance" which would falsely match bank.
+    // Credit card outstanding or available limit — check BEFORE bank balance
     // Skip if the sender is a known bank that doesn't issue credit cards.
-    if (!skipCreditCard && _creditDueRe.hasMatch(lower)) {
-      final m = _creditDueRe.firstMatch(body);
-      if (m != null) {
-        final amount = _parseAmount(m.group(1)!);
-        if (amount > 0) {
-          return BalanceHit(
-            kind: BalanceKind.creditCard,
-            amount: amount,
-            last4: _last4(body),
-            bankKeyword: bankKeyword,
-            sender: sender,
-            body: body,
-          );
+    if (!skipCreditCard) {
+      if (_creditDueRe.hasMatch(lower)) {
+        final m = _creditDueRe.firstMatch(body);
+        if (m != null) {
+          final amount = _parseAmount(m.group(1)!);
+          if (amount >= 0) {
+            return BalanceHit(
+              kind: BalanceKind.creditCard,
+              amount: amount,
+              last4: _last4(body),
+              bankKeyword: bankKeyword,
+              sender: sender,
+              body: body,
+            );
+          }
+        }
+      }
+
+      // Check for available limit notification: "Avl Limit: INR 82,933.13" / "YOUR AVAILABLE LIMIT IS RS. 77755.88"
+      if (_ccAvailableLimitRe.hasMatch(lower)) {
+        final m = _ccAvailableLimitRe.firstMatch(body);
+        if (m != null) {
+          final amount = _parseAmount(m.group(1)!);
+          if (amount > 0) {
+            return BalanceHit(
+              kind: BalanceKind.creditCard,
+              amount: amount,
+              last4: _last4(body),
+              bankKeyword: bankKeyword,
+              sender: sender,
+              body: body,
+              isAvailableLimit: true,
+            );
+          }
         }
       }
     }

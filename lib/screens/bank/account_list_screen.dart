@@ -12,6 +12,7 @@ import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 import '../credit_card/add_credit_card_screen.dart';
+import '../lending/lending_screen.dart';
 import '../loans/loans_screen.dart';
 import '../net_worth_screen.dart';
 import 'add_bank_account_screen.dart';
@@ -70,17 +71,7 @@ class AccountListScreen extends ConsumerWidget {
     final accounts = accountsAsync.value ?? [];
     final cards = cardsAsync.value ?? [];
     final loans = loansAsync.value ?? [];
-
-    if (accounts.isEmpty && cards.isEmpty && loans.isEmpty) {
-      return SpendXEmptyState(
-        icon: Icons.account_balance_wallet_outlined,
-        title: 'No accounts yet',
-        subtitle:
-            'Add your bank accounts and credit cards to establish your financial position.',
-        actionLabel: '+ Add Account',
-        onAction: () => _openAddAccount(context, ref),
-      );
-    }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget content = RefreshIndicator(
       onRefresh: () async {
@@ -112,33 +103,50 @@ class AccountListScreen extends ConsumerWidget {
                   Expanded(
                     child: SpendXGlassButton(
                       height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       accentColor: AppTheme.primaryBlue,
                       icon: Icons.account_balance_rounded,
                       onPressed: () => _openAddAccount(context, ref),
                       child: const Text('Account'),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: SpendXGlassButton(
                       height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       accentColor: AppTheme.semanticExpense,
                       icon: Icons.credit_card_rounded,
                       onPressed: () => _openAddCreditCard(context, ref),
                       child: const Text('Card'),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: SpendXGlassButton(
                       height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       accentColor: AppTheme.semanticTransfer,
-                      icon: Icons.account_balance_outlined,
+                      icon: Icons.handshake_outlined,
+                      onPressed: () => Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const LendingScreen()),
+                      ),
+                      child: const Text('Lending'),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SpendXGlassButton(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      accentColor: const Color(0xFFF59E0B),
+                      icon: Icons.receipt_long_outlined,
                       onPressed: () => Navigator.push(
                         context,
                         AppPageRoute(builder: (_) => const LoansScreen()),
                       ),
-                      child: const Text('Loan'),
+                      child: const Text('Loans'),
                     ),
                   ),
                 ],
@@ -148,12 +156,85 @@ class AccountListScreen extends ConsumerWidget {
 
           const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
+          // ── If zero accounts, cards, and loans: Onboarding Glass Card ──
+          if (accounts.isEmpty && cards.isEmpty && loans.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 26,
+                            color: AppTheme.primaryBlue,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Establish Your Accounts',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? AppTheme.darkTextPrimary
+                                  : AppTheme.lightTextPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Add bank accounts, credit cards, or cash wallets to track balances and reconcile statements.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SpendXGlassButton(
+                              height: 38,
+                              variant: SpendXGlassButtonVariant.tonal,
+                              accentColor: AppTheme.primaryBlue,
+                              onPressed: () => _openAddAccount(context, ref),
+                              child: const Text('+ Bank Account'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SpendXGlassButton(
+                              height: 38,
+                              variant: SpendXGlassButtonVariant.tonal,
+                              accentColor: AppTheme.semanticExpense,
+                              onPressed: () => _openAddCreditCard(context, ref),
+                              child: const Text('+ Credit Card'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── Bank Accounts Section ────────────────────────
           if (accounts.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: SpendXSectionHeader(
                 title: 'Bank Accounts',
                 count: accounts.length,
+                actionLabel: '+ Add',
+                onAction: () => _openAddAccount(context, ref),
               ),
             ),
             SliverToBoxAdapter(
@@ -182,14 +263,16 @@ class AccountListScreen extends ConsumerWidget {
           ],
 
           // ── Credit Cards Section ─────────────────────────
-          if (cards.isNotEmpty) ...[
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            SliverToBoxAdapter(
-              child: SpendXSectionHeader(
-                title: 'Credit Cards',
-                count: cards.length,
-              ),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          SliverToBoxAdapter(
+            child: SpendXSectionHeader(
+              title: 'Credit Cards',
+              count: cards.isNotEmpty ? cards.length : null,
+              actionLabel: '+ Add Card',
+              onAction: () => _openAddCreditCard(context, ref),
             ),
+          ),
+          if (cards.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -212,23 +295,123 @@ class AccountListScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-            ),
-          ],
-
-          // ── Loans & Liabilities Section ───────────────────
-          if (loans.isNotEmpty) ...[
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            )
+          else
             SliverToBoxAdapter(
-              child: SpendXSectionHeader(
-                title: 'Active Loans',
-                count: loans.length,
-                actionLabel: 'Manage',
-                onAction: () => Navigator.push(
-                  context,
-                  AppPageRoute(builder: (_) => const LoansScreen()),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: SpendXGlassSurface(
+                  level: SpendXGlassLevel.base,
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppTheme.semanticExpense.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.credit_card_rounded,
+                          size: 18,
+                          color: AppTheme.semanticExpense,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'No credit cards linked',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? AppTheme.darkTextPrimary
+                                    : AppTheme.lightTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Track billing cycles, credit limits, and outstanding balances',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SpendXGlassButton(
+                        height: 32,
+                        variant: SpendXGlassButtonVariant.tonal,
+                        accentColor: AppTheme.semanticExpense,
+                        onPressed: () => _openAddCreditCard(context, ref),
+                        child: const Text('Add'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+
+          // ── Loans & Lending Section ───────────────────────
+          const SliverToBoxAdapter(child: SizedBox(height: 14)),
+          SliverToBoxAdapter(
+            child: SpendXSectionHeader(
+              title: 'Loans & Obligations',
+              actionLabel: 'Manage',
+              onAction: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const LoansScreen()),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: SpendXGlassSurface(
+                level: SpendXGlassLevel.base,
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    _NavigationLinkRow(
+                      icon: Icons.handshake_outlined,
+                      iconColor: AppTheme.semanticTransfer,
+                      title: 'Lending & Borrowing',
+                      subtitle: 'Track money you lent to people & money you owe others',
+                      showDivider: true,
+                      onTap: () => Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const LendingScreen()),
+                      ),
+                    ),
+                    _NavigationLinkRow(
+                      icon: Icons.receipt_long_outlined,
+                      iconColor: const Color(0xFFF59E0B),
+                      title: 'Bank Loans & EMIs',
+                      subtitle: loans.isNotEmpty
+                          ? '${loans.length} active loan${loans.length > 1 ? 's' : ''}'
+                          : 'Vehicle loans, home loans, EMI amortizations',
+                      showDivider: false,
+                      onTap: () => Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const LoansScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          if (loans.isNotEmpty) ...[
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1170,6 +1353,98 @@ class _LoanRow extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _NavigationLinkRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool showDivider;
+  final VoidCallback onTap;
+
+  const _NavigationLinkRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.showDivider = true,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: iconColor, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.lightTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: isDark
+                      ? const Color(0xFF64748B)
+                      : const Color(0xFF94A3B8),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (showDivider)
+          Container(
+            margin: const EdgeInsets.only(left: 70, right: 16),
+            height: 0.5,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
+          ),
+      ],
     );
   }
 }

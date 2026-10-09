@@ -215,16 +215,20 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
                     children: [
                       if (widget.icon != null) ...[
                         Icon(widget.icon, size: 16, color: textColor),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                       ],
-                      DefaultTextStyle(
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
-                          letterSpacing: -0.1,
+                      Flexible(
+                        child: DefaultTextStyle(
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                            letterSpacing: -0.1,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          child: widget.child,
                         ),
-                        child: widget.child,
                       ),
                     ],
                   ),

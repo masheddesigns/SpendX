@@ -710,6 +710,12 @@ class CanonicalTransactionAdapter {
   }
 
   static CanonicalEventType _resolveCanonicalType(Transaction tx) {
+    if (tx.type == 'credit_payment') {
+      return CanonicalEventType.cardPayment;
+    }
+    if (tx.type == 'refund') {
+      return CanonicalEventType.refund;
+    }
     if (tx.source == 'credit_card_purchase' || tx.type == 'credit_card_purchase') {
       return CanonicalEventType.cardPurchase;
     }
