@@ -93,18 +93,19 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
     return Color(int.parse('0xFF$clean'));
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
     final outstanding = double.tryParse(_outstandingCtrl.text.trim()) ?? 0.0;
     final lastStatement = double.tryParse(_lastBillCtrl.text.trim()) ?? 0.0;
+    final limitVal = double.tryParse(_limitCtrl.text.trim()) ?? 0.0;
 
     final card = CreditCard(
       id: widget.existingCard?.id,
       name: TextFormatter.normalizeName(_nameCtrl.text),
       bank: TextFormatter.normalizeName(_bankCtrl.text),
       last4: _last4Ctrl.text.trim().padLeft(4, '0'),
-      limitAmount: double.parse(_limitCtrl.text.trim()),
+      limitAmount: limitVal,
       billingDay: _billingDay,
       dueDay: _dueDay,
       cardType: _cardType,
@@ -114,14 +115,25 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
     );
 
     if (widget.existingCard == null) {
-      ref.read(app_data.cardsProvider.notifier).add(card);
+      await ref.read(app_data.cardsProvider.notifier).add(card);
     } else {
-      ref.read(app_data.cardsProvider.notifier).replace(card);
+      await ref.read(app_data.cardsProvider.notifier).replace(card);
+      final oldOutstanding = widget.existingCard!.usedAmount;
+      if ((outstanding - oldOutstanding).abs() >= 0.01) {
+        await ref.read(app_data.creditRepoProvider).reconcileOutstanding(
+              card.id,
+              outstanding,
+              reason: 'Manual credit card outstanding adjustment',
+              provenance: 'manual_card_balance_update',
+            );
+        await ref.read(app_data.cardsProvider.notifier).refresh();
+      }
     }
 
     ref.invalidate(creditCardsProvider);
     ref.invalidate(liabilitiesSummaryProvider);
     ref.invalidate(creditOutstandingProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
 
     if (mounted) {
       Navigator.pop(context, true);
@@ -209,8 +221,9 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
     if (_nameCtrl.text.trim().isEmpty) return false;
     if (_bankCtrl.text.trim().isEmpty) return false;
     if (_last4Ctrl.text.trim().length != 4) return false;
-    final limit = double.tryParse(_limitCtrl.text.trim()) ?? 0.0;
-    if (limit <= 0) return false;
+    final limit = double.tryParse(_limitCtrl.text.trim());
+    if (limit == null || limit < 0) return false;
+    if (widget.existingCard == null && limit <= 0) return false;
     return true;
   }
 

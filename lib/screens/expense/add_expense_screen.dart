@@ -78,14 +78,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _selectedCategoryId = widget.initialCategoryId;
     if (widget.existingTransaction != null) {
       final txn = widget.existingTransaction!;
-      _selectedType = txn.type;
+      _selectedType = (txn.type == 'credit_card_purchase') ? 'expense' : txn.type;
       _amountController.text = txn.amount.toString();
       _notesController.text = txn.notes;
       _selectedDate = txn.date;
       _selectedCategoryId = txn.categoryId;
       _selectedPaymentMethodId = txn.accountId;
     } else {
-      _selectedType = widget.initialType;
+      _selectedType = (widget.initialType == 'credit_card_purchase')
+          ? 'expense'
+          : widget.initialType;
       _restoreSmartDefaults();
     }
     _loadInitialData();
@@ -272,11 +274,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     final selectedMethod = _availablePaymentMethods.where((m) => m.id == _selectedPaymentMethodId).firstOrNull;
     final isCreditCard = selectedMethod?.type == 'credit_card';
+    final effectiveType = (isCreditCard && _selectedType == 'expense')
+        ? 'credit_card_purchase'
+        : _selectedType;
 
     final newTransaction = Transaction(
       id: widget.existingTransaction?.id,
       userId: widget.existingTransaction?.userId ?? 'offline_user',
-      type: _selectedType,
+      type: effectiveType,
       categoryId: _selectedCategoryId,
       accountId: _selectedPaymentMethodId,
       amount: amount,

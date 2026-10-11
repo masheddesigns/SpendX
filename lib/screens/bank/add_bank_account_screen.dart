@@ -85,6 +85,11 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
       await ref.read(accountsProvider.notifier).add(account);
     } else {
       await ref.read(accountsProvider.notifier).replace(account);
+      final oldBalance = widget.existing!.balance;
+      if ((account.balance - oldBalance).abs() >= 0.01) {
+        await ref.read(accountRepoProvider).updateBalance(account.id, account.balance);
+        await ref.read(accountsProvider.notifier).refresh();
+      }
     }
     if (mounted) Navigator.pop(context, true);
   }

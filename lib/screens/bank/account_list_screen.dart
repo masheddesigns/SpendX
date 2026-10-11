@@ -847,7 +847,9 @@ class _NetPositionHero extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '+${AppFormat.currency(assets)}',
+                      assets >= 0
+                          ? '+${AppFormat.currency(assets)}'
+                          : AppFormat.currency(assets),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -882,7 +884,9 @@ class _NetPositionHero extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '-${AppFormat.currency(liabilities)}',
+                      liabilities > 0
+                          ? '-${AppFormat.currency(liabilities)}'
+                          : AppFormat.currency(liabilities.abs()),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

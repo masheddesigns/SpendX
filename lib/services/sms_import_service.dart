@@ -272,6 +272,11 @@ class SmsImportService {
       effectiveIsCredit = false;
     }
 
+    final effectiveBankName = parsed.bankName ??
+        (_bankKeyword(sender, lower) != null
+            ? _bankDisplayName(_bankKeyword(sender, lower))
+            : null);
+
     final effective = ParsedTransaction(
       amount: parsed.amount,
       isCredit: effectiveIsCredit,
@@ -280,7 +285,7 @@ class SmsImportService {
       merchant: merchant,
       refId: parsed.refId,
       last4: parsed.last4 ?? _last4(body),
-      bankName: parsed.bankName,
+      bankName: effectiveBankName,
       method: (isCcPayment || isCardSpend || isCcRefund) ? 'card' : parsed.method,
       source: 'sms',
       confidence: parsed.confidence,

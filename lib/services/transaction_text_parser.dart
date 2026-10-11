@@ -729,9 +729,12 @@ class TransactionTextParser {
   // ── Account last 4 ────────────────────────────────────────────────
 
   static final _last4Patterns = <RegExp>[
-    RegExp(r'\bx{1,2}(\d{4})\b', caseSensitive: false),
+    RegExp(r'\bx{1,6}(\d{4})\b', caseSensitive: false),
     RegExp(r'\*{2,}(\d{4})\b'),
-    RegExp(r'(?:a/c|account)\s*[^\d]{0,8}(\d{4})\b', caseSensitive: false),
+    RegExp(
+      r'(?:a/c|acct|account|card|ending(?:\s+with|\s+in)?)\s*[^\d]{0,12}(\d{4})\b',
+      caseSensitive: false,
+    ),
   ];
 
   static String? _extractLast4(String text) {
@@ -763,6 +766,16 @@ class TransactionTextParser {
     'rbl': 'RBL',
     'idfc': 'IDFC',
     'jio payments bank': 'Jio',
+    'onecard': 'OneCard',
+    'bobcard': 'BOBCARD',
+    'csb bank': 'CSB Bank',
+    'edge csb': 'CSB Bank',
+    'au bank': 'AU Bank',
+    'au small finance': 'AU Bank',
+    'canara': 'Canara Bank',
+    'bank of baroda': 'Bank of Baroda',
+    'union bank': 'Union Bank',
+    'pnb': 'PNB',
   };
 
   static String? _extractBankName(String lower) {
