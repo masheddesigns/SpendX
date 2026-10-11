@@ -5,9 +5,7 @@ import '../../../screens/bank/account_list_screen.dart';
 import '../../../screens/home/transactions_screen.dart';
 import '../../../screens/more/more_screen.dart';
 import '../../../screens/plan/plan_tab.dart';
-import '../../../screens/profile_hub_screen.dart';
 import '../../../services/haptic_service.dart';
-import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
@@ -117,7 +115,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          actions: _buildActions(context, isDark),
         ),
         body: IndexedStack(
           index: _currentIndex,
@@ -130,20 +127,5 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
     );
-  }
-
-  List<Widget> _buildActions(BuildContext context, bool isDark) {
-    return [
-      IconButton(
-        tooltip: 'Profile',
-        onPressed: () => Navigator.of(context).push(
-          AppPageRoute(builder: (_) => const ProfileHubScreen()),
-        ),
-        icon: Icon(
-          Icons.account_circle_outlined,
-          color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-        ),
-      ),
-    ];
   }
 }
