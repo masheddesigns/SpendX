@@ -13,7 +13,7 @@ import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
 import '../reports_screen.dart';
 import '../settings/backup_hub_screen.dart';
-import '../settings/profile_settings_screen.dart';
+import '../settings/app_settings_screen.dart';
 import '../smart_import_screen.dart';
 
 /// SpendX 2.0 System & Intelligence Workspace (More Screen).
@@ -156,7 +156,7 @@ class MoreScreen extends ConsumerWidget {
                     title: 'App Settings',
                     subtitle: 'Categories, theme preferences, currency, notifications',
                     isDark: isDark,
-                    onTap: () => _push(context, const ProfileSettingsScreen()),
+                    onTap: () => _push(context, const AppSettingsScreen()),
                   ),
                   _buildDivider(isDark),
                   _MoreGlassRow(

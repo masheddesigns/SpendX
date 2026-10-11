@@ -219,7 +219,7 @@ class AppTheme extends ChangeNotifier {
 
   static Color tinted(Color color) => color.withValues(alpha: 0.15);
 
-  // --- Instance Members for ProfileHub selection ---
+  // --- Theme Selection Helpers ---
   static Color get seedColor {
     final variant = SettingsService.instance.themeVariant;
     return availableThemes.firstWhere(
@@ -236,18 +236,6 @@ class AppTheme extends ChangeNotifier {
     if (theme.isNotEmpty) {
       SettingsService.instance.setThemeVariant(theme['id'] as String);
     }
-  }
-
-  // Instance versions for Consumer usage
-  Color get instanceSeedColor => seedColor;
-  void instanceSetPrimaryColor(Color color) => setPrimaryColor(color);
-
-  String get currentThemeName {
-    final variant = SettingsService.instance.themeVariant;
-    return availableThemes.firstWhere(
-      (t) => t['id'] == variant,
-      orElse: () => availableThemes.first,
-    )['name'];
   }
 
   static ThemeData get lightTheme => _getTheme('light');

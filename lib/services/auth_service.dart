@@ -134,18 +134,6 @@ class AuthService extends ChangeNotifier {
   String? get currentAccountEmail => _currentUser?.email;
   GoogleSignInAccount? get currentUser => _currentUser;
 
-  /// Returns a formatted string for the month/year the user joined (e.g., "Mar 2024").
-  String? get memberSinceLabel {
-    final date = SettingsService.instance.userJoinDate;
-    if (date == null) return null;
-
-    final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[date.month - 1]} ${date.year}';
-  }
-
   // ── Drive API ─────────────────────────────────────────────────────────────
 
   /// Returns a fresh Drive API client, refreshing the access token if needed.

@@ -34,8 +34,6 @@ class SettingsService extends ChangeNotifier {
   static const String _localSnapshotHashKey = 'local_snapshot_hash';
   static const String _cloudSnapshotVersionKey = 'cloud_snapshot_version';
   static const String _localSnapshotVersionKey = 'local_snapshot_version';
-  static const String _userJoinDateKey = 'user_join_date';
-  static const String _userQuoteKey = 'user_quote';
   static const String _textNormalizationCompleteKey =
       'text_normalization_complete_v1';
   static const String _expenseDefaultsCategoryPrefix =
@@ -490,28 +488,6 @@ class SettingsService extends ChangeNotifier {
   // Alias for HomeScreen drawer
   String? get googleAccountEmail => googleEmail;
 
-  // --- User Profile ---
-  DateTime? get userJoinDate {
-    final timestamp = _prefs.getInt(_userJoinDateKey);
-    if (timestamp == null) return null;
-    return DateTime.fromMillisecondsSinceEpoch(timestamp);
-  }
-
-  Future<void> setUserJoinDate(DateTime date) async {
-    await _prefs.setInt(_userJoinDateKey, date.millisecondsSinceEpoch);
-    notifyListeners();
-  }
-
-  String get userQuote {
-    return _prefs.getString(_userQuoteKey) ??
-        'Building wealth one step at a time.';
-  }
-
-  Future<void> setUserQuote(String quote) async {
-    await _prefs.setString(_userQuoteKey, quote);
-    notifyListeners();
-  }
-
   // --- Drive Folder ID ---
   String? get driveFolderId {
     return _prefs.getString(_driveFolderIdKey);
@@ -629,8 +605,6 @@ class SettingsService extends ChangeNotifier {
       _enableAiReportKey: enableAiReport,
       _disableIncomeKey: isIncomeDisabled,
       _themeVariantKey: themeVariant,
-      _userJoinDateKey: userJoinDate?.millisecondsSinceEpoch,
-      _userQuoteKey: userQuote,
     };
   }
 
@@ -683,15 +657,6 @@ class SettingsService extends ChangeNotifier {
     }
     if (settings.containsKey(_themeVariantKey)) {
       await setThemeVariant(settings[_themeVariantKey]);
-    }
-    if (settings.containsKey(_userJoinDateKey) &&
-        settings[_userJoinDateKey] != null) {
-      await setUserJoinDate(
-        DateTime.fromMillisecondsSinceEpoch(settings[_userJoinDateKey]),
-      );
-    }
-    if (settings.containsKey(_userQuoteKey)) {
-      await setUserQuote(settings[_userQuoteKey]);
     }
 
     notifyListeners();

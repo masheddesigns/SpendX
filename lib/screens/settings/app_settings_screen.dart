@@ -21,8 +21,8 @@ import '../credit_history_screen.dart';
 import '../help_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 
-class ProfileSettingsScreen extends StatelessWidget {
-  const ProfileSettingsScreen({super.key});
+class AppSettingsScreen extends StatelessWidget {
+  const AppSettingsScreen({super.key});
 
   String _getThemeName(BuildContext context) {
     final settings = Provider.of<SettingsService>(context, listen: false);
