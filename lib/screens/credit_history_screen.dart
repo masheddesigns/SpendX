@@ -306,16 +306,17 @@ class _CreditHistoryScreenState extends ConsumerState<CreditHistoryScreen> {
                           break;
                         }
                       }
+                      final isPaymentOrCredit = txn.type == 'payment' || txn.type == 'refund' || txn.type == 'credit';
                       // Wrap in spx.Transaction for tile compatibility
                       final displayTxn = spx.Transaction(
                         id: txn.id,
                         userId: 'offline_user',
-                        type: txn.amount < 0 ? 'income' : 'expense',
+                        type: isPaymentOrCredit ? 'income' : 'expense',
                         categoryId: txn.categoryId,
                         amount: txn.amount,
                         date: txn.date,
                         notes: txn.note ?? '',
-                        source: 'credit_purchase',
+                        source: isPaymentOrCredit ? 'credit_card_payment' : 'credit_purchase',
                         relatedEntityId: txn.id,
                       );
                       return TransactionTile(

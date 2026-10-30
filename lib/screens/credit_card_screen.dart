@@ -16,6 +16,9 @@ import 'credit_card/add_credit_card_screen.dart';
 import 'credit_card/add_credit_transaction_screen.dart';
 import 'credit_card/pay_credit_card_screen.dart';
 import 'credit_card/credit_emi_detail_screen.dart';
+import 'credit_history_screen.dart';
+import 'transaction_detail_screen.dart';
+import '../models/transaction.dart' as spx;
 import '../utils/text_formatter.dart';
 import '../features/liabilities/providers/liabilities_providers.dart';
 import '../shared/widgets/app_page_route.dart';
@@ -128,7 +131,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   ),
                 ),
                 recentTxnsAsync.when(
-                  data: (txns) => _buildRecentTransactionsList(txns),
+                  data: (txns) => _buildRecentTransactionsList(txns, selectedCard),
                   loading: () => const SliverToBoxAdapter(
                     child: SkeletonLoader.transactions(),
                   ),
@@ -702,7 +705,12 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         ),
         TextButton(
           onPressed: () {
-            // Navigate to all transactions filtered by this card
+            Navigator.push(
+              context,
+              AppPageRoute(
+                builder: (_) => CreditHistoryScreen(cardId: card.id),
+              ),
+            ).then((_) => _invalidateAll());
           },
           child: const Text('See All'),
         ),
@@ -710,7 +718,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     );
   }
 
-  Widget _buildRecentTransactionsList(List<CreditTransaction> txns) {
+  Widget _buildRecentTransactionsList(List<CreditTransaction> txns, CreditCard card) {
     if (txns.isEmpty) {
       return const SliverToBoxAdapter(
         child: Center(
@@ -725,22 +733,42 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final tx = txns[index];
-        final isCredit = tx.type == 'credit';
+        final isPaymentOrCredit =
+            tx.type == 'payment' || tx.type == 'refund' || tx.type == 'credit';
 
         return ListTile(
           onTap: () async {
-            // Convert CreditTransaction to LedgerTransaction for detail screen if needed
-            // or navigate to TransactionDetailScreen if it's a regular transaction
+            final spxTx = spx.Transaction(
+              id: tx.id,
+              userId: 'offline_user',
+              type: isPaymentOrCredit ? 'income' : 'expense',
+              categoryId: tx.categoryId,
+              accountId: card.id,
+              amount: tx.amount,
+              date: tx.date,
+              notes: tx.note ?? '',
+              source: isPaymentOrCredit
+                  ? 'credit_card_payment'
+                  : 'credit_card_purchase',
+              relatedEntityId: card.id,
+            );
+            Navigator.push(
+              context,
+              AppPageRoute(
+                builder: (_) =>
+                    UnifiedTransactionDetailScreen(transaction: spxTx),
+              ),
+            ).then((_) => _invalidateAll());
           },
           leading: CircleAvatar(
-            backgroundColor: isCredit
+            backgroundColor: isPaymentOrCredit
                 ? Colors.green.withValues(alpha: 0.1)
                 : Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
             child: Icon(
-              isCredit
+              isPaymentOrCredit
                   ? Icons.arrow_downward_rounded
                   : Icons.shopping_cart_outlined,
-              color: isCredit
+              color: isPaymentOrCredit
                   ? Colors.green
                   : Theme.of(context).colorScheme.error,
               size: 20,
@@ -754,10 +782,10 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           ),
           subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.date)),
           trailing: Text(
-            '${isCredit ? "+" : "-"}${AppFormat.currency(tx.amount)}',
+            '${isPaymentOrCredit ? "+" : "-"}${AppFormat.currency(tx.amount)}',
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: isCredit
+              color: isPaymentOrCredit
                   ? Colors.green
                   : Theme.of(context).colorScheme.onSurface,
             ),

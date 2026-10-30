@@ -72,15 +72,18 @@ class _AddCreditTransactionScreenState
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     if (amount <= 0) return;
 
+    final noteText = _merchantController.text.trim().isNotEmpty
+        ? _merchantController.text.trim()
+        : 'Manual Purchase';
+
     final txn = CreditTransaction(
       id: const Uuid().v4(),
       cardId: widget.card.id,
       amount: amount,
       date: _selectedDate,
-      category: _merchantController.text.isNotEmpty
-          ? _merchantController.text
-          : 'Purchase',
-      note: 'Added manually',
+      category: noteText,
+      categoryId: _selectedCategoryId,
+      note: noteText,
       type: 'purchase',
       status: 'active',
     );
@@ -95,9 +98,7 @@ class _AddCreditTransactionScreenState
             date: _selectedDate,
             creditCardId: widget.card.id,
             categoryId: _selectedCategoryId,
-            note: _merchantController.text.isNotEmpty
-                ? _merchantController.text
-                : 'Purchase',
+            note: noteText,
             referenceId: txn.id,
           ),
           cardId: widget.card.id,

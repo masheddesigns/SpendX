@@ -6,6 +6,7 @@ import '../../../models/credit_transaction.dart';
 import '../../../models/credit_emi.dart';
 import '../../../models/emi_installment.dart';
 import '../../../models/ledger_transaction.dart';
+import '../../../models/reminder_model.dart';
 import '../../../models/loan.dart';
 import '../../../models/lending.dart';
 import '../../../services/credit_intelligence_service.dart';
@@ -72,6 +73,35 @@ class CreditPurchaseMutationNotifier extends StateNotifier<AsyncValue<void>> {
         _ref.invalidate(creditRecentTransactionsProvider(cardId));
         _ref.invalidate(creditOutstandingProvider(cardId));
         _ref.invalidate(liabilitiesSummaryProvider);
+
+        // Sync upcoming card reminder
+        try {
+          final card = await _ref.read(creditRepoProvider).getCard(cardId);
+          if (card != null) {
+            final derived = await _ref.read(creditRepoProvider).getDerivedBalance(card.id);
+            final outstandingRupees = derived.toRupees;
+            await _ref.read(app_data.reminderRepoProvider).insertGlobalReminder(
+              Reminder(
+                id: 'credit_due_${card.id}',
+                type: ReminderType.credit,
+                title: 'Credit Card Due: ${card.name}',
+                linkedEntityId: card.id,
+                dueDate: card.nextDueDate,
+                amount: outstandingRupees,
+                isActive: outstandingRupees > 0,
+                status: outstandingRupees <= 0
+                    ? ReminderStatus.inactive
+                    : ReminderStatus.upcoming,
+                recordStatus: outstandingRupees <= 0
+                    ? ReminderRecordStatus.done
+                    : ReminderRecordStatus.pending,
+                sourceType: ReminderSourceType.credit,
+                sourceId: card.id,
+              ).toMap(),
+            );
+            _ref.invalidate(app_data.remindersProvider);
+          }
+        } catch (_) {}
       } catch (e, st) {
         state = AsyncError(e, st);
         rethrow;

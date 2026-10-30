@@ -627,6 +627,28 @@ class CardsNotifier extends CachedAsyncNotifier<List<CreditCard>> {
               .map((c) => c.id == tempCard.id ? c.copyWith(id: realId) : c)
               .toList(),
         );
+        if (card.usedAmount > 0 || card.lastStatementBalance > 0) {
+          try {
+            await ref.read(reminderRepoProvider).insertGlobalReminder(
+              Reminder(
+                id: 'credit_due_$realId',
+                type: ReminderType.credit,
+                title: 'Credit Card Due: ${card.name}',
+                linkedEntityId: realId,
+                dueDate: card.nextDueDate,
+                amount: card.lastStatementBalance > 0
+                    ? card.lastStatementBalance
+                    : card.usedAmount,
+                isActive: true,
+                status: ReminderStatus.upcoming,
+                recordStatus: ReminderRecordStatus.pending,
+                sourceType: ReminderSourceType.credit,
+                sourceId: realId,
+              ).toMap(),
+            );
+            ref.invalidate(remindersProvider);
+          } catch (_) {}
+        }
       } catch (e, st) {
         debugPrint('Card insert failed: $e');
         setData(snapshot);
@@ -665,6 +687,12 @@ class CardsNotifier extends CachedAsyncNotifier<List<CreditCard>> {
         rollback: () => setData(snapshot),
         repositoryDelete: () => ref.read(writeQueueProvider).enqueue(() async {
           await ref.read(creditRepoProvider).delete(id);
+          try {
+            await ref
+                .read(reminderRepoProvider)
+                .deleteGlobalReminder('credit_due_$id');
+            ref.invalidate(remindersProvider);
+          } catch (_) {}
         }),
       );
     } catch (e, st) {
