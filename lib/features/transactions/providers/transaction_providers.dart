@@ -8,7 +8,6 @@ import '../../../services/financial_transaction_service.dart';
 import '../../../models/category.dart';
 import '../../../models/credit_transaction.dart';
 import '../../../models/transaction.dart';
-import '../../../services/gamification_service.dart';
 import '../../../services/data_audit_service.dart';
 import '../../accounts/providers/account_providers.dart';
 import '../../categories/providers/category_providers.dart';
@@ -177,11 +176,6 @@ final addTransactionProvider = Provider((ref) {
     debugPrint('➡️ Adding transaction: ${transaction.amount}');
     await svc.createTransaction(transaction);
     debugPrint('✅ Transaction inserted (journaled)');
-
-    // Award XP for adding a transaction
-    try {
-      await GamificationService.instance.addXP(10, isTransaction: true);
-    } catch (_) {}
 
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);

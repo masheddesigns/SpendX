@@ -99,9 +99,9 @@ AIIntent parseIntent(String input) {
     return AIIntent.forecast;
   }
 
-  // Progress / gamification
-  if (_matchesAny(lower, ['my level', 'xp', 'experience', 'achievements',
-      'rewards', 'gamification', 'progress status'])) {
+  // Progress / streak
+  if (_matchesAny(lower, ['my streak', 'consistency', 'streak status', 'progress',
+      'consistency streak', 'progress status'])) {
     return AIIntent.progressStatus;
   }
 

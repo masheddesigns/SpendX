@@ -17,6 +17,7 @@ import '../../utils/app_format.dart';
 import '../../utils/text_formatter.dart';
 import 'add_loan_screen.dart';
 import 'loan_detail_screen.dart';
+import '../lending/lending_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 
 class LoansScreen extends ConsumerStatefulWidget {
@@ -39,7 +40,20 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Loans')),
+      appBar: AppBar(
+        title: const Text('Loans & Debts'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => const LendingScreen()),
+            ),
+            icon: const Icon(Icons.handshake_outlined, size: 18),
+            label: const Text('Lending'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
         child: loansAsync.when(
           loading: () => const SkeletonLoader.transactions(),

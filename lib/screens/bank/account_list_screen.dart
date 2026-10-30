@@ -103,50 +103,36 @@ class AccountListScreen extends ConsumerWidget {
                   Expanded(
                     child: SpendXGlassButton(
                       height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                       accentColor: AppTheme.primaryBlue,
                       icon: Icons.account_balance_rounded,
                       onPressed: () => _openAddAccount(context, ref),
                       child: const Text('Account'),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: SpendXGlassButton(
                       height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                       accentColor: AppTheme.semanticExpense,
                       icon: Icons.credit_card_rounded,
                       onPressed: () => _openAddCreditCard(context, ref),
                       child: const Text('Card'),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: SpendXGlassButton(
                       height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                      accentColor: AppTheme.semanticTransfer,
-                      icon: Icons.handshake_outlined,
-                      onPressed: () => Navigator.push(
-                        context,
-                        AppPageRoute(builder: (_) => const LendingScreen()),
-                      ),
-                      child: const Text('Lending'),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: SpendXGlassButton(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                       accentColor: const Color(0xFFF59E0B),
                       icon: Icons.receipt_long_outlined,
                       onPressed: () => Navigator.push(
                         context,
                         AppPageRoute(builder: (_) => const LoansScreen()),
                       ),
-                      child: const Text('Loans'),
+                      child: const Text('Loans & Debts'),
                     ),
                   ),
                 ],

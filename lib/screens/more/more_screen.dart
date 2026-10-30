@@ -8,13 +8,15 @@ import '../../theme/app_theme.dart';
 import '../ai_chat_screen.dart';
 import '../data_health_screen.dart';
 import '../feedback_screen.dart';
-import '../gamification_detail_screen.dart';
 import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
 import '../reports_screen.dart';
+import '../review/review_queue_screen.dart';
 import '../settings/backup_hub_screen.dart';
 import '../settings/app_settings_screen.dart';
 import '../smart_import_screen.dart';
+import '../../features/wrapped/screens/wrapped_screen.dart';
+import '../../features/review_queue/providers/review_providers.dart';
 
 /// SpendX 2.0 System & Intelligence Workspace (More Screen).
 ///
@@ -30,6 +32,7 @@ class MoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final alertCount = ref.watch(activeAlertsProvider).valueOrNull?.length ?? 0;
+    final reviewCount = ref.watch(reviewQueueCountProvider).valueOrNull ?? 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return CustomScrollView(
@@ -69,6 +72,19 @@ class MoreScreen extends ConsumerWidget {
                     isDark: isDark,
                     onTap: () => _push(context, const NotificationsInboxScreen()),
                   ),
+                  if (reviewCount > 0) ...[
+                    _buildDivider(isDark),
+                    _MoreGlassRow(
+                      icon: Icons.rate_review_rounded,
+                      iconColor: Colors.orange,
+                      title: 'Review Queue',
+                      subtitle: '$reviewCount transaction${reviewCount == 1 ? '' : 's'} awaiting confirmation',
+                      badgeCount: reviewCount,
+                      badgeColor: Colors.orange,
+                      isDark: isDark,
+                      onTap: () => _push(context, const ReviewQueueScreen()),
+                    ),
+                  ],
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.upload_file_rounded,
@@ -86,10 +102,10 @@ class MoreScreen extends ConsumerWidget {
 
         const SliverToBoxAdapter(child: SizedBox(height: 14)),
 
-        // ── Group 2: Insights & Engagement ─────────────────────────
+        // ── Group 2: Analytics & Trends ────────────────────────────
         const SliverToBoxAdapter(
           child: SpendXSectionHeader(
-            title: 'Insights & Activity',
+            title: 'Analytics & Trends',
             padding: EdgeInsets.fromLTRB(20, 14, 20, 6),
           ),
         ),
@@ -102,15 +118,6 @@ class MoreScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   _MoreGlassRow(
-                    icon: Icons.auto_graph_rounded,
-                    iconColor: AppTheme.primaryBlue,
-                    title: 'Financial Insights',
-                    subtitle: 'Health score, net worth evolution, category breakdown',
-                    isDark: isDark,
-                    onTap: () => _push(context, const _InsightsScreen()),
-                  ),
-                  _buildDivider(isDark),
-                  _MoreGlassRow(
                     icon: Icons.bar_chart_rounded,
                     iconColor: const Color(0xFF0D9488),
                     title: 'Reports & Cash Flow',
@@ -120,12 +127,21 @@ class MoreScreen extends ConsumerWidget {
                   ),
                   _buildDivider(isDark),
                   _MoreGlassRow(
-                    icon: Icons.emoji_events_rounded,
-                    iconColor: const Color(0xFFF59E0B),
-                    title: 'Rewards & Daily Streaks',
-                    subtitle: 'Financial consistency milestones and achievements',
+                    icon: Icons.auto_graph_rounded,
+                    iconColor: AppTheme.primaryBlue,
+                    title: 'Financial Health & Insights',
+                    subtitle: 'Health score, runway, net worth evolution, category breakdown',
                     isDark: isDark,
-                    onTap: () => _push(context, const GamificationDetailScreen()),
+                    onTap: () => _push(context, const _InsightsScreen()),
+                  ),
+                  _buildDivider(isDark),
+                  _MoreGlassRow(
+                    icon: Icons.auto_stories_rounded,
+                    iconColor: const Color(0xFF8B5CF6),
+                    title: 'Spending Wrapped',
+                    subtitle: 'Annual and monthly spending recap & highlights',
+                    isDark: isDark,
+                    onTap: () => _push(context, const WrappedScreen(period: 'month')),
                   ),
                 ],
               ),

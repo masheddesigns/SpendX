@@ -5,7 +5,6 @@ import '../../features/automation/automation_engine.dart';
 import '../../features/automation/automation_providers.dart';
 import '../../features/budget/budget_providers.dart';
 import '../../features/forecast/forecast_provider.dart';
-import '../../features/gamification/xp_provider.dart';
 import '../../features/income/income_providers.dart';
 import '../../features/cashflow/runway_provider.dart';
 import '../../features/streak/streak_provider.dart';
@@ -580,12 +579,13 @@ class AIDataBridge {
   // ── Progress / XP ────────────────────────────────────────────────────
 
   Future<String> _handleProgress() async {
-    final xp = await _ref.read(xpProvider.future);
+    final streak = await _ref.read(streakProvider.future);
 
     final sb = StringBuffer();
-    sb.writeln('You\'re Level ${xp.level} (${xp.levelName})');
-    sb.writeln('XP: ${xp.xp} / ${xp.xpForNextLevel}');
-    sb.writeln('${xp.xpForNextLevel - xp.xp} XP to reach Level ${xp.level + 1}.');
+    sb.writeln('Active Consistency Streak: ${streak.current} day${streak.current == 1 ? '' : 's'}.');
+    if (streak.best > streak.current) {
+      sb.writeln('Personal best: ${streak.best} days.');
+    }
 
     return sb.toString().trim();
   }

@@ -22,6 +22,8 @@ import '../goals/add_goal_screen.dart';
 import '../goals/goals_screen.dart';
 import '../home/transactions_screen.dart';
 import '../recurring/recurring_payments_screen.dart';
+import '../review/review_queue_screen.dart';
+import '../../features/review_queue/providers/review_providers.dart';
 
 /// SpendX 2.0 Forward-Looking Financial Workspace (Planning Screen).
 ///
@@ -67,13 +69,26 @@ class PlanTab extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: DailyDigestCard(
                   topInsight: timeline.topInsight,
-                  onActionTap: () => Navigator.push(
-                    context,
-                    AppPageRoute(
-                      builder: (_) =>
-                          const TransactionListScreen(isFullScreen: true),
-                    ),
-                  ),
+                  onActionTap: () {
+                    final reviewCount =
+                        ref.read(reviewQueueCountProvider).valueOrNull ?? 0;
+                    if (reviewCount > 0) {
+                      Navigator.push(
+                        context,
+                        AppPageRoute(
+                          builder: (_) => const ReviewQueueScreen(),
+                        ),
+                      );
+                    } else {
+                      Navigator.push(
+                        context,
+                        AppPageRoute(
+                          builder: (_) =>
+                              const TransactionListScreen(isFullScreen: true),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ),
             ),

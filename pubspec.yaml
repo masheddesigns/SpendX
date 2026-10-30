@@ -36,7 +36,6 @@ dependencies:
   google_sign_in: 6.2.1
   googleapis: ^16.0.0
   workmanager: ^0.9.0
-  games_services: ^5.0.0
 
   extension_google_sign_in_as_googleapis_auth: 2.0.13
   flutter_secure_storage: ^10.0.0

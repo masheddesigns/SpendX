@@ -5,7 +5,6 @@ class ReportsSummary {
   final double totalExpense;
   final List<CreditCardSummary> creditSummaries;
   final List<LoanSummary> loanSummaries;
-  final List<FuelMonthData> fuelMonthlyData;
   final List<LendingTrendData> lendingTrend;
   final double totalLent;
   final double totalBorrowed;
@@ -29,7 +28,6 @@ class ReportsSummary {
     required this.totalExpense,
     required this.creditSummaries,
     required this.loanSummaries,
-    required this.fuelMonthlyData,
     required this.lendingTrend,
     required this.totalLent,
     required this.totalBorrowed,
@@ -50,7 +48,6 @@ class ReportsSummary {
     totalExpense: 0,
     creditSummaries: [],
     loanSummaries: [],
-    fuelMonthlyData: [],
     lendingTrend: [],
     totalLent: 0,
     totalBorrowed: 0,
@@ -103,12 +100,6 @@ class LoanSummary {
   });
 }
 
-class FuelMonthData {
-  final String label;
-  final double cost;
-
-  FuelMonthData({required this.label, required this.cost});
-}
 
 class LendingTrendData {
   final String label;

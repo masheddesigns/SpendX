@@ -7,7 +7,6 @@ import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../accounts/providers/account_providers.dart';
 import '../../transactions/providers/transaction_providers.dart';
-import '../../wrapped/widgets/wrapped_story_bubbles.dart';
 import '../widgets/quick_actions_row.dart';
 import '../widgets/safe_to_spend_card.dart';
 
@@ -51,9 +50,6 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
-          // ── Compact Wrapped Story Bubbles (Canvas Direct) ──
-          const SliverToBoxAdapter(child: WrappedStoryBubbles()),
-
           // ── Primary Decision Hero: Safe-to-Spend ─────────
           const SliverToBoxAdapter(child: SafeToSpendCard()),
 

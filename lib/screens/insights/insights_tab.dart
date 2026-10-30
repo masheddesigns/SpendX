@@ -7,7 +7,6 @@ import '../../features/anomaly/anomaly_provider.dart';
 import '../../features/cashflow/runway_provider.dart';
 import '../../features/dashboard/insights_providers.dart';
 import '../../features/forecast/forecast_provider.dart';
-import '../../features/gamification/xp_provider.dart';
 import '../../features/health/health_score_provider.dart';
 import '../../features/liabilities/providers/credit_health_providers.dart';
 import '../../features/streak/streak_provider.dart';
@@ -40,7 +39,6 @@ class InsightsTab extends ConsumerWidget {
     final prevStats = ref.watch(previousMonthStatsProvider);
     final forecastAsync = ref.watch(forecastProvider);
     final streakAsync = ref.watch(streakProvider);
-    final xpAsync = ref.watch(xpProvider);
     final salaryAsync = ref.watch(salaryLedgerProvider);
 
     final children = <Widget>[
@@ -66,7 +64,6 @@ class InsightsTab extends ConsumerWidget {
             runwayAsync: runwayAsync,
             anomaliesAsync: anomaliesAsync,
             streakAsync: streakAsync,
-            xpAsync: xpAsync,
           ),
 
           // ═══════════════════════════════════════════════════════════
@@ -248,13 +245,11 @@ class _RiskSection extends StatelessWidget {
   final AsyncValue<Runway> runwayAsync;
   final AsyncValue<List<Anomaly>> anomaliesAsync;
   final AsyncValue<Streak> streakAsync;
-  final AsyncValue<UserXP> xpAsync;
 
   const _RiskSection({
     required this.runwayAsync,
     required this.anomaliesAsync,
     required this.streakAsync,
-    required this.xpAsync,
   });
 
   @override
@@ -263,14 +258,12 @@ class _RiskSection extends StatelessWidget {
     final runway = runwayAsync.valueOrNull;
     final anomalies = anomaliesAsync.valueOrNull ?? [];
     final streak = streakAsync.valueOrNull;
-    final xp = xpAsync.valueOrNull;
 
     final hasRunwayRisk = runway != null && runway.status != RunwayStatus.safe;
     final hasAnomalies = anomalies.isNotEmpty;
     final hasStreak = streak != null && streak.current > 0;
-    final hasXP = xp != null && xp.xp > 0;
 
-    if (!hasRunwayRisk && !hasAnomalies && !hasStreak && !hasXP) {
+    if (!hasRunwayRisk && !hasAnomalies && !hasStreak) {
       return const SizedBox.shrink();
     }
 
@@ -334,32 +327,20 @@ class _RiskSection extends StatelessWidget {
                     ),
                   ),
 
-              // Streak + XP (inline)
-              if (hasStreak || hasXP) ...[
+              // Streak (inline)
+              if (hasStreak) ...[
                 if (hasRunwayRisk || hasAnomalies) const Divider(height: 16),
                 Row(
                   children: [
-                    if (hasStreak) ...[
-                      Icon(Icons.local_fire_department_rounded,
-                          size: 16,
-                          color: streak.current >= 7
-                              ? const Color(0xFF8B5CF6)
-                              : const Color(0xFFF59E0B)),
-                      const SizedBox(width: 4),
-                      Text('${streak.current}d streak',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600)),
-                    ],
-                    if (hasStreak && hasXP) const SizedBox(width: 16),
-                    if (hasXP) ...[
-                      Text('Lv${xp.level}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 4),
-                      Text(xp.levelName,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant)),
-                    ],
+                    Icon(Icons.local_fire_department_rounded,
+                        size: 16,
+                        color: streak.current >= 7
+                            ? const Color(0xFF8B5CF6)
+                            : const Color(0xFFF59E0B)),
+                    const SizedBox(width: 4),
+                    Text('${streak.current}d consistency streak',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
               ],

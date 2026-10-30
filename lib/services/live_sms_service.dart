@@ -28,7 +28,6 @@ import '../models/transaction.dart';
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
 import 'financial_transaction_service.dart';
-import 'gamification_service.dart';
 import 'notification_service_v2.dart';
 import 'smart_category_classifier.dart';
 import 'sms_import_service.dart';
@@ -525,11 +524,6 @@ class LiveSmsService with WidgetsBindingObserver {
             }
           } catch (_) {}
         }
-
-        // Gamification XP
-        try {
-          await GamificationService.instance.addXP(10, isTransaction: true);
-        } catch (_) {}
 
         // Learn Merchant Rule
         if (resolution.id != null && notes.isNotEmpty) {

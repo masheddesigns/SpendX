@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import '../data/core/app_database.dart';
 import '../data/core/tables.dart';
-import '../services/gamification_service.dart';
 import 'insights_activity_service.dart';
 
 import '../data/repositories/transaction_repo.dart';
@@ -122,7 +121,7 @@ class FinancialHealthService {
     double discipline = (rawDiscipline + complianceBonus).clamp(0.0, 1.0);
 
     // 4. Consistency (15%) -> Based on streak
-    double streak = (await GamificationService.instance.getCurrentStreak()).toDouble();
+    double streak = (await _calculateStreak()).toDouble();
     double consistencyScore = (streak / 30).clamp(0.0, 1.0); 
 
     // 5. Asset Growth (10%)
@@ -135,6 +134,24 @@ class FinancialHealthService {
       'consistency': consistencyScore,
       'assetGrowth': assetGrowth,
     };
+  }
+
+  DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+  Future<int> _calculateStreak() async {
+    final txns = await transactionRepo.getAll();
+    if (txns.isEmpty) return 0;
+    final loggedDays = txns.map((t) => _dateOnly(t.date)).toSet();
+    int streak = 0;
+    DateTime cursor = _dateOnly(DateTime.now());
+    if (!loggedDays.contains(cursor)) {
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    while (loggedDays.contains(cursor)) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
   }
 
   double calculateTotalScore(Map<String, double> metrics) {

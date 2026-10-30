@@ -139,7 +139,6 @@ class ReportsService {
       totalExpense: totalExpense,
       creditSummaries: creditSummaries,
       loanSummaries: loanSummaries,
-      fuelMonthlyData: const [],
       lendingTrend: lendingTrendMap.entries
           .map((e) => LendingTrendData(label: e.key, net: e.value))
           .toList(),

@@ -9,7 +9,6 @@ import '../../../data/repositories/transaction_repo.dart';
 import '../../../models/review_item.dart';
 import '../../../models/transaction.dart';
 import '../../../services/financial_transaction_service.dart';
-import '../../../services/gamification_service.dart';
 import '../../../services/smart_category_classifier.dart';
 import '../../merchant_rules/data/merchant_rule_repo.dart';
 import '../../transactions/providers/transaction_providers.dart';
@@ -123,9 +122,6 @@ Future<void> approveReviewItem({
 
   // 1. Insert transaction (with balance impact)
   await fSvc.createTransaction(transaction);
-  try {
-    await GamificationService.instance.addXP(10, isTransaction: true);
-  } catch (_) {}
 
   // 2. Learn from this approval → merchant rules.
   //    Guarded so a learning failure can never abort the approval and leave
