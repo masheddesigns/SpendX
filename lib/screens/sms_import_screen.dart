@@ -10,12 +10,16 @@ import '../data/providers.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/credit_repo.dart';
 import '../data/repositories/loan_repo.dart';
+import '../data/repositories/recurring_repo.dart';
+import '../data/repositories/reminder_repo.dart';
 import '../features/liabilities/providers/liabilities_providers.dart'
     hide loansProvider;
 import '../features/transactions/providers/transaction_providers.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
 import '../models/loan.dart';
+import '../models/recurring_template.dart';
+import '../models/reminder_model.dart';
 import '../models/review_item.dart';
 import '../models/transaction.dart';
 import '../screens/loans/loans_screen.dart';
@@ -132,7 +136,12 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
       } catch (_) {}
     }
 
-    await _autoRegisterDetected(bundle.accounts, bundle.cards, bundle.loans);
+    await _autoRegisterDetected(
+      bundle.accounts,
+      bundle.cards,
+      bundle.loans,
+      bundle.upcomingObligations,
+    );
 
     if (!mounted) return;
     setState(() {
@@ -153,14 +162,21 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
     List<DetectedAccount> accounts,
     List<DetectedCard> cards,
     List<DetectedLoan> loans,
+    List<UpcomingObligationHit> upcomingObligations,
   ) async {
-    if (accounts.isEmpty && cards.isEmpty && loans.isEmpty) return;
+    if (accounts.isEmpty &&
+        cards.isEmpty &&
+        loans.isEmpty &&
+        upcomingObligations.isEmpty) {
+      return;
+    }
 
     var addedAccounts = 0;
     var updatedAccounts = 0;
     var addedCards = 0;
     var updatedCards = 0;
     var addedLoans = 0;
+    var addedReminders = 0;
 
     try {
       final existingAccounts =
@@ -244,6 +260,55 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
         }
       }
 
+      final reminderRepo = ReminderRepo();
+      final recurringRepo = RecurringRepo();
+      for (final ob in upcomingObligations) {
+        final cleanMerchant = ob.merchant ?? ob.title;
+        final slug = cleanMerchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+        final reminderId = 'sms_due_${slug}_${ob.dueDate.year}_${ob.dueDate.month}';
+
+        final existing = await reminderRepo.getById(reminderId);
+        if (existing == null) {
+          final reminder = Reminder(
+            id: reminderId,
+            title: ob.title,
+            type: ob.reminderType,
+            amount: ob.amount > 0 ? ob.amount : null,
+            dueDate: ob.dueDate,
+            recurrencePeriod: ob.isMandate ? ReminderRecurrence.monthly : ReminderRecurrence.none,
+            recordStatus: ReminderRecordStatus.pending,
+            sourceType: ob.reminderType == ReminderType.credit
+                ? ReminderSourceType.credit
+                : ReminderSourceType.manual,
+            notes: 'Auto-detected from SMS: ${ob.body}',
+            isActive: true,
+          );
+          await reminderRepo.upsert(reminder);
+          addedReminders++;
+
+          if (ob.isMandate && ob.amount > 0) {
+            final templates = await recurringRepo.getAll();
+            final cleanName = cleanMerchant.toLowerCase().trim();
+            final exists = templates.any((t) =>
+                t.name.toLowerCase().trim() == cleanName ||
+                t.name.toLowerCase().contains(cleanName) ||
+                cleanName.contains(t.name.toLowerCase()));
+            if (!exists) {
+              await recurringRepo.insert(
+                RecurringTemplate(
+                  name: cleanMerchant,
+                  amount: ob.amount,
+                  type: 'expense',
+                  frequency: 'monthly',
+                  startDate: ob.dueDate,
+                  isActive: true,
+                ),
+              );
+            }
+          }
+        }
+      }
+
       if (addedAccounts > 0 || updatedAccounts > 0) {
         ref.invalidate(accountsProvider);
       }
@@ -252,6 +317,10 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
       }
       if (addedLoans > 0) {
         ref.invalidate(loansProvider);
+      }
+      if (addedReminders > 0) {
+        ref.invalidate(remindersProvider);
+        ref.invalidate(recurringProvider);
       }
     } catch (_) {}
 
@@ -275,6 +344,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
     }
     if (addedLoans > 0) {
       parts.add('$addedLoans loan${addedLoans == 1 ? '' : 's'} added');
+    }
+    if (addedReminders > 0) {
+      parts.add('$addedReminders upcoming bill/mandate${addedReminders == 1 ? '' : 's'} added');
     }
     if (parts.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

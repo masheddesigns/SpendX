@@ -426,4 +426,111 @@ void main() {
       expect(cardDueToday.daysUntilDue, 0);
     });
   });
+
+  group('Upcoming obligations & autopay detection', () {
+    final service = SmsImportService.instance;
+
+    test('detects OneCard Netflix e-mandate upcoming debit', () {
+      final result = service.classifyMessage(
+        'Hi Sivek, you have an upcoming debit for the emandate registered on NETFLIX of INR199.0 on 30/10/2026. View Details https://onecard.1crd.in/Oneapp/SubsDshb -Team OneCard',
+        'CP-OneCrd-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.eventType, SmsEventType.billReminder);
+      final ob = result.upcomingObligation;
+      expect(ob, isNotNull);
+      expect(ob!.amount, 199.0);
+      expect(ob.merchant, 'Netflix');
+      expect(ob.isMandate, isTrue);
+      expect(ob.dueDate.day, 30);
+      expect(ob.dueDate.month, 10);
+      expect(ob.dueDate.year, 2026);
+    });
+
+    test('detects OneCard Spotify e-mandate upcoming debit', () {
+      final result = service.classifyMessage(
+        'Hi Sivek, you have an upcoming debit for the emandate registered on Spotify of INR179.0 on 26/10/2026. View Details https://onecard.1crd.in/Oneapp/SubsDshb -Team OneCard',
+        'CP-OneCrd-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.eventType, SmsEventType.billReminder);
+      final ob = result.upcomingObligation;
+      expect(ob, isNotNull);
+      expect(ob!.amount, 179.0);
+      expect(ob.merchant, 'Spotify');
+      expect(ob.isMandate, isTrue);
+      expect(ob.dueDate.day, 26);
+      expect(ob.dueDate.month, 10);
+    });
+
+    test('detects SBI UPI AutoPay scheduled SIP debit', () {
+      final result = service.classifyMessage(
+        'Dear UPI User, UPI AutoPay for GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP debit of Rs.1100.00 is scheduled on .11/10/26, 01a0e6968c75765b805365fc1885a677@yesg. Please ensure sufficient balance in your account. -SBI',
+        'JK-SBIUPI-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.eventType, SmsEventType.billReminder);
+      final ob = result.upcomingObligation;
+      expect(ob, isNotNull);
+      expect(ob!.amount, 1100.0);
+      expect(ob.merchant, contains('Groww'));
+      expect(ob.isMandate, isTrue);
+      expect(ob.dueDate.day, 11);
+      expect(ob.dueDate.month, 10);
+    });
+
+    test('detects JioHome broadband bill due for payment', () {
+      final result = service.classifyMessage(
+        'Your bill dated 21-10-2026 for JioHome connection having Jio number 778620105790 is due for payment on 27-10-2026 . Bill period : 21-Sep-2026 to 20-Oct-2026 Total Amount payable : Rs. 706.82 Payment due date: 27-Oct-2026',
+        'JL-JIOINF-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.eventType, SmsEventType.billReminder);
+      final ob = result.upcomingObligation;
+      expect(ob, isNotNull);
+      expect(ob!.amount, 706.82);
+      expect(ob.merchant, 'JioHome');
+      expect(ob.dueDate.day, 27);
+      expect(ob.dueDate.month, 10);
+    });
+
+    test('detects Niva Bupa insurance renewal notice with premium', () {
+      final result = service.classifyMessage(
+        'Hi Sivek, Your Niva Bupa policy renewal is due. Upon renewal, you will receive a Bonus of Rs.15,00,000, increasing your total coverage to Rs.22,50,000. Renew today with a premium of Rs.7,497 at https://epbz.in/POLBAZ/c2gv/lc2hZ. Team Policybazaar',
+        'VM-POLBAZ-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.eventType, SmsEventType.billReminder);
+      final ob = result.upcomingObligation;
+      expect(ob, isNotNull);
+      expect(ob!.amount, 7497.0);
+      expect(ob.merchant, 'Niva Bupa Health Insurance');
+      expect(ob.reminderType, ReminderType.insurance);
+    });
+
+    test('detects Tata Neu HDFC credit card bill due', () {
+      final result = service.classifyMessage(
+        'Your HDFC Credit Card bill of Rs.25000.00 is due on 2026-10-21. Pay by 2026-10-21 to avoid late charges: https://m.tneu.in/TNBPAY/j03Z144 - Tata Neu',
+        'JX-TNBPAY-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.eventType, SmsEventType.billReminder);
+      final ob = result.upcomingObligation;
+      expect(ob, isNotNull);
+      expect(ob!.amount, 25000.0);
+      expect(ob.reminderType, ReminderType.credit);
+      expect(ob.dueDate.day, 21);
+      expect(ob.dueDate.month, 10);
+    });
+
+    test('rejects revoked / cancelled mandates', () {
+      final result = service.classifyMessage(
+        'Your UPI-Mandate is successfully cancelled towards Shopify for 15000.00 from A/c No.XXXXXX9331. UMN:58f5e1c6816e98b4e0630c2eb00a359d@oksbi -SBI',
+        'AX-SBIUPI-S',
+      );
+      expect(result.transaction, isNull);
+      expect(result.upcomingObligation, isNull);
+      expect(result.eventType, isIn([SmsEventType.infoOnly, SmsEventType.failed]));
+    });
+  });
 }

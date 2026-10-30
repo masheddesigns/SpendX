@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../core/logging/app_logger.dart';
 import '../core/utils/category_resolver.dart';
 import '../core/utils/merchant_extractor.dart';
 import '../data/core/database_lifecycle_coordinator.dart';
@@ -13,12 +14,14 @@ import '../data/repositories/account_repo.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/credit_repo.dart';
+import '../data/repositories/recurring_repo.dart';
 import '../data/repositories/reminder_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../domain/finance/finance.dart';
 import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
+import '../models/recurring_template.dart';
 import '../models/reminder_model.dart';
 import '../models/review_item.dart';
 import '../models/transaction.dart';
@@ -81,12 +84,16 @@ class LiveSmsService with WidgetsBindingObserver {
 
     // Drain any pending messages received while the app was closed.
     await drainPending();
+
+    // Sync upcoming e-mandates / subscriptions from inbox
+    unawaited(syncUpcomingObligationsFromInbox());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     unawaited(drainPending());
+    unawaited(syncUpcomingObligationsFromInbox());
   }
 
   Future<void> _flushLiveBuffer() async {
@@ -573,6 +580,14 @@ class LiveSmsService with WidgetsBindingObserver {
       }
     }
 
+    // 1.5. Upcoming financial obligations (mandates, subscriptions, scheduled debits, bill dues)
+    if (result.upcomingObligation != null) {
+      final obligation = result.upcomingObligation!;
+      await _registerUpcomingObligation(obligation);
+      final dueStr = '${obligation.dueDate.day}/${obligation.dueDate.month}/${obligation.dueDate.year}';
+      balanceNote = 'Upcoming ${obligation.title}: ${AppFormat.currency(obligation.amount)} due on $dueStr';
+    }
+
     // 2. Balance update from message itself
     if (result.balance != null && !skipBalance) {
       final hit = result.balance!;
@@ -732,6 +747,107 @@ class LiveSmsService with WidgetsBindingObserver {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Registers an upcoming obligation (e-mandate, autopay, utility bill due, insurance renewal)
+  /// as an active reminder and recurring template.
+  Future<void> _registerUpcomingObligation(UpcomingObligationHit obligation) async {
+    try {
+      final reminderRepo = ReminderRepo();
+      final cleanMerchant = obligation.merchant ?? obligation.title;
+      final slug = cleanMerchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+
+      // Stable ID for idempotency per due month/year
+      final reminderId = 'sms_due_${slug}_${obligation.dueDate.year}_${obligation.dueDate.month}';
+
+      // Check if a credit card matches
+      String? matchedCardId;
+      if (obligation.last4 != null || obligation.bankKeyword != null) {
+        final cards = await CreditRepo().getAll();
+        final matchedCard = (obligation.last4 != null)
+            ? cards.where((c) => c.last4 == obligation.last4).firstOrNull
+            : cards
+                .where((c) =>
+                    obligation.bankKeyword != null &&
+                    c.bank.toLowerCase().contains(obligation.bankKeyword!.toLowerCase()))
+                .firstOrNull;
+        matchedCardId = matchedCard?.id;
+      }
+
+      final reminder = Reminder(
+        id: reminderId,
+        title: obligation.title,
+        type: obligation.reminderType,
+        amount: obligation.amount > 0 ? obligation.amount : null,
+        dueDate: obligation.dueDate,
+        recurrencePeriod:
+            obligation.isMandate ? ReminderRecurrence.monthly : ReminderRecurrence.none,
+        recordStatus: ReminderRecordStatus.pending,
+        sourceType: obligation.reminderType == ReminderType.credit
+            ? ReminderSourceType.credit
+            : ReminderSourceType.manual,
+        linkedEntityId: matchedCardId,
+        notes: 'Auto-detected from SMS: ${obligation.body}',
+        isActive: true,
+      );
+      await reminderRepo.upsert(reminder);
+
+      // If it's a mandate / subscription (e.g. Netflix, Spotify, SIP), also register RecurringTemplate
+      if (obligation.isMandate && obligation.amount > 0) {
+        await _registerRecurringTemplateIfMissing(
+          name: cleanMerchant,
+          amount: obligation.amount,
+          startDate: obligation.dueDate,
+        );
+      }
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] _registerUpcomingObligation error: $e');
+    }
+  }
+
+  Future<void> _registerRecurringTemplateIfMissing({
+    required String name,
+    required double amount,
+    required DateTime startDate,
+  }) async {
+    try {
+      final repo = RecurringRepo();
+      final templates = await repo.getAll();
+      final cleanName = name.toLowerCase().trim();
+      final exists = templates.any((t) =>
+          t.name.toLowerCase().trim() == cleanName ||
+          t.name.toLowerCase().contains(cleanName) ||
+          cleanName.contains(t.name.toLowerCase()));
+      if (!exists) {
+        final t = RecurringTemplate(
+          name: name,
+          amount: amount,
+          type: 'expense',
+          frequency: 'monthly',
+          startDate: startDate,
+          isActive: true,
+        );
+        await repo.insert(t);
+      }
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] _registerRecurringTemplateIfMissing error: $e');
+    }
+  }
+
+  /// Scans device SMS inbox for upcoming e-mandates, subscriptions, and bill dues.
+  Future<void> syncUpcomingObligationsFromInbox() async {
+    try {
+      final bundle = await SmsImportService.instance.scan(
+        options: const SmsScanOptions(daysBack: 60),
+      );
+      if (bundle.upcomingObligations.isNotEmpty) {
+        for (final obligation in bundle.upcomingObligations) {
+          await _registerUpcomingObligation(obligation);
+        }
+      }
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] syncUpcomingObligationsFromInbox error: $e');
     }
   }
 

@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
 import '../../core/app_database.dart';
-import '../../core/tables_v24.dart';
+import '../../core/tables.dart';
 
 /// Canonical Financial Query Repository for SpendX 2.0.
 ///
@@ -337,7 +337,8 @@ class CanonicalFinancialQueryRepository {
     final earmarkAmount = (earmarkResult.first['total_earmarks'] as num?)?.toInt() ?? 0;
     final activeEarmarks = Money.fromMinorUnits(earmarkAmount, currency: currency);
 
-    final commitments = knownCommitments14d ?? Money.zeroCurrency(currency);
+    final commitments = knownCommitments14d ??
+        await _computeKnownCommitments14d(db, currency: currency);
     final pendingDebits = highConfidencePendingDebits ?? Money.zeroCurrency(currency);
 
     return SafeToSpendCalculation.compute(
@@ -346,6 +347,162 @@ class CanonicalFinancialQueryRepository {
       knownCommitments14d: commitments,
       highConfidencePendingDebits: pendingDebits,
     );
+  }
+
+  /// Calculates total obligations (bills, subscriptions, credit card dues, EMI installments)
+  /// due within the next 14 calendar days from the local database.
+  Future<Money> _computeKnownCommitments14d(
+    DatabaseExecutor db, {
+    String currency = 'INR',
+  }) async {
+    final now = DateTime.now();
+    final endWindow = now.add(const Duration(days: 14));
+    final endIso = endWindow.toIso8601String();
+    double total14d = 0.0;
+    final seenCommitments = <String>{};
+
+    // 1. Reminders due within 14 days or overdue (excluding salary income)
+    try {
+      final reminderRows = await db.rawQuery('''
+        SELECT id, title, amount, date, linked_entity_id, type, is_active, is_completed
+        FROM ${Tables.reminders}
+        WHERE is_active = 1
+          AND is_completed = 0
+          AND type != 'salary'
+          AND date <= ?;
+      ''', [endIso]);
+
+      for (final r in reminderRows) {
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        if (amount > 0) {
+          total14d += amount;
+          final cardId = r['linked_entity_id'] as String?;
+          if (cardId != null && cardId.isNotEmpty) {
+            seenCommitments.add('card:$cardId');
+          }
+          final title = (r['title'] as String?)?.toLowerCase().trim() ?? '';
+          if (title.isNotEmpty) {
+            seenCommitments.add('title:$title');
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Credit cards due within next 14 days (if not already counted via reminder)
+    try {
+      final cardRows = await db.rawQuery('''
+        SELECT id, used_amount, last_statement_balance, due_day
+        FROM ${Tables.creditCards};
+      ''');
+
+      for (final c in cardRows) {
+        final cardId = c['id'] as String? ?? '';
+        if (seenCommitments.contains('card:$cardId')) continue;
+
+        final dueDay = (c['due_day'] as num?)?.toInt() ?? 20;
+        final nextDue = _calculateNextDueDay(now, dueDay);
+
+        if (nextDue.isBefore(endWindow) || nextDue.isAtSameMomentAs(endWindow)) {
+          final lastStmt = (c['last_statement_balance'] as num?)?.toDouble() ?? 0.0;
+          final used = (c['used_amount'] as num?)?.toDouble() ?? 0.0;
+          final dueAmount = lastStmt > 0 ? lastStmt : (used > 0 ? used : 0.0);
+          if (dueAmount > 0) {
+            total14d += dueAmount;
+            seenCommitments.add('card:$cardId');
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Recurring templates due within next 14 days (if not already counted via reminder)
+    try {
+      final recurringRows = await db.rawQuery('''
+        SELECT name, amount, type, frequency, last_generated, next_generation, is_active
+        FROM ${Tables.recurring_templates}
+        WHERE is_active = 1 AND type = 'expense';
+      ''');
+
+      for (final t in recurringRows) {
+        final name = (t['name'] as String? ?? '').toLowerCase().trim();
+        final alreadySeen = seenCommitments.any((k) {
+          final stripped = k.replaceFirst('title:', '');
+          return stripped.isNotEmpty && (stripped.contains(name) || name.contains(stripped));
+        });
+        if (alreadySeen) continue;
+
+        final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+        final freq = t['frequency'] as String? ?? 'monthly';
+        final startIso = t['next_generation'] as String?;
+        final lastIso = t['last_generated'] as String?;
+
+        final startDate = startIso != null ? DateTime.tryParse(startIso) ?? now : now;
+        final lastDate = lastIso != null ? DateTime.tryParse(lastIso) : null;
+
+        if (_isTemplateDueIn14Days(startDate, lastDate, freq, now, endWindow)) {
+          total14d += amount;
+        }
+      }
+    } catch (_) {}
+
+    return Money.fromRupees(total14d);
+  }
+
+  DateTime _calculateNextDueDay(DateTime now, int dueDay) {
+    var year = now.year;
+    var month = now.month;
+    var maxDays = DateTime(year, month + 1, 0).day;
+    var day = dueDay > maxDays ? maxDays : dueDay;
+    var date = DateTime(year, month, day);
+    if (date.isBefore(DateTime(now.year, now.month, now.day))) {
+      month = month == 12 ? 1 : month + 1;
+      year = month == 1 ? year + 1 : year;
+      maxDays = DateTime(year, month + 1, 0).day;
+      day = dueDay > maxDays ? maxDays : dueDay;
+      date = DateTime(year, month, day);
+    }
+    return date;
+  }
+
+  bool _isTemplateDueIn14Days(
+    DateTime startDate,
+    DateTime? lastDate,
+    String frequency,
+    DateTime now,
+    DateTime endWindow,
+  ) {
+    DateTime nextDate = startDate;
+    if (lastDate != null) {
+      nextDate = _calculateNextRecurring(lastDate, frequency);
+    }
+
+    while (nextDate.isBefore(now)) {
+      final next = _calculateNextRecurring(nextDate, frequency);
+      if (next.isAtSameMomentAs(nextDate)) break;
+      nextDate = next;
+    }
+
+    return nextDate.isBefore(endWindow) || nextDate.isAtSameMomentAs(endWindow);
+  }
+
+  DateTime _calculateNextRecurring(DateTime from, String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return from.add(const Duration(days: 1));
+      case 'weekly':
+        return from.add(const Duration(days: 7));
+      case 'monthly':
+        final nextMonth = from.month == 12 ? 1 : from.month + 1;
+        final nextYear = from.month == 12 ? from.year + 1 : from.year;
+        final maxDays = DateTime(nextYear, nextMonth + 1, 0).day;
+        final nextDay = from.day > maxDays ? maxDays : from.day;
+        return DateTime(nextYear, nextMonth, nextDay, from.hour, from.minute);
+      case 'yearly':
+        final maxDays = DateTime(from.year + 1, from.month + 1, 0).day;
+        final nextDay = from.day > maxDays ? maxDays : from.day;
+        return DateTime(from.year + 1, from.month, nextDay, from.hour, from.minute);
+      default:
+        return from.add(const Duration(days: 30));
+    }
   }
 
   /// Calculates total expense spending for a specific category within an optional date range.

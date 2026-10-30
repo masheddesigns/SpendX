@@ -54,5 +54,22 @@ void main() {
       expect(calc.discretionaryCash != calc.safeToSpend, isTrue);
       expect(calc.cashflowShortfall == -calc.discretionaryCash, isTrue);
     });
+
+    test('14-day commitments scenario with real SMS obligations', () {
+      // Obligations: Netflix ₹199, Spotify ₹179, JioHome ₹706.82, HDFC CC bill ₹25,000 = ₹26,084.82
+      final obligations = 199.0 + 179.0 + 706.82 + 25000.0;
+      final calc = SafeToSpendCalculation.compute(
+        liquidAssets: Money.fromRupees(50000),
+        activeEarmarks: Money.fromRupees(10000),
+        knownCommitments14d: Money.fromRupees(obligations),
+        highConfidencePendingDebits: Money.zero,
+      );
+
+      // Liquid: 50,000 - 10,000 - 26,084.82 = 13,915.18
+      expect(calc.discretionaryCash, Money.fromRupees(13915.18));
+      expect(calc.safeToSpend, Money.fromRupees(13915.18));
+      expect(calc.hasShortfall, isFalse);
+      expect(calc.knownCommitments14d.toRupees, 26084.82);
+    });
   });
 }

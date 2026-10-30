@@ -3,6 +3,7 @@ import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../core/logging/app_logger.dart';
+import '../models/reminder_model.dart';
 import '../models/review_item.dart';
 import 'transaction_text_parser.dart';
 
@@ -108,6 +109,35 @@ class DetectedLoan {
   });
 }
 
+/// An upcoming financial obligation detected in an SMS (e-mandate, autopay, utility bill due, insurance renewal).
+class UpcomingObligationHit {
+  final String title;
+  final double amount;
+  final DateTime dueDate;
+  final String? merchant;
+  final String? last4;
+  final String? bankKeyword;
+  final ReminderType reminderType;
+  final bool isMandate;
+  final String sender;
+  final String body;
+  final DateTime? smsDate;
+
+  const UpcomingObligationHit({
+    required this.title,
+    required this.amount,
+    required this.dueDate,
+    this.merchant,
+    this.last4,
+    this.bankKeyword,
+    required this.reminderType,
+    this.isMandate = false,
+    required this.sender,
+    required this.body,
+    this.smsDate,
+  });
+}
+
 /// Everything a single SMS scan found.
 class SmsScanBundle {
   final List<SmsImportResult> transactions;
@@ -115,6 +145,7 @@ class SmsScanBundle {
   final List<DetectedAccount> accounts;
   final List<DetectedCard> cards;
   final List<DetectedLoan> loans;
+  final List<UpcomingObligationHit> upcomingObligations;
 
   const SmsScanBundle({
     required this.transactions,
@@ -122,6 +153,7 @@ class SmsScanBundle {
     this.accounts = const [],
     this.cards = const [],
     this.loans = const [],
+    this.upcomingObligations = const [],
   });
 }
 
@@ -155,6 +187,9 @@ enum SmsEventType {
   /// Failed, declined, or cancelled transaction attempt
   failed,
 
+  /// Bill payment reminder, recurring subscription mandate, or upcoming scheduled debit
+  billReminder,
+
   /// Non-transactional notification, statement summary, or balance update only
   infoOnly,
 }
@@ -163,11 +198,13 @@ enum SmsEventType {
 class SmsClassification {
   final ParsedTransaction? transaction;
   final BalanceHit? balance;
+  final UpcomingObligationHit? upcomingObligation;
   final SmsEventType eventType;
 
   const SmsClassification({
     this.transaction,
     this.balance,
+    this.upcomingObligation,
     this.eventType = SmsEventType.infoOnly,
   });
 }
@@ -198,6 +235,17 @@ class SmsImportService {
     if (TransactionTextParser.isFailedPayment(body)) {
       final balance = _detectBalance(body, sender);
       return SmsClassification(balance: balance, eventType: SmsEventType.failed);
+    }
+
+    // 1.5. Detect upcoming financial obligations (e-mandates, subscriptions, scheduled debits, bill dues)
+    final upcoming = detectUpcomingObligation(body, sender);
+    if (upcoming != null) {
+      final balance = _detectBalance(body, sender);
+      return SmsClassification(
+        balance: balance,
+        upcomingObligation: upcoming,
+        eventType: SmsEventType.billReminder,
+      );
     }
 
     // 2. Hard reject non-transaction / promotional / telecom / weather / service messages.
@@ -371,8 +419,10 @@ class SmsImportService {
 
     final seenTx = <String>{};
     final seenBal = <String>{};
+    final seenUpcoming = <String>{};
     final transactions = <SmsImportResult>[];
     final balances = <BalanceHit>[];
+    final upcomingObligations = <UpcomingObligationHit>[];
     final accountMap =
         <String, ({DateTime? date, String bank, String? last4, double balance, String sender})>{};
     final cardMap =
@@ -492,6 +542,15 @@ class SmsImportService {
       final isCcRefundCandidate = _isCreditCardRefundText(lower);
       final isCcBillCandidate = _isCreditCardBillText(lower);
       final isCardSpend = _isCardSpendCandidate(lower);
+
+      // 1.5 Upcoming financial obligations (mandates, subscriptions, bill dues)
+      final upcomingHit = detectUpcomingObligation(body, senderAddr, smsDate: smsDate);
+      if (upcomingHit != null) {
+        final upKey = '${upcomingHit.merchant ?? upcomingHit.title}|${upcomingHit.dueDate.year}-${upcomingHit.dueDate.month}-${upcomingHit.dueDate.day}|${upcomingHit.amount}';
+        if (seenUpcoming.add(upKey)) {
+          upcomingObligations.add(upcomingHit);
+        }
+      }
 
       // 2. Transaction messages — skip non-transaction / intent SMS.
       if (!isCcPaymentCandidate &&
@@ -631,6 +690,7 @@ class SmsImportService {
       accounts: accounts,
       cards: cards,
       loans: loans,
+      upcomingObligations: upcomingObligations,
     );
   }
 
@@ -875,8 +935,8 @@ class SmsImportService {
   );
 
   static final RegExp _dueDateRe = RegExp(
-    r'(?:due\s*(?:date|on|by)?|pay\s*(?:by|before)|payable\s*by|before\s*due\s*date)[^\w\d]*'
-    r'([0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4}|[0-9]{1,2}[-\/\s](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\/\s]?[0-9]{0,4})',
+    r'(?:due\s*(?:date|on|by|for\s+(?:payment|renewal)\s+on)?|pay\s*(?:by|before)|payable\s*(?:by|on)|scheduled\s+on|before\s*due\s*date|of\s+inr[\d.]+\s+on)[^\w\d]*'
+    r'([0-9]{4}[-\/.][0-9]{1,2}[-\/.][0-9]{1,2}|[0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4}|[0-9]{1,2}[-\/\s](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\/\s]?[0-9]{0,4})',
     caseSensitive: false,
   );
 
@@ -887,6 +947,15 @@ class SmsImportService {
     if (rawDate == null || rawDate.isEmpty) return null;
 
     final now = DateTime.now();
+
+    // 0. YYYY-MM-DD or YYYY/MM/DD
+    final isoMatch = RegExp(r'^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$').firstMatch(rawDate);
+    if (isoMatch != null) {
+      final year = int.tryParse(isoMatch.group(1)!) ?? now.year;
+      final month = int.tryParse(isoMatch.group(2)!) ?? 1;
+      final day = int.tryParse(isoMatch.group(3)!) ?? 1;
+      return DateTime(year, month, day);
+    }
 
     // 1. DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
     final numMatch = RegExp(r'^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$').firstMatch(rawDate);
@@ -920,6 +989,43 @@ class SmsImportService {
     }
 
     return null;
+  }
+
+  static DateTime? _parseDateString(String rawDate, [DateTime? fallback]) {
+    final now = fallback ?? DateTime.now();
+    final isoMatch = RegExp(r'^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$').firstMatch(rawDate);
+    if (isoMatch != null) {
+      final year = int.tryParse(isoMatch.group(1)!) ?? now.year;
+      final month = int.tryParse(isoMatch.group(2)!) ?? 1;
+      final day = int.tryParse(isoMatch.group(3)!) ?? 1;
+      return DateTime(year, month, day);
+    }
+    final numMatch = RegExp(r'^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$').firstMatch(rawDate);
+    if (numMatch != null) {
+      final day = int.tryParse(numMatch.group(1)!) ?? 1;
+      final month = int.tryParse(numMatch.group(2)!) ?? 1;
+      var year = int.tryParse(numMatch.group(3)!) ?? now.year;
+      if (year < 100) year += 2000;
+      return DateTime(year, month, day);
+    }
+    return null;
+  }
+
+  static String _normalizeMerchantName(String raw) {
+    final clean = raw.trim();
+    final upper = clean.toUpperCase();
+    if (upper == 'NETFLIX') return 'Netflix';
+    if (upper == 'SPOTIFY') return 'Spotify';
+    if (upper == 'YOUTUBE') return 'YouTube';
+    if (upper.contains('GROWW')) return 'Groww Stocks SIP';
+    if (upper.contains('ANOMALY')) return 'Anomaly';
+    if (upper == 'AMAZON' || upper.startsWith('AMAZON ')) return 'Amazon';
+    if (upper.contains('JIOHOME') || upper.contains('JIOFIB')) return 'JioHome';
+    if (upper.contains('NIVA BUPA')) return 'Niva Bupa Health Insurance';
+    if (clean.length > 2 && clean == clean.toUpperCase()) {
+      return clean[0] + clean.substring(1).toLowerCase();
+    }
+    return clean;
   }
 
   static final RegExp _minDueRe = RegExp(
@@ -1079,6 +1185,211 @@ class SmsImportService {
           body: body,
         );
       }
+    }
+
+    return null;
+  }
+
+  /// Detects an upcoming financial obligation (e-mandate, autopay, utility bill due, insurance renewal).
+  UpcomingObligationHit? detectUpcomingObligation(
+    String body,
+    String sender, {
+    DateTime? smsDate,
+  }) {
+    // 0. Hard reject OTPs or cancellations/revocations
+    if (_isOtpOrAuth(body)) return null;
+    final lower = body.toLowerCase();
+    if (lower.contains('revoked') ||
+        lower.contains('successfully revok') ||
+        lower.contains('cancelled') ||
+        lower.contains('canceled') ||
+        lower.contains('unsuccessful') ||
+        lower.contains('failed')) {
+      return null;
+    }
+
+    // 1. OneCard / Card E-Mandate Upcoming Debit:
+    // e.g. "Hi Sivek, you have an upcoming debit for the emandate registered on NETFLIX of INR199.0 on 30/10/2026."
+    final emandateMatch = RegExp(
+      r'upcoming\s+debit\s+for\s+(?:the\s+)?e?mandate\s+registered\s+on\s+([A-Za-z0-9 .&_-]+?)\s+of\s+(?:inr|rs\.?)\s*([\d,]+(?:\.\d+)?)\s+on\s+([0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4})',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (emandateMatch != null) {
+      final merchant = emandateMatch.group(1)!.trim();
+      final amount = _parseAmount(emandateMatch.group(2)!);
+      final rawDate = emandateMatch.group(3)!;
+      final dueDate = _parseDateString(rawDate) ?? smsDate ?? DateTime.now();
+      final normalizedMerchant = _normalizeMerchantName(merchant);
+      return UpcomingObligationHit(
+        title: '$normalizedMerchant Subscription',
+        amount: amount,
+        dueDate: dueDate,
+        merchant: normalizedMerchant,
+        last4: _last4(body),
+        bankKeyword: _bankKeyword(sender, lower),
+        reminderType: ReminderType.service,
+        isMandate: true,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
+    // 2. UPI AutoPay / SIP Scheduled Debit:
+    // e.g. "Dear UPI User, UPI AutoPay for GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP debit of Rs.1100.00 is scheduled on .11/10/26"
+    final autopayMatch = RegExp(
+      r'upi\s*autopay\s+for\s+([A-Za-z0-9 .&_-]+?)(?:\s+debit)?\s+of\s+(?:rs\.?|inr)\s*([\d,]+(?:\.\d+)?)\s+is\s+scheduled\s+on\s*\.?([0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4})',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (autopayMatch != null) {
+      final merchant = autopayMatch.group(1)!.trim();
+      final amount = _parseAmount(autopayMatch.group(2)!);
+      final rawDate = autopayMatch.group(3)!;
+      final dueDate = _parseDateString(rawDate) ?? smsDate ?? DateTime.now();
+      final normalizedMerchant = _normalizeMerchantName(merchant);
+      final title = normalizedMerchant.toLowerCase().contains('sip')
+          ? normalizedMerchant
+          : '$normalizedMerchant AutoPay';
+      return UpcomingObligationHit(
+        title: title,
+        amount: amount,
+        dueDate: dueDate,
+        merchant: normalizedMerchant,
+        last4: _last4(body),
+        bankKeyword: _bankKeyword(sender, lower),
+        reminderType: ReminderType.service,
+        isMandate: true,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
+    // 3. Card Standing Instruction:
+    // e.g. "Payment of INR 799.00 towards Merchant Amazon to be debited from ICICI Bank Credit Card 5007, as per Standing Instruction Xu1DUr0BJS, is due by 24/06/2026."
+    final siMatch = RegExp(
+      r'payment\s+of\s+(?:inr|rs\.?)\s*([\d,]+(?:\.\d+)?)\s+towards\s+(?:merchant\s+)?(.+?)\s+to\s+be\s+debited.*?(?:due\s+by|on)\s+([0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4})',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (siMatch != null) {
+      final amount = _parseAmount(siMatch.group(1)!);
+      final merchant = siMatch.group(2)!.trim();
+      final rawDate = siMatch.group(3)!;
+      final dueDate = _parseDateString(rawDate) ?? smsDate ?? DateTime.now();
+      final normalizedMerchant = _normalizeMerchantName(merchant);
+      return UpcomingObligationHit(
+        title: '$normalizedMerchant Subscription',
+        amount: amount,
+        dueDate: dueDate,
+        merchant: normalizedMerchant,
+        last4: _last4(body),
+        bankKeyword: _bankKeyword(sender, lower),
+        reminderType: ReminderType.service,
+        isMandate: true,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
+    // 4. Utility / Broadband Bill Due:
+    // e.g. "Bill dated 21-Oct-26 for your JioHome connection with JioFixedVoice Number ... is due for payment today. Total amount payable is Rs. 706.82."
+    // e.g. "Your bill dated 21-10-2026 for JioHome connection... is due for payment on 27-10-2026 . Total amount payable: Rs. 706.82"
+    final isUtilitySignal = lower.contains('jiohome') ||
+        lower.contains('jiofiber') ||
+        lower.contains('jiofixedvoice') ||
+        lower.contains('broadband') ||
+        lower.contains('electricity') ||
+        lower.contains('water bill') ||
+        sender.toLowerCase().contains('jiofib') ||
+        sender.toLowerCase().contains('jioinf') ||
+        sender.toLowerCase().contains('airtel');
+    final isBillDueSignal = lower.contains('due for payment') ||
+        lower.contains('payment due date') ||
+        lower.contains('due today') ||
+        lower.contains('bill is due');
+
+    if (isUtilitySignal && isBillDueSignal) {
+      final payableMatch = RegExp(
+        r'(?:total\s*(?:amount\s*)?payable|amount\s*payable|total\s*due|bill\s*amount)[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (payableMatch != null) {
+        final amount = _parseAmount(payableMatch.group(1)!);
+        if (amount > 0) {
+          DateTime? dueDate;
+          if (lower.contains('due for payment today') || lower.contains('due today')) {
+            dueDate = smsDate ?? DateTime.now();
+          } else {
+            dueDate = _extractDueDate(body) ?? smsDate ?? DateTime.now();
+          }
+          final serviceName = lower.contains('jio')
+              ? 'JioHome'
+              : (lower.contains('airtel') ? 'Airtel Broadband' : 'Utility');
+          return UpcomingObligationHit(
+            title: '$serviceName Bill',
+            amount: amount,
+            dueDate: dueDate,
+            merchant: serviceName,
+            reminderType: ReminderType.service,
+            isMandate: false,
+            sender: sender,
+            body: body,
+            smsDate: smsDate,
+          );
+        }
+      }
+    }
+
+    // 5. Insurance Renewal Notice:
+    // e.g. "Dear Customer, your Niva Bupa Health Insurance Policy No. 34419958202501 is due for renewal on 07/11/2026."
+    // e.g. "Hi Sivek, Your Niva Bupa policy renewal is due. ... Renew today with a premium of Rs.7,497 at ..."
+    if (lower.contains('due for renewal') || lower.contains('policy renewal is due')) {
+      final dueDate = _extractDueDate(body) ?? smsDate ?? DateTime.now();
+      final premMatch = RegExp(
+        r'premium\s+of\s+(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+        caseSensitive: false,
+      ).firstMatch(body);
+      final amount = premMatch != null ? _parseAmount(premMatch.group(1)!) : 0.0;
+      final insurer = lower.contains('niva bupa')
+          ? 'Niva Bupa Health Insurance'
+          : (lower.contains('star health') ? 'Star Health Insurance' : 'Insurance Policy');
+      return UpcomingObligationHit(
+        title: '$insurer Renewal',
+        amount: amount,
+        dueDate: dueDate,
+        merchant: insurer,
+        reminderType: ReminderType.insurance,
+        isMandate: false,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
+    // 6. Standalone Credit Card Bill Due (e.g. Tata Neu):
+    // e.g. "Your HDFC Credit Card bill of Rs.25000.00 is due on 2026-10-21. Pay by 2026-10-21 to avoid late charges"
+    final ccBillMatch = RegExp(
+      r'([A-Za-z0-9]+)\s+credit\s+card\s+bill\s+of\s+(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)\s+is\s+due\s+on\s+([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4})',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (ccBillMatch != null) {
+      final bank = ccBillMatch.group(1)!.trim();
+      final amount = _parseAmount(ccBillMatch.group(2)!);
+      final rawDate = ccBillMatch.group(3)!;
+      final dueDate = _parseDateString(rawDate) ?? smsDate ?? DateTime.now();
+      return UpcomingObligationHit(
+        title: '$bank Credit Card Bill',
+        amount: amount,
+        dueDate: dueDate,
+        merchant: '$bank Credit Card',
+        bankKeyword: bank.toLowerCase(),
+        reminderType: ReminderType.credit,
+        isMandate: false,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
     }
 
     return null;
