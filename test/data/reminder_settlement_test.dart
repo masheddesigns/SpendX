@@ -37,6 +37,26 @@ void main() {
         next_trigger_at INTEGER
       );
     ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${Tables.transactions} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        category_id TEXT,
+        account_id TEXT,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        notes TEXT,
+        tags TEXT,
+        source TEXT,
+        related_entity_id TEXT,
+        external_ref TEXT,
+        location TEXT,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    ''');
     repo = ReminderRepo(database: db);
   });
 
@@ -186,6 +206,122 @@ void main() {
       expect(settled, 0);
       final r = await repo.getById('due_spotify');
       expect(r!.recordStatus, ReminderRecordStatus.pending);
+    });
+
+    test('reconcileWithExistingTransactions marks past paid credit card bill as completed', () async {
+      final now = DateTime.now();
+      // 1. Existing transaction in DB: ₹25,000 paid to HDFC credit card 10 days ago
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.transactions} (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          type TEXT NOT NULL,
+          category_id TEXT,
+          account_id TEXT,
+          amount REAL NOT NULL,
+          date TEXT NOT NULL,
+          notes TEXT,
+          tags TEXT,
+          source TEXT,
+          related_entity_id TEXT,
+          external_ref TEXT,
+          location TEXT,
+          is_deleted INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      ''');
+
+      await db.insert(Tables.transactions, {
+        'id': 'tx_pay_hdfc_25k',
+        'user_id': 'offline_user',
+        'type': 'credit_payment',
+        'amount': 25000.0,
+        'date': now.subtract(const Duration(days: 10)).toIso8601String(),
+        'notes': 'Payment towards HDFC Bank Credit Card',
+        'source': 'credit_card_payment',
+        'related_entity_id': 'card_hdfc_6366',
+        'created_at': now.subtract(const Duration(days: 10)).toIso8601String(),
+        'updated_at': now.subtract(const Duration(days: 10)).toIso8601String(),
+      });
+
+      // 2. Pending reminder for HDFC Credit Card Bill due around that time
+      await repo.insertGlobalReminder(
+        Reminder(
+          id: 'sms_due_hdfc_credit_card_2026_10',
+          title: 'HDFC Credit Card Bill',
+          amount: 25000.0,
+          dueDate: now.subtract(const Duration(days: 5)),
+          recurrencePeriod: ReminderRecurrence.none,
+          recordStatus: ReminderRecordStatus.pending,
+          type: ReminderType.credit,
+          linkedEntityId: 'card_hdfc_6366',
+        ).toMap(),
+      );
+
+      final count = await repo.reconcileWithExistingTransactions(executor: db);
+      expect(count, 1);
+
+      final r = await repo.getById('sms_due_hdfc_credit_card_2026_10');
+      expect(r, isNotNull);
+      expect(r!.isDone, isTrue);
+      expect(r.recordStatus, ReminderRecordStatus.done);
+    });
+
+    test('reconcileWithExistingTransactions auto-settles credit card bill when card statement is zero', () async {
+      final repo = ReminderRepo(database: db);
+      final now = DateTime.now();
+
+      await TablesV24.createAllV24(db);
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS credit_cards (
+          id TEXT PRIMARY KEY,
+          last_statement_balance REAL NOT NULL DEFAULT 0
+        );
+      ''');
+
+      await db.insert('accounts', {
+        'id': 'card_hdfc_real',
+        'name': 'HDFC Card',
+        'institution_name': 'HDFC',
+        'account_type': 'liability',
+        'subtype': 'credit_card',
+        'account_number_last4': '6366',
+        'currency': 'INR',
+        'credit_limit_minor_units': 15000000,
+        'billing_cycle_day': 1,
+        'payment_due_day': 20,
+        'is_active': 1,
+        'created_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      });
+
+      await db.insert('credit_cards', {
+        'id': 'card_hdfc_real',
+        'last_statement_balance': 0.0,
+      });
+
+      await repo.insertGlobalReminder(
+        Reminder(
+          id: 'sms_due_hdfc_zero_stmt',
+          title: 'HDFC Credit Card Bill',
+          amount: 25000.0,
+          dueDate: now.subtract(const Duration(days: 9)),
+          recurrencePeriod: ReminderRecurrence.none,
+          recordStatus: ReminderRecordStatus.pending,
+          type: ReminderType.credit,
+          linkedEntityId: 'card_hdfc_real',
+        ).toMap(),
+      );
+
+      final count = await repo.reconcileWithExistingTransactions(executor: db);
+      expect(count, greaterThanOrEqualTo(1));
+
+      final r = await repo.getById('sms_due_hdfc_zero_stmt');
+      expect(r, isNotNull);
+      expect(r!.isDone, isTrue);
+      expect(r.recordStatus, ReminderRecordStatus.done);
     });
   });
 }

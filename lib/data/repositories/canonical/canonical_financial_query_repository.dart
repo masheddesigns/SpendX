@@ -1,9 +1,11 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
+import '../../../models/credit_card.dart';
 import '../../../models/reminder_model.dart';
 import '../../core/app_database.dart';
 import '../../core/tables.dart';
 import '../credit_repo.dart';
+import '../reminder_repo.dart';
 
 /// Canonical Financial Query Repository for SpendX 2.0.
 ///
@@ -367,6 +369,17 @@ class CanonicalFinancialQueryRepository {
     final items = <CommitmentItem>[];
     final seenCommitments = <String>{};
 
+    // Reconcile pending reminders against existing recorded payments/expenses
+    try {
+      await ReminderRepo(database: db).reconcileWithExistingTransactions(executor: db);
+    } catch (_) {}
+
+    // Pre-load all credit cards with canonical derived liabilities
+    List<CreditCard> cards = [];
+    try {
+      cards = await CreditRepo(executor: db).getAll();
+    } catch (_) {}
+
     // 1. Reminders due within 14 days or recent overdue (excluding salary income)
     try {
       final reminderRows = await db.rawQuery('''
@@ -394,6 +407,70 @@ class CanonicalFinancialQueryRepository {
         if (amount > 0) {
           final title = (r['title'] as String?)?.trim() ?? 'Reminder';
           final cardId = r['linked_entity_id'] as String?;
+          final rType = r['type'] as String? ?? 'bill';
+          final rawDate = r['date'] as String?;
+          final dueDate = rawDate != null ? DateTime.tryParse(rawDate) ?? now : now;
+
+          final isCreditReminder = rType == 'credit' ||
+              title.toLowerCase().contains('credit card') ||
+              (cardId != null && cardId.isNotEmpty);
+
+          // If this reminder is for a credit card, check if it was already paid
+          CreditCard? matchedCard;
+          if (isCreditReminder) {
+            if (cardId != null && cardId.isNotEmpty) {
+              matchedCard = cards.where((c) => c.id == cardId).firstOrNull;
+            }
+            if (matchedCard == null) {
+              final tLower = title.toLowerCase();
+              matchedCard = cards.where((c) {
+                final bLower = c.bank.toLowerCase();
+                final nLower = c.name.toLowerCase();
+                return (bLower.isNotEmpty && tLower.contains(bLower)) ||
+                    (nLower.isNotEmpty && tLower.contains(nLower));
+              }).firstOrNull;
+            }
+
+            if (matchedCard != null) {
+              final minPayDate = dueDate.subtract(const Duration(days: 25)).toIso8601String();
+              final maxPayDate = dueDate.add(const Duration(days: 25)).toIso8601String();
+
+              final payResult = await db.rawQuery('''
+                SELECT COALESCE(SUM(amount), 0) AS total_paid
+                FROM ${Tables.transactions}
+                WHERE is_deleted = 0
+                  AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
+                  AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
+                  AND date BETWEEN ? AND ?;
+              ''', [
+                matchedCard.id,
+                '%${matchedCard.bank}%',
+                '%${matchedCard.name}%',
+                minPayDate,
+                maxPayDate,
+              ]);
+
+              final totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+              final isPastDue = dueDate.isBefore(now);
+              final isCardPaid = totalPaid >= amount - 1.0 ||
+                  matchedCard.lastStatementBalance <= 0.01 ||
+                  matchedCard.outstanding <= 0.01 ||
+                  (isPastDue && matchedCard.outstanding < amount);
+
+              if (isCardPaid) {
+                // Credit card bill already paid in full!
+                final oldId = r['id'] as String?;
+                if (oldId != null && oldId.isNotEmpty) {
+                  await db.rawUpdate(
+                    'UPDATE ${Tables.reminders} SET is_completed = 1, record_status = ? WHERE id = ?',
+                    [ReminderRecordStatus.done.name, oldId],
+                  );
+                }
+                seenCommitments.add('card:${matchedCard.id}');
+                continue; // Skip paid credit card bill!
+              }
+            }
+          }
 
           // Normalized deduplication key for recurring obligations/merchants
           final cleanTitle = title
@@ -414,8 +491,6 @@ class CanonicalFinancialQueryRepository {
               (cardId != null &&
                   cardId.isNotEmpty &&
                   seenCommitments.contains('card:$cardId'))) {
-            // Obsolete older billing cycle for the same service/card already covered by a newer reminder.
-            // Mark older reminder as done to maintain database hygiene
             final oldId = r['id'] as String?;
             if (oldId != null && oldId.isNotEmpty) {
               await db.rawUpdate(
@@ -433,10 +508,6 @@ class CanonicalFinancialQueryRepository {
           seenCommitments.add('title:${title.toLowerCase()}');
           total14d += amount;
 
-          final rawDate = r['date'] as String?;
-          final dueDate = rawDate != null ? DateTime.tryParse(rawDate) ?? now : now;
-          final rType = r['type'] as String? ?? 'bill';
-
           items.add(
             CommitmentItem(
               title: title,
@@ -451,8 +522,6 @@ class CanonicalFinancialQueryRepository {
 
     // 2. Credit cards due within next 14 days (if not already counted via reminder)
     try {
-      final cards = await CreditRepo(executor: db).getAll();
-
       for (final card in cards) {
         if (seenCommitments.contains('card:${card.id}')) continue;
         final cardName = card.name.toLowerCase().trim();
@@ -468,9 +537,40 @@ class CanonicalFinancialQueryRepository {
         final nextDue = card.nextDueDate;
 
         if (nextDue.isBefore(endWindow) || nextDue.isAtSameMomentAs(endWindow)) {
+          if (card.outstanding <= 0.01) {
+            seenCommitments.add('card:${card.id}');
+            continue;
+          }
+
+          // Check if statement balance has already been paid
           final lastStmt = card.lastStatementBalance;
-          final used = card.outstanding;
-          final dueAmount = lastStmt > 0 ? lastStmt : (used > 0 ? used : 0.0);
+          if (lastStmt > 0) {
+            final minPayDate = nextDue.subtract(const Duration(days: 25)).toIso8601String();
+            final maxPayDate = nextDue.add(const Duration(days: 25)).toIso8601String();
+            final payResult = await db.rawQuery('''
+              SELECT COALESCE(SUM(amount), 0) AS total_paid
+              FROM ${Tables.transactions}
+              WHERE is_deleted = 0
+                AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
+                AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
+                AND date BETWEEN ? AND ?;
+            ''', [
+              card.id,
+              '%${card.bank}%',
+              '%${card.name}%',
+              minPayDate,
+              maxPayDate,
+            ]);
+            final totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+            if (totalPaid >= lastStmt - 1.0) {
+              seenCommitments.add('card:${card.id}');
+              continue;
+            }
+          }
+
+          final dueAmount = card.lastStatementBalance > 0
+              ? card.lastStatementBalance
+              : card.outstanding;
           if (dueAmount > 0) {
             total14d += dueAmount;
             seenCommitments.add('card:${card.id}');
