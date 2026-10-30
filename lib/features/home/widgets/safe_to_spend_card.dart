@@ -367,8 +367,14 @@ class SafeToSpendCard extends ConsumerWidget {
                   ),
                   child: Column(
                     children: calc.commitmentItems.map((item) {
-                      final daysUntil = item.dueDate.difference(DateTime.now()).inDays;
-                      final dueStr = daysUntil <= 0 ? 'Due today' : 'Due in ${daysUntil}d';
+                      final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                      final itemDay = DateTime(item.dueDate.year, item.dueDate.month, item.dueDate.day);
+                      final diffDays = itemDay.difference(today).inDays;
+                      final dueStr = diffDays == 0
+                          ? 'Due today'
+                          : diffDays < 0
+                              ? '${diffDays.abs()}d overdue'
+                              : 'Due in ${diffDays}d';
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3.5),
                         child: Row(

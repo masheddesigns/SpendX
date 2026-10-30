@@ -220,7 +220,8 @@ class ReminderRepo {
       final rAmt = reminder.amount;
       if (rAmt == null || rAmt <= 0) continue;
       final rDate = reminder.dueDate ?? reminder.createdAt;
-      final isPastDue = rDate.isBefore(DateTime.now());
+      final now = DateTime.now();
+      final isPastDue = rDate.isBefore(now);
       final minDate = rDate.subtract(const Duration(days: 25)).toIso8601String();
       final maxDate = rDate.add(const Duration(days: 25)).toIso8601String();
 
@@ -230,6 +231,7 @@ class ReminderRepo {
 
       bool matched = false;
 
+      // 1. Credit card derived balance / statement reconciliation
       if (isCc && cards.isNotEmpty) {
         CreditCard? matchedCard;
         if (reminder.linkedEntityId != null && reminder.linkedEntityId!.isNotEmpty) {
@@ -254,77 +256,164 @@ class ReminderRepo {
         }
       }
 
+      // 2. Query canonical V24 postings & economic events
       if (!matched) {
-        final rows = await db.rawQuery('''
-          SELECT id, amount, type, source, notes, related_entity_id, external_ref, date
-          FROM ${Tables.transactions}
-          WHERE is_deleted = 0
-            AND amount BETWEEN ? AND ?
-            AND date BETWEEN ? AND ?;
-        ''', [rAmt - 1.0, rAmt + 1.0, minDate, maxDate]);
+        try {
+          final minPaise = ((rAmt - 1.0) * 100).round();
+          final maxPaise = ((rAmt + 1.0) * 100).round();
+          final v24Rows = await db.rawQuery('''
+            SELECT e.id, e.description, e.timestamp, e.event_type, e.notes,
+                   (p.amount_minor_units / 100.0) AS amount, p.account_id
+            FROM ${TablesV24.postings} p
+            JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+            WHERE e.lifecycle_status = 'posted'
+              AND p.amount_minor_units BETWEEN ? AND ?
+              AND e.timestamp BETWEEN ? AND ?;
+          ''', [minPaise, maxPaise, minDate, maxDate]);
 
-        for (final tx in rows) {
-        final txType = tx['type'] as String? ?? '';
-        final txSource = tx['source'] as String? ?? '';
-        final notes = (tx['notes'] as String? ?? '').toLowerCase();
-        final relatedId = tx['related_entity_id'] as String?;
+          for (final row in v24Rows) {
+            final desc = ((row['description'] as String?) ?? '').toLowerCase();
+            final notes = ((row['notes'] as String?) ?? '').toLowerCase();
+            final fullText = '$desc $notes';
+            final evType = row['event_type'] as String? ?? '';
 
-        if (isCc) {
-          final isPaymentType =
-              txType == 'credit_payment' || txSource == 'credit_card_payment';
-          final matchesEntity = reminder.linkedEntityId != null &&
-              reminder.linkedEntityId!.isNotEmpty &&
-              (relatedId == reminder.linkedEntityId ||
-                  notes.contains(reminder.linkedEntityId!));
-          final rTitle = reminder.title.toLowerCase();
-          final matchesTitle = notes.contains('credit') ||
-              notes.contains('card') ||
-              notes.contains('pay') ||
-              notes.contains('bill') ||
-              (rTitle.contains('hdfc') && notes.contains('hdfc')) ||
-              (rTitle.contains('sbi') && notes.contains('sbi')) ||
-              (rTitle.contains('icici') && notes.contains('icici')) ||
-              (rTitle.contains('axis') && notes.contains('axis')) ||
-              (rTitle.contains('onecard') && notes.contains('onecard'));
-
-          if (isPaymentType ||
-              matchesEntity ||
-              (matchesTitle && (txType == 'expense' || txType == 'transfer'))) {
-            matched = true;
-            break;
+            if (isCc) {
+              final isCcEvent = evType == 'liability_settlement' ||
+                  fullText.contains('credit') ||
+                  fullText.contains('card') ||
+                  fullText.contains('bill') ||
+                  fullText.contains('hdfc') ||
+                  fullText.contains('sbi') ||
+                  fullText.contains('icici') ||
+                  fullText.contains('axis') ||
+                  fullText.contains('onecard');
+              if (isCcEvent) {
+                matched = true;
+                break;
+              }
+            } else {
+              final rTitle = reminder.title.toLowerCase();
+              final cleanTokens = rTitle
+                  .replaceAll(
+                    RegExp(
+                      r'\b(subscription|bill|due|premium|autopay|mandate|stocks|health|renewal)\b',
+                    ),
+                    '',
+                  )
+                  .split(RegExp(r'[^a-z0-9]+'))
+                  .where((t) => t.length >= 3)
+                  .toSet();
+              final hasToken = cleanTokens.any((t) => fullText.contains(t));
+              if (hasToken) {
+                matched = true;
+                break;
+              }
+            }
           }
-        } else {
-          final rTitle = reminder.title.toLowerCase();
-          final cleanTokens = rTitle
-              .replaceAll(
-                RegExp(
-                  r'\b(subscription|bill|due|premium|autopay|mandate|stocks|health|renewal)\b',
-                ),
-                '',
-              )
-              .split(RegExp(r'[^a-z0-9]+'))
-              .where((t) => t.length >= 3)
-              .toSet();
-          final hasToken = cleanTokens.any((t) => notes.contains(t));
-          if (hasToken && (txType == 'expense' || txType == 'transfer')) {
-            matched = true;
-            break;
-          }
-        }
+        } catch (_) {}
       }
-    }
 
-      if (matched) {
+      // 3. Fallback: Query legacy transactions table
+      if (!matched) {
+        try {
+          final rows = await db.rawQuery('''
+            SELECT id, amount, type, source, notes, related_entity_id, external_ref, date
+            FROM ${Tables.transactions}
+            WHERE is_deleted = 0
+              AND amount BETWEEN ? AND ?
+              AND date BETWEEN ? AND ?;
+          ''', [rAmt - 1.0, rAmt + 1.0, minDate, maxDate]);
+
+          for (final tx in rows) {
+            final txType = tx['type'] as String? ?? '';
+            final txSource = tx['source'] as String? ?? '';
+            final notes = (tx['notes'] as String? ?? '').toLowerCase();
+            final relatedId = tx['related_entity_id'] as String?;
+
+            if (isCc) {
+              final isPaymentType =
+                  txType == 'credit_payment' || txSource == 'credit_card_payment';
+              final matchesEntity = reminder.linkedEntityId != null &&
+                  reminder.linkedEntityId!.isNotEmpty &&
+                  (relatedId == reminder.linkedEntityId ||
+                      notes.contains(reminder.linkedEntityId!));
+              final rTitle = reminder.title.toLowerCase();
+              final matchesTitle = notes.contains('credit') ||
+                  notes.contains('card') ||
+                  notes.contains('pay') ||
+                  notes.contains('bill') ||
+                  (rTitle.contains('hdfc') && notes.contains('hdfc')) ||
+                  (rTitle.contains('sbi') && notes.contains('sbi')) ||
+                  (rTitle.contains('icici') && notes.contains('icici')) ||
+                  (rTitle.contains('axis') && notes.contains('axis')) ||
+                  (rTitle.contains('onecard') && notes.contains('onecard'));
+
+              if (isPaymentType ||
+                  matchesEntity ||
+                  (matchesTitle && (txType == 'expense' || txType == 'transfer'))) {
+                matched = true;
+                break;
+              }
+            } else {
+              final rTitle = reminder.title.toLowerCase();
+              final cleanTokens = rTitle
+                  .replaceAll(
+                    RegExp(
+                      r'\b(subscription|bill|due|premium|autopay|mandate|stocks|health|renewal)\b',
+                    ),
+                    '',
+                  )
+                  .split(RegExp(r'[^a-z0-9]+'))
+                  .where((t) => t.length >= 3)
+                  .toSet();
+              final hasToken = cleanTokens.any((t) => notes.contains(t));
+              if (hasToken && (txType == 'expense' || txType == 'transfer')) {
+                matched = true;
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 4. Overdue grace expiration: If past due date is older than 3 days,
+      // it either cleared in a prior billing cycle or expired.
+      final isOverdueExpired = !matched &&
+          isPastDue &&
+          rDate.isBefore(now.subtract(const Duration(days: 3)));
+
+      if (matched || isOverdueExpired) {
         reconciledCount++;
-        await db.rawUpdate('''
-          UPDATE ${Tables.reminders}
-          SET is_completed = 1, record_status = ?, last_triggered_at = ?
-          WHERE id = ?;
-        ''', [
-          ReminderRecordStatus.done.name,
-          DateTime.now().toIso8601String(),
-          reminder.id,
-        ]);
+        if (reminder.recurrencePeriod == ReminderRecurrence.monthly) {
+          final currentDue = reminder.dueDate ?? reminder.createdAt;
+          final nextDue = DateTime(
+            currentDue.year,
+            currentDue.month + 1,
+            currentDue.day,
+            currentDue.hour,
+            currentDue.minute,
+          );
+          await db.rawUpdate('''
+            UPDATE ${Tables.reminders}
+            SET date = ?, is_completed = 0, record_status = ?, last_triggered_at = ?
+            WHERE id = ?;
+          ''', [
+            nextDue.toIso8601String(),
+            ReminderRecordStatus.pending.name,
+            DateTime.now().toIso8601String(),
+            reminder.id,
+          ]);
+        } else {
+          await db.rawUpdate('''
+            UPDATE ${Tables.reminders}
+            SET is_completed = 1, record_status = ?, last_triggered_at = ?
+            WHERE id = ?;
+          ''', [
+            ReminderRecordStatus.done.name,
+            DateTime.now().toIso8601String(),
+            reminder.id,
+          ]);
+        }
       }
     }
 

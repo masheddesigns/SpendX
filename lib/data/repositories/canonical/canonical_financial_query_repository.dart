@@ -362,7 +362,7 @@ class CanonicalFinancialQueryRepository {
     String currency = 'INR',
   }) async {
     final now = DateTime.now();
-    final startOverdue = now.subtract(const Duration(days: 60)).toIso8601String();
+    final startOverdue = now.subtract(const Duration(days: 3)).toIso8601String();
     final endWindow = now.add(const Duration(days: 14));
     final endIso = endWindow.toIso8601String();
     double total14d = 0.0;
@@ -435,22 +435,45 @@ class CanonicalFinancialQueryRepository {
               final minPayDate = dueDate.subtract(const Duration(days: 25)).toIso8601String();
               final maxPayDate = dueDate.add(const Duration(days: 25)).toIso8601String();
 
-              final payResult = await db.rawQuery('''
-                SELECT COALESCE(SUM(amount), 0) AS total_paid
-                FROM ${Tables.transactions}
-                WHERE is_deleted = 0
-                  AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
-                  AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
-                  AND date BETWEEN ? AND ?;
-              ''', [
-                matchedCard.id,
-                '%${matchedCard.bank}%',
-                '%${matchedCard.name}%',
-                minPayDate,
-                maxPayDate,
-              ]);
+              double totalPaid = 0.0;
+              try {
+                final v24Pay = await db.rawQuery('''
+                  SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
+                  FROM ${TablesV24.postings} p
+                  JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+                  WHERE e.lifecycle_status = 'posted'
+                    AND (p.account_id = ? OR e.description LIKE ? OR e.description LIKE ?)
+                    AND (e.event_type = 'liability_settlement' OR e.description LIKE '%credit%' OR e.description LIKE '%card%')
+                    AND e.timestamp BETWEEN ? AND ?;
+                ''', [
+                  matchedCard.id,
+                  '%${matchedCard.bank}%',
+                  '%${matchedCard.name}%',
+                  minPayDate,
+                  maxPayDate,
+                ]);
+                totalPaid = ((v24Pay.first['total_minor'] as num?)?.toDouble() ?? 0.0) / 100.0;
+              } catch (_) {}
 
-              final totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+              if (totalPaid <= 0.0) {
+                try {
+                  final payResult = await db.rawQuery('''
+                    SELECT COALESCE(SUM(amount), 0) AS total_paid
+                    FROM ${Tables.transactions}
+                    WHERE is_deleted = 0
+                      AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
+                      AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
+                      AND date BETWEEN ? AND ?;
+                  ''', [
+                    matchedCard.id,
+                    '%${matchedCard.bank}%',
+                    '%${matchedCard.name}%',
+                    minPayDate,
+                    maxPayDate,
+                  ]);
+                  totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+                } catch (_) {}
+              }
               final isPastDue = dueDate.isBefore(now);
               final isCardPaid = totalPaid >= amount - 1.0 ||
                   matchedCard.lastStatementBalance <= 0.01 ||
@@ -547,21 +570,46 @@ class CanonicalFinancialQueryRepository {
           if (lastStmt > 0) {
             final minPayDate = nextDue.subtract(const Duration(days: 25)).toIso8601String();
             final maxPayDate = nextDue.add(const Duration(days: 25)).toIso8601String();
-            final payResult = await db.rawQuery('''
-              SELECT COALESCE(SUM(amount), 0) AS total_paid
-              FROM ${Tables.transactions}
-              WHERE is_deleted = 0
-                AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
-                AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
-                AND date BETWEEN ? AND ?;
-            ''', [
-              card.id,
-              '%${card.bank}%',
-              '%${card.name}%',
-              minPayDate,
-              maxPayDate,
-            ]);
-            final totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+            double totalPaid = 0.0;
+            try {
+              final v24Pay = await db.rawQuery('''
+                SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
+                FROM ${TablesV24.postings} p
+                JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+                WHERE e.lifecycle_status = 'posted'
+                  AND (p.account_id = ? OR e.description LIKE ? OR e.description LIKE ?)
+                  AND (e.event_type = 'liability_settlement' OR e.description LIKE '%credit%' OR e.description LIKE '%card%')
+                  AND e.timestamp BETWEEN ? AND ?;
+              ''', [
+                card.id,
+                '%${card.bank}%',
+                '%${card.name}%',
+                minPayDate,
+                maxPayDate,
+              ]);
+              totalPaid = ((v24Pay.first['total_minor'] as num?)?.toDouble() ?? 0.0) / 100.0;
+            } catch (_) {}
+
+            if (totalPaid <= 0.0) {
+              try {
+                final payResult = await db.rawQuery('''
+                  SELECT COALESCE(SUM(amount), 0) AS total_paid
+                  FROM ${Tables.transactions}
+                  WHERE is_deleted = 0
+                    AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
+                    AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
+                    AND date BETWEEN ? AND ?;
+                ''', [
+                  card.id,
+                  '%${card.bank}%',
+                  '%${card.name}%',
+                  minPayDate,
+                  maxPayDate,
+                ]);
+                totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+              } catch (_) {}
+            }
+
             if (totalPaid >= lastStmt - 1.0) {
               seenCommitments.add('card:${card.id}');
               continue;

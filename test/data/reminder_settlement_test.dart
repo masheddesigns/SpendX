@@ -323,5 +323,82 @@ void main() {
       expect(r!.isDone, isTrue);
       expect(r.recordStatus, ReminderRecordStatus.done);
     });
+
+    test('reconcileWithExistingTransactions auto-expires ancient overdue reminders older than 3 days', () async {
+      final repo = ReminderRepo(database: db);
+      final now = DateTime.now();
+
+      // Reminder from 20 days ago (past billing cycle)
+      await repo.insertGlobalReminder(
+        Reminder(
+          id: 'sms_due_anomaly_old',
+          title: 'Anomaly AutoPay',
+          amount: 929.0,
+          dueDate: now.subtract(const Duration(days: 20)),
+          recurrencePeriod: ReminderRecurrence.none,
+          recordStatus: ReminderRecordStatus.pending,
+          type: ReminderType.custom,
+        ).toMap(),
+      );
+
+      final count = await repo.reconcileWithExistingTransactions(executor: db);
+      expect(count, greaterThanOrEqualTo(1));
+
+      final r = await repo.getById('sms_due_anomaly_old');
+      expect(r, isNotNull);
+      expect(r!.isDone, isTrue);
+      expect(r.recordStatus, ReminderRecordStatus.done);
+    });
+
+    test('reconcileWithExistingTransactions matches and settles against canonical V24 postings', () async {
+      final repo = ReminderRepo(database: db);
+      final now = DateTime.now();
+
+      await TablesV24.createAllV24(db);
+
+      // Post a V24 economic event & posting for Netflix ₹199
+      await db.insert(TablesV24.economicEvents, {
+        'id': 'ev_netflix_199',
+        'event_type': 'expense',
+        'lifecycle_status': 'posted',
+        'timestamp': now.subtract(const Duration(days: 1)).toIso8601String(),
+        'description': 'Netflix Subscription',
+        'currency': 'INR',
+        'created_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      });
+
+      await db.insert(TablesV24.postings, {
+        'id': 'post_netflix_199',
+        'economic_event_id': 'ev_netflix_199',
+        'account_id': 'acc_test_bank',
+        'direction': 'debit',
+        'amount_minor_units': 19900,
+        'currency': 'INR',
+        'sequence_number': 1,
+        'created_at': now.toIso8601String(),
+      });
+
+      // Active reminder for Netflix due today
+      await repo.insertGlobalReminder(
+        Reminder(
+          id: 'sms_due_netflix_today',
+          title: 'Netflix Subscription',
+          amount: 199.0,
+          dueDate: now,
+          recurrencePeriod: ReminderRecurrence.none,
+          recordStatus: ReminderRecordStatus.pending,
+          type: ReminderType.custom,
+        ).toMap(),
+      );
+
+      final count = await repo.reconcileWithExistingTransactions(executor: db);
+      expect(count, greaterThanOrEqualTo(1));
+
+      final r = await repo.getById('sms_due_netflix_today');
+      expect(r, isNotNull);
+      expect(r!.isDone, isTrue);
+      expect(r.recordStatus, ReminderRecordStatus.done);
+    });
   });
 }
