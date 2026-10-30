@@ -10,6 +10,8 @@ import '../data/providers.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/credit_repo.dart';
 import '../data/repositories/loan_repo.dart';
+import '../features/liabilities/providers/liabilities_providers.dart'
+    hide loansProvider;
 import '../features/transactions/providers/transaction_providers.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
@@ -339,27 +341,69 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
 
     final accounts =
         ref.read(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final cards =
+        ref.read(cardsProvider).valueOrNull ?? const <CreditCard>[];
     var saved = 0;
     final total = indices.length;
     try {
       for (var i = 0; i < indices.length; i++) {
         final index = indices[i];
         if (index >= _transactions.length) continue;
-        final parsed = _transactions[index].parsed;
-        final type = parsed.isCredit ? 'income' : 'expense';
+        final item = _transactions[index];
+        final parsed = item.parsed;
+        final lower = item.body.toLowerCase();
+        final lowerSender = item.sender.toLowerCase();
+
+        final isCardSpend = parsed.method == 'card' ||
+            lower.contains('credit card') ||
+            lower.contains('card ending') ||
+            lower.contains('card xx') ||
+            lowerSender.contains('crd') ||
+            lowerSender.contains('card') ||
+            lowerSender.contains('jtedge');
+
+        final isCcPayment = (lower.contains('payment') || lower.contains('credited') || lower.contains('received')) &&
+            (lower.contains('credit card') || lower.contains('card ending') || lower.contains('card xx'));
+
+        CreditCard? matchedCard = isCardSpend || isCcPayment
+            ? _matchCard(parsed, cards)
+            : null;
+
+        String type;
+        String source;
+        String? accountId;
+        String? relatedEntityId;
+
+        if (isCcPayment) {
+          type = 'credit_payment';
+          source = 'credit_card_payment';
+          relatedEntityId = matchedCard?.id;
+          accountId = _defaultAccountId ?? _matchAccountId(parsed, accounts);
+        } else if (isCardSpend && matchedCard != null) {
+          type = parsed.isCredit ? 'refund' : 'credit_card_purchase';
+          source = 'credit_card_purchase';
+          accountId = _defaultAccountId ?? matchedCard.id;
+        } else {
+          type = parsed.isCredit ? 'income' : 'expense';
+          source = 'sms';
+          accountId = _defaultAccountId ?? _matchAccountId(parsed, accounts);
+        }
+
         final categoryId = await _resolveCategoryId(
           parsed.merchant ?? '',
-          type,
+          (type == 'credit_card_purchase') ? 'expense' : (type == 'refund' ? 'expense' : type),
         );
+
         final txn = Transaction(
           userId: 'offline_user',
           type: type,
           amount: parsed.amount,
           date: parsed.date,
           categoryId: categoryId,
-          accountId: _defaultAccountId ?? _matchAccountId(parsed, accounts),
+          accountId: accountId,
+          relatedEntityId: relatedEntityId,
           notes: parsed.merchant ?? parsed.rawText,
-          source: 'sms',
+          source: source,
           externalRef: parsed.refId,
           tags: const [],
         );
@@ -374,6 +418,11 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
         }
       }
     } catch (_) {}
+
+    ref.invalidate(cardsProvider);
+    ref.invalidate(accountsProvider);
+    ref.invalidate(creditCardsProvider);
+    ref.invalidate(liabilitiesSummaryProvider);
 
     if (!mounted) return;
     setState(() {
@@ -431,6 +480,26 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
     return null;
   }
 
+  CreditCard? _matchCard(ParsedTransaction parsed, List<CreditCard> cards) {
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      final byLast4 =
+          cards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      if (byLast4 != null) return byLast4;
+    }
+    if (parsed.bankName != null && parsed.bankName!.isNotEmpty) {
+      final kw = parsed.bankName!.toLowerCase();
+      final byBank = cards
+          .where(
+            (c) =>
+                c.bank.toLowerCase().contains(kw) ||
+                c.name.toLowerCase().contains(kw),
+          )
+          .toList();
+      if (byBank.isNotEmpty) return byBank.first;
+    }
+    return null;
+  }
+
   Future<String?> _resolveCategoryId(String merchant, String type) async {
     try {
       final resolution = await resolveCategoryForText(
@@ -464,7 +533,11 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
     final cs = Theme.of(context).colorScheme;
     final title = hit.kind == BalanceKind.bank
         ? 'Update bank balance'
-        : 'Update credit card outstanding';
+        : (hit.isAvailableLimit
+            ? 'Update available limit'
+            : (hit.isStatementBill
+                ? 'Record credit card bill'
+                : 'Update credit card outstanding'));
 
     await showModalBottomSheet<void>(
       context: context,
@@ -579,8 +652,30 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
         ref.invalidate(accountsProvider);
       } else {
         final c = account as CreditCard;
-        await CreditRepo().updateBalance(c.id, hit.amount);
+        if (hit.isAvailableLimit) {
+          if (c.limitAmount > 0) {
+            final derived = (c.limitAmount - hit.amount).clamp(0.0, double.infinity);
+            await CreditRepo().updateBalance(c.id, derived);
+          } else {
+            final updated = c.copyWith(limitAmount: hit.amount);
+            await CreditRepo().update(updated);
+            await CreditRepo().updateBalance(c.id, 0.0);
+          }
+        } else {
+          await CreditRepo().updateBalance(c.id, hit.amount);
+        }
+        if (hit.creditLimit != null && hit.creditLimit! > c.limitAmount) {
+          await CreditRepo().update(c.copyWith(limitAmount: hit.creditLimit!));
+        }
+        if (hit.isStatementBill || hit.dueDate != null) {
+          await CreditRepo().update(c.copyWith(
+            lastStatementBalance: hit.isStatementBill ? hit.amount : c.lastStatementBalance,
+            dueDay: hit.dueDate?.day ?? c.dueDay,
+          ));
+        }
         ref.invalidate(cardsProvider);
+        ref.invalidate(creditCardsProvider);
+        ref.invalidate(liabilitiesSummaryProvider);
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -822,7 +917,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
                       _rangeSelector(cs),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String?>(
-                        value: _defaultAccountId,
+                        initialValue: _defaultAccountId,
                         decoration: const InputDecoration(
                           labelText: 'Add to account (optional)',
                           isDense: true,
@@ -1090,8 +1185,13 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
                 '${card.bank}${card.last4 != null ? ' ••${card.last4}' : ''}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle:
-                  Text('Outstanding ${AppFormat.currency(card.outstanding)}'),
+              subtitle: Text(
+                card.isAvailableLimit
+                    ? 'Available Limit: ${AppFormat.currency(card.availableLimit ?? card.outstanding)}'
+                    : (card.isStatementBill
+                        ? 'Bill Due: ${AppFormat.currency(card.outstanding)}${card.dueDate != null ? " on ${AppFormat.date(card.dueDate!)}" : ""}'
+                        : 'Outstanding: ${AppFormat.currency(card.outstanding)}'),
+              ),
               trailing: TextButton(
                 onPressed: () => _registerOrUpdateCard(card, cards),
                 child: Text(
@@ -1184,14 +1284,15 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          existing == null ? 'Register credit card?' : 'Update outstanding?',
+          existing == null ? 'Register credit card?' : 'Update balance?',
         ),
         content: Text(
           existing == null
-              ? 'Add a ${card.bank} card with outstanding '
-                  '${AppFormat.currency(card.outstanding)}?'
-              : 'Set ${existing.name} outstanding to '
-                  '${AppFormat.currency(card.outstanding)}?',
+              ? 'Add a ${card.bank} card with '
+                  '${card.isAvailableLimit ? "available limit ${AppFormat.currency(card.availableLimit ?? card.outstanding)}" : "outstanding ${AppFormat.currency(card.outstanding)}"}'
+                  '${card.creditLimit != null && card.creditLimit! > 0 ? " (Limit: ${AppFormat.currency(card.creditLimit!)})" : ""}?'
+              : 'Update ${existing.name} '
+                  '${card.isAvailableLimit ? "available limit to ${AppFormat.currency(card.availableLimit ?? card.outstanding)}" : "outstanding to ${AppFormat.currency(card.outstanding)}"}?',
         ),
         actions: [
           TextButton(
@@ -1209,26 +1310,53 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
 
     try {
       if (existing != null) {
-        await CreditRepo().updateBalance(existing.id, card.outstanding);
+        if (card.isAvailableLimit) {
+          if (existing.limitAmount > 0) {
+            final derived = (existing.limitAmount - card.outstanding).clamp(0.0, double.infinity);
+            await CreditRepo().updateBalance(existing.id, derived);
+          } else {
+            final updated = existing.copyWith(limitAmount: card.outstanding);
+            await CreditRepo().update(updated);
+            await CreditRepo().updateBalance(existing.id, 0.0);
+          }
+        } else {
+          await CreditRepo().updateBalance(existing.id, card.outstanding);
+        }
+        if (card.creditLimit != null && card.creditLimit! > existing.limitAmount) {
+          await CreditRepo().update(existing.copyWith(limitAmount: card.creditLimit!));
+        }
+        if (card.dueDate != null) {
+          await CreditRepo().update(existing.copyWith(dueDay: card.dueDate!.day));
+        }
       } else {
+        final limit = card.creditLimit ?? (card.isAvailableLimit ? card.outstanding : 0.0);
+        final used = card.isAvailableLimit
+            ? (card.creditLimit != null && card.creditLimit! > 0
+                ? (card.creditLimit! - card.outstanding).clamp(0.0, double.infinity)
+                : 0.0)
+            : card.outstanding;
         await CreditRepo().insert(
           CreditCard(
             name: '${card.bank} Card',
             bank: card.bank,
             last4: card.last4 ?? '0000',
-            limitAmount: 0,
-            usedAmount: card.outstanding,
+            limitAmount: limit,
+            usedAmount: used,
+            dueDay: card.dueDate?.day ?? 20,
+            lastStatementBalance: card.isStatementBill ? card.outstanding : 0.0,
           ),
         );
       }
       ref.invalidate(cardsProvider);
+      ref.invalidate(creditCardsProvider);
+      ref.invalidate(liabilitiesSummaryProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             existing == null
                 ? 'Registered ${card.bank} card.'
-                : 'Outstanding updated.',
+                : 'Card balance updated.',
           ),
         ),
       );
@@ -1278,13 +1406,21 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
                 hit.kind == BalanceKind.bank
                     ? 'Bank balance'
                     : hit.kind == BalanceKind.creditCard
-                        ? 'Credit card outstanding'
+                        ? (hit.isAvailableLimit
+                            ? 'Credit card available limit'
+                            : (hit.isStatementBill
+                                ? 'Credit card bill due'
+                                : 'Credit card outstanding'))
                         : hit.kind == BalanceKind.wallet
                             ? 'Wallet balance'
                             : 'Loan balance',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text(AppFormat.currency(hit.amount)),
+              subtitle: Text(
+                hit.isStatementBill && hit.dueDate != null
+                    ? '${AppFormat.currency(hit.amount)} • Due ${AppFormat.date(hit.dueDate!)}'
+                    : AppFormat.currency(hit.amount),
+              ),
               trailing: TextButton(
                 onPressed: () => _openBalanceUpdate(hit),
                 child: const Text('Update'),

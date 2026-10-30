@@ -6,6 +6,9 @@ import '../../services/smart_category_classifier.dart';
 import '../../data/repositories/transaction_repo.dart';
 import '../../features/accounts/providers/account_providers.dart';
 import '../../models/bank_account.dart';
+import '../../models/credit_card.dart';
+import '../../data/providers.dart' show cardsProvider;
+import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../features/categories/providers/category_providers.dart';
 import '../../features/merchant_rules/providers/merchant_rule_providers.dart';
 import '../../features/transactions/providers/transaction_providers.dart';
@@ -52,6 +55,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
   late bool _isExpense;
   Category? _selectedCategory;
   String? _selectedAccountId;
+  bool _selectedIsCreditCard = false;
   bool _saving = false;
   bool _failedAcknowledged = false;
 
@@ -81,6 +85,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
 
     // Resolve initial category from merchant rules (memory) or classifier
     Future.microtask(_resolveInitialCategory);
+    Future.microtask(_resolveInitialAccount);
 
     // Look up recurring pattern in the background — surfaces a "🔁
     // Monthly" badge if this merchant has a stable history. Pure read,
@@ -233,6 +238,50 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
     }
 
     if (mounted) setState(() => _selectedCategory = resolved);
+  }
+
+  Future<void> _resolveInitialAccount() async {
+    try {
+      final accounts = await ref.read(accountsProvider.future);
+      final cards = await ref.read(cardsProvider.future);
+
+      final lowerRaw = widget.parsed.rawText.toLowerCase();
+      final isCardSignal = widget.parsed.method == 'card' ||
+          lowerRaw.contains('credit card') ||
+          lowerRaw.contains('card ending') ||
+          lowerRaw.contains('card xx');
+
+      if (isCardSignal && cards.isNotEmpty) {
+        final card = cards.firstWhereOrNull((c) =>
+          (widget.parsed.last4 != null && c.last4 == widget.parsed.last4) ||
+          (widget.parsed.bankName != null &&
+              (c.bank.toLowerCase().contains(widget.parsed.bankName!.toLowerCase()) ||
+               c.name.toLowerCase().contains(widget.parsed.bankName!.toLowerCase()))),
+        );
+        if (card != null) {
+          if (mounted) {
+            setState(() {
+              _selectedAccountId = card.id;
+              _selectedIsCreditCard = true;
+            });
+          }
+          return;
+        }
+      }
+
+      if (widget.parsed.last4 != null) {
+        final acc = accounts.firstWhereOrNull((a) => a.last4 == widget.parsed.last4);
+        if (acc != null) {
+          if (mounted) {
+            setState(() {
+              _selectedAccountId = acc.id;
+              _selectedIsCreditCard = false;
+            });
+          }
+          return;
+        }
+      }
+    } catch (_) {}
   }
 
   // ── Confidence helpers ─────────────────────────────────────────────
@@ -392,9 +441,14 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
       return; // user chose to cancel
     }
 
+    final cards = ref.read(cardsProvider).valueOrNull ?? const <CreditCard>[];
+    final isCard = _selectedIsCreditCard ||
+        widget.parsed.method == 'card' ||
+        cards.any((c) => c.id == _selectedAccountId);
+
     final txn = Transaction(
       userId: 'offline_user',
-      type: type,
+      type: isCard ? 'credit_card_purchase' : type,
       amount: amount,
       date: widget.parsed.date,
       categoryId: _selectedCategory?.id,
@@ -402,7 +456,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
       notes: _notesController.text.trim().isEmpty
           ? merchant
           : _notesController.text.trim(),
-      source: widget.parsed.source ?? 'share',
+      source: isCard ? 'credit_card_purchase' : (widget.parsed.source ?? 'share'),
       externalRef: widget.parsed.refId,
       tags: const [],
     );
@@ -416,6 +470,12 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
       );
 
       await ref.read(addTransactionProvider)(txn);
+
+      if (isCard) {
+        ref.invalidate(cardsProvider);
+        ref.invalidate(creditCardsProvider);
+        ref.invalidate(liabilitiesSummaryProvider);
+      }
 
       // Remember this fingerprint so the next preview within the
       // window auto-detects a re-share / accidental re-tap. Includes
@@ -504,6 +564,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
     final cs = Theme.of(context).colorScheme;
     final categoriesAsync = ref.watch(categoriesProvider);
     final accountsAsync = ref.watch(accountsProvider);
+    final cardsAsync = ref.watch(cardsProvider);
 
     // Failed payment short-circuit: single-tap [Ignore] vs [Add anyway].
     // Friction-light pattern — checkbox was overkill for a rare case.
@@ -640,10 +701,10 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
           const SizedBox(height: 12),
 
           // Account picker
-          accountsAsync.when(
-            data: (accs) => _accountPicker(accs, cs),
-            loading: () => const SizedBox(height: 60),
-            error: (_, _) => const SizedBox.shrink(),
+          _accountPicker(
+            accountsAsync.valueOrNull ?? const [],
+            cardsAsync.valueOrNull ?? const [],
+            cs,
           ),
           const SizedBox(height: 12),
 
@@ -887,10 +948,8 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
     );
   }
 
-  Widget _accountPicker(List<BankAccount> accounts, ColorScheme cs) {
-    // Empty-state: user has no accounts yet. Skip the picker entirely —
-    // account is optional for a transaction. Show a soft hint instead.
-    if (accounts.isEmpty) {
+  Widget _accountPicker(List<BankAccount> accounts, List<CreditCard> cards, ColorScheme cs) {
+    if (accounts.isEmpty && cards.isEmpty) {
       return AppCard(
         child: ListTile(
           leading: const Icon(Icons.account_balance_outlined),
@@ -903,42 +962,105 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
       );
     }
 
-    // Look up explicitly, then fall back to first. Null-safe — no orElse hack.
-    final BankAccount? selected = _selectedAccountId == null
-        ? accounts.first
-        : accounts.firstWhereOrNull((a) => a.id == _selectedAccountId);
+    final BankAccount? selectedAccount = _selectedAccountId != null
+        ? accounts.firstWhereOrNull((a) => a.id == _selectedAccountId)
+        : null;
+    final CreditCard? selectedCard = _selectedAccountId != null
+        ? cards.firstWhereOrNull((c) => c.id == _selectedAccountId)
+        : null;
+
+    final String title;
+    final String subtitle;
+    final IconData icon;
+
+    if (selectedCard != null) {
+      title = selectedCard.name;
+      subtitle = 'Credit Card ••${selectedCard.last4}';
+      icon = Icons.credit_card_rounded;
+    } else if (selectedAccount != null) {
+      title = selectedAccount.name;
+      subtitle = selectedAccount.bank;
+      icon = Icons.account_balance_outlined;
+    } else if (accounts.isNotEmpty) {
+      title = accounts.first.name;
+      subtitle = accounts.first.bank;
+      icon = Icons.account_balance_outlined;
+    } else {
+      title = cards.first.name;
+      subtitle = 'Credit Card ••${cards.first.last4}';
+      icon = Icons.credit_card_rounded;
+    }
+
     return AppCard(
       child: ListTile(
-        leading: const Icon(Icons.account_balance_outlined),
-        title: Text(selected?.name ?? 'Choose account'),
-        subtitle: const Text('Where the money moved'),
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: () async {
-                final picked = await showModalBottomSheet<String?>(
-                  context: context,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
+          final picked = await showModalBottomSheet<(String?, bool)>(
+            context: context,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            builder: (_) => SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.remove_circle_outline),
+                    title: const Text('No account'),
+                    onTap: () => Navigator.pop(context, (null, false)),
                   ),
-                  builder: (_) => SafeArea(
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        ListTile(
-                          title: const Text('No account'),
-                          onTap: () => Navigator.pop(context, null),
+                  if (cards.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(
+                        'Credit Cards',
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
                         ),
-                        ...accounts.map((a) => ListTile(
-                              title: Text(a.name),
-                              subtitle: Text(a.bank),
-                              onTap: () => Navigator.pop(context, a.id),
-                            )),
-                      ],
+                      ),
                     ),
-                  ),
-                );
-                setState(() => _selectedAccountId = picked);
-              },
+                    ...cards.map((c) => ListTile(
+                          leading: const Icon(Icons.credit_card_rounded),
+                          title: Text(c.name),
+                          subtitle: Text('${c.bank} ••${c.last4}'),
+                          onTap: () => Navigator.pop(context, (c.id, true)),
+                        )),
+                  ],
+                  if (accounts.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(
+                        'Bank Accounts',
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    ...accounts.map((a) => ListTile(
+                          leading: const Icon(Icons.account_balance_outlined),
+                          title: Text(a.name),
+                          subtitle: Text(a.bank),
+                          onTap: () => Navigator.pop(context, (a.id, false)),
+                        )),
+                  ],
+                ],
+              ),
+            ),
+          );
+          if (picked != null) {
+            setState(() {
+              _selectedAccountId = picked.$1;
+              _selectedIsCreditCard = picked.$2;
+            });
+          }
+        },
       ),
     );
   }

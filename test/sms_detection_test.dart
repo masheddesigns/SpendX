@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:spend_x/models/credit_card.dart';
 import 'package:spend_x/models/reminder_model.dart';
 import 'package:spend_x/services/sms_import_service.dart';
 
@@ -402,6 +403,27 @@ void main() {
       expect(result.transaction!.amount, 75.0);
       expect(result.transaction!.merchant?.toLowerCase(), contains('muhammed2557'));
       expect(result.balance!.amount, 14401.25);
+    });
+
+    test('CreditCard.safeDate clamps to maximum days in month without overflow', () {
+      final febClamped = CreditCard.safeDate(2026, 2, 31);
+      expect(febClamped.month, 2);
+      expect(febClamped.day, 28);
+
+      final aprilClamped = CreditCard.safeDate(2026, 4, 31);
+      expect(aprilClamped.month, 4);
+      expect(aprilClamped.day, 30);
+    });
+
+    test('CreditCard.daysUntilDue returns 0 on due day instead of rolling over to next month', () {
+      final now = DateTime.now();
+      final cardDueToday = CreditCard(
+        name: 'Test Card',
+        bank: 'HDFC',
+        limitAmount: 50000,
+        dueDay: now.day,
+      );
+      expect(cardDueToday.daysUntilDue, 0);
     });
   });
 }

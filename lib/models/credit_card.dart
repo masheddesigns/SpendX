@@ -43,9 +43,10 @@ class CreditCard {
   /// Next billing date from today
   DateTime get nextBillingDate {
     final now = DateTime.now();
-    var d = DateTime(now.year, now.month, billingDay);
-    if (d.isBefore(now) || d.isAtSameMomentAs(now)) {
-      d = DateTime(now.year, now.month + 1, billingDay);
+    final today = DateTime(now.year, now.month, now.day);
+    var d = safeDate(now.year, now.month, billingDay);
+    if (d.isBefore(today)) {
+      d = safeDate(now.year, now.month + 1, billingDay);
     }
     return d;
   }
@@ -53,14 +54,36 @@ class CreditCard {
   /// Next due date from today
   DateTime get nextDueDate {
     final now = DateTime.now();
-    var d = DateTime(now.year, now.month, dueDay);
-    if (d.isBefore(now) || d.isAtSameMomentAs(now)) {
-      d = DateTime(now.year, now.month + 1, dueDay);
+    final today = DateTime(now.year, now.month, now.day);
+    var d = safeDate(now.year, now.month, dueDay);
+    if (d.isBefore(today)) {
+      d = safeDate(now.year, now.month + 1, dueDay);
     }
     return d;
   }
 
-  int get daysUntilDue => nextDueDate.difference(DateTime.now()).inDays;
+  int get daysUntilDue {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return nextDueDate.difference(today).inDays;
+  }
+
+  /// Returns a valid DateTime clamped to the maximum days in that month.
+  /// Prevents Dart from rolling over into subsequent months when month has fewer days.
+  static DateTime safeDate(int year, int month, int day) {
+    var y = year;
+    var m = month;
+    while (m > 12) {
+      y += 1;
+      m -= 12;
+    }
+    while (m < 1) {
+      y -= 1;
+      m += 12;
+    }
+    final daysInMonth = DateTime(y, m + 1, 0).day;
+    return DateTime(y, m, day.clamp(1, daysInMonth));
+  }
 
   Map<String, dynamic> toMap() => {
     'id': id,

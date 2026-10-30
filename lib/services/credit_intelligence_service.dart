@@ -61,28 +61,29 @@ class CreditIntelligenceService {
 
   BillingCycle _calculateBillingCycle(CreditCard card) {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final int billingDay = card.billingDay;
 
     DateTime start;
     DateTime end;
 
     if (now.day >= billingDay) {
-      start = DateTime(now.year, now.month, billingDay);
-      end = DateTime(
+      start = CreditCard.safeDate(now.year, now.month, billingDay);
+      end = CreditCard.safeDate(
         now.year,
         now.month + 1,
         billingDay,
       ).subtract(const Duration(days: 1));
     } else {
-      start = DateTime(now.year, now.month - 1, billingDay);
-      end = DateTime(
+      start = CreditCard.safeDate(now.year, now.month - 1, billingDay);
+      end = CreditCard.safeDate(
         now.year,
         now.month,
         billingDay,
       ).subtract(const Duration(days: 1));
     }
 
-    final daysRemaining = end.difference(now).inDays;
+    final daysRemaining = end.difference(today).inDays;
 
     return BillingCycle(
       startDate: start,
@@ -125,17 +126,18 @@ class CreditIntelligenceService {
     if (outstanding <= 0) return DueStatus.safe;
 
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final int dueDay = card.dueDay;
 
     // Find next due date
     DateTime nextDue;
     if (now.day <= dueDay) {
-      nextDue = DateTime(now.year, now.month, dueDay);
+      nextDue = CreditCard.safeDate(now.year, now.month, dueDay);
     } else {
-      nextDue = DateTime(now.year, now.month + 1, dueDay);
+      nextDue = CreditCard.safeDate(now.year, now.month + 1, dueDay);
     }
 
-    final daysLeft = nextDue.difference(now).inDays;
+    final daysLeft = nextDue.difference(today).inDays;
 
     if (daysLeft <= 2) return DueStatus.critical;
     if (daysLeft <= 5) return DueStatus.warning;
@@ -146,13 +148,14 @@ class CreditIntelligenceService {
     if (outstanding <= 0) return null;
 
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final dueDay = card.dueDay;
 
     final nextDue = now.day <= dueDay
-        ? DateTime(now.year, now.month, dueDay)
-        : DateTime(now.year, now.month + 1, dueDay);
+        ? CreditCard.safeDate(now.year, now.month, dueDay)
+        : CreditCard.safeDate(now.year, now.month + 1, dueDay);
 
-    return nextDue.difference(now).inDays;
+    return nextDue.difference(today).inDays;
   }
 
   List<String> _generateAdvice(

@@ -13,6 +13,8 @@ import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../utils/text_formatter.dart';
 import '../../utils/app_format.dart';
 import '../bank/add_bank_account_screen.dart';
+import '../../data/repositories/reminder_repo.dart';
+import '../../models/reminder_model.dart';
 import '../../shared/widgets/app_page_route.dart';
 
 enum CreditCardFormAction { deleted }
@@ -128,6 +130,26 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
             );
         await ref.read(app_data.cardsProvider.notifier).refresh();
       }
+    }
+
+    if (outstanding > 0 || lastStatement > 0) {
+      try {
+        await ReminderRepo().insertGlobalReminder(
+          Reminder(
+            id: 'credit_due_${card.id}',
+            type: ReminderType.credit,
+            title: 'Credit Card Due: ${card.name}',
+            linkedEntityId: card.id,
+            dueDate: card.nextDueDate,
+            amount: lastStatement > 0 ? lastStatement : outstanding,
+            isActive: true,
+            status: ReminderStatus.upcoming,
+            recordStatus: ReminderRecordStatus.pending,
+            sourceType: ReminderSourceType.credit,
+            sourceId: card.id,
+          ).toMap(),
+        );
+      } catch (_) {}
     }
 
     ref.invalidate(creditCardsProvider);

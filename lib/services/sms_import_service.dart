@@ -67,18 +67,31 @@ class DetectedAccount {
   });
 }
 
-/// A credit card detected from SMS (best-known outstanding).
+/// A credit card detected from SMS (best-known outstanding / available limit).
 class DetectedCard {
   final String bank;
   final String? last4;
   final String? keyword;
   final double outstanding;
+  final double? creditLimit;
+  final double? availableLimit;
+  final bool isAvailableLimit;
+  final bool isStatementBill;
+  final DateTime? dueDate;
+  final double? minDue;
   final String sender;
+
   const DetectedCard({
     required this.bank,
     this.last4,
     this.keyword,
     required this.outstanding,
+    this.creditLimit,
+    this.availableLimit,
+    this.isAvailableLimit = false,
+    this.isStatementBill = false,
+    this.dueDate,
+    this.minDue,
     required this.sender,
   });
 }
@@ -322,15 +335,15 @@ class SmsImportService {
         'sinceEpochMs': 0,
         'limit': 20000,
       });
-      print('[SmsScan] Native queryInboxSince returned ${raw.length} raw messages');
+      AppLogger.d('[SmsScan] Native queryInboxSince returned ${raw.length} raw messages');
       final result = raw.map((m) {
         final map = Map<String, dynamic>.from(m as Map);
         return SmsMessage.fromJson(map);
       }).toList();
-      print('[SmsScan] Parsed ${result.length} SmsMessages');
+      AppLogger.d('[SmsScan] Parsed ${result.length} SmsMessages');
       return result;
     } catch (e) {
-      print('[SmsScan] Native queryInboxSince failed: $e — falling back to library');
+      AppLogger.w('[SmsScan] Native queryInboxSince failed: $e — falling back to library');
       // Fallback to library if native query fails
       return SmsQuery().querySms(
         count: 1000,
@@ -346,7 +359,7 @@ class SmsImportService {
     }
 
     final messages = await _queryInbox();
-    print('[SmsScan] _queryInbox returned ${messages.length} messages');
+    AppLogger.d('[SmsScan] _queryInbox returned ${messages.length} messages');
 
     final cutoff = options.daysBack == null
         ? null
@@ -359,7 +372,20 @@ class SmsImportService {
     final accountMap =
         <String, ({DateTime? date, String bank, String? last4, double balance, String sender})>{};
     final cardMap =
-        <String, ({DateTime? date, String bank, String? last4, String? keyword, double outstanding, String sender})>{};
+        <String, ({
+          DateTime? date,
+          String bank,
+          String? last4,
+          String? keyword,
+          double outstanding,
+          double? creditLimit,
+          double? availableLimit,
+          bool isAvailableLimit,
+          bool isStatementBill,
+          DateTime? dueDate,
+          double? minDue,
+          String sender,
+        })>{};
     final loanMap =
         <String, ({DateTime? date, String bank, double outstanding, String sender})>{};
 
@@ -429,6 +455,12 @@ class SmsImportService {
                 last4: balanceHit.last4,
                 keyword: balanceHit.bankKeyword,
                 outstanding: balanceHit.amount,
+                creditLimit: balanceHit.creditLimit,
+                availableLimit: balanceHit.isAvailableLimit ? balanceHit.amount : null,
+                isAvailableLimit: balanceHit.isAvailableLimit,
+                isStatementBill: balanceHit.isStatementBill,
+                dueDate: balanceHit.dueDate,
+                minDue: balanceHit.minDue,
                 sender: balanceHit.sender,
               );
             }
@@ -452,8 +484,19 @@ class SmsImportService {
         }
       }
 
+      final isCcPaymentCandidate = _isCreditCardPaymentText(lower, senderAddr);
+      final isCcRefundCandidate = _isCreditCardRefundText(lower);
+      final isCcBillCandidate = _isCreditCardBillText(lower);
+      final isCardSpend = _isCardSpendCandidate(lower);
+
       // 2. Transaction messages — skip non-transaction / intent SMS.
-      if (_nonTransactionRe.hasMatch(lower)) continue;
+      if (!isCcPaymentCandidate &&
+          !isCcRefundCandidate &&
+          !isCcBillCandidate &&
+          !isCardSpend &&
+          _nonTransactionRe.hasMatch(lower)) {
+        continue;
+      }
 
       // Sender-based gatekeeping: non-bank senders must have strong signals.
       if (!_isBankSender(senderAddr)) {
@@ -558,6 +601,12 @@ class SmsImportService {
             last4: c.last4,
             keyword: c.keyword,
             outstanding: c.outstanding,
+            creditLimit: c.creditLimit,
+            availableLimit: c.availableLimit,
+            isAvailableLimit: c.isAvailableLimit,
+            isStatementBill: c.isStatementBill,
+            dueDate: c.dueDate,
+            minDue: c.minDue,
             sender: c.sender,
           ),
         )

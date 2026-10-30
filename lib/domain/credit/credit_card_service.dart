@@ -177,6 +177,35 @@ class CreditCardService {
         ),
       );
     }
+
+    // Sync to Reminders after payment
+    try {
+      final card = await _creditRepo.getCard(cardId);
+      if (card != null) {
+        final outstanding = await calculateOutstanding(card.id);
+        await _reminderRepo.insertGlobalReminder(
+          Reminder(
+            id: 'credit_due_${card.id}',
+            type: ReminderType.credit,
+            title: 'Credit Card Due: ${card.name}',
+            linkedEntityId: card.id,
+            dueDate: card.nextDueDate,
+            amount: outstanding,
+            isActive: outstanding > 0,
+            status: outstanding <= 0
+                ? ReminderStatus.inactive
+                : ReminderStatus.upcoming,
+            recordStatus: outstanding <= 0
+                ? ReminderRecordStatus.done
+                : ReminderRecordStatus.pending,
+            sourceType: ReminderSourceType.credit,
+            sourceId: card.id,
+          ).toMap(),
+        );
+      }
+    } catch (_) {
+      // Non-fatal if reminder sync fails
+    }
   }
 
   /// Converts an existing purchase to an EMI plan
