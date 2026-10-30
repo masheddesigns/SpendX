@@ -351,5 +351,57 @@ void main() {
       // Should NOT be detected as credit card even though "total dues" matches _creditDueRe.
       expect(result.balance, isNull);
     });
+
+    test('detects credit card statement bill with due date and min due', () {
+      final result = service.classifyMessage(
+        'Your ICICI Bank Credit Card XX5007 statement has been generated. Total Amount Due: Rs 15,450.00. Minimum Due: Rs 800.00. Due Date: 18-NOV-26.',
+        'VM-ICICIB-S',
+      );
+      expect(result.balance, isNotNull);
+      expect(result.balance!.kind, BalanceKind.creditCard);
+      expect(result.balance!.amount, 15450.0);
+      expect(result.balance!.minDue, 800.0);
+      expect(result.balance!.dueDate, isNotNull);
+      expect(result.balance!.dueDate!.day, 18);
+      expect(result.balance!.dueDate!.month, 11);
+      expect(result.balance!.isStatementBill, isTrue);
+    });
+
+    test('detects Kotak credit card bill due', () {
+      final result = service.classifyMessage(
+        'Your Kotak Credit Card ending 1234 total due is Rs. 12,500.00 payable by 15-Nov.',
+        'VM-KOTAKB-S',
+      );
+      expect(result.balance, isNotNull);
+      expect(result.balance!.kind, BalanceKind.creditCard);
+      expect(result.balance!.amount, 12500.0);
+      expect(result.balance!.last4, '1234');
+      expect(result.balance!.dueDate, isNotNull);
+      expect(result.balance!.dueDate!.day, 15);
+      expect(result.balance!.dueDate!.month, 11);
+    });
+
+    test('detects credit card spend with available limit', () {
+      final result = service.classifyMessage(
+        'Alert: Rs 450.00 spent on ICICI Bank Credit Card ending 5007. Avail credit limit: Rs 45,000. Total due: Rs 15,000.',
+        'VM-ICICIB-S',
+      );
+      expect(result.transaction, isNotNull);
+      expect(result.transaction!.amount, 450.0);
+      expect(result.eventType, SmsEventType.creditCardPurchase);
+      expect(result.balance, isNotNull);
+      expect(result.balance!.kind, BalanceKind.creditCard);
+    });
+
+    test('extracts lowercase UPI recipient handle', () {
+      final result = service.classifyMessage(
+        'Debited Rs 75.00 from a/c X8434 on 30Oct26 14:35 via UPI to muhammed2557. Ref 630304506825.Bal Rs 14401.25. Not you?Call 18004251199 -Federal Bank',
+        'JK-FEDBNK-T',
+      );
+      expect(result.transaction, isNotNull);
+      expect(result.transaction!.amount, 75.0);
+      expect(result.transaction!.merchant?.toLowerCase(), contains('muhammed2557'));
+      expect(result.balance!.amount, 14401.25);
+    });
   });
 }

@@ -55,6 +55,21 @@ class MainActivity : FlutterActivity() {
                     requestReceiveSmsPermission()
                     result.success(null)
                 }
+                "isNotificationListenerEnabled" -> {
+                    val enabled = androidx.core.app.NotificationManagerCompat
+                        .getEnabledListenerPackages(this)
+                        .contains(packageName)
+                    result.success(enabled)
+                }
+                "openNotificationListenerSettings" -> {
+                    try {
+                        val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
                 "queryInboxSince" -> {
                     val sinceEpochMs = (call.argument<Number>("sinceEpochMs"))?.toLong()
                     val limit = (call.argument<Number>("limit"))?.toInt() ?: 5000

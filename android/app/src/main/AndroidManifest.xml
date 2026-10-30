@@ -96,6 +96,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Listens to bank and UPI push notifications when banks don't send SMS -->
+        <service
+            android:name=".BankNotificationListener"
+            android:label="SpendX Auto-Track"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

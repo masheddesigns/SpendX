@@ -21,6 +21,7 @@ class _NotificationSettingsScreenState
   NotificationSettings _settings = NotificationSettings();
   bool _loading = true;
   bool _liveSmsEnabled = true;
+  bool _notifListenerEnabled = false;
 
   @override
   void initState() {
@@ -31,9 +32,11 @@ class _NotificationSettingsScreenState
   Future<void> _loadSettings() async {
     final settings = await _service.load();
     final liveSms = await LiveSmsService.instance.enabled;
+    final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
     setState(() {
       _settings = settings;
       _liveSmsEnabled = liveSms;
+      _notifListenerEnabled = notifListener;
       _loading = false;
     });
   }
@@ -196,6 +199,27 @@ class _NotificationSettingsScreenState
                 if (v) {
                   await LiveSmsService.instance.requestReceivePermission();
                 }
+              },
+            ),
+            const Divider(),
+            SwitchListTile(
+              secondary: Icon(
+                Icons.notifications_active_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text(
+                'Bank App Notifications',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Auto-track transactions & balances from GPay, PhonePe, Paytm, and bank apps',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _notifListenerEnabled,
+              onChanged: (v) async {
+                await LiveSmsService.instance.openNotificationListenerSettings();
+                final enabled = await LiveSmsService.instance.isNotificationListenerEnabled();
+                setState(() => _notifListenerEnabled = enabled);
               },
             ),
           ]),

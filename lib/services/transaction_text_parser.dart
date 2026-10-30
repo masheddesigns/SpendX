@@ -26,7 +26,7 @@ class TransactionTextParser {
   /// stale cached entries from older builds can never be served.
   /// Mixed into the cache key — a version bump effectively wipes the cache
   /// without needing an explicit clear.
-  static const _parserVersion = 4;
+  static const _parserVersion = 5;
 
   /// Cache TTL — entries older than this are evicted on read. Prevents
   /// long-lived runs from accumulating drift; 5 minutes is well past any
@@ -586,9 +586,15 @@ class TransactionTextParser {
   // match via the open-ended word boundary; only the apostrophe character
   // itself is excluded from the captured name.
   static final _merchantPatterns = <RegExp>[
-    // "paid to MERCHANT", "sent to MERCHANT"
+    // "paid to MERCHANT", "sent to MERCHANT", "debited via UPI to MERCHANT"
     RegExp(
-      r'(?:paid|sent|transferred)\s+to\s+([A-Z][A-Za-z0-9 .&-]{1,40})',
+      r'(?:paid|sent|transferred|debited)\s+(?:via\s+upi\s+)?to\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "via UPI to MERCHANT", "UPI to MERCHANT"
+    RegExp(
+      r'(?:via\s+upi\s+to|upi\s+to)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
     ),
     // "to MERCHANT" (with capital first letter)
     RegExp(r'\bto\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
@@ -602,6 +608,7 @@ class TransactionTextParser {
   static final _merchantStopWords = {
     'upi', 'bank', 'account', 'a/c', 'card', 'ref', 'txn', 'transaction',
     'payment', 'your', 'the', 'a', 'an', 'on', 'for', 'via', 'using',
+    'credit', 'debit', 'rupay', 'visa', 'mastercard', 'edge', 'my', 'his', 'her',
   };
 
   /// Returns (normalizedMerchant, source).
@@ -630,19 +637,22 @@ class TransactionTextParser {
       var merchant = m.group(1)!.trim();
       merchant = merchant
           .replaceAll(
-            RegExp(r'\s+(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank).*$',
+            RegExp(r'\s+(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank|bal|not\s+you|call).*$',
                 caseSensitive: false),
             '',
           )
           .trim();
       if (merchant.isEmpty || merchant.length < 2) continue;
       final firstWord = merchant.split(' ').first.toLowerCase();
-      if (_merchantStopWords.contains(firstWord)) continue;
+      if (_merchantStopWords.contains(firstWord) ||
+          RegExp(r'^x+\d+$', caseSensitive: false).hasMatch(firstWord)) {
+        continue;
+      }
       // Reject OCR garbage candidates outright — better to return null
       // than poison the merchant memory with phrases like
       // "Cc Ordered Successfully Order Id".
       if (_isNoisyMerchant(merchant)) continue;
-      final src = (i == 0 || i == 3) ? 'keyword' : 'fallback';
+      final src = (i == 0 || i == 1 || i == 4) ? 'keyword' : 'fallback';
       return (_normalizeMerchant(merchant), src);
     }
     return (null, null);

@@ -41,7 +41,7 @@ object FinancialSmsFilter {
     // 4. Known financial keywords in sender headers
     private val FINANCIAL_SENDER_KEYWORDS = listOf(
         "HDFC", "SBI", "ICICI", "AXIS", "KOTAK", "FEDBNK", "JTEDGE", "ONECRD",
-        "BOBCRD", "BOBONE", "JIOPBS", "PAYTM", "QCAMZN", "AMZPAY", "JUSPAY",
+        "BOBCRD", "BOBONE", "BOB", "CSB", "JIOPBS", "PAYTM", "QCAMZN", "AMZPAY", "JUSPAY",
         "CANBNK", "PNBSMS", "IDFC", "INDUS", "YESBK", "YESBNK", "UNIONB",
         "INDIANB", "CENTBK", "UCOBNK", "IOB", "KVB", "CUB", "SIBLTD",
         "KBL", "TMB", "BNDHAN", "RBL", "SCISMS", "CITIBK", "HSBC", "STANBK",
@@ -63,7 +63,8 @@ object FinancialSmsFilter {
     // 7. Balance or account statement keywords
     private val BALANCE_KEYWORDS = Pattern.compile(
         """\b(?:available\s*balance|avail\.?\s*bal(?:ance)?|account\s*balance|closing\s*bal(?:ance)?|""" +
-        """current\s*balance|total\s*due|minimum\s*due|outstanding\s*(?:balance|amount|dues))\b""",
+        """current\s*balance|total\s*due|minimum\s*due|amount\s*due|payment\s*due|bill\s*(?:amount|for|of)|""" +
+        """available\s*limit|avl\s*limit|credit\s*limit|outstanding\s*(?:balance|amount|dues))\b""",
         Pattern.CASE_INSENSITIVE
     )
 

@@ -20,6 +20,10 @@ class BalanceHit {
   final String sender;
   final String body;
   final bool isAvailableLimit;
+  final DateTime? dueDate;
+  final double? minDue;
+  final double? creditLimit;
+  final bool isStatementBill;
 
   const BalanceHit({
     required this.kind,
@@ -29,6 +33,10 @@ class BalanceHit {
     required this.sender,
     required this.body,
     this.isAvailableLimit = false,
+    this.dueDate,
+    this.minDue,
+    this.creditLimit,
+    this.isStatementBill = false,
   });
 }
 
@@ -180,10 +188,16 @@ class SmsImportService {
     }
 
     // 2. Hard reject non-transaction / promotional / telecom / weather / service messages.
-    // Exception: Do not reject credit card payment confirmations or refunds.
+    // Exception: Do not reject credit card payment confirmations, refunds, bills, or spends.
     final isCcPaymentCandidate = _isCreditCardPaymentText(lower, sender);
     final isCcRefundCandidate = _isCreditCardRefundText(lower);
-    if (!isCcPaymentCandidate && !isCcRefundCandidate && _nonTransactionRe.hasMatch(lower)) {
+    final isCcBillCandidate = _isCreditCardBillText(lower);
+    final isCcSpend = _isCardSpendCandidate(lower);
+    if (!isCcPaymentCandidate &&
+        !isCcRefundCandidate &&
+        !isCcBillCandidate &&
+        !isCcSpend &&
+        _nonTransactionRe.hasMatch(lower)) {
       return const SmsClassification();
     }
 
@@ -650,6 +664,43 @@ class SmsImportService {
     return hasCard && hasRefund && hasCredit;
   }
 
+  /// Returns true if text indicates a credit card bill statement or due date announcement.
+  static bool _isCreditCardBillText(String lower) {
+    final hasCardSignal = lower.contains('credit card') ||
+        lower.contains('card ending') ||
+        lower.contains('card xx') ||
+        lower.contains('cardmember') ||
+        lower.contains('crd') ||
+        lower.contains('rupay');
+    final hasBillSignal = _creditDueRe.hasMatch(lower) ||
+        _ccAvailableLimitRe.hasMatch(lower) ||
+        lower.contains('total due') ||
+        lower.contains('amount due') ||
+        lower.contains('minimum due') ||
+        lower.contains('bill of rs') ||
+        lower.contains('bill for rs') ||
+        lower.contains('bill generated') ||
+        lower.contains('statement has been generated') ||
+        lower.contains('payable by');
+    return hasCardSignal && hasBillSignal;
+  }
+
+  /// Returns true if text indicates an actual credit card spend transaction.
+  static bool _isCardSpendCandidate(String lower) {
+    final hasCardSignal = lower.contains('credit card') ||
+        lower.contains('card ending') ||
+        lower.contains('card xx') ||
+        lower.contains('cardmember') ||
+        lower.contains('jtedge') ||
+        lower.contains('crd') ||
+        lower.contains('rupay');
+    final hasSpendVerb = RegExp(
+      r'\b(?:spent|paid|charged|debited|used\s+for|transaction\s+of)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+    return hasCardSignal && hasSpendVerb;
+  }
+
   // Digital wallet balance — Amazon Pay, Paytm Wallet, IRCTC RWallet, etc.
   static final RegExp _walletBalanceRe = RegExp(
     r'(?:updated\s*balance(?:\s*is)?|available\s*balance|'
@@ -684,7 +735,7 @@ class SmsImportService {
     r'\bbonus\b|claim now|free bonus|\bneu ?coins?\b|reward|points? credited|'
     r'bill.*(?:generat|due|issued)|statement|is due for payment|'
     r'\bregistered\b|registration|enrolled|'
-    r'credit limit|increas(?:e|ing) (?:the )?limit|limit.*(?:increas|rais)|'
+    r'(?:increase|raise|raising|enhancing|enhancement)\s+(?:your\s+)?credit\s+limit|increas(?:e|ing) (?:the )?limit|limit.*(?:increas|rais)|'
     r'fund bal|securities bal|'
     r'\bapy\b|\bpran\b|pension|trade confirm|broker|booking info|'
     r'offer for you|pre-approved loan|'
@@ -764,28 +815,110 @@ class SmsImportService {
         lower.contains('irsmsa');
   }
 
-  /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT`.
+  /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT` or `via UPI to MERCHANT`.
   static final RegExp _upiRefRe = RegExp(
-    r'UPI/(?:DR|CR|P2A|P2P)/\d+/([A-Za-z0-9 .&/()-]+)',
+    r'(?:UPI/(?:DR|CR|P2A|P2P)/\d+/|(?:via\s+upi\s+to|upi\s+to)\s+)([A-Za-z0-9 .&/()@_-]+)',
     caseSensitive: false,
   );
+
+  static final RegExp _dueDateRe = RegExp(
+    r'(?:due\s*(?:date|on|by)?|pay\s*(?:by|before)|payable\s*by|before\s*due\s*date)[^\w\d]*'
+    r'([0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4}|[0-9]{1,2}[-\/\s](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\/\s]?[0-9]{0,4})',
+    caseSensitive: false,
+  );
+
+  static DateTime? _extractDueDate(String body) {
+    final m = _dueDateRe.firstMatch(body);
+    if (m == null) return null;
+    final rawDate = m.group(1)?.trim();
+    if (rawDate == null || rawDate.isEmpty) return null;
+
+    final now = DateTime.now();
+
+    // 1. DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    final numMatch = RegExp(r'^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})$').firstMatch(rawDate);
+    if (numMatch != null) {
+      final day = int.tryParse(numMatch.group(1)!) ?? 1;
+      final month = int.tryParse(numMatch.group(2)!) ?? 1;
+      var year = int.tryParse(numMatch.group(3)!) ?? now.year;
+      if (year < 100) year += 2000;
+      return DateTime(year, month, day);
+    }
+
+    // 2. DD-MMM or DD-MMM-YYYY (e.g. 18-NOV-26 or 15-Nov)
+    final textMatch = RegExp(r'^(\d{1,2})[-\/\s]([A-Za-z]{3,})[-\/\s]?(\d{2,4})?$').firstMatch(rawDate);
+    if (textMatch != null) {
+      final day = int.tryParse(textMatch.group(1)!) ?? 1;
+      final monthStr = textMatch.group(2)!.toLowerCase().substring(0, 3);
+      final months = {
+        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+      };
+      final month = months[monthStr] ?? now.month;
+      final yearGroup = textMatch.group(3);
+      int year = now.year;
+      if (yearGroup != null && yearGroup.isNotEmpty) {
+        year = int.tryParse(yearGroup) ?? now.year;
+        if (year < 100) year += 2000;
+      } else {
+        if (month < now.month) year += 1;
+      }
+      return DateTime(year, month, day);
+    }
+
+    return null;
+  }
+
+  static final RegExp _minDueRe = RegExp(
+    r'(?:minimum\s*(?:amount\s*)?due|min\s*due)[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    caseSensitive: false,
+  );
+
+  static double? _extractMinDue(String body) {
+    final m = _minDueRe.firstMatch(body);
+    if (m == null) return null;
+    return _parseAmount(m.group(1)!);
+  }
+
+  static final RegExp _totalLimitRe = RegExp(
+    r'(?:total\s*(?:credit\s*)?limit|card\s*limit|credit\s*limit(?!\s*(?:to\s*rs|increase)))[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    caseSensitive: false,
+  );
+
+  static double? _extractTotalCreditLimit(String body) {
+    final m = _totalLimitRe.firstMatch(body);
+    if (m == null) return null;
+    final val = _parseAmount(m.group(1)!);
+    return val > 0 ? val : null;
+  }
 
   /// Detects a balance statement in an SMS. Returns `null` when the message
   /// is (primarily) a transaction alert instead.
   BalanceHit? _detectBalance(String body, String sender) {
     final lower = body.toLowerCase();
     final bankKeyword = _bankKeyword(sender, lower);
-    // Known banks should not be detected as credit cards even if their SMS
-    // contains words like "total dues" / "outstanding balance".
-    // Exception: banks that also issue credit cards (ICICI, HDFC, etc.)
     final isKnownBank = bankKeyword != null && bankNames.containsKey(bankKeyword);
+
+    final hasExplicitCardMention = lower.contains('credit card') ||
+        lower.contains('card ending') ||
+        lower.contains('card xx') ||
+        lower.contains('cardmember') ||
+        _ccAvailableLimitRe.hasMatch(lower) ||
+        _ccPaymentRe.hasMatch(lower) ||
+        lower.contains('rupay credit') ||
+        sender.toLowerCase().contains('crd') ||
+        sender.toLowerCase().contains('jtedge');
+
     final ccIssuers = {
       'icicib', 'icicit', 'icici',
       'hdfc', 'hdfcbk', 'hdfcbn',
       'axisbk', 'axsbk', 'axns',
-      'sbicrd', 'bobcard', 'onecrd', 'jtedge', 'auccb',
+      'sbicrd', 'sbiinb', 'cbssbi', 'sbi',
+      'bobcard', 'bobcrd', 'bob', 'onecrd', 'jtedge', 'auccb', 'aubnk', 'aubank',
+      'kotak', 'kotakb', 'idfcfb', 'idfc', 'indus', 'rbl', 'yesbk', 'yesbank',
+      'fedbnk', 'csb', 'canbnk', 'pnb', 'scisms', 'stanbk', 'citibk', 'hsbc',
     };
-    final skipCreditCard = isKnownBank && !ccIssuers.contains(bankKeyword);
+    final skipCreditCard = !hasExplicitCardMention && isKnownBank && !ccIssuers.contains(bankKeyword);
 
     // Loan balance — check BEFORE credit card because loan SMS often contain
     // "outstanding" which would falsely match the credit card pattern.
@@ -807,13 +940,18 @@ class SmsImportService {
     }
 
     // Credit card outstanding or available limit — check BEFORE bank balance
-    // Skip if the sender is a known bank that doesn't issue credit cards.
     if (!skipCreditCard) {
       if (_creditDueRe.hasMatch(lower)) {
         final m = _creditDueRe.firstMatch(body);
         if (m != null) {
           final amount = _parseAmount(m.group(1)!);
           if (amount >= 0) {
+            final isStatementBill = lower.contains('bill') ||
+                lower.contains('statement') ||
+                lower.contains('due date') ||
+                lower.contains('total due') ||
+                lower.contains('amount due') ||
+                lower.contains('payable by');
             return BalanceHit(
               kind: BalanceKind.creditCard,
               amount: amount,
@@ -821,6 +959,10 @@ class SmsImportService {
               bankKeyword: bankKeyword,
               sender: sender,
               body: body,
+              dueDate: _extractDueDate(body),
+              minDue: _extractMinDue(body),
+              creditLimit: _extractTotalCreditLimit(body),
+              isStatementBill: isStatementBill,
             );
           }
         }
@@ -840,6 +982,9 @@ class SmsImportService {
               sender: sender,
               body: body,
               isAvailableLimit: true,
+              dueDate: _extractDueDate(body),
+              minDue: _extractMinDue(body),
+              creditLimit: _extractTotalCreditLimit(body),
             );
           }
         }
@@ -973,10 +1118,12 @@ class SmsImportService {
     'prajin': 'Pension Savings (PMSY)',
   };
 
-  String _bankDisplayName(String? code) {
+  String bankDisplayName(String? code) {
     if (code == null) return 'Bank';
     return bankNames[code] ?? code.toUpperCase();
   }
+
+  String _bankDisplayName(String? code) => bankDisplayName(code);
 
   String? _last4(String body) {
     final m = _last4Re.firstMatch(body);
@@ -986,7 +1133,7 @@ class SmsImportService {
     return digits.length > 4 ? digits.substring(digits.length - 4) : digits;
   }
 
-  double _parseAmount(String raw) {
+  static double _parseAmount(String raw) {
     return double.tryParse(raw.replaceAll(',', '')) ?? 0;
   }
 }

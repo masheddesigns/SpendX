@@ -13,11 +13,13 @@ import '../data/repositories/account_repo.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/credit_repo.dart';
+import '../data/repositories/reminder_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../domain/finance/finance.dart';
 import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
+import '../models/reminder_model.dart';
 import '../models/review_item.dart';
 import '../models/transaction.dart';
 import '../utils/app_format.dart';
@@ -143,6 +145,23 @@ class LiveSmsService with WidgetsBindingObserver {
     } catch (_) {
       // Ignore on platforms without the channel.
     }
+  }
+
+  /// Checks whether Android Notification Access is granted to SpendX.
+  Future<bool> isNotificationListenerEnabled() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('isNotificationListenerEnabled');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Opens the Android system settings page for Notification Access.
+  Future<void> openNotificationListenerSettings() async {
+    try {
+      await _channel.invokeMethod('openNotificationListenerSettings');
+    } catch (_) {}
   }
 
   Future<void> drainPending() async {
@@ -412,6 +431,30 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await FinancialTransactionService().createTransaction(tx);
           createdTx = tx;
+
+          // Sync upcoming card reminder if bill payment settled the card
+          if (matchedCard != null) {
+            try {
+              final updatedCard = await CreditRepo().getCard(matchedCard.id);
+              if (updatedCard != null) {
+                await ReminderRepo().insertGlobalReminder(
+                  Reminder(
+                    id: 'credit_due_${updatedCard.id}',
+                    type: ReminderType.credit,
+                    title: 'Credit Card Due: ${updatedCard.name}',
+                    linkedEntityId: updatedCard.id,
+                    dueDate: updatedCard.nextDueDate,
+                    amount: updatedCard.outstanding,
+                    isActive: updatedCard.outstanding > 0,
+                    status: updatedCard.outstanding <= 0 ? ReminderStatus.inactive : ReminderStatus.upcoming,
+                    recordStatus: updatedCard.outstanding <= 0 ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
+                    sourceType: ReminderSourceType.credit,
+                    sourceId: updatedCard.id,
+                  ).toMap(),
+                );
+              }
+            } catch (_) {}
+          }
         }
       } else if (!await _alreadyInApp(parsed)) {
         // --- OTHER TRANSACTIONS (Card purchase, refund, bank expense/income, etc.) ---
@@ -473,6 +516,30 @@ class LiveSmsService with WidgetsBindingObserver {
         // Create transaction in canonical double-entry ledger
         await FinancialTransactionService().createTransaction(tx);
         createdTx = tx;
+
+        // Sync upcoming card reminder if this was a credit card purchase
+        if (instrument.instrumentType == 'credit_card' && instrument.accountId != null) {
+          try {
+            final card = await CreditRepo().getCard(instrument.accountId!);
+            if (card != null) {
+              await ReminderRepo().insertGlobalReminder(
+                Reminder(
+                  id: 'credit_due_${card.id}',
+                  type: ReminderType.credit,
+                  title: 'Credit Card Due: ${card.name}',
+                  linkedEntityId: card.id,
+                  dueDate: card.nextDueDate,
+                  amount: card.outstanding,
+                  isActive: true,
+                  status: ReminderStatus.upcoming,
+                  recordStatus: ReminderRecordStatus.pending,
+                  sourceType: ReminderSourceType.credit,
+                  sourceId: card.id,
+                ).toMap(),
+              );
+            }
+          } catch (_) {}
+        }
 
         // Gamification XP
         try {
@@ -563,19 +630,83 @@ class LiveSmsService with WidgetsBindingObserver {
             c.bank.toLowerCase().contains(kw),
           ).firstOrNull;
         }
-        if (card != null) {
-          if (hit.isAvailableLimit) {
-            // If card limit is known and > 0, derived outstanding = limit - available limit
-            if (card.limitAmount > 0 && hit.amount <= card.limitAmount) {
-              final derivedOutstanding = card.limitAmount - hit.amount;
-              await CreditRepo().updateBalance(card.id, derivedOutstanding);
-            }
-          } else {
-            // Direct outstanding dues reported
-            await CreditRepo().updateBalance(card.id, hit.amount);
-          }
-          return true;
+
+        // Auto-create card if not found yet
+        if (card == null) {
+          final bankTitle = hit.bankKeyword != null
+              ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
+              : (hit.sender.isNotEmpty ? hit.sender : 'Credit');
+          final cardTitle = '$bankTitle Card${hit.last4 != null && hit.last4!.isNotEmpty ? ' (..${hit.last4})' : ''}';
+          final newCard = CreditCard(
+            name: cardTitle,
+            bank: bankTitle,
+            last4: hit.last4 ?? '0000',
+            limitAmount: hit.creditLimit ?? (hit.isAvailableLimit ? hit.amount : 0.0),
+            usedAmount: hit.isAvailableLimit ? 0.0 : hit.amount,
+            lastStatementBalance: hit.isStatementBill ? hit.amount : 0.0,
+            dueDay: hit.dueDate?.day ?? 20,
+          );
+          final newId = await CreditRepo().insert(newCard);
+          card = newCard.copyWith(id: newId);
         }
+
+        // If total credit limit was reported and card has no limit or smaller limit, update it
+        if (hit.creditLimit != null && hit.creditLimit! > 0 &&
+            (card.limitAmount == 0 || card.limitAmount < hit.creditLimit!)) {
+          final updated = card.copyWith(limitAmount: hit.creditLimit!);
+          await CreditRepo().update(updated);
+          card = updated;
+        }
+
+        if (hit.isAvailableLimit) {
+          // If card limit is known and > 0, derived outstanding = limit - available limit
+          if (card.limitAmount > 0) {
+            final derivedOutstanding = (card.limitAmount - hit.amount).clamp(0.0, double.infinity);
+            await CreditRepo().updateBalance(card.id, derivedOutstanding);
+          } else {
+            // Card limit is unknown: we know total limit must be at least available limit
+            final updated = card.copyWith(limitAmount: hit.amount);
+            await CreditRepo().update(updated);
+            card = updated;
+            await CreditRepo().updateBalance(card.id, 0.0);
+          }
+        } else {
+          // Direct outstanding dues / statement total due reported
+          await CreditRepo().updateBalance(card.id, hit.amount);
+        }
+
+        // If statement bill or due date detected, update card metadata & schedule upcoming reminder!
+        if (hit.isStatementBill || hit.dueDate != null) {
+          final dueDay = hit.dueDate?.day ?? card.dueDay;
+          final updated = card.copyWith(
+            lastStatementBalance: hit.isStatementBill ? hit.amount : card.lastStatementBalance,
+            dueDay: dueDay,
+          );
+          await CreditRepo().update(updated);
+
+          try {
+            final dueDateTime = hit.dueDate ?? card.nextDueDate;
+            final reminderAmount = hit.isStatementBill ? hit.amount : card.outstanding;
+            await ReminderRepo().insertGlobalReminder(
+              Reminder(
+                id: 'credit_due_${card.id}',
+                type: ReminderType.credit,
+                title: 'Credit Card Due: ${card.name}',
+                linkedEntityId: card.id,
+                dueDate: dueDateTime,
+                amount: reminderAmount,
+                isActive: true,
+                status: ReminderStatus.upcoming,
+                recordStatus: ReminderRecordStatus.pending,
+                sourceType: ReminderSourceType.credit,
+                sourceId: card.id,
+              ).toMap(),
+            );
+          } catch (e) {
+            // Non-fatal if reminder sync fails
+          }
+        }
+        return true;
       } else {
         // Bank or Wallet
         final accounts = await AccountRepo().getAll();
