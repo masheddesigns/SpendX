@@ -416,6 +416,7 @@ class LiveSmsService with WidgetsBindingObserver {
             newTransaction: updatedTx,
           );
           createdTx = updatedTx;
+          await _syncCardReminderOnPayment(matchedCard);
         } else if (!await _alreadyInApp(parsed)) {
           // Standalone CC payment confirmation received
           final externalRef = parsed.refId ??
@@ -438,30 +439,7 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await FinancialTransactionService().createTransaction(tx);
           createdTx = tx;
-
-          // Sync upcoming card reminder if bill payment settled the card
-          if (matchedCard != null) {
-            try {
-              final updatedCard = await CreditRepo().getCard(matchedCard.id);
-              if (updatedCard != null) {
-                await ReminderRepo().insertGlobalReminder(
-                  Reminder(
-                    id: 'credit_due_${updatedCard.id}',
-                    type: ReminderType.credit,
-                    title: 'Credit Card Due: ${updatedCard.name}',
-                    linkedEntityId: updatedCard.id,
-                    dueDate: updatedCard.nextDueDate,
-                    amount: updatedCard.outstanding,
-                    isActive: updatedCard.outstanding > 0,
-                    status: updatedCard.outstanding <= 0 ? ReminderStatus.inactive : ReminderStatus.upcoming,
-                    recordStatus: updatedCard.outstanding <= 0 ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
-                    sourceType: ReminderSourceType.credit,
-                    sourceId: updatedCard.id,
-                  ).toMap(),
-                );
-              }
-            } catch (_) {}
-          }
+          await _syncCardReminderOnPayment(matchedCard);
         }
       } else if (!await _alreadyInApp(parsed)) {
         // --- OTHER TRANSACTIONS (Card purchase, refund, bank expense/income, etc.) ---
@@ -1072,6 +1050,35 @@ class LiveSmsService with WidgetsBindingObserver {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Synchronizes or settles the credit card due reminder upon receiving a bill payment.
+  Future<void> _syncCardReminderOnPayment(CreditCard? matchedCard) async {
+    if (matchedCard == null) return;
+    try {
+      final updatedCard = await CreditRepo().getCard(matchedCard.id);
+      if (updatedCard != null) {
+        await ReminderRepo().insertGlobalReminder(
+          Reminder(
+            id: 'credit_due_${updatedCard.id}',
+            type: ReminderType.credit,
+            title: 'Credit Card Due: ${updatedCard.name}',
+            linkedEntityId: updatedCard.id,
+            dueDate: updatedCard.nextDueDate,
+            amount: updatedCard.outstanding,
+            isActive: updatedCard.outstanding > 0,
+            status: updatedCard.outstanding <= 0
+                ? ReminderStatus.inactive
+                : ReminderStatus.upcoming,
+            recordStatus: updatedCard.outstanding <= 0
+                ? ReminderRecordStatus.done
+                : ReminderRecordStatus.pending,
+            sourceType: ReminderSourceType.credit,
+            sourceId: updatedCard.id,
+          ).toMap(),
+        );
+      }
+    } catch (_) {}
   }
 
   /// Deduce paying bank account ID from message text if available (e.g. "from a/c X8434").

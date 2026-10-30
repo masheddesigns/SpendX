@@ -8,6 +8,20 @@ import 'money.dart';
 /// 3. [cashflowShortfall] preserves deficit magnitude: `max(0, -discretionaryCash)`.
 ///
 /// These three metrics must NEVER be collapsed into a single value.
+class CommitmentItem {
+  final String title;
+  final Money amount;
+  final DateTime dueDate;
+  final String type; // 'bill', 'subscription', 'credit_card', 'recurring'
+
+  const CommitmentItem({
+    required this.title,
+    required this.amount,
+    required this.dueDate,
+    required this.type,
+  });
+}
+
 class SafeToSpendCalculation {
   /// Total cash across all unrestricted liquid asset accounts.
   final Money liquidAssets;
@@ -30,6 +44,9 @@ class SafeToSpendCalculation {
   /// Cashflow deficit when discretionary cash is negative; zero otherwise.
   final Money cashflowShortfall;
 
+  /// Detailed list of obligations contributing to [knownCommitments14d].
+  final List<CommitmentItem> commitmentItems;
+
   const SafeToSpendCalculation._({
     required this.liquidAssets,
     required this.activeEarmarks,
@@ -38,6 +55,7 @@ class SafeToSpendCalculation {
     required this.discretionaryCash,
     required this.safeToSpend,
     required this.cashflowShortfall,
+    this.commitmentItems = const [],
   });
 
   /// Computes the complete Safe-to-Spend breakdown from its component values.
@@ -46,6 +64,7 @@ class SafeToSpendCalculation {
     required Money activeEarmarks,
     required Money knownCommitments14d,
     required Money highConfidencePendingDebits,
+    List<CommitmentItem> commitmentItems = const [],
   }) {
     // discretionary_cash = liquid_assets - active_earmarks - known_commitments_14d - high_confidence_pending_debits
     final discretionary = liquidAssets -
@@ -69,6 +88,7 @@ class SafeToSpendCalculation {
       discretionaryCash: discretionary,
       safeToSpend: safe,
       cashflowShortfall: shortfall,
+      commitmentItems: commitmentItems,
     );
   }
 

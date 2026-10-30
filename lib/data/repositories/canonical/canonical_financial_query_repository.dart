@@ -1,7 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
+import '../../../models/reminder_model.dart';
 import '../../core/app_database.dart';
 import '../../core/tables.dart';
+import '../credit_repo.dart';
 
 /// Canonical Financial Query Repository for SpendX 2.0.
 ///
@@ -337,8 +339,9 @@ class CanonicalFinancialQueryRepository {
     final earmarkAmount = (earmarkResult.first['total_earmarks'] as num?)?.toInt() ?? 0;
     final activeEarmarks = Money.fromMinorUnits(earmarkAmount, currency: currency);
 
-    final commitments = knownCommitments14d ??
-        await _computeKnownCommitments14d(db, currency: currency);
+    final computed = await _computeKnownCommitments14d(db, currency: currency);
+    final commitments = knownCommitments14d ?? computed.total;
+    final commitmentItems = computed.items;
     final pendingDebits = highConfidencePendingDebits ?? Money.zeroCurrency(currency);
 
     return SafeToSpendCalculation.compute(
@@ -346,69 +349,139 @@ class CanonicalFinancialQueryRepository {
       activeEarmarks: activeEarmarks,
       knownCommitments14d: commitments,
       highConfidencePendingDebits: pendingDebits,
+      commitmentItems: commitmentItems,
     );
   }
 
   /// Calculates total obligations (bills, subscriptions, credit card dues, EMI installments)
   /// due within the next 14 calendar days from the local database.
-  Future<Money> _computeKnownCommitments14d(
+  Future<({Money total, List<CommitmentItem> items})> _computeKnownCommitments14d(
     DatabaseExecutor db, {
     String currency = 'INR',
   }) async {
     final now = DateTime.now();
+    final startOverdue = now.subtract(const Duration(days: 60)).toIso8601String();
     final endWindow = now.add(const Duration(days: 14));
     final endIso = endWindow.toIso8601String();
     double total14d = 0.0;
+    final items = <CommitmentItem>[];
     final seenCommitments = <String>{};
 
-    // 1. Reminders due within 14 days or overdue (excluding salary income)
+    // 1. Reminders due within 14 days or recent overdue (excluding salary income)
     try {
       final reminderRows = await db.rawQuery('''
-        SELECT id, title, amount, date, linked_entity_id, type, is_active, is_completed
+        SELECT id, title, amount, date, linked_entity_id, type, is_active, is_completed, record_status, snoozed_until
         FROM ${Tables.reminders}
         WHERE is_active = 1
           AND is_completed = 0
+          AND (record_status IS NULL OR record_status != 'done')
           AND type != 'salary'
-          AND date <= ?;
-      ''', [endIso]);
+          AND date <= ?
+          AND date >= ?
+        ORDER BY date DESC;
+      ''', [endIso, startOverdue]);
 
       for (final r in reminderRows) {
+        final snoozed = r['snoozed_until'] as String?;
+        if (snoozed != null) {
+          final sDate = DateTime.tryParse(snoozed);
+          if (sDate != null && sDate.isAfter(endWindow)) {
+            continue; // Snoozed past the 14-day commitment horizon
+          }
+        }
+
         final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
         if (amount > 0) {
-          total14d += amount;
+          final title = (r['title'] as String?)?.trim() ?? 'Reminder';
           final cardId = r['linked_entity_id'] as String?;
+
+          // Normalized deduplication key for recurring obligations/merchants
+          final cleanTitle = title
+              .toLowerCase()
+              .replaceAll(
+                RegExp(
+                  r'\b(subscription|bill|due|premium|autopay|mandate|stocks|health|renewal)\b',
+                ),
+                '',
+              )
+              .replaceAll(RegExp(r'[^a-z0-9]'), '')
+              .trim();
+          final normKey = cleanTitle.isNotEmpty
+              ? cleanTitle
+              : title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+          if (seenCommitments.contains('norm:$normKey') ||
+              (cardId != null &&
+                  cardId.isNotEmpty &&
+                  seenCommitments.contains('card:$cardId'))) {
+            // Obsolete older billing cycle for the same service/card already covered by a newer reminder.
+            // Mark older reminder as done to maintain database hygiene
+            final oldId = r['id'] as String?;
+            if (oldId != null && oldId.isNotEmpty) {
+              await db.rawUpdate(
+                'UPDATE ${Tables.reminders} SET is_completed = 1, record_status = ? WHERE id = ?',
+                [ReminderRecordStatus.done.name, oldId],
+              );
+            }
+            continue;
+          }
+
+          seenCommitments.add('norm:$normKey');
           if (cardId != null && cardId.isNotEmpty) {
             seenCommitments.add('card:$cardId');
           }
-          final title = (r['title'] as String?)?.toLowerCase().trim() ?? '';
-          if (title.isNotEmpty) {
-            seenCommitments.add('title:$title');
-          }
+          seenCommitments.add('title:${title.toLowerCase()}');
+          total14d += amount;
+
+          final rawDate = r['date'] as String?;
+          final dueDate = rawDate != null ? DateTime.tryParse(rawDate) ?? now : now;
+          final rType = r['type'] as String? ?? 'bill';
+
+          items.add(
+            CommitmentItem(
+              title: title,
+              amount: Money.fromRupees(amount, currency: currency),
+              dueDate: dueDate,
+              type: rType == 'credit' ? 'credit_card' : 'bill',
+            ),
+          );
         }
       }
     } catch (_) {}
 
     // 2. Credit cards due within next 14 days (if not already counted via reminder)
     try {
-      final cardRows = await db.rawQuery('''
-        SELECT id, used_amount, last_statement_balance, due_day
-        FROM ${Tables.creditCards};
-      ''');
+      final cards = await CreditRepo(executor: db).getAll();
 
-      for (final c in cardRows) {
-        final cardId = c['id'] as String? ?? '';
-        if (seenCommitments.contains('card:$cardId')) continue;
+      for (final card in cards) {
+        if (seenCommitments.contains('card:${card.id}')) continue;
+        final cardName = card.name.toLowerCase().trim();
+        final bankName = card.bank.toLowerCase().trim();
+        final alreadySeenTitle = seenCommitments.any((k) {
+          final stripped = k.replaceFirst('title:', '');
+          return stripped.isNotEmpty &&
+              ((cardName.isNotEmpty && stripped.contains(cardName)) ||
+                  (bankName.isNotEmpty && stripped.contains(bankName)));
+        });
+        if (alreadySeenTitle) continue;
 
-        final dueDay = (c['due_day'] as num?)?.toInt() ?? 20;
-        final nextDue = _calculateNextDueDay(now, dueDay);
+        final nextDue = card.nextDueDate;
 
         if (nextDue.isBefore(endWindow) || nextDue.isAtSameMomentAs(endWindow)) {
-          final lastStmt = (c['last_statement_balance'] as num?)?.toDouble() ?? 0.0;
-          final used = (c['used_amount'] as num?)?.toDouble() ?? 0.0;
+          final lastStmt = card.lastStatementBalance;
+          final used = card.outstanding;
           final dueAmount = lastStmt > 0 ? lastStmt : (used > 0 ? used : 0.0);
           if (dueAmount > 0) {
             total14d += dueAmount;
-            seenCommitments.add('card:$cardId');
+            seenCommitments.add('card:${card.id}');
+            items.add(
+              CommitmentItem(
+                title: card.name,
+                amount: Money.fromRupees(dueAmount, currency: currency),
+                dueDate: nextDue,
+                type: 'credit_card',
+              ),
+            );
           }
         }
       }
@@ -423,10 +496,31 @@ class CanonicalFinancialQueryRepository {
       ''');
 
       for (final t in recurringRows) {
-        final name = (t['name'] as String? ?? '').toLowerCase().trim();
+        final rawName = (t['name'] as String? ?? '').toLowerCase().trim();
+        final cleanName = rawName
+            .replaceAll(
+              RegExp(
+                r'\b(subscription|bill|due|premium|autopay|mandate|stocks|health|renewal)\b',
+              ),
+              '',
+            )
+            .replaceAll(RegExp(r'[^a-z0-9]'), '')
+            .trim();
+        final normName = cleanName.isNotEmpty
+            ? cleanName
+            : rawName.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+        if (seenCommitments.contains('norm:$normName') ||
+            seenCommitments.contains('title:$rawName')) {
+          continue;
+        }
+
         final alreadySeen = seenCommitments.any((k) {
-          final stripped = k.replaceFirst('title:', '');
-          return stripped.isNotEmpty && (stripped.contains(name) || name.contains(stripped));
+          final stripped = k
+              .replaceFirst('title:', '')
+              .replaceFirst('norm:', '');
+          return stripped.isNotEmpty &&
+              (stripped.contains(normName) || normName.contains(stripped));
         });
         if (alreadySeen) continue;
 
@@ -440,27 +534,22 @@ class CanonicalFinancialQueryRepository {
 
         if (_isTemplateDueIn14Days(startDate, lastDate, freq, now, endWindow)) {
           total14d += amount;
+          items.add(
+            CommitmentItem(
+              title: t['name'] as String? ?? 'Recurring Expense',
+              amount: Money.fromRupees(amount, currency: currency),
+              dueDate: startDate,
+              type: 'recurring',
+            ),
+          );
         }
       }
     } catch (_) {}
 
-    return Money.fromRupees(total14d);
-  }
+    // Sort items by due date ascending
+    items.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
-  DateTime _calculateNextDueDay(DateTime now, int dueDay) {
-    var year = now.year;
-    var month = now.month;
-    var maxDays = DateTime(year, month + 1, 0).day;
-    var day = dueDay > maxDays ? maxDays : dueDay;
-    var date = DateTime(year, month, day);
-    if (date.isBefore(DateTime(now.year, now.month, now.day))) {
-      month = month == 12 ? 1 : month + 1;
-      year = month == 1 ? year + 1 : year;
-      maxDays = DateTime(year, month + 1, 0).day;
-      day = dueDay > maxDays ? maxDays : dueDay;
-      date = DateTime(year, month, day);
-    }
-    return date;
+    return (total: Money.fromRupees(total14d, currency: currency), items: items);
   }
 
   bool _isTemplateDueIn14Days(

@@ -71,5 +71,37 @@ void main() {
       expect(calc.hasShortfall, isFalse);
       expect(calc.knownCommitments14d.toRupees, 26084.82);
     });
+
+    test('commitmentItems preserves details of upcoming obligations', () {
+      final now = DateTime.now();
+      final items = [
+        CommitmentItem(
+          title: 'Netflix Subscription',
+          amount: Money.fromRupees(199.0),
+          dueDate: now.add(const Duration(days: 3)),
+          type: 'bill',
+        ),
+        CommitmentItem(
+          title: 'SBI Credit Card',
+          amount: Money.fromRupees(35718.82),
+          dueDate: now.add(const Duration(days: 5)),
+          type: 'credit_card',
+        ),
+      ];
+
+      final calc = SafeToSpendCalculation.compute(
+        liquidAssets: Money.fromRupees(50000),
+        activeEarmarks: Money.zero,
+        knownCommitments14d: Money.fromRupees(199.0 + 35718.82),
+        highConfidencePendingDebits: Money.zero,
+        commitmentItems: items,
+      );
+
+      expect(calc.commitmentItems.length, 2);
+      expect(calc.commitmentItems[0].title, 'Netflix Subscription');
+      expect(calc.commitmentItems[0].amount.toRupees, 199.0);
+      expect(calc.commitmentItems[1].title, 'SBI Credit Card');
+      expect(calc.commitmentItems[1].type, 'credit_card');
+    });
   });
 }

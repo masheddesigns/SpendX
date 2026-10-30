@@ -4,6 +4,7 @@ import '../data/core/app_database.dart';
 import '../data/core/tables.dart';
 import '../data/repositories/credit_repo.dart';
 import '../data/repositories/loan_repo.dart';
+import '../data/repositories/reminder_repo.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../models/credit_transaction.dart';
 import '../models/ledger_transaction.dart';
@@ -355,6 +356,7 @@ class FinancialTransactionService {
       } else {
         await canonicalFlow(db);
       }
+      await _autoSettleMatchingReminders(db, tx);
       return;
     }
 
@@ -400,9 +402,33 @@ class FinancialTransactionService {
       await _applyAndVerify(t, legs, _bankDeltas(tx));
     }
 
-    if (txn != null) return legacyFlow(txn);
-    final database = await _db;
-    await database.transaction((t) => legacyFlow(t));
+    if (txn != null) {
+      await legacyFlow(txn);
+    } else {
+      final database = await _db;
+      await database.transaction((t) => legacyFlow(t));
+    }
+    await _autoSettleMatchingReminders(db, tx);
+  }
+
+  Future<void> _autoSettleMatchingReminders(DatabaseExecutor db, Transaction tx) async {
+    try {
+      final isCcPayment = tx.type == 'credit_payment';
+      final isBillSpend = tx.type == 'expense' ||
+          tx.type == 'fuel_expense' ||
+          tx.source == 'credit_card_purchase' ||
+          isCcPayment;
+      if (isBillSpend && tx.amount > 0) {
+        final rRepo = ReminderRepo(database: db);
+        await rRepo.settleMatching(
+          amount: tx.amount,
+          date: tx.date,
+          notes: tx.notes,
+          linkedEntityId: tx.relatedEntityId,
+          isCreditCardPayment: isCcPayment,
+        );
+      }
+    } catch (_) {}
   }
 
   /// Edits an existing transaction.
@@ -431,6 +457,7 @@ class FinancialTransactionService {
       } else {
         await canonicalEdit(db);
       }
+      await _autoSettleMatchingReminders(db, newTransaction);
       return;
     }
 
@@ -476,9 +503,13 @@ class FinancialTransactionService {
       await _applyAndVerify(t, [...revLegs, ...newLegs], expected);
     }
 
-    if (txn != null) return legacyEdit(txn);
-    final database = await _db;
-    await database.transaction((t) => legacyEdit(t));
+    if (txn != null) {
+      await legacyEdit(txn);
+    } else {
+      final database = await _db;
+      await database.transaction((t) => legacyEdit(t));
+    }
+    await _autoSettleMatchingReminders(db, newTransaction);
   }
 
   /// Deletes an existing transaction.

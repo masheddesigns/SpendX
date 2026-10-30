@@ -348,6 +348,75 @@ class SafeToSpendCard extends ConsumerWidget {
               const SizedBox(height: 20),
               _buildBreakdownRow('Total Liquid Cash', calc.liquidAssets.toRupees, isDark, isPositive: true),
               _buildBreakdownRow('14-Day Commitments', calc.knownCommitments14d.toRupees, isDark, isNegative: true),
+              if (calc.commitmentItems.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.black.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.06),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Column(
+                    children: calc.commitmentItems.map((item) {
+                      final daysUntil = item.dueDate.difference(DateTime.now()).inDays;
+                      final dueStr = daysUntil <= 0 ? 'Due today' : 'Due in ${daysUntil}d';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3.5),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    item.type == 'credit_card'
+                                        ? Icons.credit_card_rounded
+                                        : (item.type == 'recurring'
+                                            ? Icons.autorenew_rounded
+                                            : Icons.receipt_long_rounded),
+                                    size: 14,
+                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${item.title} ($dueStr)',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '-${AppFormat.currency(item.amount.toRupees)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
               _buildBreakdownRow('Active Goal Earmarks', calc.activeEarmarks.toRupees, isDark, isNegative: true),
               const Divider(height: 28),
               _buildBreakdownRow(

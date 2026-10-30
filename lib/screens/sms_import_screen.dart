@@ -198,8 +198,16 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
             ),
           );
           addedAccounts++;
+        } else {
+          if ((acc.balance - existing.balance).abs() > 0.01) {
+            await AccountRepo().updateBalance(existing.id, acc.balance);
+            updatedAccounts++;
+          }
         }
       }
+
+      final reminderRepo = ReminderRepo();
+      final recurringRepo = RecurringRepo();
 
       for (final card in cards) {
         final matchByLast4 = (card.last4 != null && card.last4!.isNotEmpty)
@@ -217,16 +225,104 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
           final bankField = card.keyword != null && card.keyword!.isNotEmpty
               ? '${card.bank} [${card.keyword}]'
               : card.bank;
-          await CreditRepo().insert(
-            CreditCard(
-              name: '${card.bank} Card',
-              bank: bankField,
-              last4: card.last4 ?? '',
-              limitAmount: 0,
-              usedAmount: card.outstanding,
-            ),
+          final newCard = CreditCard(
+            name: '${card.bank} Card',
+            bank: bankField,
+            last4: card.last4 ?? '',
+            limitAmount: card.creditLimit ?? (card.isAvailableLimit ? card.outstanding : 0),
+            usedAmount: card.isAvailableLimit ? 0 : card.outstanding,
+            lastStatementBalance: card.isStatementBill ? card.outstanding : 0,
+            dueDay: card.dueDate?.day ?? 20,
           );
+          final newId = await CreditRepo().insert(newCard);
           addedCards++;
+          if (card.dueDate != null) {
+            await reminderRepo.insertGlobalReminder(
+              Reminder(
+                id: 'credit_due_$newId',
+                type: ReminderType.credit,
+                title: 'Credit Card Due: ${newCard.name}',
+                linkedEntityId: newId,
+                dueDate: card.dueDate,
+                amount: card.outstanding,
+                isActive: true,
+                status: ReminderStatus.upcoming,
+                recordStatus: ReminderRecordStatus.pending,
+                sourceType: ReminderSourceType.credit,
+                sourceId: newId,
+              ).toMap(),
+            );
+          }
+        } else {
+          bool cardChanged = false;
+          // 1. Update credit limit if newly detected or higher
+          if (card.creditLimit != null &&
+              card.creditLimit! > 0 &&
+              (existing.limitAmount == 0 || existing.limitAmount < card.creditLimit!)) {
+            final updated = existing.copyWith(limitAmount: card.creditLimit);
+            await CreditRepo().update(updated);
+            cardChanged = true;
+          }
+
+          // 2. Update balance / outstanding
+          if (card.isAvailableLimit) {
+            if (existing.limitAmount > 0) {
+              final derivedOutstanding =
+                  (existing.limitAmount - card.outstanding).clamp(0.0, double.infinity);
+              if ((derivedOutstanding - existing.usedAmount).abs() > 0.01) {
+                await CreditRepo().updateBalance(existing.id, derivedOutstanding);
+                cardChanged = true;
+              }
+            } else if (card.outstanding > existing.limitAmount) {
+              final updated = existing.copyWith(limitAmount: card.outstanding);
+              await CreditRepo().update(updated);
+              await CreditRepo().updateBalance(existing.id, 0.0);
+              cardChanged = true;
+            }
+          } else if (card.outstanding > 0 &&
+              (card.outstanding - existing.usedAmount).abs() > 0.01) {
+            await CreditRepo().updateBalance(existing.id, card.outstanding);
+            cardChanged = true;
+          }
+
+          // 3. Update statement balance / due day if detected
+          if (card.isStatementBill || card.dueDate != null) {
+            final dueDay = card.dueDate?.day ?? existing.dueDay;
+            final lastStmt =
+                card.isStatementBill ? card.outstanding : existing.lastStatementBalance;
+            if (dueDay != existing.dueDay ||
+                (lastStmt - existing.lastStatementBalance).abs() > 0.01) {
+              await CreditRepo().update(
+                existing.copyWith(
+                  dueDay: dueDay,
+                  lastStatementBalance: lastStmt,
+                ),
+              );
+              cardChanged = true;
+            }
+
+            if (card.dueDate != null) {
+              await reminderRepo.insertGlobalReminder(
+                Reminder(
+                  id: 'credit_due_${existing.id}',
+                  type: ReminderType.credit,
+                  title: 'Credit Card Due: ${existing.name}',
+                  linkedEntityId: existing.id,
+                  dueDate: card.dueDate,
+                  amount: card.isStatementBill ? card.outstanding : existing.outstanding,
+                  isActive: true,
+                  status: ReminderStatus.upcoming,
+                  recordStatus: ReminderRecordStatus.pending,
+                  sourceType: ReminderSourceType.credit,
+                  sourceId: existing.id,
+                ).toMap(),
+              );
+            }
+          }
+
+          if (cardChanged) {
+            updatedCards++;
+          }
         }
       }
 
@@ -260,8 +356,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
         }
       }
 
-      final reminderRepo = ReminderRepo();
-      final recurringRepo = RecurringRepo();
       for (final ob in upcomingObligations) {
         final cleanMerchant = ob.merchant ?? ob.title;
         final slug = cleanMerchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
@@ -321,6 +415,14 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen>
       if (addedReminders > 0) {
         ref.invalidate(remindersProvider);
         ref.invalidate(recurringProvider);
+      }
+      if (addedAccounts > 0 ||
+          updatedAccounts > 0 ||
+          addedCards > 0 ||
+          updatedCards > 0 ||
+          addedReminders > 0) {
+        ref.invalidate(safeToSpendProvider);
+        ref.invalidate(netWorthSummaryProvider);
       }
     } catch (_) {}
 
