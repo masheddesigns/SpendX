@@ -275,7 +275,11 @@ class SmsImportService {
         lower.contains('spent at') ||
         lower.contains('paid from your edge') ||
         lower.contains('credit card') ||
+        lower.contains('card ending') ||
         lower.contains('card xx') ||
+        lower.contains('card no') ||
+        lower.contains('on your card') ||
+        lower.contains('on card') ||
         sender.toLowerCase().contains('crd') ||
         sender.toLowerCase().contains('jtedge');
 

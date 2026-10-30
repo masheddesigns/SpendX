@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../../models/credit_card.dart';
 import '../../models/credit_transaction.dart';
 import '../../models/credit_emi.dart';
 import '../../models/emi_installment.dart';
@@ -92,6 +93,14 @@ class CreditCardService {
     if (emi == null) return;
 
     final originalTxnId = emi.transactionId;
+
+    // Clean up installment reminders
+    try {
+      final installments = await _creditRepo.getInstallments(emiId);
+      for (final inst in installments) {
+        await _reminderRepo.deleteGlobalReminder('emi_inst_${inst.id}');
+      }
+    } catch (_) {}
 
     // 1. Delete all installments
     await _creditRepo.deleteInstallments(emiId);
@@ -281,7 +290,8 @@ class CreditCardService {
 
     // Generate upcoming installments
     for (int i = 1; i <= tenureMonths; i++) {
-      final dueDate = DateTime(DateTime.now().year, DateTime.now().month + i, DateTime.now().day);
+      final now = DateTime.now();
+      final dueDate = CreditCard.safeDate(now.year, now.month + i, now.day);
       final instId = const Uuid().v4();
       final inst = EMIInstallment(
         id: instId,
@@ -356,6 +366,14 @@ class CreditCardService {
     // 3. Update DB
     await _creditRepo.updateEMI(updatedEmi);
 
+    // Clean up old installment reminders
+    try {
+      final oldInstallments = await _creditRepo.getInstallments(emiId);
+      for (final inst in oldInstallments) {
+        await _reminderRepo.deleteGlobalReminder('emi_inst_${inst.id}');
+      }
+    } catch (_) {}
+
     // 4. Regenerate Installments
     await _creditRepo.deleteInstallments(emiId);
 
@@ -366,7 +384,11 @@ class CreditCardService {
     );
 
     for (int i = 1; i <= tenureMonths; i++) {
-      final dueDate = DateTime(oldEmi.startDate.year, oldEmi.startDate.month + i, oldEmi.startDate.day);
+      final dueDate = CreditCard.safeDate(
+        oldEmi.startDate.year,
+        oldEmi.startDate.month + i,
+        oldEmi.startDate.day,
+      );
       final instId = const Uuid().v4();
       final inst = EMIInstallment(
         id: instId,
@@ -414,9 +436,12 @@ class CreditCardService {
       }
     }
 
-    // Minimum due logic
-    double minimumDue = (statementAmount * 0.05).clamp(200.0, statementAmount);
-    if (statementAmount <= 0) minimumDue = 0;
+    // Minimum due logic (safe against statementAmount < 200)
+    double minimumDue = statementAmount <= 0
+        ? 0.0
+        : (statementAmount <= 200.0
+            ? statementAmount
+            : (statementAmount * 0.05).clamp(200.0, statementAmount));
 
     final statement = CardStatement(
       id: const Uuid().v4(),

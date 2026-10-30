@@ -59,9 +59,16 @@ class BankNotificationListener : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
 
-        val fullBody = when {
+        val messageText = when {
             bigText.isNotBlank() && bigText.length > text.length -> bigText
             text.isNotBlank() -> text
+            else -> ""
+        }
+
+        val fullBody = when {
+            title.isNotBlank() && messageText.isNotBlank() && !messageText.contains(title, ignoreCase = true) ->
+                "$title: $messageText"
+            messageText.isNotBlank() -> messageText
             else -> title
         }
 
@@ -76,13 +83,15 @@ class BankNotificationListener : NotificationListenerService() {
         val isFinancial = isFromPaymentPackage || FinancialSmsFilter.isFinancial(senderTitle, fullBody)
         if (!isFinancial) return
 
-        // Deliver to Flutter live or queue for later
+        // Deliver to Flutter live on UI thread or queue for later
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
-            MethodChannel(
-                engine.dartExecutor.binaryMessenger,
-                MainActivity.CHANNEL,
-            ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody))
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                MethodChannel(
+                    engine.dartExecutor.binaryMessenger,
+                    MainActivity.CHANNEL,
+                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody))
+            }
         } else {
             SmsStore.queue(this, senderTitle, fullBody)
         }
