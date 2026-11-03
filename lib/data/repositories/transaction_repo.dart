@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
+import 'package:sqflite/sqflite.dart' show Database, DatabaseExecutor;
 import '../../models/transaction.dart';
 import '../core/app_database.dart';
 import '../core/tables_v24.dart';
@@ -122,6 +122,16 @@ class TransactionRepo {
 
     // Collect all reversed original event IDs
     final reversedIds = <String>{};
+    final explicitReversals = await database.rawQuery(
+      'SELECT reversal_of_event_id FROM ${TablesV24.economicEvents} WHERE reversal_of_event_id IS NOT NULL;',
+    );
+    for (final row in explicitReversals) {
+      final revOf = row['reversal_of_event_id'] as String?;
+      if (revOf != null && revOf.isNotEmpty) {
+        reversedIds.add(revOf);
+      }
+    }
+
     for (final e in events) {
       if (e.description.startsWith('REVERSAL:')) {
         final ref = e.metadata['reversal_of'] as String?;
@@ -168,10 +178,32 @@ class TransactionRepo {
       return null;
     }
 
-    // Check if this event was reversed by a subsequent deletion/edit
+    // Check if event is itself a reversal via structured relationship
+    final eventRow = await database.rawQuery(
+      'SELECT reversal_of_event_id FROM ${TablesV24.economicEvents} WHERE id = ? LIMIT 1;',
+      [id],
+    );
+    if (eventRow.isNotEmpty && eventRow.first['reversal_of_event_id'] != null) {
+      return null;
+    }
+
+    // Check if this event was reversed by a subsequent deletion/edit.
+    // Uses structured column reversal_of_event_id and exact substring matching,
+    // avoiding SQL LIKE wildcard issues with '_' or '%'.
     final reversalCheck = await database.rawQuery(
-      "SELECT id FROM ${TablesV24.economicEvents} WHERE description LIKE ? LIMIT 1;",
-      ['REVERSAL: $id%'],
+      '''
+      SELECT id FROM ${TablesV24.economicEvents}
+      WHERE reversal_of_event_id = ?
+         OR (
+           substr(description, 1, 10) = 'REVERSAL: '
+           AND (
+             substr(description, 11) = ?
+             OR substr(description, 11, length(?) + 3) = ? || ' - '
+           )
+         )
+      LIMIT 1;
+      ''',
+      [id, id, id, id],
     );
     if (reversalCheck.isNotEmpty) {
       return null;
@@ -275,6 +307,12 @@ class TransactionRepo {
       reversal.event,
       postings: reversal.postings,
     );
+    await database.update(
+      TablesV24.economicEvents,
+      {'reversal_of_event_id': original.id},
+      where: 'id = ?',
+      whereArgs: [reversal.event.id],
+    );
 
     // 3. Post replacement event with new transaction state
     final replacementId = '${txn.id}:corr:${DateTime.now().millisecondsSinceEpoch}';
@@ -312,23 +350,74 @@ class TransactionRepo {
 
   Future<int> delete(String id) async {
     final database = await _db;
-    final repo = _eventRepo(database);
 
-    final original = await repo.getEvent(id);
-    if (original == null) return 0;
+    Future<int> executeDelete(DatabaseExecutor txn) async {
+      final repo = _eventRepo(txn);
+      final original = await repo.getEvent(id);
+      if (original == null) return 0;
 
-    // Post reversal event to cancel financial impact
-    final reversal = CanonicalTransactionAdapter.createReversal(
-      original,
-      original.postings,
-      reason: 'Transaction deletion',
-    );
-    await repo.createAndPostEvent(
-      reversal.event,
-      postings: reversal.postings,
-    );
+      // 1. Reversal events cannot themselves be deleted or reversed
+      if (original.description.startsWith('REVERSAL:') ||
+          original.metadata['is_reversal'] == true) {
+        return 0;
+      }
+      final eventRow = await txn.rawQuery(
+        'SELECT reversal_of_event_id FROM ${TablesV24.economicEvents} WHERE id = ? LIMIT 1;',
+        [id],
+      );
+      if (eventRow.isNotEmpty && eventRow.first['reversal_of_event_id'] != null) {
+        return 0;
+      }
 
-    return 1;
+      // 2. Idempotency check: verify whether a reversal already exists for this original event.
+      // Uses the structured column reversal_of_event_id and exact substring equality
+      // to eliminate SQL LIKE wildcard vulnerabilities with '_' or '%'.
+      final existingReversal = await txn.rawQuery(
+        '''
+        SELECT id FROM ${TablesV24.economicEvents}
+        WHERE reversal_of_event_id = ?
+           OR (
+             substr(description, 1, 10) = 'REVERSAL: '
+             AND (
+               substr(description, 11) = ?
+               OR substr(description, 11, length(?) + 3) = ? || ' - '
+             )
+           )
+        LIMIT 1;
+        ''',
+        [id, id, id, id],
+      );
+      if (existingReversal.isNotEmpty) {
+        return 0;
+      }
+
+      // 3. Post reversal event to cancel financial impact
+      final reversal = CanonicalTransactionAdapter.createReversal(
+        original,
+        original.postings,
+        reason: 'Transaction deletion',
+      );
+      await repo.createAndPostEvent(
+        reversal.event,
+        postings: reversal.postings,
+      );
+
+      // 4. Record structured relationship on economic_events
+      await txn.update(
+        TablesV24.economicEvents,
+        {'reversal_of_event_id': original.id},
+        where: 'id = ?',
+        whereArgs: [reversal.event.id],
+      );
+
+      return 1;
+    }
+
+    if (database is Database) {
+      return await database.transaction((txn) => executeDelete(txn));
+    } else {
+      return await executeDelete(database);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -345,31 +434,82 @@ class TransactionRepo {
 
     final summary = await database.rawQuery('''
       SELECT
-        COALESCE(SUM(CASE WHEN a.account_type = 'income' AND p.direction = 'credit' THEN p.amount_minor_units ELSE 0 END), 0) / 100.0 AS income,
-        COALESCE(SUM(CASE WHEN a.account_type = 'expense' AND p.direction = 'debit' THEN p.amount_minor_units ELSE 0 END), 0) / 100.0 AS expense,
-        COUNT(DISTINCT e.id) AS txn_count,
-        COALESCE(MAX(CASE WHEN a.account_type = 'expense' AND p.direction = 'debit' THEN p.amount_minor_units ELSE 0 END), 0) / 100.0 AS biggest_expense
+        COALESCE(SUM(
+          CASE
+            WHEN a.account_type = 'income' AND p.direction = 'credit' THEN p.amount_minor_units
+            WHEN a.account_type = 'income' AND p.direction = 'debit' THEN -p.amount_minor_units
+            ELSE 0
+          END
+        ), 0) / 100.0 AS income,
+        COALESCE(SUM(
+          CASE
+            WHEN a.account_type = 'expense' AND p.direction = 'debit' THEN p.amount_minor_units
+            WHEN a.account_type = 'expense' AND p.direction = 'credit' THEN -p.amount_minor_units
+            ELSE 0
+          END
+        ), 0) / 100.0 AS expense,
+        COUNT(DISTINCT CASE 
+          WHEN (e.reversal_of_event_id IS NULL AND substr(e.description, 1, 10) != 'REVERSAL: ')
+           AND NOT EXISTS (
+             SELECT 1 FROM ${TablesV24.economicEvents} r 
+             WHERE r.reversal_of_event_id = e.id
+                OR (
+                  substr(r.description, 1, 10) = 'REVERSAL: '
+                  AND (
+                    substr(r.description, 11) = e.id
+                    OR substr(r.description, 11, length(e.id) + 3) = e.id || ' - '
+                  )
+                )
+           ) 
+          THEN e.id 
+          ELSE NULL 
+        END) AS txn_count,
+        COALESCE(MAX(
+          CASE 
+            WHEN a.account_type = 'expense' 
+             AND p.direction = 'debit'
+             AND (e.reversal_of_event_id IS NULL AND substr(e.description, 1, 10) != 'REVERSAL: ')
+             AND NOT EXISTS (
+               SELECT 1 FROM ${TablesV24.economicEvents} r 
+               WHERE r.reversal_of_event_id = e.id
+                  OR (
+                    substr(r.description, 1, 10) = 'REVERSAL: '
+                    AND (
+                      substr(r.description, 11) = e.id
+                      OR substr(r.description, 11, length(e.id) + 3) = e.id || ' - '
+                    )
+                  )
+             )
+            THEN p.amount_minor_units 
+            ELSE 0 
+          END
+        ), 0) / 100.0 AS biggest_expense
       FROM ${TablesV24.postings} p
       JOIN ${TablesV24.accounts} a ON p.account_id = a.id
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
       WHERE e.lifecycle_status = 'posted'
-        AND e.event_type NOT LIKE 'adjustment%'
-        AND e.description NOT LIKE 'REVERSAL:%'
+        AND e.event_type != 'opening_balance'
         AND e.timestamp >= ? AND e.timestamp < ?;
     ''', [startStr, endStr]);
 
     final topCats = await database.rawQuery('''
       SELECT a.id AS category_id, a.name, a.icon_name AS icon, a.color_hex AS color,
-             SUM(p.amount_minor_units) / 100.0 AS total
+             COALESCE(SUM(
+               CASE
+                 WHEN p.direction = 'debit' THEN p.amount_minor_units
+                 WHEN p.direction = 'credit' THEN -p.amount_minor_units
+                 ELSE 0
+               END
+             ), 0) / 100.0 AS total
       FROM ${TablesV24.postings} p
       JOIN ${TablesV24.accounts} a ON p.account_id = a.id
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
       WHERE e.lifecycle_status = 'posted'
         AND a.account_type = 'expense'
-        AND p.direction = 'debit'
-        AND e.description NOT LIKE 'REVERSAL:%'
+        AND e.event_type != 'opening_balance'
         AND e.timestamp >= ? AND e.timestamp < ?
       GROUP BY a.id
+      HAVING total > 0
       ORDER BY total DESC
       LIMIT 5;
     ''', [startStr, endStr]);
@@ -664,7 +804,8 @@ class TransactionRepo {
       SELECT DISTINCT strftime('%Y-%m', timestamp) AS month
       FROM ${TablesV24.economicEvents}
       WHERE lifecycle_status = 'posted'
-        AND description NOT LIKE 'REVERSAL:%'
+        AND reversal_of_event_id IS NULL
+        AND substr(description, 1, 10) != 'REVERSAL: '
       ORDER BY month DESC
       LIMIT ?;
     ''', [limit]);
