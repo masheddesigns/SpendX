@@ -73,117 +73,128 @@ class SpendXGlassSurface extends StatelessWidget {
     switch (level) {
       case SpendXGlassLevel.base:
         defaultBlur = 16.0;
-        specularOpacity = isDark ? 0.18 : 0.35;
+        specularOpacity = isDark ? 0.15 : 0.0;
         defaultGradient = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
               ? const [
-                  Color(0x33171D2A), // ~20%
-                  Color(0x1F0F131D), // ~12%
+                  Color(0xFF171A26),
+                  Color(0xFF141722),
                 ]
               : const [
-                  Color(0x66FFFFFF), // ~40%
-                  Color(0x38F1F5F9), // ~22%
+                  Color(0xFFFFFFFF),
+                  Color(0xFFFAFBFE),
                 ],
         );
         defaultBorderColor = isDark
-            ? const Color(0x1FFFFFFF) // 12% white
-            : const Color(0x24000000); // 14% black
-        defaultShadow = null;
+            ? const Color(0xFF262B3D)
+            : const Color(0xFFEDF0F7);
+        defaultShadow = isDark
+            ? const [
+                BoxShadow(
+                  color: Color(0x28000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 3),
+                ),
+              ]
+            : AppShadows.card;
         break;
 
       case SpendXGlassLevel.elevated:
         defaultBlur = 24.0;
-        specularOpacity = isDark ? 0.32 : 0.55;
+        specularOpacity = isDark ? 0.25 : 0.0;
         defaultGradient = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
               ? const [
-                  Color(0x4D1E2638), // ~30%
-                  Color(0x2B101522), // ~17%
+                  Color(0xFF1F2333),
+                  Color(0xFF191D2B),
                 ]
               : const [
-                  Color(0x8AFFFFFF), // ~54%
-                  Color(0x52F8FAFC), // ~32%
+                  Color(0xFFFFFFFF),
+                  Color(0xFFF8FAFD),
                 ],
         );
         defaultBorderColor = isDark
-            ? const Color(0x30FFFFFF) // 19% white
-            : const Color(0x2E000000); // 18% black
-        defaultShadow = [
-          BoxShadow(
-            color: isDark
-                ? const Color(0x55000000)
-                : const Color(0x140F172A),
-            blurRadius: 28,
-            spreadRadius: -4,
-            offset: const Offset(0, 10),
-          ),
-        ];
+            ? const Color(0xFF2F354B)
+            : const Color(0xFFE2E7F1);
+        defaultShadow = isDark
+            ? const [
+                BoxShadow(
+                  color: Color(0x40000000),
+                  blurRadius: 20,
+                  offset: Offset(0, 6),
+                ),
+              ]
+            : AppShadows.floating;
         break;
 
       case SpendXGlassLevel.floating:
         defaultBlur = 28.0;
-        specularOpacity = isDark ? 0.45 : 0.70;
+        specularOpacity = isDark ? 0.35 : 0.0;
         defaultGradient = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
               ? const [
-                  Color(0x661A2232), // ~40%
-                  Color(0x470D121B), // ~28%
+                  Color(0xF0171A26),
+                  Color(0xF0121520),
                 ]
               : const [
-                  Color(0x9EFFFFFF), // ~62%
-                  Color(0x6BF1F5F9), // ~42%
+                  Color(0xF8FFFFFF),
+                  Color(0xF2F7F9FD),
                 ],
         );
         defaultBorderColor = isDark
-            ? const Color(0x3DFFFFFF) // 24% white
-            : const Color(0x33000000); // 20% black
-        defaultShadow = [
-          BoxShadow(
-            color: isDark
-                ? const Color(0x70000000)
-                : const Color(0x1F0F172A),
-            blurRadius: 32,
-            spreadRadius: -2,
-            offset: const Offset(0, 12),
-          ),
-        ];
+            ? const Color(0xFF2F354B)
+            : const Color(0xFFE2E7F1);
+        defaultShadow = isDark
+            ? const [
+                BoxShadow(
+                  color: Color(0x60000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ]
+            : AppShadows.floating;
         break;
 
       case SpendXGlassLevel.interactive:
         defaultBlur = 14.0;
-        specularOpacity = isDark ? 0.25 : 0.45;
+        specularOpacity = isDark ? 0.20 : 0.0;
         defaultGradient = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
               ? const [
-                  Color(0x3820293A), // ~22%
-                  Color(0x24121722), // ~14%
+                  Color(0xFF202538),
+                  Color(0xFF1A1E2E),
                 ]
               : const [
-                  Color(0x70FFFFFF), // ~44%
-                  Color(0x40F1F5F9), // ~25%
+                  Color(0xFFFFFFFF),
+                  Color(0xFFF4F6FC),
                 ],
         );
         defaultBorderColor = isDark
-            ? const Color(0x29FFFFFF) // 16% white
-            : const Color(0x26000000); // 15% black
-        defaultShadow = [
-          BoxShadow(
-            color: isDark
-                ? const Color(0x30000000)
-                : const Color(0x0F0F172A),
-            blurRadius: 10,
-            spreadRadius: -2,
-            offset: const Offset(0, 4),
-          ),
-        ];
+            ? const Color(0xFF2D3349)
+            : const Color(0xFFE2E7F1);
+        defaultShadow = isDark
+            ? const [
+                BoxShadow(
+                  color: Color(0x20000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ]
+            : const [
+                BoxShadow(
+                  color: Color(0x0A18274B),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ];
         break;
     }
 
@@ -257,7 +268,7 @@ class SpendXGlassSurface extends StatelessWidget {
     );
 
     // Outer container for floating drop shadow (not clipped by ClipRRect)
-    if (effectiveShadow != null && effectiveShadow.isNotEmpty) {
+    if (effectiveShadow.isNotEmpty) {
       return Container(
         margin: margin,
         decoration: BoxDecoration(

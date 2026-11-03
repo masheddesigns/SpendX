@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../screens/bank/account_list_screen.dart';
+import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/home/transactions_screen.dart';
 import '../../../screens/more/more_screen.dart';
 import '../../../screens/plan/plan_tab.dart';
 import '../../../services/haptic_service.dart';
+import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
@@ -104,18 +106,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: SpendXScaffold(
         extendBody: true,
         extendBodyBehindAppBar: false,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          title: Text(
-            _titles[_currentIndex],
-            style: AppTextStyles.heading.copyWith(
-              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
+        appBar: _currentIndex == 0
+            ? null
+            : AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                title: Text(
+                  _titles[_currentIndex],
+                  style: AppTextStyles.heading.copyWith(
+                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                actions: [
+                  if (_currentIndex == 1)
+                    IconButton(
+                      icon: const Icon(Icons.add_rounded),
+                      tooltip: 'Add Transaction',
+                      onPressed: () => Navigator.push(
+                        context,
+                        AppPageRoute(
+                          builder: (_) =>
+                              const AddExpenseScreen(initialType: 'expense'),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
         body: IndexedStack(
           index: _currentIndex,
           children: _tabs,

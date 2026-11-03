@@ -93,6 +93,25 @@ class Transaction {
     }
   }
 
+  /// Whether this transaction represents an outflow (spent).
+  bool get isExpenseType =>
+      type == 'expense' ||
+      type == 'credit_card_purchase' ||
+      type == 'credit_purchase' ||
+      type == 'loan_payment';
+
+  /// Whether this transaction represents an inflow (received).
+  bool get isIncomeType =>
+      type == 'income' ||
+      type == 'refund' ||
+      type == 'loan_disbursement';
+
+  /// Whether this transaction represents a movement between accounts.
+  bool get isTransferType =>
+      type == 'transfer' ||
+      type == 'credit_payment' ||
+      type == 'loan_repayment';
+
   // Required for backward compatibility with SharedPreferences before migration
   Map<String, dynamic> toJson() => toMap();
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction.fromMap(json);

@@ -98,15 +98,26 @@ class SpendXFinancialAmount extends StatelessWidget {
         break;
     }
 
-    final formattedText = AppFormat.currency(amount);
+    final absAmount = amount.abs();
+    final isNegative = amount < 0 || (semanticType == FinancialSemanticType.shortfall && amount != 0);
+    final rawFormatted = AppFormat.currency(absAmount);
+
+    // Sanitize prefix: remove any duplicate currency symbol
+    String cleanPrefix = (prefix ?? '')
+        .replaceAll('₹', '')
+        .replaceAll(AppFormat.currencySymbol, '')
+        .trim();
+
     String sign = '';
     if (showSign && amount > 0 && semanticType == FinancialSemanticType.income) {
       sign = '+';
-    } else if (showSign && amount < 0) {
-      sign = '-';
+    } else if (isNegative) {
+      if (!cleanPrefix.startsWith('-')) {
+        sign = '-';
+      }
     }
 
-    final displayText = '$sign${prefix ?? ''}$formattedText${suffix ?? ''}';
+    final displayText = '$sign$cleanPrefix$rawFormatted${suffix ?? ''}';
 
     return Text(
       displayText,

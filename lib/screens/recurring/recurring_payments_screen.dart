@@ -374,7 +374,7 @@ class _RecurringPaymentsScreenState
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount)}',
+                              '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount.abs())}',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,

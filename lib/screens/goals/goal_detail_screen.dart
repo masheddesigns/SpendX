@@ -881,7 +881,7 @@ class _TransactionTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        '${isExpense ? '-' : '+'}${AppFormat.currency(tx.amount)}',
+        '${isExpense ? '-' : '+'}${AppFormat.currency(tx.amount.abs())}',
         style: TextStyle(
           fontWeight: FontWeight.w600,
           color: color,

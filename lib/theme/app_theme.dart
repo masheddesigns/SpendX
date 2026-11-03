@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/settings_service.dart';
 
 export 'app_spacing.dart';
@@ -15,9 +17,56 @@ class AppRadius {
   static const double large = l;
   static const double lg = l;
   static const double xl = 20.0;
-  static const double card = 14.0;
-  static const double button = 10.0;
+  static const double xxl = 24.0;
+  static const double card = 16.0;
+  static const double button = 12.0;
   static const double full = 999.0;
+}
+
+class AppShadows {
+  static const List<BoxShadow> card = [
+    BoxShadow(
+      color: Color(0x0A18274B),
+      blurRadius: 16,
+      offset: Offset(0, 4),
+      spreadRadius: -2,
+    ),
+    BoxShadow(
+      color: Color(0x0518274B),
+      blurRadius: 6,
+      offset: Offset(0, 1),
+    ),
+  ];
+
+  static const List<BoxShadow> floating = [
+    BoxShadow(
+      color: Color(0x1218274B),
+      blurRadius: 24,
+      offset: Offset(0, 8),
+      spreadRadius: -4,
+    ),
+    BoxShadow(
+      color: Color(0x0818274B),
+      blurRadius: 8,
+      offset: Offset(0, 2),
+    ),
+  ];
+
+  static const List<BoxShadow> glow = [
+    BoxShadow(
+      color: Color(0x256558E8),
+      blurRadius: 16,
+      offset: Offset(0, 4),
+    ),
+  ];
+
+  static const List<BoxShadow> darkCard = [
+    BoxShadow(
+      color: Color(0x40000000),
+      blurRadius: 16,
+      offset: Offset(0, 4),
+    ),
+  ];
 }
 
 class AppTextStyles {
@@ -129,63 +178,65 @@ class CinematicTheme {
 }
 
 class AppTheme extends ChangeNotifier {
-  // --- Production Liquid Glass Tokens ---
-  static const Color darkCanvas = Color(0xFF0A0C10);
-  static const Color darkSurface = Color(0xFF12151D);
-  static const Color darkElevated = Color(0xFF191D28);
-  static const Color darkBorder = Color(0xFF1E2330);
+  // --- Modern Fintech Surface Tokens ---
+  static const Color darkCanvas = Color(0xFF0D0F17);
+  static const Color darkSurface = Color(0xFF171A26);
+  static const Color darkElevated = Color(0xFF1F2333);
+  static const Color darkBorder = Color(0xFF262B3D);
   static const Color darkCard = darkSurface;
   static const Color darkBg = darkCanvas;
 
-  static const Color lightCanvas = Color(0xFFF1F5F9);
+  static const Color lightCanvas = Color(0xFFFAF7F2);
   static const Color lightSurface = Color(0xFFFFFFFF);
-  static const Color lightElevated = Color(0xFFF8FAFC);
-  static const Color lightBorder = Color(0xFFE2E8F0);
+  static const Color lightElevated = Color(0xFFFFFFFF);
+  static const Color lightBorder = Color(0xFFEBE6DC);
   static const Color lightCard = lightSurface;
   static const Color lightBg = lightCanvas;
 
-  static const Color primaryBlue = Color(0xFF3B82F6);
-  static const Color primaryBlueMuted = Color(0xFF1D3A6B);
+  // Signature SpendX Brand Color (Duolingo / Revolut modern violet-indigo)
+  static const Color primaryBlue = Color(0xFF6558E8);
+  static const Color primaryBlueMuted = Color(0xFF4C3FC7);
 
-  // Financial Semantics (LOCKED)
-  static const Color semanticIncome = Color(0xFF10B981);
-  static const Color semanticExpense = Color(0xFFF43F5E);
-  static const Color semanticTransfer = Color(0xFF64748B);
-  static const Color semanticWarning = Color(0xFFF59E0B);
-  static const Color semanticShortfall = Color(0xFFE11D48);
+  // Financial Semantics (LOCKED - Finch/Monzo clear and reassuring)
+  static const Color semanticIncome = Color(0xFF35B779);
+  static const Color semanticExpense = Color(0xFFE76D76);
+  static const Color semanticTransfer = Color(0xFF55B8C5);
+  static const Color semanticWarning = Color(0xFFF3AD4E);
+  static const Color semanticShortfall = Color(0xFFE76D76);
 
   static const Color successGreen = semanticIncome;
   static const Color warningAmber = semanticWarning;
   static const Color dangerRed = semanticExpense;
 
-  static const Color darkTextPrimary = Color(0xFFF8FAFC);
-  static const Color darkTextSecondary = Color(0xFF94A3B8);
-  static const Color darkTextMuted = Color(0xFF64748B);
+  static const Color darkTextPrimary = Color(0xFFF5F7FC);
+  static const Color darkTextSecondary = Color(0xFF9AA1B5);
+  static const Color darkTextMuted = Color(0xFF656C82);
 
-  static const Color lightTextPrimary = Color(0xFF0F172A);
-  static const Color lightTextSecondary = Color(0xFF475569);
-  static const Color lightTextMuted = Color(0xFF94A3B8);
+  static const Color lightTextPrimary = Color(0xFF202432);
+  static const Color lightTextSecondary = Color(0xFF6B7280);
+  static const Color lightTextMuted = Color(0xFF9AA1B5);
 
   // Liquid Glass Specific Surface Tokens
-  static const Color glassDarkSurface = Color(0xCC12151D); // ~80%
-  static const Color glassDarkElevated = Color(0xD9191D28); // ~85%
-  static const Color glassDarkNav = Color(0xE610131A); // ~90%
-  static const Color glassDarkBorder = Color(0x2EFFFFFF); // 18% white highlight
-  static const Color glassDarkBorderSubtle = Color(0x1AFFFFFF); // 10% white
+  static const Color glassDarkSurface = Color(0xCC171A26);
+  static const Color glassDarkElevated = Color(0xD91F2333);
+  static const Color glassDarkNav = Color(0xF2121520);
+  static const Color glassDarkBorder = Color(0x2EFFFFFF);
+  static const Color glassDarkBorderSubtle = Color(0x1AFFFFFF);
 
-  static const Color glassLightSurface = Color(0xD9FFFFFF); // ~85%
-  static const Color glassLightElevated = Color(0xEBFFFFFF); // ~92%
-  static const Color glassLightNav = Color(0xF2FFFFFF); // ~95%
-  static const Color glassLightBorder = Color(0x26000000); // 15% black
-  static const Color glassLightBorderSubtle = Color(0x14000000); // 8% black
+  static const Color glassLightSurface = Color(0xF5FFFFFF);
+  static const Color glassLightElevated = Color(0xFAFFFFFF);
+  static const Color glassLightNav = Color(0xF5FFFFFF);
+  static const Color glassLightBorder = Color(0xFFEDF0F7);
+  static const Color glassLightBorderSubtle = Color(0xFFF0F3F9);
 
   static const double glassBlur = 16.0;
   static const double glassNavBlur = 20.0;
   static const double glassControlBlur = 12.0;
 
   static const List<Map<String, dynamic>> availableThemes = [
-    {'id': 'liquid_glass_dark', 'name': 'Liquid Glass Dark', 'color': Color(0xFF3B82F6)},
-    {'id': 'premium_dark', 'name': 'Premium Dark', 'color': Color(0xFF3B82F6)},
+    {'id': 'spendx_modern', 'name': 'SpendX Modern', 'color': Color(0xFF6558E8)},
+    {'id': 'liquid_glass_dark', 'name': 'Liquid Glass Dark', 'color': Color(0xFF6558E8)},
+    {'id': 'premium_dark', 'name': 'Premium Dark', 'color': Color(0xFF6558E8)},
   ];
 
   AppTheme() {
@@ -274,15 +325,21 @@ class AppTheme extends ChangeNotifier {
 
       return ThemeData(
         useMaterial3: true,
+        fontFamily: GoogleFonts.inter().fontFamily,
         colorScheme: colorScheme,
         textTheme: _buildStaticTextTheme(colorScheme),
         scaffoldBackgroundColor: bg,
+        dividerTheme: const DividerThemeData(
+          color: lightBorder,
+          thickness: 1,
+          space: 1,
+        ),
         cardTheme: CardThemeData(
           color: card,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            side: BorderSide(color: lightBorder, width: 1),
+            side: const BorderSide(color: lightBorder, width: 1),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -293,9 +350,47 @@ class AppTheme extends ChangeNotifier {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.button),
             ),
-            textStyle: AppTextStyles.subheading,
+            textStyle: AppTextStyles.button,
             elevation: 0,
           ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: primary,
+            minimumSize: const Size.fromHeight(48),
+            side: const BorderSide(color: lightBorder, width: 1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.button),
+            ),
+            textStyle: AppTextStyles.button,
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: primary,
+            textStyle: AppTextStyles.button,
+          ),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.dark,
+          ),
+          titleTextStyle: AppTextStyles.heading.copyWith(color: lightTextPrimary),
+          iconTheme: const IconThemeData(color: lightTextPrimary),
+        ),
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+          backgroundColor: lightSurface,
+          selectedItemColor: primary,
+          unselectedItemColor: lightTextMuted,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
         ),
       );
     }
@@ -323,9 +418,15 @@ class AppTheme extends ChangeNotifier {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: GoogleFonts.inter().fontFamily,
       colorScheme: colorScheme,
       textTheme: _buildStaticTextTheme(colorScheme),
       scaffoldBackgroundColor: bg,
+      dividerTheme: const DividerThemeData(
+        color: darkBorder,
+        thickness: 1,
+        space: 1,
+      ),
       cardTheme: CardThemeData(
         color: card,
         elevation: 0,
@@ -349,13 +450,38 @@ class AppTheme extends ChangeNotifier {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.button),
           ),
-          textStyle: AppTextStyles.subheading,
+          textStyle: AppTextStyles.button,
           elevation: 0,
         ),
       ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primary,
+          minimumSize: const Size.fromHeight(48),
+          side: const BorderSide(color: darkBorder, width: 1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          textStyle: AppTextStyles.button,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primary,
+          textStyle: AppTextStyles.button,
+        ),
+      ),
       appBarTheme: AppBarTheme(
-        backgroundColor: bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
         titleTextStyle: AppTextStyles.heading.copyWith(color: darkTextPrimary),
         iconTheme: const IconThemeData(color: primaryBlue),
       ),
@@ -363,14 +489,18 @@ class AppTheme extends ChangeNotifier {
   }
 
   static TextTheme _buildStaticTextTheme(ColorScheme cs) {
-    return TextTheme(
+    final base = GoogleFonts.interTextTheme();
+    return base.copyWith(
+      displayLarge: AppTextStyles.displayBalance.copyWith(color: cs.onSurface),
       headlineLarge: AppTextStyles.heading.copyWith(color: cs.onSurface),
       headlineMedium: AppTextStyles.heading.copyWith(color: cs.onSurface),
       titleLarge: AppTextStyles.subheading.copyWith(color: cs.onSurface),
       titleMedium: AppTextStyles.subheading.copyWith(color: cs.onSurface),
+      titleSmall: AppTextStyles.sectionHeading.copyWith(color: cs.onSurface),
       bodyLarge: AppTextStyles.body.copyWith(color: cs.onSurface),
-      bodyMedium: AppTextStyles.body.copyWith(color: cs.onSurfaceVariant),
-      labelLarge: AppTextStyles.caption.copyWith(color: cs.onSurfaceVariant),
+      bodyMedium: AppTextStyles.bodyMedium.copyWith(color: cs.onSurfaceVariant),
+      labelLarge: AppTextStyles.button.copyWith(color: cs.onSurface),
+      labelMedium: AppTextStyles.caption.copyWith(color: cs.onSurfaceVariant),
       labelSmall: AppTextStyles.caption.copyWith(
         color: cs.onSurfaceVariant.withValues(alpha: 0.7),
       ),

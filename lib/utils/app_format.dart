@@ -10,6 +10,12 @@ class AppFormat {
     return formatter.format(value);
   }
 
+  static String compact(double value, {String? symbol}) {
+    final effectiveSymbol = symbol ?? SettingsService.instance.currencySymbol;
+    final formatter = NumberFormat.compactCurrency(symbol: effectiveSymbol, decimalDigits: 0);
+    return formatter.format(value);
+  }
+
   static String date(DateTime date) {
     return DateFormat('dd MMM yyyy').format(date);
   }

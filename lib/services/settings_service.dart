@@ -235,12 +235,11 @@ class SettingsService extends ChangeNotifier {
   }
 
   bool get isDarkMode {
-    return _prefs.getBool(_themeModeKey) ??
-        true; // Always default to dark for fintech theme
+    return _prefs.getString(_themeModeKey) == 'dark';
   }
 
   String get appThemeMode {
-    return _prefs.getString(_themeModeKey) ?? 'dark';
+    return _prefs.getString(_themeModeKey) ?? 'light';
   }
 
   ThemeMode get themeMode {

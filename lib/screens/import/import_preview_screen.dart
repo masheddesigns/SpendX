@@ -1127,7 +1127,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
   Widget _detectedRow(ColorScheme cs) {
     final chips = <Widget>[];
     if (widget.parsed.amount > 0) {
-      chips.add(_chip('₹${AppFormat.currency(widget.parsed.amount)}',
+      chips.add(_chip(AppFormat.currency(widget.parsed.amount),
           Icons.payments_outlined, cs));
     }
     if (widget.parsed.method != null) {

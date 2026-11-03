@@ -425,7 +425,7 @@ class _UnifiedTransactionDetailScreenState
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          '${isIncome ? '+' : '-'}${AppFormat.currency(_tx.amount)}',
+                          '${isIncome ? '+' : '-'}${AppFormat.currency(_tx.amount.abs())}',
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w700,

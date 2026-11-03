@@ -2,20 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../utils/app_format.dart';
+
 import '../data/providers.dart';
 import '../models/reports_summary.dart';
-
-import 'reports/monthly_report_screen.dart';
-import '../shared/widgets/app_page_route.dart';
+import '../services/export_service.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/skeleton_loader.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
+import '../shared/widgets/glass/spendx_glass_sheet.dart';
 import '../shared/widgets/glass/spendx_scaffold.dart';
-import '../shared/widgets/glass/spendx_states.dart';
 import '../shared/widgets/spendx_app_bar.dart';
+import '../utils/app_format.dart';
+import 'reports/reports_category_resolver.dart';
 
-/// Full financial reports screen with 5 tabs.
+/// SpendX Financial Reports Screen.
+///
+/// Designed around actual financial data capabilities:
+/// 1. Cash Flow Cadence: Executive net savings and flow ratios.
+/// 2. Monthly Movement: Left-to-right chronological dual-stem timeline.
+/// 3. Where Your Money Went: Exact-mapped category distribution with proportional bars.
+/// 4. Debt & Lending History: Peer lending net trend, loan principal amortization, and credit exposure.
+/// 5. Persistent Horizon Selector: 3M, 6M, 12M with explicit calendar span.
+/// 6. Verified Transaction Export: CSV and JSON via [ExportService].
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -24,19 +32,13 @@ class ReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen>
-    with TickerProviderStateMixin {
-  late TabController _tabController;
+    with SingleTickerProviderStateMixin {
   late AnimationController _chartAnimCtrl;
   late Animation<double> _chartAnim;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
-    });
-
     _chartAnimCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -50,82 +52,257 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _chartAnimCtrl.dispose();
     super.dispose();
   }
 
   void _onPeriodChanged(int months) {
+    if (ref.read(reportsPeriodProvider) == months) return;
     ref.read(reportsPeriodProvider.notifier).state = months;
     _chartAnimCtrl.reset();
     _chartAnimCtrl.forward();
+  }
+
+  void _showExportSheet(BuildContext context) {
+    final period = ref.read(reportsPeriodProvider);
+    SpendXGlassSheet.show(
+      context: context,
+      title: 'Export Transactions',
+      builder: (ctx) => _ExportTransactionsSheetContent(period: period),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final reportsAsync = ref.watch(reportsProvider);
     final period = ref.watch(reportsPeriodProvider);
-    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
         title: 'Financial Reports',
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: cs.primary,
-          unselectedLabelColor: cs.onSurfaceVariant,
-          tabAlignment: TabAlignment.start,
-          tabs: const [
-            Tab(text: 'Overview'),
-            Tab(text: 'Spending'),
-            Tab(text: 'Credit'),
-            Tab(text: 'Loans'),
-            Tab(text: 'Lending'),
-          ],
-        ),
         actions: [
-          PopupMenuButton<int>(
-            icon: const Icon(Icons.tune),
-            onSelected: _onPeriodChanged,
-            itemBuilder: (_) => [
-              for (final m in [3, 6, 12])
-                PopupMenuItem(
-                  value: m,
-                  child: Text(
-                    period == m ? '\u2713 Last $m Months' : 'Last $m Months',
-                  ),
-                ),
-            ],
+          IconButton(
+            icon: const Icon(Icons.file_upload_outlined),
+            tooltip: 'Export Transactions',
+            onPressed: () => _showExportSheet(context),
           ),
         ],
       ),
       body: reportsAsync.when(
-        data: (summary) => TabBarView(
-          controller: _tabController,
-          children: [
-            _OverviewTab(summary: summary, anim: _chartAnim),
-            _SpendingTab(summary: summary, anim: _chartAnim),
-            _CreditTab(summary: summary, anim: _chartAnim),
-            _LoansTab(summary: summary, anim: _chartAnim),
-            _LendingTab(summary: summary, anim: _chartAnim),
-          ],
+        data: (summary) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── 1. Horizon Selector & Date Span ──────────────────
+              _HorizonSelector(
+                selectedPeriod: period,
+                onPeriodChanged: _onPeriodChanged,
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 20),
+
+              // ── 2. Cash Flow Horizon (Cardless Executive Summary) ─
+              _CashFlowHorizonSection(
+                summary: summary,
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── 3. Monthly Movement (Chronological Dual-Stem) ─────
+              _MonthlyMovementSection(
+                summary: summary,
+                anim: _chartAnim,
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 28),
+
+              // ── 4. Where Your Money Went (Category Trajectory) ────
+              _CategoryBreakdownSection(
+                summary: summary,
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 28),
+
+              // ── 5. Debt & Lending History ─────────────────────────
+              _DebtAndLendingSection(
+                summary: summary,
+                anim: _chartAnim,
+                isDark: isDark,
+              ),
+            ],
+          ),
         ),
         loading: () => const SkeletonLoader.summary(),
-        error: (err, _) => ErrorStateWidget(error: err, onRetry: () => ref.invalidate(reportsProvider)),
+        error: (err, _) => ErrorStateWidget(
+          error: err,
+          onRetry: () => ref.invalidate(reportsProvider),
+        ),
       ),
     );
   }
 }
 
 // =========================================================================
-// OVERVIEW TAB
+// 1. HORIZON SELECTOR (3M, 6M, 12M WITH EXPLICIT DATE SPAN)
 // =========================================================================
 
-class _OverviewTab extends StatelessWidget {
+class _HorizonSelector extends StatelessWidget {
+  final int selectedPeriod;
+  final ValueChanged<int> onPeriodChanged;
+  final bool isDark;
+
+  const _HorizonSelector({
+    required this.selectedPeriod,
+    required this.onPeriodChanged,
+    required this.isDark,
+  });
+
+  String _formatDateRange(int months) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month - months + 1, 1);
+    final fmt = DateFormat('MMM yyyy');
+    return '${fmt.format(start)} – ${fmt.format(now)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rangeText = _formatDateRange(selectedPeriod);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your money, over time',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _PillButton(
+              label: '3 months',
+              isSelected: selectedPeriod == 3,
+              isDark: isDark,
+              onTap: () => onPeriodChanged(3),
+            ),
+            const SizedBox(width: 8),
+            _PillButton(
+              label: '6 months',
+              isSelected: selectedPeriod == 6,
+              isDark: isDark,
+              onTap: () => onPeriodChanged(6),
+            ),
+            const SizedBox(width: 8),
+            _PillButton(
+              label: '12 months',
+              isSelected: selectedPeriod == 12,
+              isDark: isDark,
+              onTap: () => onPeriodChanged(12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(
+              Icons.date_range_rounded,
+              size: 13,
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              rangeText,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PillButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _PillButton({
+    required this.label,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final activeBg = isDark
+        ? cs.primary.withValues(alpha: 0.20)
+        : cs.primary.withValues(alpha: 0.12);
+    final inactiveBg = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : Colors.black.withValues(alpha: 0.04);
+
+    final activeText = isDark ? cs.primary : const Color(0xFF0F766E);
+    final inactiveText = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? activeBg : inactiveBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? cs.primary.withValues(alpha: 0.35)
+                : (isDark ? Colors.white10 : Colors.black12),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? activeText : inactiveText,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// 2. CASH FLOW HORIZON (CARDLESS EXECUTIVE SUMMARY)
+// =========================================================================
+
+class _CashFlowHorizonSection extends StatelessWidget {
   final ReportsSummary summary;
-  final Animation<double> anim;
-  const _OverviewTab({required this.summary, required this.anim});
+  final bool isDark;
+
+  const _CashFlowHorizonSection({
+    required this.summary,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -133,473 +310,170 @@ class _OverviewTab extends StatelessWidget {
     final net = summary.netSavings;
     final isPositive = net >= 0;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── KPI Cards ──────────────────────────────
-          Row(
-            children: [
-              Expanded(child: _KpiCard(
-                label: 'Income', value: AppFormat.currency(summary.totalIncome),
-                icon: Icons.trending_up, color: cs.primary)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(
-                label: 'Expense', value: AppFormat.currency(summary.totalExpense),
-                icon: Icons.trending_down, color: cs.error)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: _KpiCard(
-                label: 'Net Savings', value: AppFormat.currency(net),
-                icon: Icons.savings, color: isPositive ? Colors.green : cs.error)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(
-                label: 'Savings Rate',
-                value: '${summary.savingsRate.toStringAsFixed(1)}%',
-                icon: Icons.percent, color: summary.savingsRate >= 20 ? Colors.green : Colors.orange)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: _KpiCard(
-                label: 'Avg Daily Spend',
-                value: AppFormat.currency(summary.avgDailySpending),
-                icon: Icons.today, color: cs.tertiary)),
-              const SizedBox(width: 10),
-              if (summary.salarySourceCount > 0)
-                Expanded(child: _KpiCard(
-                  label: 'Salary Earned',
-                  value: AppFormat.currency(summary.totalSalaryEarned),
-                  icon: Icons.account_balance_wallet, color: Colors.blue))
-              else
-                const Expanded(child: SizedBox()),
-            ],
-          ),
+    final primaryInflowColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final primaryOutflowColor = cs.error;
+    final netColor = isPositive ? primaryInflowColor : primaryOutflowColor;
 
-          const SizedBox(height: 24),
-          _SectionLabel('Income vs Expense'),
-          const SizedBox(height: 12),
-          _IncomeExpenseChart(data: summary.monthlyTrend, anim: anim),
-
-          const SizedBox(height: 24),
-          _SectionLabel('Monthly Net'),
-          const SizedBox(height: 12),
-          ...summary.monthlyTrend.map((d) => _NetRow(data: d)),
-
-          const SizedBox(height: 24),
-          SpendXGlassSurface(
-            level: SpendXGlassLevel.interactive,
-            borderRadius: BorderRadius.circular(16),
-            child: ListTile(
-              leading: Icon(Icons.analytics_outlined, color: cs.primary),
-              title: const Text('Detailed Monthly Analysis'),
-              subtitle: Text(
-                  'View deep insights for ${DateFormat('MMMM').format(DateTime.now())}'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const MonthlyReportScreen())),
-            ),
-          ),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// SPENDING TAB (NEW)
-// =========================================================================
-
-class _SpendingTab extends StatelessWidget {
-  final ReportsSummary summary;
-  final Animation<double> anim;
-  const _SpendingTab({required this.summary, required this.anim});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final categories = summary.topExpenseCategories;
-
-    if (categories.isEmpty) {
-      return _EmptyState(icon: Icons.pie_chart_outline, text: 'No expenses to analyze');
+    // Semantic savings rate display: handle zero income cleanly
+    final String savingsRateText;
+    final Color savingsRateColor;
+    if (summary.totalIncome > 0) {
+      savingsRateText = '${summary.savingsRate.toStringAsFixed(1)}%';
+      savingsRateColor = summary.savingsRate >= 20
+          ? primaryInflowColor
+          : (summary.savingsRate >= 0 ? Colors.orange : cs.error);
+    } else if (summary.totalExpense > 0) {
+      savingsRateText = 'Deficit (0% Inflow)';
+      savingsRateColor = cs.error;
+    } else {
+      savingsRateText = '0.0%';
+      savingsRateColor = isDark ? Colors.grey : Colors.black54;
     }
 
-    final totalExpense = categories.fold<double>(0, (s, c) => s + c.amount);
-    final colors = [
-      cs.primary, cs.error, cs.tertiary, Colors.orange, Colors.purple,
-      Colors.teal, Colors.pink, Colors.indigo, Colors.amber, Colors.cyan,
-    ];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Pie Chart ──────────────────────────────
-          SpendXGlassSurface(
-            level: SpendXGlassLevel.base,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 200,
-                    child: AnimatedBuilder(
-                      animation: anim,
-                      builder: (_, _) => PieChart(
-                        PieChartData(
-                          sections: categories.asMap().entries.map((e) {
-                            final pct = totalExpense > 0
-                                ? (e.value.amount / totalExpense) * 100
-                                : 0.0;
-                            return PieChartSectionData(
-                              value: e.value.amount * anim.value,
-                              title: pct >= 5 ? '${pct.toStringAsFixed(0)}%' : '',
-                              color: colors[e.key % colors.length],
-                              radius: 55,
-                              titleStyle: const TextStyle(
-                                fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                            );
-                          }).toList(),
-                          sectionsSpace: 2,
-                          centerSpaceRadius: 45,
-                          centerSpaceColor: Colors.transparent,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 6,
-                    children: categories.take(6).toList().asMap().entries.map((e) {
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(width: 10, height: 10,
-                            decoration: BoxDecoration(
-                              color: colors[e.key % colors.length],
-                              shape: BoxShape.circle)),
-                          const SizedBox(width: 4),
-                          Text(e.value.categoryName,
-                            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-          _SectionLabel('Top Spending Categories'),
-          const SizedBox(height: 12),
-
-          // ── Category List ──────────────────────────
-          ...categories.asMap().entries.map((e) {
-            final c = e.value;
-            final pct = totalExpense > 0 ? c.amount / totalExpense : 0.0;
-            final color = colors[e.key % colors.length];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SpendXGlassSurface(
-                level: SpendXGlassLevel.base,
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(10)),
-                            child: Center(
-                              child: Text('${e.key + 1}',
-                                style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(c.categoryName,
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                Text('${c.transactionCount} transactions',
-                                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(AppFormat.currency(c.amount),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.error,
-                                  fontSize: 14,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
-                                )),
-                              Text('${(pct * 100).toStringAsFixed(1)}%',
-                                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: pct,
-                          backgroundColor: cs.outline.withValues(alpha: 0.1),
-                          valueColor: AlwaysStoppedAnimation(color),
-                          minHeight: 4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// CREDIT TAB
-// =========================================================================
-
-class _CreditTab extends StatelessWidget {
-  final ReportsSummary summary;
-  final Animation<double> anim;
-  const _CreditTab({required this.summary, required this.anim});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    if (summary.creditSummaries.isEmpty) {
-      return _EmptyState(icon: Icons.credit_card_off, text: 'No credit cards added yet');
-    }
-
-    final totalOutstanding = summary.creditSummaries.fold<double>(0, (s, c) => s + c.outstanding);
-    final totalLimit = summary.creditSummaries.fold<double>(0, (s, c) => s + c.limit);
-    final overallUtil = totalLimit > 0 ? (totalOutstanding / totalLimit) * 100 : 0.0;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Overall credit health
-          Row(
-            children: [
-              Expanded(child: _KpiCard(
-                label: 'Total Outstanding',
-                value: AppFormat.currency(totalOutstanding),
-                icon: Icons.credit_card, color: cs.error)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(
-                label: 'Overall Utilization',
-                value: '${overallUtil.toStringAsFixed(0)}%',
-                icon: Icons.donut_large,
-                color: overallUtil >= 80 ? Colors.red : overallUtil >= 50 ? Colors.orange : Colors.green)),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          _SectionLabel('Outstanding per Card'),
-          const SizedBox(height: 12),
-          _CreditBarChart(summaries: summary.creditSummaries, anim: anim),
-          const SizedBox(height: 24),
-
-          _SectionLabel('Card Details'),
-          const SizedBox(height: 12),
-          ...summary.creditSummaries.map((c) => _CreditDetailCard(card: c)),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// LOANS TAB
-// =========================================================================
-
-class _LoansTab extends StatelessWidget {
-  final ReportsSummary summary;
-  final Animation<double> anim;
-  const _LoansTab({required this.summary, required this.anim});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    if (summary.loanSummaries.isEmpty) {
-      return _EmptyState(icon: Icons.account_balance_outlined, text: 'No active loans');
-    }
-
-    final totalDebt = summary.loanSummaries.fold<double>(0, (s, l) => s + l.remainingPrincipal);
-    final totalPaid = summary.loanSummaries.fold<double>(0, (s, l) => s + l.principalPaid);
-    final overallProgress = (totalPaid + totalDebt) > 0
-        ? totalPaid / (totalPaid + totalDebt) : 0.0;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: _KpiCard(
-                label: 'Total Debt',
-                value: AppFormat.currency(totalDebt),
-                icon: Icons.account_balance, color: cs.error)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(
-                label: 'Overall Progress',
-                value: '${(overallProgress * 100).toStringAsFixed(0)}%',
-                icon: Icons.trending_up, color: cs.primary)),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          _SectionLabel('Principal vs Interest'),
-          const SizedBox(height: 12),
-          _LoanPieChart(summaries: summary.loanSummaries, anim: anim),
-          const SizedBox(height: 24),
-
-          _SectionLabel('Loan Progress'),
-          const SizedBox(height: 12),
-          ...summary.loanSummaries.map((l) => _LoanProgressCard(loan: l)),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// LENDING TAB
-// =========================================================================
-
-class _LendingTab extends StatelessWidget {
-  final ReportsSummary summary;
-  final Animation<double> anim;
-  const _LendingTab({required this.summary, required this.anim});
-
-  @override
-  Widget build(BuildContext context) {
-    if (summary.totalLent == 0 && summary.totalBorrowed == 0) {
-      return _EmptyState(icon: Icons.handshake_outlined, text: 'No lending records');
-    }
-
-    final netLending = summary.totalLent - summary.totalBorrowed;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: _KpiCard(
-                label: 'Total Lent', value: AppFormat.currency(summary.totalLent),
-                icon: Icons.call_made, color: Colors.green)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(
-                label: 'Total Borrowed', value: AppFormat.currency(summary.totalBorrowed),
-                icon: Icons.call_received, color: Colors.orange)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _KpiCard(
-            label: 'Net Position',
-            value: '${netLending >= 0 ? "+" : ""}${AppFormat.currency(netLending)}',
-            icon: netLending >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
-            color: netLending >= 0 ? Colors.green : Colors.orange),
-          const SizedBox(height: 24),
-
-          _SectionLabel('Monthly Lending Trend'),
-          const SizedBox(height: 12),
-          _LendingTrendChart(trend: summary.lendingTrend, anim: anim),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// SHARED WIDGETS
-// =========================================================================
-
-class _KpiCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  const _KpiCard({required this.label, required this.value,
-    required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
     return SpendXGlassSurface(
       level: SpendXGlassLevel.base,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'CASH FLOW',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                ),
+                Text(
+                  'Income − Expenses',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
                   ),
-                ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Large Hero Net Savings Figure
+            Text(
+              isPositive
+                  ? '+${AppFormat.currency(net)}'
+                  : '-${AppFormat.currency(net.abs())}',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: netColor,
+                letterSpacing: -0.5,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
+            const SizedBox(height: 2),
+            Text(
+              isPositive
+                  ? 'Net retained savings across this horizon'
+                  : 'Net deficit across this horizon (spending exceeded inflows)',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+            Divider(
+              color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
+              height: 1,
+            ),
+            const SizedBox(height: 14),
+
+            // Four Flow Pillars
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricPillar(
+                    label: 'Total Inflow',
+                    value: AppFormat.currency(summary.totalIncome),
+                    valueColor: primaryInflowColor,
+                    isDark: isDark,
+                  ),
+                ),
+                Expanded(
+                  child: _MetricPillar(
+                    label: 'Total Outflow',
+                    value: AppFormat.currency(summary.totalExpense),
+                    valueColor: primaryOutflowColor,
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricPillar(
+                    label: 'Savings Rate',
+                    value: savingsRateText,
+                    valueColor: savingsRateColor,
+                    isDark: isDark,
+                  ),
+                ),
+                Expanded(
+                  child: _MetricPillar(
+                    label: 'Avg Daily Spend',
+                    value: AppFormat.currency(summary.avgDailySpending),
+                    valueColor: isDark ? Colors.white : const Color(0xFF1E293B),
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+            ),
+
+            if (summary.salarySourceCount > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.payments_outlined,
+                        size: 16,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Verified Salary Received:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      AppFormat.currency(summary.totalSalaryEarned),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -607,80 +481,227 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
+class _MetricPillar extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+  final bool isDark;
+
+  const _MetricPillar({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-      fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2));
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _EmptyState({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SpendXEmptyState(
-        icon: icon,
-        title: text,
-        subtitle: 'Data will appear here once relevant records are added.',
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: valueColor,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _NetRow extends StatelessWidget {
-  final MonthData data;
-  const _NetRow({required this.data});
+// =========================================================================
+// 3. MONTHLY MOVEMENT (CHRONOLOGICAL LEFT-TO-RIGHT BAR CHART)
+// =========================================================================
+
+class _MonthlyMovementSection extends StatelessWidget {
+  final ReportsSummary summary;
+  final Animation<double> anim;
+  final bool isDark;
+
+  const _MonthlyMovementSection({
+    required this.summary,
+    required this.anim,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final net = data.net;
-    final isPositive = net >= 0;
-    final color = isPositive
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.error;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: SpendXGlassSurface(
-        level: SpendXGlassLevel.base,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            children: [
-              Text(
-                data.label,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+    final cs = Theme.of(context).colorScheme;
+    final inflowColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final outflowColor = cs.error;
+
+    // SAFE REVERSAL: The underlying repository and service provide newest-first.
+    // We reverse ONLY for chart presentation so time moves left-to-right (past to present).
+    final chronologicalData = summary.monthlyTrend.reversed.toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'MONTHLY MOVEMENT',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+            Row(
+              children: [
+                _ChartLegendDot(color: inflowColor, label: 'Inflow'),
+                const SizedBox(width: 12),
+                _ChartLegendDot(color: outflowColor, label: 'Outflow'),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        SpendXGlassSurface(
+          level: SpendXGlassLevel.base,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: chronologicalData.isEmpty
+                ? const SizedBox(
+                    height: 160,
+                    child: Center(
+                      child: Text(
+                        'No transaction records in this time horizon.',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    ),
+                  )
+                : _buildBarChart(chronologicalData, cs, inflowColor, outflowColor),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBarChart(
+    List<MonthData> data,
+    ColorScheme cs,
+    Color inflowColor,
+    Color outflowColor,
+  ) {
+    final maxVal = data.fold<double>(
+      0.0,
+      (m, d) => [m, d.income, d.expense].reduce((a, b) => a > b ? a : b),
+    );
+    final chartCeiling = maxVal > 0 ? maxVal * 1.25 : 1000.0;
+
+    return SizedBox(
+      height: 200,
+      child: AnimatedBuilder(
+        animation: anim,
+        builder: (_, _) => BarChart(
+          BarChartData(
+            alignment: BarChartAlignment.spaceAround,
+            maxY: chartCeiling,
+            barTouchData: BarTouchData(
+              enabled: true,
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (_) => isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFFFFFFF),
+                tooltipBorderRadius: BorderRadius.circular(8),
+                getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                  final item = data[group.x.toInt()];
+                  final isIncomeRod = rodIndex == 0;
+                  final label = isIncomeRod ? 'Inflow' : 'Outflow';
+                  final amount = isIncomeRod ? item.income : item.expense;
+                  final currentMonthLabel = DateFormat('MMM yy').format(DateTime.now());
+                  final monthTitle = item.label == currentMonthLabel
+                      ? '${item.label} (MTD)'
+                      : item.label;
+                  return BarTooltipItem(
+                    '$monthTitle\n$label: ${AppFormat.currency(amount)}',
+                    TextStyle(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  );
+                },
+              ),
+            ),
+            titlesData: FlTitlesData(
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (v, _) {
+                    final i = v.toInt();
+                    if (i < 0 || i >= data.length) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        data[i].label,
+                        style: TextStyle(
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
-              const Spacer(),
-              Icon(
-                isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                size: 14,
-                color: color,
+              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (_) => FlLine(
+                color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                strokeWidth: 1,
               ),
-              const SizedBox(width: 4),
-              Text(
-                AppFormat.currency(net.abs()),
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+            ),
+            borderData: FlBorderData(show: false),
+            barGroups: data.asMap().entries.map((entry) {
+              final i = entry.key;
+              final d = entry.value;
+              final rodWidth = data.length <= 4 ? 14.0 : 10.0;
+              return BarChartGroupData(
+                x: i,
+                barsSpace: 4,
+                barRods: [
+                  BarChartRodData(
+                    toY: d.income * anim.value,
+                    color: inflowColor,
+                    width: rodWidth,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                  ),
+                  BarChartRodData(
+                    toY: d.expense * anim.value,
+                    color: outflowColor,
+                    width: rodWidth,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                  ),
+                ],
+              );
+            }).toList(),
           ),
         ),
       ),
@@ -688,71 +709,664 @@ class _NetRow extends StatelessWidget {
   }
 }
 
-// ── Charts ────────────────────────────────────────────────
+class _ChartLegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
 
-class _IncomeExpenseChart extends StatelessWidget {
-  final List<MonthData> data;
-  final Animation<double> anim;
-  const _IncomeExpenseChart({required this.data, required this.anim});
+  const _ChartLegendDot({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) return const _ChartEmpty('No transactions yet');
-    final cs = Theme.of(context).colorScheme;
-    final maxVal = data.fold<double>(0.0,
-      (m, d) => [m, d.income, d.expense].reduce((a, b) => a > b ? a : b));
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =========================================================================
+// 4. WHERE YOUR MONEY WENT (EXACT RESOLVER & PROPORTIONAL BARS)
+// =========================================================================
+
+class _CategoryBreakdownSection extends StatelessWidget {
+  final ReportsSummary summary;
+  final bool isDark;
+
+  const _CategoryBreakdownSection({
+    required this.summary,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = summary.topExpenseCategories;
+    final totalExpense = categories.fold<double>(0, (s, c) => s + c.amount);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'WHERE YOUR MONEY WENT',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+            if (categories.isNotEmpty)
+              Text(
+                '${categories.length} categories',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        if (categories.isEmpty)
+          SpendXGlassSurface(
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(16),
+            child: const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No categorized expense records in this time horizon.',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              ),
+            ),
+          )
+        else
+          SpendXGlassSurface(
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: categories.length,
+                separatorBuilder: (_, _) => Divider(
+                  color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                  height: 16,
+                ),
+                itemBuilder: (context, i) {
+                  final c = categories[i];
+                  final humanName = ReportsCategoryResolver.resolve(c.categoryName);
+                  final pct = totalExpense > 0 ? (c.amount / totalExpense) : 0.0;
+
+                  return _CategoryProportionRow(
+                    name: humanName,
+                    amount: c.amount,
+                    percentage: pct,
+                    transactionCount: c.transactionCount,
+                    isDark: isDark,
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CategoryProportionRow extends StatelessWidget {
+  final String name;
+  final double amount;
+  final double percentage;
+  final int transactionCount;
+  final bool isDark;
+
+  const _CategoryProportionRow({
+    required this.name,
+    required this.amount,
+    required this.percentage,
+    required this.transactionCount,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final trackColor = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.black.withValues(alpha: 0.05);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$transactionCount tx',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Row(
+              children: [
+                Text(
+                  AppFormat.currency(amount),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    '${(percentage * 100).toStringAsFixed(1)}%',
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: percentage.clamp(0.0, 1.0),
+            minHeight: 5,
+            backgroundColor: trackColor,
+            valueColor: AlwaysStoppedAnimation(
+              isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =========================================================================
+// 5. DEBT & LENDING HISTORY (PEER LENDING, LOAN PRINCIPAL, REVOLVING CREDIT)
+// =========================================================================
+
+class _DebtAndLendingSection extends StatelessWidget {
+  final ReportsSummary summary;
+  final Animation<double> anim;
+  final bool isDark;
+
+  const _DebtAndLendingSection({
+    required this.summary,
+    required this.anim,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'DEBT & LENDING HISTORY',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Changes in borrowing, obligations & peer lending over time',
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Sub-item 1: Peer Lending Cadence (Genuine Monthly Movement)
+        _PeerLendingCadenceCard(
+          trend: summary.lendingTrend,
+          totalLent: summary.totalLent,
+          totalBorrowed: summary.totalBorrowed,
+          anim: anim,
+          isDark: isDark,
+        ),
+
+        const SizedBox(height: 14),
+
+        // Sub-item 2: Loan Principal Amortization (Zero Fake Interest)
+        _LoanPrincipalAmortizationCard(
+          loans: summary.loanSummaries,
+          isDark: isDark,
+        ),
+
+        const SizedBox(height: 14),
+
+        // Sub-item 3: Revolving Credit Exposure (Current Outstanding & Util)
+        _RevolvingCreditExposureCard(
+          cards: summary.creditSummaries,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+}
+
+/// Peer lending monthly movement chart and balance sheet.
+class _PeerLendingCadenceCard extends StatelessWidget {
+  final List<LendingTrendData> trend;
+  final double totalLent;
+  final double totalBorrowed;
+  final Animation<double> anim;
+  final bool isDark;
+
+  const _PeerLendingCadenceCard({
+    required this.trend,
+    required this.totalLent,
+    required this.totalBorrowed,
+    required this.anim,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final netLending = totalLent - totalBorrowed;
+    final isNetLent = netLending >= 0;
+    final lentColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final borrowedColor = isDark ? const Color(0xFFFB923C) : const Color(0xFFEA580C);
 
     return SpendXGlassSurface(
       level: SpendXGlassLevel.base,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              _Legend(color: cs.primary, label: 'Income'),
-              const SizedBox(width: 16),
-              _Legend(color: cs.error, label: 'Expense'),
-            ]),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: AnimatedBuilder(
-                animation: anim,
-                builder: (_, _) => BarChart(BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: maxVal * 1.2,
-                  barTouchData: BarTouchData(enabled: true),
-                  titlesData: FlTitlesData(
-                    bottomTitles: AxisTitles(sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (v, _) {
-                        final i = v.toInt();
-                        if (i < 0 || i >= data.length) return const SizedBox.shrink();
-                        return Padding(padding: const EdgeInsets.only(top: 8),
-                          child: Text(data[i].label,
-                            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10, fontWeight: FontWeight.w600)));
-                      },
-                    )),
-                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.handshake_outlined,
+                        size: 16,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Peer Lending Cadence',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                Text(
+                  isNetLent ? 'Net Receivable' : 'Net Payable',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isNetLent ? lentColor : borrowedColor,
                   ),
-                  gridData: FlGridData(show: true, drawVerticalLine: false,
-                    getDrawingHorizontalLine: (_) => FlLine(color: cs.outline.withValues(alpha: 0.1))),
-                  borderData: FlBorderData(show: false),
-                  barGroups: data.asMap().map((i, d) => MapEntry(i,
-                    BarChartGroupData(x: i, barsSpace: 8, barRods: [
-                      BarChartRodData(toY: d.income * anim.value, color: cs.primary.withValues(alpha: 0.9),
-                        width: 14, borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
-                      BarChartRodData(toY: d.expense * anim.value, color: cs.error.withValues(alpha: 0.9),
-                        width: 14, borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
-                    ]),
-                  )).values.toList(),
-                )),
-              ),
+                ),
+              ],
             ),
+            const SizedBox(height: 10),
+
+            // Summary figures
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total Lent',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                      Text(AppFormat.currency(totalLent),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: lentColor,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          )),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total Borrowed',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                      Text(AppFormat.currency(totalBorrowed),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: borrowedColor,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          )),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('Net Position',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                      Text(
+                        '${isNetLent ? '+' : ''}${AppFormat.currency(netLending)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isNetLent ? lentColor : borrowedColor,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            if (trend.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _ChartLegendDot(color: lentColor, label: 'Lent (+)'),
+                  const SizedBox(width: 12),
+                  _ChartLegendDot(color: borrowedColor, label: 'Borrowed (−)'),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 120,
+                child: _buildLendingTrendChart(lentColor, borrowedColor),
+              ),
+            ] else ...[
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  'No peer lending records captured in this period.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLendingTrendChart(Color lentColor, Color borrowedColor) {
+    final maxVal = trend.fold<double>(
+      0.0,
+      (m, d) => m > d.net.abs() ? m : d.net.abs(),
+    );
+    final ceiling = maxVal > 0 ? maxVal * 1.3 : 1000.0;
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: ceiling,
+        minY: -ceiling,
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) =>
+                isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+            tooltipBorderRadius: BorderRadius.circular(8),
+            getTooltipItem: (group, _, rod, rodIndex) {
+              final d = trend[group.x.toInt()];
+              final isPositive = d.net >= 0;
+              return BarTooltipItem(
+                '${d.label}\n${isPositive ? 'Net Lent (+):' : 'Net Borrowed (−):'} ${AppFormat.currency(d.net.abs())}',
+                TextStyle(
+                  color: isPositive ? lentColor : borrowedColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              );
+            },
+          ),
+        ),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (v, _) {
+                final i = v.toInt();
+                if (i < 0 || i >= trend.length) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    trend[i].label,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barGroups: trend.asMap().entries.map((entry) {
+          final i = entry.key;
+          final d = entry.value;
+          return BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: d.net,
+                color: d.net >= 0 ? lentColor : borrowedColor,
+                width: 14,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+/// Loan Principal Amortization (Cumulative Principal Paid vs Remaining Balance).
+class _LoanPrincipalAmortizationCard extends StatelessWidget {
+  final List<LoanSummary> loans;
+  final bool isDark;
+
+  const _LoanPrincipalAmortizationCard({
+    required this.loans,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totalDebt = loans.fold<double>(0, (s, l) => s + l.remainingPrincipal);
+    final totalPaid = loans.fold<double>(0, (s, l) => s + l.principalPaid);
+    final totalOriginal = totalDebt + totalPaid;
+    final overallProgress = totalOriginal > 0 ? (totalPaid / totalOriginal) : 0.0;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final errorColor = Theme.of(context).colorScheme.error;
+
+    return SpendXGlassSurface(
+      level: SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.account_balance_outlined,
+                        size: 16,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Loan Principal Amortization',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${(overallProgress * 100).toStringAsFixed(0)}% Repaid',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: primaryColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            if (loans.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: Text(
+                    'No active term loans.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ),
+              )
+            else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Principal Repaid: ${AppFormat.currency(totalPaid)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      )),
+                  Text('Remaining Debt: ${AppFormat.currency(totalDebt)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: errorColor,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      )),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: overallProgress.clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                  valueColor: AlwaysStoppedAnimation(primaryColor),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Individual loan rows
+              ...loans.map((loan) => Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            loan.name,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${(loan.progress * 100).toStringAsFixed(0)}% (${AppFormat.currency(loan.remainingPrincipal)} left)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
           ],
         ),
       ),
@@ -760,282 +1374,308 @@ class _IncomeExpenseChart extends StatelessWidget {
   }
 }
 
-class _CreditBarChart extends StatelessWidget {
-  final List<CreditCardSummary> summaries;
-  final Animation<double> anim;
-  const _CreditBarChart({required this.summaries, required this.anim});
+/// Revolving Credit Exposure (Current Outstanding & Limit Utilization).
+class _RevolvingCreditExposureCard extends StatelessWidget {
+  final List<CreditCardSummary> cards;
+  final bool isDark;
+
+  const _RevolvingCreditExposureCard({
+    required this.cards,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final maxVal = summaries.fold<double>(0, (m, c) => m > c.outstanding ? m : c.outstanding);
-    if (maxVal == 0) return const _ChartEmpty('No outstanding dues');
+    final totalOutstanding = cards.fold<double>(0, (s, c) => s + c.outstanding);
+    final totalLimit = cards.fold<double>(0, (s, c) => s + c.limit);
+    final overallUtil = totalLimit > 0 ? (totalOutstanding / totalLimit) * 100 : 0.0;
+
+    final utilColor = overallUtil >= 80
+        ? Colors.red
+        : (overallUtil >= 50 ? Colors.orange : const Color(0xFF22C55E));
 
     return SpendXGlassSurface(
       level: SpendXGlassLevel.base,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: SizedBox(
-          height: 180,
-          child: AnimatedBuilder(animation: anim, builder: (_, _) => BarChart(BarChartData(
-            alignment: BarChartAlignment.spaceAround,
-            maxY: maxVal * 1.2,
-            barTouchData: BarTouchData(enabled: true),
-            titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
-                getTitlesWidget: (v, _) {
-                  final i = v.toInt();
-                  if (i < 0 || i >= summaries.length) return const SizedBox.shrink();
-                  return Padding(padding: const EdgeInsets.only(top: 4),
-                    child: Text(summaries[i].name.split(' ').first,
-                      style: const TextStyle(color: Colors.grey, fontSize: 9)));
-                },
-              )),
-              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.credit_card_outlined,
+                        size: 16,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Revolving Credit Exposure',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${overallUtil.toStringAsFixed(0)}% Used',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: utilColor,
+                  ),
+                ),
+              ],
             ),
-            gridData: FlGridData(show: true, drawVerticalLine: false,
-              getDrawingHorizontalLine: (_) => const FlLine(color: Colors.white10)),
-            borderData: FlBorderData(show: false),
-            barGroups: summaries.asMap().map((i, c) => MapEntry(i,
-              BarChartGroupData(x: i, barRods: [
-                BarChartRodData(toY: c.outstanding * anim.value,
-                  gradient: LinearGradient(colors: [cs.error, cs.error.withValues(alpha: 0.6)],
-                    begin: Alignment.bottomCenter, end: Alignment.topCenter),
-                  width: 20, borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
-              ]),
-            )).values.toList(),
-          ))),
+            const SizedBox(height: 10),
+
+            if (cards.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: Text(
+                    'No credit cards added.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ),
+              )
+            else ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total Outstanding: ${AppFormat.currency(totalOutstanding)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: cs.error,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  Text(
+                    totalLimit > 0 ? 'Limit: ${AppFormat.currency(totalLimit)}' : 'No limit set',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: (overallUtil / 100).clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                  valueColor: AlwaysStoppedAnimation(utilColor),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Individual card rows
+              ...cards.map((card) => Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              card.name,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: (card.daysLeft <= 5 ? cs.error : cs.secondary)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                'Due in ${card.daysLeft}d',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: card.daysLeft <= 5 ? cs.error : cs.secondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${AppFormat.currency(card.outstanding)} (${card.utilPct.toStringAsFixed(0)}%)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ],
         ),
       ),
     );
   }
 }
 
-class _CreditDetailCard extends StatelessWidget {
-  final CreditCardSummary card;
-  const _CreditDetailCard({required this.card});
+// =========================================================================
+// 6. EXPORT TRANSACTIONS SHEET CONTENT (VERIFIED CSV & JSON ONLY)
+// =========================================================================
+
+class _ExportTransactionsSheetContent extends StatelessWidget {
+  final int period;
+
+  const _ExportTransactionsSheetContent({required this.period});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final utilColor = card.utilPct >= 80 ? Colors.red
-        : card.utilPct >= 50 ? Colors.orange : Colors.green;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SpendXGlassSurface(
-        level: SpendXGlassLevel.base,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text(card.name, style: TextStyle(
-                  color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (card.daysLeft <= 5 ? cs.error : cs.secondary).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20)),
-                  child: Text('Due in ${card.daysLeft}d', style: TextStyle(
-                    color: card.daysLeft <= 5 ? cs.error : cs.secondary,
-                    fontSize: 11, fontWeight: FontWeight.w600)),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              ClipRRect(borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: (card.utilPct / 100).clamp(0.0, 1.0),
-                  backgroundColor: Colors.white12,
-                  valueColor: AlwaysStoppedAnimation(utilColor), minHeight: 6)),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Outstanding: ${AppFormat.currency(card.outstanding)}',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 12,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  )),
-                Text('${card.utilPct.toStringAsFixed(0)}% used',
-                  style: TextStyle(color: utilColor, fontSize: 12, fontWeight: FontWeight.w600)),
-              ]),
-            ],
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Export Raw Transactions',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Note: These actions export your underlying transaction records. They do not generate a consolidated visual PDF report.',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Option 1: CSV Export
+          _ExportOptionTile(
+            icon: Icons.table_chart_outlined,
+            title: 'Export Transactions (CSV)',
+            subtitle: 'Spreadsheet-ready format for Excel or Google Sheets',
+            isDark: isDark,
+            onTap: () async {
+              Navigator.pop(context);
+              await ExportService.instance.exportTransactionsToCsv();
+            },
+          ),
+
+          const SizedBox(height: 10),
+
+          // Option 2: JSON Export
+          _ExportOptionTile(
+            icon: Icons.data_object_rounded,
+            title: 'Export Transactions (JSON)',
+            subtitle: 'Structured raw data format for software backups',
+            isDark: isDark,
+            onTap: () async {
+              Navigator.pop(context);
+              await ExportService.instance.exportTransactionsToJson();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExportOptionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _ExportOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.08),
+            width: 1,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _LoanPieChart extends StatelessWidget {
-  final List<LoanSummary> summaries;
-  final Animation<double> anim;
-  const _LoanPieChart({required this.summaries, required this.anim});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final totalP = summaries.fold<double>(0, (s, l) => s + l.principalPaid);
-    final totalI = summaries.fold<double>(0, (s, l) => s + l.interestPaid);
-    if (totalP + totalI == 0) return const _ChartEmpty('No payments recorded');
-
-    return SpendXGlassSurface(
-      level: SpendXGlassLevel.base,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(children: [
-          SizedBox(height: 160, child: PieChart(PieChartData(
-            sections: [
-              PieChartSectionData(value: totalP, title: 'Principal', color: cs.primary,
-                radius: 50, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
-              PieChartSectionData(value: totalI, title: 'Interest', color: cs.error,
-                radius: 50, titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
-            ],
-            sectionsSpace: 2, centerSpaceRadius: 40,
-          ))),
-          const SizedBox(height: 16),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _Legend(color: cs.primary, label: 'Principal (${AppFormat.currency(totalP)})'),
-            const SizedBox(width: 16),
-            _Legend(color: cs.error, label: 'Interest (${AppFormat.currency(totalI)})'),
-          ]),
-        ]),
-      ),
-    );
-  }
-}
-
-class _LoanProgressCard extends StatelessWidget {
-  final LoanSummary loan;
-  const _LoanProgressCard({required this.loan});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: SpendXGlassSurface(
-        level: SpendXGlassLevel.base,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(loan.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              Text('${(loan.progress * 100).toStringAsFixed(1)}%',
-                style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold, fontSize: 14)),
-            ]),
-            const SizedBox(height: 12),
-            ClipRRect(borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(value: loan.progress,
-                backgroundColor: Colors.white10,
-                valueColor: AlwaysStoppedAnimation(cs.primary), minHeight: 8)),
-            const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Paid: ${AppFormat.currency(loan.principalPaid)}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                )),
-              Text('Remaining: ${AppFormat.currency(loan.remainingPrincipal)}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                )),
-            ]),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-class _LendingTrendChart extends StatelessWidget {
-  final List<LendingTrendData> trend;
-  final Animation<double> anim;
-  const _LendingTrendChart({required this.trend, required this.anim});
-
-  @override
-  Widget build(BuildContext context) {
-    if (trend.isEmpty) return const _ChartEmpty('No lending history');
-    final maxVal = trend.fold<double>(0, (m, d) => m > d.net.abs() ? m : d.net.abs());
-
-    return SpendXGlassSurface(
-      level: SpendXGlassLevel.base,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SizedBox(
-          height: 160,
-          child: BarChart(BarChartData(
-            alignment: BarChartAlignment.spaceAround,
-            maxY: maxVal * 1.5, minY: -maxVal * 1.5,
-            barTouchData: BarTouchData(enabled: true),
-            titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true,
-                getTitlesWidget: (v, _) {
-                  final i = v.toInt();
-                  if (i < 0 || i >= trend.length) return const SizedBox.shrink();
-                  return Padding(padding: const EdgeInsets.only(top: 4),
-                    child: Text(trend[i].label, style: const TextStyle(fontSize: 9, color: Colors.grey)));
-                },
-              )),
-              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF38BDF8).withValues(alpha: 0.15)
+                    : const Color(0xFF0284C7).withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+              ),
             ),
-            gridData: const FlGridData(show: false),
-            borderData: FlBorderData(show: false),
-            barGroups: trend.asMap().map((i, d) => MapEntry(i,
-              BarChartGroupData(x: i, barRods: [
-                BarChartRodData(toY: d.net, color: d.net >= 0 ? Colors.green : Colors.orange,
-                  width: 16, borderRadius: BorderRadius.circular(4)),
-              ]),
-            )).values.toList(),
-          )),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _Legend({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(width: 10, height: 10,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(width: 5),
-      Text(label, style: TextStyle(
-        color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-    ]);
-  }
-}
-
-class _ChartEmpty extends StatelessWidget {
-  final String msg;
-  const _ChartEmpty(this.msg);
-
-  @override
-  Widget build(BuildContext context) {
-    return SpendXGlassSurface(
-      level: SpendXGlassLevel.base,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        height: 160,
-        alignment: Alignment.center,
-        child: Text(msg, style: const TextStyle(color: Colors.grey)),
       ),
     );
   }

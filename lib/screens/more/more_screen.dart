@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/app_env.dart';
 import '../../features/alerts/providers/alert_providers.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../ai_chat_screen.dart';
 import '../data_health_screen.dart';
+import '../debug/debug_hub_screen.dart';
 import '../feedback_screen.dart';
 import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
@@ -201,6 +203,17 @@ class MoreScreen extends ConsumerWidget {
                     isDark: isDark,
                     onTap: () => _push(context, const FeedbackScreen()),
                   ),
+                  if (AppEnv.isDebug) ...[
+                    _buildDivider(isDark),
+                    _MoreGlassRow(
+                      icon: Icons.developer_mode_rounded,
+                      iconColor: const Color(0xFF6558E8),
+                      title: 'Debug Hub (Developer)',
+                      subtitle: 'Seed dummy data, stress tests & diagnostics',
+                      isDark: isDark,
+                      onTap: () => _push(context, const DebugHubScreen()),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -99,7 +99,7 @@ class CategoryIconPicker extends StatelessWidget {
                     ),
                   ),
                   child: Icon(
-                    _iconForKey(icon),
+                    iconForKey(icon),
                     size: 22,
                     color: isSelected
                         ? Theme.of(context).colorScheme.primary
@@ -114,7 +114,7 @@ class CategoryIconPicker extends StatelessWidget {
     );
   }
 
-  IconData _iconForKey(String key) {
+  static IconData iconForKey(String key) {
     switch (key) {
       case 'lunch_dining':
         return Icons.lunch_dining_rounded;

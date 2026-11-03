@@ -408,13 +408,14 @@ void main() {
         final cardId = await creditRepo.insert(card);
 
         // 1. Initial Bank Debit: Jio PB reports ₹2,000 sent to HDFC CC
+        final now = DateTime.now();
         final bankDebit = Transaction(
           id: 'tx_jio_debit_1',
           amount: 2000.0,
           userId: 'offline_user',
           type: 'expense',
           accountId: bankId,
-          date: DateTime(2026, 10, 2, 14, 0),
+          date: DateTime(now.year, now.month, 2, 14, 0),
           notes: 'Paid to HDFC CC XX6366',
           source: 'sms',
         );
@@ -447,7 +448,7 @@ void main() {
 
         // Expense reversed to 0, income 0
         final txRepo = TransactionRepo(executor: db);
-        final stats = await txRepo.getStatsForMonth(2026, 10);
+        final stats = await txRepo.getStatsForMonth(now.year, now.month);
         expect(stats['expense'], 0.0);
         expect(stats['income'], 0.0);
 
@@ -459,7 +460,7 @@ void main() {
           type: 'credit_payment',
           accountId: bankId,
           relatedEntityId: cardId,
-          date: DateTime(2026, 10, 2, 16, 30),
+          date: DateTime(now.year, now.month, 2, 16, 30),
           notes: 'Second Payment of ₹2,000 towards HDFC Card',
           source: 'credit_card_payment',
           externalRef: 'ext_second_pay_2000',

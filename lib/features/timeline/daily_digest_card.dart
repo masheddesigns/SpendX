@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/decision_engine.dart';
 import '../../services/retention_events.dart';
 import '../../services/retention_service.dart';
+import '../automation/automation_engine.dart';
+import '../automation/automation_providers.dart';
 import '../review_queue/providers/review_providers.dart';
 
 /// Daily Loop card — the one card that defines today's state.
@@ -73,10 +75,15 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final reviewCount = ref.watch(reviewQueueCountProvider).valueOrNull ?? 0;
+    final nudges = ref.watch(smartNudgesProvider).valueOrNull ?? const [];
+    final criticalNudge =
+        nudges.where((n) => n.priority == NudgePriority.critical).firstOrNull;
+    final highNudge =
+        nudges.where((n) => n.priority == NudgePriority.high).firstOrNull;
     final insight = widget.topInsight;
 
     // Strict priority — ONE state only
-    final state = _resolveState(insight, reviewCount);
+    final state = _resolveState(insight, reviewCount, criticalNudge, highNudge);
     _logStateOnce(state.kind);
 
     // Smooth reveal
@@ -188,7 +195,12 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
   }
 
   /// Strict priority resolver — ONE state, never multiple CTAs.
-  _DigestState _resolveState(DecisionInsight? insight, int reviewCount) {
+  _DigestState _resolveState(
+    DecisionInsight? insight,
+    int reviewCount,
+    SmartNudge? criticalNudge,
+    SmartNudge? highNudge,
+  ) {
     final cs = Theme.of(context).colorScheme;
 
     // 1. CRITICAL — overspend risk dominates everything
@@ -200,6 +212,16 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
         title: insight!.title,
         body: insight.body,
         actionLabel: insight.actionLabel ?? 'View',
+      );
+    }
+    if (criticalNudge != null) {
+      return _DigestState(
+        kind: _StateKind.critical,
+        color: cs.error,
+        icon: Icons.warning_amber_rounded,
+        title: criticalNudge.title,
+        body: criticalNudge.message,
+        actionLabel: 'Review',
       );
     }
 
@@ -231,7 +253,7 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
       );
     }
 
-    // 4. HIGH — goal delays etc.
+    // 4. HIGH — goal delays, budget warnings, etc.
     if (insight?.priority == InsightPriority.high) {
       return _DigestState(
         kind: _StateKind.high,
@@ -240,6 +262,16 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
         title: insight!.title,
         body: insight.body,
         actionLabel: insight.actionLabel ?? 'View',
+      );
+    }
+    if (highNudge != null) {
+      return _DigestState(
+        kind: _StateKind.high,
+        color: Colors.orange,
+        icon: Icons.info_outline_rounded,
+        title: highNudge.title,
+        body: highNudge.message,
+        actionLabel: 'Review',
       );
     }
 

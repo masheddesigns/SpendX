@@ -112,27 +112,27 @@ class _GlassNavItem extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: isDark
                       ? const [
-                          Color(0x403B82F6), // Elevated blue glass pill
-                          Color(0x241D4ED8),
+                          Color(0x406558E8),
+                          Color(0x255245CC),
                         ]
                       : const [
-                          Color(0x283B82F6),
-                          Color(0x181D4ED8),
+                          Color(0x1F6558E8),
+                          Color(0x106558E8),
                         ],
                 )
               : null,
           border: isSelected
               ? Border.all(
                   color: isDark
-                      ? const Color(0x6060A5FA)
-                      : const Color(0x403B82F6),
-                  width: 0.75,
+                      ? const Color(0x608B82F6)
+                      : const Color(0x356558E8),
+                  width: 1,
                 )
               : null,
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: activeColor.withValues(alpha: isDark ? 0.35 : 0.20),
+                    color: activeColor.withValues(alpha: isDark ? 0.35 : 0.18),
                     blurRadius: 10,
                     spreadRadius: -1,
                     offset: const Offset(0, 2),
@@ -148,7 +148,7 @@ class _GlassNavItem extends StatelessWidget {
               isSelected ? (item.activeIcon ?? item.icon) : item.icon,
               size: 21,
               color: isSelected
-                  ? (isDark ? const Color(0xFF60A5FA) : activeColor)
+                  ? (isDark ? const Color(0xFF8B82F6) : activeColor)
                   : inactiveColor,
             ),
             const SizedBox(height: 2),

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../../models/category.dart';
 import '../../../models/transaction.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/category_icon_picker.dart';
 import 'spendx_financial_amount.dart';
 
 /// High-density transaction row designed for grouped Liquid Glass containers.
@@ -33,9 +34,9 @@ class SpendXTransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isExpense = transaction.type == 'expense';
-    final isIncome = transaction.type == 'income';
-    final isTransfer = transaction.type == 'transfer';
+    final isExpense = transaction.isExpenseType;
+    final isIncome = transaction.isIncomeType;
+    final isTransfer = transaction.isTransferType;
 
     FinancialSemanticType semanticType;
     if (isIncome) {
@@ -52,6 +53,7 @@ class SpendXTransactionTile extends StatelessWidget {
 
     if (category != null) {
       iconColor = _parseColor(category!.color) ?? iconColor;
+      iconData = CategoryIconPicker.iconForKey(category!.icon);
     }
 
     if (isTransfer) {
@@ -64,15 +66,17 @@ class SpendXTransactionTile extends StatelessWidget {
         ? transaction.notes
         : (category?.name ?? (isTransfer ? 'Transfer' : 'Transaction'));
 
-    return InkWell(
-      onTap: onTap,
-      splashColor: isDark
-          ? Colors.white.withValues(alpha: 0.05)
-          : Colors.black.withValues(alpha: 0.03),
-      highlightColor: isDark
-          ? Colors.white.withValues(alpha: 0.08)
-          : Colors.black.withValues(alpha: 0.05),
-      child: Column(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.03),
+        highlightColor: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.05),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
@@ -151,14 +155,18 @@ class SpendXTransactionTile extends StatelessWidget {
                       Row(
                         children: [
                           if (accountName != null && accountName!.isNotEmpty) ...[
-                            Text(
-                              accountName!,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w400,
-                                color: isDark
-                                    ? AppTheme.darkTextSecondary
-                                    : AppTheme.lightTextSecondary,
+                            Flexible(
+                              child: Text(
+                                accountName!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w400,
+                                  color: isDark
+                                      ? AppTheme.darkTextSecondary
+                                      : AppTheme.lightTextSecondary,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 5),
@@ -209,8 +217,9 @@ class SpendXTransactionTile extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Color? _parseColor(String colorStr) {
     try {
