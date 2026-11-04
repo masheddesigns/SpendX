@@ -61,6 +61,7 @@ enum MigrationState {
   readyToSwap,
   swapping,
   verified,
+  cleanupPending,
   failed,
   recoveryRequired;
 
@@ -372,6 +373,7 @@ class MigrationJournal {
   String sourceDbPath;
   String stagedDbPath;
   String rollbackBackupPath;
+  bool keepBackupOnSuccess;
   AccountingFingerprint? fingerprint;
   String? error;
 
@@ -382,6 +384,7 @@ class MigrationJournal {
     required this.sourceDbPath,
     required this.stagedDbPath,
     required this.rollbackBackupPath,
+    this.keepBackupOnSuccess = false,
     this.fingerprint,
     this.error,
   });
@@ -402,6 +405,7 @@ class MigrationJournal {
       'sourceDbPath': sourceDbPath,
       'stagedDbPath': stagedDbPath,
       'rollbackBackupPath': rollbackBackupPath,
+      'keepBackupOnSuccess': keepBackupOnSuccess,
       'fingerprint': fingerprint?.toJson(),
       'error': error,
     };
@@ -427,6 +431,12 @@ class MigrationJournal {
       if (str.trim().isEmpty) return null;
       final map = jsonDecode(str) as Map<String, dynamic>;
 
+      // Explicit backward-compatible default: older journals that do not contain
+      // 'keepBackupOnSuccess' default to true to safely preserve the pre-migration backup.
+      final keepBackup = map.containsKey('keepBackupOnSuccess')
+          ? (map['keepBackupOnSuccess'] as bool? ?? true)
+          : true;
+
       return MigrationJournal(
         file: f,
         state: MigrationState.fromString(map['state'] as String? ?? 'none'),
@@ -435,6 +445,7 @@ class MigrationJournal {
         sourceDbPath: map['sourceDbPath'] as String? ?? '',
         stagedDbPath: map['stagedDbPath'] as String? ?? '',
         rollbackBackupPath: map['rollbackBackupPath'] as String? ?? '',
+        keepBackupOnSuccess: keepBackup,
         fingerprint: map['fingerprint'] != null
             ? AccountingFingerprint.fromJson(
                 map['fingerprint'] as Map<String, dynamic>,
@@ -701,6 +712,7 @@ class DatabaseEncryptionMigrationService {
       sourceDbPath: sourcePath,
       stagedDbPath: stagedPath,
       rollbackBackupPath: rollbackBackupPath,
+      keepBackupOnSuccess: keepBackupOnSuccess,
     );
 
     try {
@@ -888,35 +900,41 @@ class DatabaseEncryptionMigrationService {
       stagedFile.renameSync(sourcePath);
 
       // 9. CHECKPOINT 8: POST-SWAP VERIFICATION
-      final liveEncryptedDb = await _factory.openEncryptedDatabase(
-        sourcePath,
-        password: blobKey,
+      final isSwappedValid = await validateEncryptedDatabase(
+        dbPath: sourcePath,
+        keyOverride: key,
       );
-      try {
-        final masterRows =
-            await liveEncryptedDb.rawQuery('SELECT count(*) FROM sqlite_master;');
-        if (masterRows.isEmpty) {
-          throw PreflightValidationException(
-            'Live database validation failed: sqlite_master is inaccessible.',
-          );
-        }
-      } finally {
-        await liveEncryptedDb.close();
+      if (!isSwappedValid) {
+        throw PreflightValidationException(
+          'Live database post-swap validation failed: database is not a valid SQLCipher database.',
+        );
       }
 
       await journal.record(MigrationState.verified);
 
-      // Cleanup archives and temporary files
-      if (await archiveFile.exists()) {
-        await archiveFile.delete();
-      }
-      if (!keepBackupOnSuccess) {
-        final bkp = File(rollbackBackupPath);
-        if (await bkp.exists()) await bkp.delete();
-      }
+      // Post-verification cleanup: failure here is NON-FATAL and must NEVER trigger rollback.
+      try {
+        if (await archiveFile.exists()) {
+          await archiveFile.delete();
+        }
+        if (!keepBackupOnSuccess) {
+          final bkp = File(rollbackBackupPath);
+          if (await bkp.exists()) await bkp.delete();
+        }
 
-      // Clear journal marker
-      await journal.clear();
+        // Clear journal marker once cleanup completes successfully
+        await journal.clear();
+      } catch (cleanupErr, cleanupStack) {
+        AppLogger.w(
+          '[MIGRATION] Post-verification cleanup encountered non-fatal error: $cleanupErr\n$cleanupStack',
+        );
+        try {
+          await journal.record(
+            MigrationState.cleanupPending,
+            err: cleanupErr.toString(),
+          );
+        } catch (_) {}
+      }
 
       stopwatch.stop();
       AppLogger.i(
@@ -926,7 +944,9 @@ class DatabaseEncryptionMigrationService {
       return MigrationResult(
         success: true,
         skipped: false,
-        finalState: MigrationState.verified,
+        finalState: journal.state == MigrationState.cleanupPending
+            ? MigrationState.cleanupPending
+            : MigrationState.verified,
         fingerprint: postFingerprint,
         duration: stopwatch.elapsed,
       );
@@ -934,22 +954,51 @@ class DatabaseEncryptionMigrationService {
       AppLogger.e('[MIGRATION] Migration failed: $e\n$stack');
 
       // Check if swap was attempted or in progress
-      if (journal.state == MigrationState.swapping ||
-          journal.state == MigrationState.verified) {
-        await journal.record(
-          MigrationState.recoveryRequired,
-          err: e.toString(),
+      if (journal.state == MigrationState.swapping) {
+        // Did the swap actually take place and produce a valid SQLCipher DB?
+        final liveEncryptedOk = await validateEncryptedDatabase(
+          dbPath: sourcePath,
+          keyOverride: keyOverride,
         );
-        // Attempt emergency rollback
-        try {
-          await _rollbackSwap(
-            sourcePath: sourcePath,
-            archivePath: archivePath,
-            rollbackBackupPath: rollbackBackupPath,
+
+        if (liveEncryptedOk) {
+          AppLogger.w(
+            '[MIGRATION] Swapped database is valid SQLCipher despite error in swapping phase; preserving encrypted DB.',
           );
-        } catch (rbErr) {
-          AppLogger.e('[MIGRATION] Emergency rollback failed: $rbErr');
+          try {
+            await journal.record(
+              MigrationState.cleanupPending,
+              err: e.toString(),
+            );
+          } catch (_) {}
+        } else {
+          await journal.record(
+            MigrationState.recoveryRequired,
+            err: e.toString(),
+          );
+          // Attempt emergency rollback to pristine plaintext
+          try {
+            await _rollbackSwap(
+              sourcePath: sourcePath,
+              archivePath: archivePath,
+              rollbackBackupPath: rollbackBackupPath,
+            );
+          } catch (rbErr) {
+            AppLogger.e('[MIGRATION] Emergency rollback failed: $rbErr');
+          }
         }
+      } else if (journal.state == MigrationState.verified ||
+          journal.state == MigrationState.cleanupPending) {
+        // Verification was already reached! Rollback is STRICTLY PROHIBITED.
+        AppLogger.w(
+          '[MIGRATION] Exception occurred after verification; preserving live encrypted database.',
+        );
+        try {
+          await journal.record(
+            MigrationState.cleanupPending,
+            err: e.toString(),
+          );
+        } catch (_) {}
       } else {
         // Pre-swap failure: live plaintext database was never touched!
         await journal.record(MigrationState.failed, err: e.toString());
@@ -964,6 +1013,85 @@ class DatabaseEncryptionMigrationService {
     } finally {
       _isMigrationRunning = false;
       DatabaseLifecycleCoordinator.instance.endMigration();
+    }
+  }
+
+  /// Deep validation of an encrypted SQLCipher database using the production engine and key.
+  ///
+  /// Verifies:
+  /// 1. Database file exists and has non-zero size.
+  /// 2. Database file is not plaintext SQLite.
+  /// 3. Database opens successfully with the expected encryption key.
+  /// 4. `PRAGMA user_version` equals the expected schema version (default: 24).
+  /// 5. `PRAGMA integrity_check` returns 'ok'.
+  /// 6. `PRAGMA foreign_key_check` returns zero violations.
+  /// 7. Database closes cleanly.
+  ///
+  /// Returns `true` if and only if all checks pass.
+  Future<bool> validateEncryptedDatabase({
+    String? dbPath,
+    Uint8List? keyOverride,
+    int expectedSchemaVersion = 24,
+  }) async {
+    final sourcePath = dbPath ?? join(await getDatabasesPath(), 'spendx.db');
+    final liveFile = File(sourcePath);
+    if (!await liveFile.exists() || await liveFile.length() == 0) {
+      return false;
+    }
+    if (isPlaintextSqliteFile(sourcePath)) {
+      return false;
+    }
+
+    try {
+      final key = keyOverride ??
+          await _keyManager.getOrCreateKey(encryptedDbPath: sourcePath);
+      final blobKey = SpendXDatabaseKeyManager.keyToSqlCipherBlob(key);
+
+      final db = await _factory.openEncryptedDatabase(
+        sourcePath,
+        password: blobKey,
+      );
+
+      try {
+        // 1. Authenticate & verify schema version
+        final vRows = await db.rawQuery('PRAGMA user_version;');
+        if (vRows.isEmpty) return false;
+        final actualVersion = (vRows.first.values.first as num?)?.toInt();
+        if (actualVersion != expectedSchemaVersion) {
+          AppLogger.w(
+            '[MIGRATION] Validation rejected: user_version is $actualVersion, expected $expectedSchemaVersion.',
+          );
+          return false;
+        }
+
+        // 2. PRAGMA integrity_check
+        final integrityRows = await db.rawQuery('PRAGMA integrity_check;');
+        if (integrityRows.isEmpty) return false;
+        final integrityStr =
+            integrityRows.first.values.first?.toString().toLowerCase();
+        if (integrityStr != 'ok') {
+          AppLogger.w(
+            '[MIGRATION] Validation rejected: integrity_check returned "$integrityStr".',
+          );
+          return false;
+        }
+
+        // 3. PRAGMA foreign_key_check
+        final fkRows = await db.rawQuery('PRAGMA foreign_key_check;');
+        if (fkRows.isNotEmpty) {
+          AppLogger.w(
+            '[MIGRATION] Validation rejected: foreign_key_check reported ${fkRows.length} violations.',
+          );
+          return false;
+        }
+
+        return true;
+      } finally {
+        await db.close();
+      }
+    } catch (e) {
+      AppLogger.w('[MIGRATION] Validation failed with error: $e');
+      return false;
     }
   }
 
@@ -986,6 +1114,102 @@ class DatabaseEncryptionMigrationService {
       await bkpFile.copy(sourcePath);
       AppLogger.w('[MIGRATION] Emergency rollback: restored from pre_migration_backup.');
     }
+  }
+
+  /// Safely sweeps leftover migration artifacts (.pre_migration_backup,
+  /// .pre_encrypted_archive, .migration_staging) only if the live database is confirmed
+  /// to exist, authenticates with SQLCipher, matches expected schema version,
+  /// and passes integrity and foreign-key checks.
+  ///
+  /// If [preserveSafetyBackup] is true, `.pre_migration_backup` is preserved.
+  ///
+  /// Returns the number of files swept.
+  static Future<int> cleanStaleMigrationArtifacts({
+    String? dbPath,
+    Uint8List? keyOverride,
+    bool preserveSafetyBackup = false,
+  }) async {
+    return await instance._cleanStaleMigrationArtifactsInternal(
+      dbPath: dbPath,
+      keyOverride: keyOverride,
+      preserveSafetyBackup: preserveSafetyBackup,
+    );
+  }
+
+  /// Instance method for sweeping stale migration artifacts.
+  Future<int> sweepStaleArtifacts({
+    String? dbPath,
+    Uint8List? keyOverride,
+    bool preserveSafetyBackup = false,
+  }) =>
+      _cleanStaleMigrationArtifactsInternal(
+        dbPath: dbPath,
+        keyOverride: keyOverride,
+        preserveSafetyBackup: preserveSafetyBackup,
+      );
+
+  Future<int> _cleanStaleMigrationArtifactsInternal({
+    String? dbPath,
+    Uint8List? keyOverride,
+    bool preserveSafetyBackup = false,
+  }) async {
+    final sourcePath = dbPath ?? join(await getDatabasesPath(), 'spendx.db');
+    final dbDir = dirname(sourcePath);
+    final dbName = basename(sourcePath);
+
+    // Deep validation of the active database before touching any artifact
+    final isValid = await validateEncryptedDatabase(
+      dbPath: sourcePath,
+      keyOverride: keyOverride,
+    );
+    if (!isValid) {
+      AppLogger.w(
+        '[MIGRATION] Artifact sweeping aborted: active database at $sourcePath failed SQLCipher validation. All recovery artifacts preserved.',
+      );
+      return 0;
+    }
+
+    // Load journal early to respect configured retention decisions
+    final journalPath = join(dbDir, 'spendx_migration_state.json');
+    final journal = await MigrationJournal.load(journalPath);
+
+    int cleanedCount = 0;
+    // Migration rollback artifacts are strictly distinct from user-created backups (.spendx packages)
+    final candidates = <File>[
+      File(join(dbDir, '$dbName.pre_encrypted_archive')),
+      File(join(dbDir, '$dbName.migration_staging')),
+    ];
+
+    final shouldPreserveBackup = preserveSafetyBackup ||
+        (journal != null && journal.keepBackupOnSuccess);
+
+    if (!shouldPreserveBackup) {
+      candidates.add(File(join(dbDir, '$dbName.pre_migration_backup')));
+    }
+
+    for (final file in candidates) {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          cleanedCount++;
+          AppLogger.i('[MIGRATION] Swept stale artifact: ${file.path}');
+        }
+      } catch (e) {
+        AppLogger.w('[MIGRATION] Failed to sweep artifact ${file.path}: $e');
+      }
+    }
+
+    // Also clear journal if it is in verified, cleanupPending, or none state
+    if (journal != null &&
+        (journal.state == MigrationState.verified ||
+            journal.state == MigrationState.cleanupPending ||
+            journal.state == MigrationState.none)) {
+      try {
+        await journal.clear();
+      } catch (_) {}
+    }
+
+    return cleanedCount;
   }
 
   /// Restores database consistency from any interrupted process termination.
@@ -1040,35 +1264,26 @@ class DatabaseEncryptionMigrationService {
         break;
 
       case MigrationState.swapping:
-      case MigrationState.recoveryRequired:
-        // Process crash occurred during or immediately after rename.
-        // Check if live database is valid SQLCipher.
-        bool liveEncryptedOk = false;
-        try {
-          if (await liveFile.exists() && !isPlaintextSqliteFile(sourcePath)) {
-            final key = keyOverride ??
-                await _keyManager.getOrCreateKey(encryptedDbPath: sourcePath);
-            final blobKey = SpendXDatabaseKeyManager.keyToSqlCipherBlob(key);
-            final probe = await _factory.openEncryptedDatabase(
-              sourcePath,
-              password: blobKey,
-            );
-            final v = await probe.rawQuery('PRAGMA user_version;');
-            if ((v.first.values.first as num?)?.toInt() == 24) {
-              liveEncryptedOk = true;
-            }
-            await probe.close();
-          }
-        } catch (_) {}
+        // Process crash occurred during swap.
+        // Check if live database passes deep SQLCipher validation.
+        final liveEncryptedOk = await validateEncryptedDatabase(
+          dbPath: sourcePath,
+          keyOverride: keyOverride,
+        );
 
         if (liveEncryptedOk) {
           AppLogger.i('[MIGRATION] Recovery: Live database is valid SQLCipher; completing migration.');
           if (await archiveFile.exists()) await archiveFile.delete();
-          if (await bkpFile.exists()) await bkpFile.delete();
+          if (!journal.keepBackupOnSuccess) {
+            final bkp = File(rollbackBackupPath);
+            if (await bkp.exists()) await bkp.delete();
+          } else {
+            AppLogger.i('[MIGRATION] Recovery: Preserving safety backup as configured.');
+          }
           if (await stagedFile.exists()) await stagedFile.delete();
           await journal.clear();
         } else {
-          AppLogger.w('[MIGRATION] Recovery: Live database invalid or missing; rolling back.');
+          AppLogger.w('[MIGRATION] Recovery: Live database invalid or missing in swapping state; rolling back.');
           await _rollbackSwap(
             sourcePath: sourcePath,
             archivePath: archivePath,
@@ -1080,12 +1295,73 @@ class DatabaseEncryptionMigrationService {
         break;
 
       case MigrationState.verified:
-        // Already verified before crash, just clean up leftovers.
-        if (await archiveFile.exists()) await archiveFile.delete();
-        if (await bkpFile.exists()) await bkpFile.delete();
-        if (await stagedFile.exists()) await stagedFile.delete();
-        await journal.clear();
-        AppLogger.i('[MIGRATION] Recovery: Cleaned post-verification artifacts.');
+      case MigrationState.cleanupPending:
+        // Already verified before crash. Plaintext restoration is STRICTLY PROHIBITED.
+        final liveEncryptedOk = await validateEncryptedDatabase(
+          dbPath: sourcePath,
+          keyOverride: keyOverride,
+        );
+
+        if (liveEncryptedOk) {
+          if (await archiveFile.exists()) await archiveFile.delete();
+          if (!journal.keepBackupOnSuccess) {
+            final bkp = File(rollbackBackupPath);
+            if (await bkp.exists()) await bkp.delete();
+          } else {
+            AppLogger.i('[MIGRATION] Recovery: Preserving safety backup as configured.');
+          }
+          if (await stagedFile.exists()) await stagedFile.delete();
+          await journal.clear();
+          AppLogger.i('[MIGRATION] Recovery: Cleaned post-verification artifacts.');
+        } else {
+          AppLogger.e(
+            '[MIGRATION] Recovery FATAL: Live encrypted database at $sourcePath failed deep validation. Plaintext restoration is prohibited.',
+          );
+          throw MigrationCrashRecoveryException(
+            'Live encrypted database at $sourcePath is corrupt or inaccessible after migration verification. Plaintext rollback is prohibited to prevent data and credential exposure. Backup retained at $rollbackBackupPath for manual inspection.',
+          );
+        }
+        break;
+
+      case MigrationState.recoveryRequired:
+        // Recovery required recorded from an earlier failure.
+        // If live file is encrypted, probe with shared validator.
+        if (await liveFile.exists() && !isPlaintextSqliteFile(sourcePath)) {
+          final liveEncryptedOk = await validateEncryptedDatabase(
+            dbPath: sourcePath,
+            keyOverride: keyOverride,
+          );
+
+          if (liveEncryptedOk) {
+            AppLogger.i('[MIGRATION] Recovery: Live database is valid SQLCipher; clearing recovery marker.');
+            if (await archiveFile.exists()) await archiveFile.delete();
+            if (!journal.keepBackupOnSuccess) {
+              final bkp = File(rollbackBackupPath);
+              if (await bkp.exists()) await bkp.delete();
+            } else {
+              AppLogger.i('[MIGRATION] Recovery: Preserving safety backup as configured.');
+            }
+            if (await stagedFile.exists()) await stagedFile.delete();
+            await journal.clear();
+          } else {
+            AppLogger.e(
+              '[MIGRATION] Recovery FATAL: Live encrypted database at $sourcePath failed deep validation. Plaintext rollback is prohibited.',
+            );
+            throw MigrationCrashRecoveryException(
+              'Live encrypted database at $sourcePath is corrupt. Plaintext restoration is prohibited to prevent data exposure.',
+            );
+          }
+        } else {
+          // Live database does not exist or is plaintext; roll back safely.
+          AppLogger.w('[MIGRATION] Recovery: Rolling back unencrypted database.');
+          await _rollbackSwap(
+            sourcePath: sourcePath,
+            archivePath: archivePath,
+            rollbackBackupPath: rollbackBackupPath,
+          );
+          if (await stagedFile.exists()) await stagedFile.delete();
+          await journal.clear();
+        }
         break;
     }
   }
