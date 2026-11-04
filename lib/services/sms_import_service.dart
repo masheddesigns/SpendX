@@ -230,9 +230,11 @@ class SmsImportService {
     }
 
     final lower = body.toLowerCase();
+    final isRefund = _isRefundText(lower);
 
     // 1. Check for failed/declined/cancelled payments first so they are properly classified as failed
-    if (TransactionTextParser.isFailedPayment(body)) {
+    // (except when the message is a confirmed reversal/refund credit).
+    if (!isRefund && TransactionTextParser.isFailedPayment(body)) {
       final balance = _detectBalance(body, sender);
       return SmsClassification(balance: balance, eventType: SmsEventType.failed);
     }
@@ -251,11 +253,10 @@ class SmsImportService {
     // 2. Hard reject non-transaction / promotional / telecom / weather / service messages.
     // Exception: Do not reject credit card payment confirmations, refunds, bills, or spends.
     final isCcPaymentCandidate = _isCreditCardPaymentText(lower, sender);
-    final isCcRefundCandidate = _isCreditCardRefundText(lower);
     final isCcBillCandidate = _isCreditCardBillText(lower);
     final isCcSpend = _isCardSpendCandidate(lower);
     if (!isCcPaymentCandidate &&
-        !isCcRefundCandidate &&
+        !isRefund &&
         !isCcBillCandidate &&
         !isCcSpend &&
         _nonTransactionRe.hasMatch(lower)) {
@@ -298,15 +299,16 @@ class SmsImportService {
     // Must have direction signal or explicit financial verb (or be an identified CC payment / refund)
     if (!parsed.hasDirectionSignal &&
         !isCcPaymentCandidate &&
-        !isCcRefundCandidate &&
+        !isRefund &&
         !RegExp(r'\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded)\b',
                 caseSensitive: false)
             .hasMatch(lower)) {
       return SmsClassification(balance: balance);
     }
 
-    // Failed/declined/cancelled payments are not completed transactions.
-    if (TransactionTextParser.isFailedPayment(body)) {
+    // Failed/declined/cancelled payments are not completed transactions
+    // (unless it is a confirmed reversal/refund credit).
+    if (!isRefund && TransactionTextParser.isFailedPayment(body)) {
       return SmsClassification(balance: balance, eventType: SmsEventType.failed);
     }
 
@@ -317,19 +319,52 @@ class SmsImportService {
 
     // Determine high-level financial event type
     final isCcPayment = _isCreditCardPaymentText(lower, sender);
-    final isCcRefund = _isCreditCardRefundText(lower);
-    final isCardSpend = parsed.method == 'card' ||
-        lower.contains('spent using') ||
-        lower.contains('spent at') ||
-        lower.contains('paid from your edge') ||
-        lower.contains('credit card') ||
-        lower.contains('card ending') ||
-        lower.contains('card xx') ||
-        lower.contains('card no') ||
-        lower.contains('on your card') ||
-        lower.contains('on card') ||
-        sender.toLowerCase().contains('crd') ||
-        sender.toLowerCase().contains('jtedge');
+
+    final isDebitCard = lower.contains('debit card') ||
+        lower.contains('debit crd') ||
+        lower.contains('debit-card');
+
+    final isWallet = lower.contains('wallet') ||
+        lower.contains('amazon pay balance') ||
+        lower.contains('paytm balance');
+
+    final hasExplicitCreditCard = lower.contains('credit card') ||
+        lower.contains('credit crd') ||
+        lower.contains('rupay credit') ||
+        lower.contains('edge csb credit') ||
+        lower.contains('edge credit') ||
+        lower.contains('onecard') ||
+        lower.contains('bobcard') ||
+        lower.contains('bobcrd');
+
+    final hasExplicitAccount = lower.contains('a/c') ||
+        lower.contains('acct') ||
+        lower.contains('bank a/c') ||
+        lower.contains('savings a/c') ||
+        lower.contains('current a/c') ||
+        lower.contains('account xx') ||
+        lower.contains('account no');
+
+    // A transaction is a credit card spend ONLY IF:
+    // 1. It is not an explicit debit card (ATM, POS swipe, etc.)
+    // 2. It is not an explicit bank account or wallet (unless an explicit credit card is mentioned)
+    final bool isCardSpend;
+    if (isDebitCard || ((hasExplicitAccount || isWallet) && !hasExplicitCreditCard)) {
+      isCardSpend = false;
+    } else {
+      isCardSpend = parsed.method == 'card' ||
+          lower.contains('spent using') ||
+          lower.contains('spent at') ||
+          lower.contains('paid from your edge') ||
+          lower.contains('credit card') ||
+          lower.contains('card ending') ||
+          lower.contains('card xx') ||
+          lower.contains('card no') ||
+          lower.contains('on your card') ||
+          lower.contains('on card') ||
+          sender.toLowerCase().contains('crd') ||
+          sender.toLowerCase().contains('jtedge');
+    }
 
     final SmsEventType eventType;
     final bool effectiveIsCredit;
@@ -337,7 +372,7 @@ class SmsImportService {
     if (isCcPayment) {
       eventType = SmsEventType.creditCardPayment;
       effectiveIsCredit = false; // Zero income / liability reduction
-    } else if (isCcRefund) {
+    } else if (isRefund) {
       eventType = SmsEventType.refund;
       effectiveIsCredit = true; // Refund credit
     } else if (isCardSpend && !parsed.isCredit) {
@@ -365,7 +400,9 @@ class SmsImportService {
       refId: parsed.refId,
       last4: parsed.last4 ?? _last4(body),
       bankName: effectiveBankName,
-      method: (isCcPayment || isCardSpend || isCcRefund) ? 'card' : parsed.method,
+      method: (isCcPayment || isCardSpend || _isCreditCardRefundText(lower))
+          ? 'card'
+          : parsed.method,
       source: 'sms',
       confidence: parsed.confidence,
       merchantSource: parsed.merchantSource,
@@ -539,7 +576,7 @@ class SmsImportService {
       }
 
       final isCcPaymentCandidate = _isCreditCardPaymentText(lower, senderAddr);
-      final isCcRefundCandidate = _isCreditCardRefundText(lower);
+      final isRefundCandidate = _isRefundText(lower);
       final isCcBillCandidate = _isCreditCardBillText(lower);
       final isCardSpend = _isCardSpendCandidate(lower);
 
@@ -554,7 +591,7 @@ class SmsImportService {
 
       // 2. Transaction messages — skip non-transaction / intent SMS.
       if (!isCcPaymentCandidate &&
-          !isCcRefundCandidate &&
+          !isRefundCandidate &&
           !isCcBillCandidate &&
           !isCardSpend &&
           _nonTransactionRe.hasMatch(lower)) {
@@ -777,6 +814,32 @@ class SmsImportService {
     return hasCard && hasRefund && hasCredit;
   }
 
+  /// Returns true if text indicates a genuine refund or reversal.
+  /// Recognizes credit card refunds, wallet refunds, and bank account reversals.
+  /// Rejects debits, ordinary income credits, and cashback.
+  static bool _isRefundText(String lower) {
+    if (_ccRefundRe.hasMatch(lower)) return true;
+
+    final hasRefundTerm = lower.contains('refund') ||
+        lower.contains('reversal') ||
+        lower.contains('reversed');
+    if (!hasRefundTerm) return false;
+
+    // Must be a credit/receiving/processing signal
+    final hasCreditSignal = lower.contains('credit') ||
+        lower.contains('received') ||
+        lower.contains('processed') ||
+        lower.contains('reversed to') ||
+        lower.contains('refunded to');
+
+    // Reject if it's explicitly a debit / expense
+    final hasDebitSignal = lower.contains('debited') ||
+        lower.contains('paid to') ||
+        lower.contains('spent on');
+
+    return hasCreditSignal && !hasDebitSignal;
+  }
+
   /// Returns true if text indicates a credit card bill statement or due date announcement.
   static bool _isCreditCardBillText(String lower) {
     final hasCardSignal = lower.contains('credit card') ||
@@ -800,6 +863,9 @@ class SmsImportService {
 
   /// Returns true if text indicates an actual credit card spend transaction.
   static bool _isCardSpendCandidate(String lower) {
+    if (lower.contains('debit card') || lower.contains('debit crd') || lower.contains('debit-card')) {
+      return false;
+    }
     final hasCardSignal = lower.contains('credit card') ||
         lower.contains('card ending') ||
         lower.contains('card xx') ||
@@ -861,7 +927,7 @@ class SmsImportService {
     r'has been initiated|is booked|is available|is scheduled|'
     r'unsuccessful|failed|cancelled|canceled|'
     r'terms.*(?:chang|revis)|fee.*revis|foreclosure|'
-    r'data usage|data quota|daily data|pack validity|recharge|plan expir|'
+    r'data usage|data quota|daily data|pack validity|recharge\s+(?:now|with|your|to|offer|pack|plan|due)\b|plan expir|'
     r'out for delivery|delivered|order placed|order confirmed|shipped|tracking id|courier|'
     r'feedback|survey|rate us|rate your|review us|'
     r'traded value|contract note|demat|depository|cdsl|nsdl|national stock exchange|bse ltd|'
@@ -928,9 +994,9 @@ class SmsImportService {
         lower.contains('irsmsa');
   }
 
-  /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT` or `via UPI to MERCHANT`.
+  /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT`, `UPI/628001122334/UBER`, or `via UPI to MERCHANT`.
   static final RegExp _upiRefRe = RegExp(
-    r'(?:UPI/(?:DR|CR|P2A|P2P)/\d+/|(?:via\s+upi\s+to|upi\s+to)\s+)([A-Za-z0-9 .&/()@_-]+)',
+    r'(?:UPI/(?:DR|CR|P2A|P2P|P2M)/\d+/|UPI/\d+/|(?:via\s+upi\s+to|upi\s+to)\s+)([A-Za-z0-9 .&/()@_-]+)',
     caseSensitive: false,
   );
 

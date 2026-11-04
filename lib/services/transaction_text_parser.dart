@@ -514,7 +514,7 @@ class TransactionTextParser {
   // ── Failure detection ─────────────────────────────────────────────
 
   static final _failurePatterns = RegExp(
-    r'\b(?:failed|declined|cancelled|canceled|reversed|unsuccessful|'
+    r'\b(?:failed|declined|cancelled|canceled|unsuccessful|'
     r'transaction\s+failed|payment\s+failed|insufficient\s+balance)\b',
     caseSensitive: false,
   );
@@ -721,6 +721,18 @@ class TransactionTextParser {
   // ── Reference ID ──────────────────────────────────────────────────
 
   static final _refPatterns = <RegExp>[
+    // NPCI UPI standard slash formats:
+    // UPI/628001122334/Uber
+    // UPI/P2M/628001122334/Swiggy
+    // UPI/DR/624952623558/5 KADEEJA
+    // UPI/CR/624952623559/John
+    // UPI/P2M/628001122334
+    // UPI/DR/628001122334
+    // UPI/CR/628001122334
+    RegExp(
+      r'\bUPI\s*/\s*(?:(?:P2M|P2P|P2A|DR|CR|REV)\s*/\s*)?([0-9]{6,18})(?:/|\b)',
+      caseSensitive: false,
+    ),
     RegExp(
       r'(?:UPI\s*(?:Ref|Txn)|UTR|Ref(?:erence)?|Txn|Transaction)\s*'
       r'(?:[Nn]o\.?|ID|#|:)?\s*\.?\s*([A-Za-z0-9]{6,})',
