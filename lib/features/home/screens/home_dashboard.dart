@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../data/providers.dart' show invalidateAllFinancialProviders;
 import '../../../models/transaction.dart';
 import '../../../screens/bank/account_list_screen.dart' show resolveAccountDisplayName;
 import '../../../screens/expense/add_expense_screen.dart';
@@ -12,6 +13,7 @@ import '../../../shared/widgets/glass/spendx_states.dart';
 import '../../../shared/widgets/glass/spendx_transaction_tile.dart';
 import '../../../utils/app_format.dart';
 import '../../accounts/providers/account_providers.dart';
+import '../../streak/streak_provider.dart' show evaluateStreakProvider;
 import '../../transactions/providers/transaction_providers.dart';
 import '../widgets/category_spending_card.dart';
 import '../widgets/dashboard_budgets_card.dart';
@@ -60,7 +62,8 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     return RefreshIndicator(
       color: const Color(0xFF4F46E5),
       onRefresh: () async {
-        ref.invalidate(transactionsProvider);
+        invalidateAllFinancialProviders(ref);
+        ref.invalidate(evaluateStreakProvider);
         ref.invalidate(transactionCategoryMapProvider);
         await ref.read(paginatedTransactionsProvider.notifier).refresh();
       },
