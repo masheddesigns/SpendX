@@ -192,7 +192,16 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           // ── Organic Curved Journey Trail (Custom Painter, no card boundary) ──
           AnimatedBuilder(
             animation: _pulseAnimation,
-            builder: (context, _) {
+            child: _buildInteractiveOverlay(
+              context: context,
+              now: now,
+              daysInMonth: daysInMonth,
+              nextBill: nextBill,
+              secondBill: secondBill,
+              allCommitments: calc.commitmentItems,
+              isDark: isDark,
+            ),
+            builder: (context, staticOverlay) {
               return SizedBox(
                 height: 100,
                 width: double.infinity,
@@ -206,15 +215,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     pulse: _pulseAnimation.value,
                     isDark: isDark,
                   ),
-                  child: _buildInteractiveOverlay(
-                    context: context,
-                    now: now,
-                    daysInMonth: daysInMonth,
-                    nextBill: nextBill,
-                    secondBill: secondBill,
-                    allCommitments: calc.commitmentItems,
-                    isDark: isDark,
-                  ),
+                  child: staticOverlay,
                 ),
               );
             },
