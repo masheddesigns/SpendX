@@ -13,13 +13,25 @@ class CommitmentItem {
   final Money amount;
   final DateTime dueDate;
   final String type; // 'bill', 'subscription', 'credit_card', 'recurring'
+  final String? id;
+  final bool isOverdue;
 
   const CommitmentItem({
     required this.title,
     required this.amount,
     required this.dueDate,
     required this.type,
+    this.id,
+    this.isOverdue = false,
   });
+
+  /// Days remaining until due date, or negative if overdue.
+  int get daysUntil {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    return due.difference(today).inDays;
+  }
 }
 
 class SafeToSpendCalculation {

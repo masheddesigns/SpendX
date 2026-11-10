@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/financial_health_screen.dart';
 import '../../../services/haptic_service.dart';
@@ -21,19 +22,72 @@ class QuickActionsRow extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final streakAsync = ref.watch(evaluateStreakProvider);
     final paginatedTxns = ref.watch(paginatedTransactionsProvider);
+    final txnsAsync = ref.watch(transactionsProvider);
 
-    final streak = streakAsync.valueOrNull?.current ?? 1;
+    final streak = streakAsync.valueOrNull?.current ?? 0;
+    final allTxns = txnsAsync.valueOrNull ?? paginatedTxns.items;
 
-    // Check if transactions have been logged today
+    // Build rolling 5-day rhythm window (Day -2, Day -1, Today, Day +1, Day +2)
     final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final todayCount = paginatedTxns.items
-        .where((t) => !t.date.isBefore(todayStart))
-        .length;
+    final today = DateTime(now.year, now.month, now.day);
 
-    final String rhythmCaption = todayCount > 0
-        ? "Today's money story has started"
-        : "Keep your money story up to date";
+    int countActivityOnDay(DateTime day) {
+      final start = DateTime(day.year, day.month, day.day);
+      final end = start.add(const Duration(days: 1));
+      return allTxns
+          .where((t) => !t.date.isBefore(start) && t.date.isBefore(end))
+          .length;
+    }
+
+    final rhythmDays = [
+      _RhythmDayData(
+        date: today.subtract(const Duration(days: 2)),
+        isCompleted: countActivityOnDay(today.subtract(const Duration(days: 2))) > 0,
+        isToday: false,
+        isFuture: false,
+        count: countActivityOnDay(today.subtract(const Duration(days: 2))),
+      ),
+      _RhythmDayData(
+        date: today.subtract(const Duration(days: 1)),
+        isCompleted: countActivityOnDay(today.subtract(const Duration(days: 1))) > 0,
+        isToday: false,
+        isFuture: false,
+        count: countActivityOnDay(today.subtract(const Duration(days: 1))),
+      ),
+      _RhythmDayData(
+        date: today,
+        isCompleted: countActivityOnDay(today) > 0,
+        isToday: true,
+        isFuture: false,
+        count: countActivityOnDay(today),
+      ),
+      _RhythmDayData(
+        date: today.add(const Duration(days: 1)),
+        isCompleted: false,
+        isToday: false,
+        isFuture: true,
+        count: 0,
+      ),
+      _RhythmDayData(
+        date: today.add(const Duration(days: 2)),
+        isCompleted: false,
+        isToday: false,
+        isFuture: true,
+        count: 0,
+      ),
+    ];
+
+    final isTodayLogged = rhythmDays[2].isCompleted;
+    final String rhythmCaption;
+    if (isTodayLogged) {
+      rhythmCaption = streak > 1
+          ? "$streak-day rhythm active • Momentum is strong"
+          : "Today's money story has started";
+    } else if (streak > 0) {
+      rhythmCaption = "Keep your $streak-day rhythm alive — log today's activity";
+    } else {
+      rhythmCaption = "Log your first activity to start your financial rhythm";
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -134,7 +188,7 @@ class QuickActionsRow extends ConsumerWidget {
                 const SizedBox(height: 14),
 
                 // Rhythm Path: ○ ─── ◉ ─── ○ ─── ○ ─── ○
-                _buildRhythmTrack(isDark, todayLogged: todayCount > 0),
+                _buildRhythmTrack(context, isDark, rhythmDays: rhythmDays),
 
                 const SizedBox(height: 8),
 
@@ -160,16 +214,20 @@ class QuickActionsRow extends ConsumerWidget {
   }
 
   /// The 5-day rolling rhythm track (○ ─── ◉ ─── ○ ─── ○)
-  Widget _buildRhythmTrack(bool isDark, {required bool todayLogged}) {
+  Widget _buildRhythmTrack(
+    BuildContext context,
+    bool isDark, {
+    required List<_RhythmDayData> rhythmDays,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
-          alignment: Alignment.center,
+          alignment: Alignment.topCenter,
           children: [
-            // Connecting hairline
+            // Connecting hairline running at circle center (y = 10)
             Container(
               height: 1.2,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
+              margin: const EdgeInsets.only(top: 9, left: 24, right: 24),
               color: isDark
                   ? Colors.white.withValues(alpha: 0.12)
                   : const Color(0xFFE2DDD2),
@@ -178,27 +236,55 @@ class QuickActionsRow extends ConsumerWidget {
             // 5 Rolling Rhythm Nodes
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Day -2
-                _RhythmNode(isCompleted: true, isToday: false, isDark: isDark),
-                // Day -1
-                _RhythmNode(isCompleted: true, isToday: false, isDark: isDark),
-                // Today
-                _RhythmNode(
-                  isCompleted: todayLogged,
-                  isToday: true,
+              children: rhythmDays.map((day) {
+                return _RhythmNode(
+                  day: day,
                   isDark: isDark,
-                ),
-                // Day +1
-                _RhythmNode(isCompleted: false, isToday: false, isDark: isDark),
-                // Day +2
-                _RhythmNode(isCompleted: false, isToday: false, isDark: isDark),
-              ],
+                  onTap: () => _onTapNode(context, day),
+                );
+              }).toList(),
             ),
           ],
         );
       },
     );
+  }
+
+  void _onTapNode(BuildContext context, _RhythmDayData day) {
+    HapticService.instance.tap();
+    if (day.isToday) {
+      if (day.isCompleted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Today: ${day.count} transaction${day.count > 1 ? 's' : ''} logged ✓'),
+            duration: const Duration(milliseconds: 1800),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        _openScreen(context, 'expense');
+      }
+    } else if (day.isFuture) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${DateFormat('EEEE').format(day.date)}: Upcoming day in your rhythm'),
+          duration: const Duration(milliseconds: 1500),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            day.isCompleted
+                ? '${DateFormat('EEEE').format(day.date)}: ${day.count} transaction${day.count > 1 ? 's' : ''} logged'
+                : '${DateFormat('EEEE').format(day.date)}: No transactions logged',
+          ),
+          duration: const Duration(milliseconds: 1800),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _openScreen(BuildContext context, String type) {
@@ -207,6 +293,135 @@ class QuickActionsRow extends ConsumerWidget {
       context,
       AppPageRoute(
         builder: (_) => AddExpenseScreen(initialType: type),
+      ),
+    );
+  }
+}
+
+class _RhythmDayData {
+  final DateTime date;
+  final bool isCompleted;
+  final bool isToday;
+  final bool isFuture;
+  final int count;
+
+  const _RhythmDayData({
+    required this.date,
+    required this.isCompleted,
+    required this.isToday,
+    required this.isFuture,
+    required this.count,
+  });
+}
+
+class _RhythmNode extends StatelessWidget {
+  final _RhythmDayData day;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  const _RhythmNode({
+    required this.day,
+    required this.isDark,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final weekdayLabel = day.isToday
+        ? 'TODAY'
+        : DateFormat('E').format(day.date).toUpperCase();
+
+    Widget nodeCircle;
+    if (day.isToday) {
+      nodeCircle = Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          color: day.isCompleted
+              ? const Color(0xFF4F46E5)
+              : (isDark ? const Color(0xFF1E2330) : Colors.white),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: const Color(0xFF818CF8),
+            width: 2.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+              blurRadius: 6,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: day.isCompleted
+            ? const Center(
+                child: Icon(Icons.check, size: 10, color: Colors.white),
+              )
+            : null,
+      );
+    } else if (day.isCompleted) {
+      nodeCircle = Container(
+        width: 14,
+        height: 14,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFF64748B),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1),
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: Container(
+            width: 4.5,
+            height: 4.5,
+            decoration: const BoxDecoration(
+              color: Color(0xFF4ADE80),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      );
+    } else {
+      nodeCircle = Container(
+        width: 11,
+        height: 11,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2DDD2),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFD6CEBF),
+            width: 1.2,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 20,
+            child: Center(child: nodeCircle),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            weekdayLabel,
+            style: TextStyle(
+              fontSize: day.isToday ? 8.5 : 8.0,
+              fontWeight: day.isToday ? FontWeight.w800 : FontWeight.w600,
+              letterSpacing: 0.5,
+              color: day.isToday
+                  ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
+                  : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -315,79 +530,6 @@ class _RhythmTokenPainter extends CustomPainter {
   }
 }
 
-class _RhythmNode extends StatelessWidget {
-  final bool isCompleted;
-  final bool isToday;
-  final bool isDark;
-
-  const _RhythmNode({
-    required this.isCompleted,
-    required this.isToday,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isToday) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: isCompleted ? const Color(0xFF4F46E5) : (isDark ? const Color(0xFF1E2330) : Colors.white),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF818CF8),
-                width: 2.2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
-                  blurRadius: 6,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: isCompleted
-                ? const Center(
-                    child: Icon(Icons.check, size: 9, color: Colors.white),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'TODAY',
-            style: TextStyle(
-              fontSize: 8.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: isCompleted
-            ? (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8))
-            : (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2DDD2)),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isCompleted
-              ? (isDark ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1))
-              : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFD6CEBF)),
-          width: 1.2,
-        ),
-      ),
-    );
-  }
-}
 
 class _HeroLogButton extends StatefulWidget {
   final bool isDark;

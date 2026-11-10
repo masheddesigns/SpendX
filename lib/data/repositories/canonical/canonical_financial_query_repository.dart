@@ -435,7 +435,8 @@ class CanonicalFinancialQueryRepository {
     String currency = 'INR',
   }) async {
     final now = DateTime.now();
-    final startOverdue = now.subtract(const Duration(days: 3)).toIso8601String();
+    final today = DateTime(now.year, now.month, now.day);
+    final startOverdue = now.subtract(const Duration(days: 14)).toIso8601String();
     final endWindow = now.add(const Duration(days: 14));
     final endIso = endWindow.toIso8601String();
     double total14d = 0.0;
@@ -617,12 +618,15 @@ class CanonicalFinancialQueryRepository {
               : amount;
           total14d += effectiveAmount;
 
+          final isPastDue = dueDate.isBefore(today);
           items.add(
             CommitmentItem(
               title: title,
               amount: Money.fromRupees(effectiveAmount, currency: currency),
               dueDate: dueDate,
               type: rType == 'credit' ? 'credit_card' : 'bill',
+              id: r['id'] as String?,
+              isOverdue: isPastDue,
             ),
           );
         }
@@ -705,6 +709,8 @@ class CanonicalFinancialQueryRepository {
                   amount: Money.fromRupees(remaining, currency: currency),
                   dueDate: nextDue,
                   type: 'credit_card',
+                  id: card.id,
+                  isOverdue: nextDue.isBefore(today),
                 ),
               );
             }
@@ -721,6 +727,8 @@ class CanonicalFinancialQueryRepository {
                 amount: Money.fromRupees(dueAmount, currency: currency),
                 dueDate: nextDue,
                 type: 'credit_card',
+                id: card.id,
+                isOverdue: nextDue.isBefore(today),
               ),
             );
           }
@@ -781,6 +789,7 @@ class CanonicalFinancialQueryRepository {
               amount: Money.fromRupees(amount, currency: currency),
               dueDate: startDate,
               type: 'recurring',
+              isOverdue: startDate.isBefore(today),
             ),
           );
         }

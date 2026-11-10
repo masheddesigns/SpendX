@@ -68,6 +68,41 @@ class ReminderRepo {
     await executor.delete(Tables.reminders, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Manually marks a reminder/bill as completed and settled.
+  Future<void> markReminderPaid(String id) async {
+    final executor = await _db;
+    final r = await getById(id);
+    if (r == null) return;
+
+    if (r.recurrencePeriod != ReminderRecurrence.none && r.dueDate != null) {
+      final nextDue = _rollForward(r.dueDate!, r.recurrencePeriod);
+      await executor.update(
+        Tables.reminders,
+        {
+          'date': nextDue.toIso8601String(),
+          'is_completed': 0,
+          'record_status': ReminderRecordStatus.pending.name,
+          'last_triggered_at': DateTime.now().toIso8601String(),
+          'snoozed_until': null,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } else {
+      await executor.update(
+        Tables.reminders,
+        {
+          'is_completed': 1,
+          'record_status': ReminderRecordStatus.done.name,
+          'last_triggered_at': DateTime.now().toIso8601String(),
+          'is_active': 0,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
   DateTime _rollForward(DateTime date, ReminderRecurrence recurrence) {
     switch (recurrence) {
       case ReminderRecurrence.weekly:
@@ -382,11 +417,12 @@ class ReminderRepo {
         } catch (_) {}
       }
 
-      // 4. Overdue grace expiration: If past due date is older than 3 days,
-      // it either cleared in a prior billing cycle or expired.
+      // 4. Overdue grace expiration: If past due date is older than 14 days (half-month),
+      // it either cleared in a prior billing cycle or expired. Unpaid bills within 14 days
+      // remain active & overdue so user can resolve or mark as paid.
       final isOverdueExpired = !matched &&
           isPastDue &&
-          rDate.isBefore(now.subtract(const Duration(days: 3)));
+          rDate.isBefore(now.subtract(const Duration(days: 14)));
 
       if (matched || isOverdueExpired) {
         reconciledCount++;
