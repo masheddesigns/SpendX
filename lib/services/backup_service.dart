@@ -262,11 +262,18 @@ class BackupService {
     if (DatabaseEncryptionMigrationService.instance.isMigrationRunning) {
       throw StateError('Cannot create backup while database migration is in progress');
     }
+    final bool shouldCloseCustomDb = sourceDb == null && sourceDbPath != null;
+    Database? customDb;
+    final customPath = sourceDbPath;
+    if (shouldCloseCustomDb && customPath != null) {
+      customDb = await openDatabase(customPath);
+    }
+    final Database db = sourceDb ?? customDb ?? await AppDatabase.instance.database;
+
     await DatabaseLifecycleCoordinator.instance.beginBackup();
     try {
       await WriteQueue.instance.quiesce();
       _log('Creating canonical backup package...');
-      final Database db = sourceDb ?? await AppDatabase.instance.database;
 
     // 1. Privacy Scrubbing: Purge expired evidence before snapshot
     await CanonicalBackupValidator.scrubExpiredEvidence(db);
@@ -380,6 +387,11 @@ class BackupService {
       } catch (_) {}
     }
     } finally {
+      if (shouldCloseCustomDb && customDb != null && customDb.isOpen) {
+        try {
+          await customDb.close();
+        } catch (_) {}
+      }
       DatabaseLifecycleCoordinator.instance.endBackup();
     }
   }

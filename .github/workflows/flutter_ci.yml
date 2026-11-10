@@ -43,7 +43,7 @@ jobs:
         run: flutter analyze lib/ --no-fatal-warnings --no-fatal-infos
 
       - name: Run unit tests
-        run: flutter test test/features/vivo_defect_verification_test.dart test/features/sms_parser_matrix_test.dart test/features/track1c_secure_key_lifecycle_test.dart test/features/track1d_android_export_qualification_test.dart test/features/track1e_backup_failure_qualification_test.dart test/features/track1f_interruption_recovery_qualification_test.dart
+        run: flutter test --concurrency=1 test/features/vivo_defect_verification_test.dart test/features/sms_parser_matrix_test.dart test/features/track1c_secure_key_lifecycle_test.dart test/features/track1d_android_export_qualification_test.dart test/features/track1e_backup_failure_qualification_test.dart test/features/track1f_interruption_recovery_qualification_test.dart
 
       - name: Build Debug APK
         run: flutter build apk --debug

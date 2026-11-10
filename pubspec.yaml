@@ -40,7 +40,7 @@ dependencies:
   extension_google_sign_in_as_googleapis_auth: 2.0.13
   flutter_secure_storage: ^10.0.0
   qr_flutter: ^4.1.0
-  mobile_scanner: ^7.2.0
+  mobile_scanner: 7.2.0
   timezone: ^0.11.0
   flutter_timezone: ^5.0.1
   package_info_plus: ^9.0.0
@@ -52,7 +52,7 @@ dependencies:
   crypto: ^3.0.6
   cryptography: ^2.7.0
   archive: ^4.0.2
-  receive_sharing_intent: ^1.8.1
+  receive_sharing_intent: 1.8.1
   in_app_review: ^2.0.11
   flutter_sms_inbox: ^1.0.5
   sqlcipher_flutter_libs: ^0.7.0+eol
@@ -60,6 +60,9 @@ dependencies:
   sqlite3: ^3.5.2
   spendx_process_lock:
     path: packages/spendx_process_lock
+
+dependency_overrides:
+  image: 4.8.0
 
 dev_dependencies:
   flutter_test:
