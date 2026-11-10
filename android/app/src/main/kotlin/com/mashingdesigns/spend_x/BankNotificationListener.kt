@@ -18,6 +18,9 @@ import io.flutter.plugin.common.MethodChannel
 class BankNotificationListener : NotificationListenerService() {
 
     companion object {
+        @Volatile
+        var instance: BankNotificationListener? = null
+
         // Known banking, UPI, and financial payment app packages in India
         private val PAYMENT_PACKAGES = setOf(
             // Top UPI & Payment Apps
@@ -112,7 +115,45 @@ class BankNotificationListener : NotificationListenerService() {
         )
     }
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        instance = this
+        Log.d("SpendX_Notif", "BankNotificationListener connected")
+        syncActiveNotifications()
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        if (instance == this) {
+            instance = null
+        }
+        Log.d("SpendX_Notif", "BankNotificationListener disconnected")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) {
+            instance = null
+        }
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        processNotification(sbn)
+    }
+
+    fun syncActiveNotifications() {
+        try {
+            val active = activeNotifications ?: return
+            Log.d("SpendX_Notif", "syncActiveNotifications: processing ${active.size} active notifications")
+            for (sbn in active) {
+                processNotification(sbn)
+            }
+        } catch (e: Exception) {
+            Log.e("SpendX_Notif", "syncActiveNotifications error: $e")
+        }
+    }
+
+    private fun processNotification(sbn: StatusBarNotification?) {
         if (sbn == null) return
 
         val pkg = sbn.packageName ?: return

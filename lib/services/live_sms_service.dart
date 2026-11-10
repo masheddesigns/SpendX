@@ -502,6 +502,12 @@ class LiveSmsService with WidgetsBindingObserver {
     if (!await enabled) return;
     await DatabaseLifecycleCoordinator.instance.waitUntilWritable();
     try {
+      try {
+        await _channel.invokeMethod('syncActiveNotifications');
+      } catch (e) {
+        AppLogger.d('[LiveSmsService] syncActiveNotifications error: $e');
+      }
+
       final pending = await _channel.invokeListMethod<dynamic>('getPendingSms');
       if (pending == null || pending.isEmpty) return;
       var added = 0;
@@ -1118,6 +1124,13 @@ class LiveSmsService with WidgetsBindingObserver {
       balanceNote = '${cancellation.title} was cancelled (${cancellation.reason})';
     }
 
+    // 1.45. Failed obligations (AutoPay, mandate, SIP payment failure)
+    if (result.failedObligation != null) {
+      final failed = result.failedObligation!;
+      await _handleFailedObligation(failed);
+      balanceNote = '⚠️ AutoPay Failed: ${failed.title} (${AppFormat.currency(failed.amount)})';
+    }
+
     // 1.5. Upcoming financial obligations (mandates, subscriptions, scheduled debits, bill dues)
     if (result.upcomingObligation != null) {
       final obligation = result.upcomingObligation!;
@@ -1465,6 +1478,66 @@ class LiveSmsService with WidgetsBindingObserver {
     }
   }
 
+  /// Records a failed AutoPay, SIP debit, or recurring mandate payment as an active overdue obligation
+  /// and fires an alert notification so the user is immediately aware.
+  Future<void> _handleFailedObligation(FailedObligationHit failed) async {
+    try {
+      AppLogger.w('[LiveSmsService] _handleFailedObligation: ${failed.merchant ?? failed.title} amt=${failed.amount}');
+      final reminderRepo = ReminderRepo();
+      final cleanMerchant = (failed.merchant ?? failed.title).trim();
+      final slug = cleanMerchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+
+      // Month-scoped stable ID matching the upcoming obligation ID format
+      final reminderId = 'sms_due_${slug}_${failed.date.year}_${failed.date.month}';
+      final existing = await reminderRepo.getById(reminderId);
+
+      final finalAmount = failed.amount > 0 ? failed.amount : (existing?.amount ?? 0.0);
+
+      // Check if a credit card matches
+      String? matchedCardId;
+      if (failed.last4 != null || failed.bankKeyword != null) {
+        final cards = await CreditRepo().getAll();
+        final matchedCard = (failed.last4 != null)
+            ? cards.where((c) => c.last4 == failed.last4).firstOrNull
+            : cards
+                .where((c) =>
+                    failed.bankKeyword != null &&
+                    c.bank.toLowerCase().contains(failed.bankKeyword!.toLowerCase()))
+                .firstOrNull;
+        matchedCardId = matchedCard?.id;
+      }
+
+      final reminder = Reminder(
+        id: reminderId,
+        title: failed.title,
+        type: ReminderType.service,
+        amount: finalAmount > 0 ? finalAmount : null,
+        dueDate: failed.date,
+        recurrencePeriod: ReminderRecurrence.monthly,
+        recordStatus: ReminderRecordStatus.pending,
+        sourceType: ReminderSourceType.manual,
+        linkedEntityId: matchedCardId,
+        notes: '⚠️ AutoPay Failed: ${failed.body}',
+        isActive: true,
+      );
+      await reminderRepo.upsert(reminder);
+
+      // Notify data change bus so Safe-to-Spend & Dashboard recalculate immediately
+      DataChangeBus.instance.notify();
+
+      // Show high-priority alert notification
+      final amtStr = finalAmount > 0 ? ' ${AppFormat.currency(finalAmount)}' : '';
+      await NotificationServiceV2().showNotification(
+        title: '⚠️ AutoPay Failed$amtStr',
+        body: '${failed.title} debit failed — tap to review and pay.',
+        category: 'generalUpdates',
+        payload: jsonEncode({'source_type': 'commitments'}),
+      );
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] _handleFailedObligation error: $e');
+    }
+  }
+
   /// Scans device SMS inbox for upcoming e-mandates, subscriptions, bill dues, and cancellations.
   Future<void> syncUpcomingObligationsFromInbox() async {
     try {
@@ -1479,6 +1552,11 @@ class LiveSmsService with WidgetsBindingObserver {
       if (bundle.obligationCancellations.isNotEmpty) {
         for (final cancellation in bundle.obligationCancellations) {
           await _cancelUpcomingObligation(cancellation);
+        }
+      }
+      if (bundle.failedObligations.isNotEmpty) {
+        for (final failed in bundle.failedObligations) {
+          await _handleFailedObligation(failed);
         }
       }
     } catch (e) {

@@ -1,10 +1,12 @@
 package com.mashingdesigns.spend_x
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.provider.Telephony
+import android.service.notification.NotificationListenerService
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -74,6 +76,21 @@ class MainActivity : FlutterActivity() {
                     val sinceEpochMs = (call.argument<Number>("sinceEpochMs"))?.toLong()
                     val limit = (call.argument<Number>("limit"))?.toInt() ?: 5000
                     result.success(queryInboxSince(sinceEpochMs, limit))
+                }
+                "syncActiveNotifications" -> {
+                    val listener = BankNotificationListener.instance
+                    if (listener != null) {
+                        listener.syncActiveNotifications()
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        try {
+                            NotificationListenerService.requestRebind(
+                                ComponentName(this, BankNotificationListener::class.java)
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.w("MainActivity", "Failed to requestRebind for BankNotificationListener: $e")
+                        }
+                    }
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }

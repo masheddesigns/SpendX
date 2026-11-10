@@ -7,6 +7,7 @@ import '../../../models/transaction.dart';
 import '../../../screens/bank/account_list_screen.dart' show resolveAccountDisplayName;
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/home/transactions_screen.dart';
+import '../../../services/live_sms_service.dart';
 import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/glass/spendx_section_header.dart';
 import '../../../shared/widgets/glass/spendx_states.dart';
@@ -62,6 +63,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     return RefreshIndicator(
       color: const Color(0xFF4F46E5),
       onRefresh: () async {
+        try {
+          await LiveSmsService.instance.drainPending();
+        } catch (_) {}
         invalidateAllFinancialProviders(ref);
         ref.invalidate(evaluateStreakProvider);
         ref.invalidate(transactionCategoryMapProvider);

@@ -228,8 +228,10 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             onTap: calc.commitmentItems.isNotEmpty
                 ? () => _showCommitmentDetails(context, calc.commitmentItems, isDark)
                 : () => _showBreakdownSheet(context, calc, isDark),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Container(
+              width: double.infinity,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -396,21 +398,21 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
 
             // Node 2: Primary Milestone (Next / Overdue Bill)
             Positioned(
-              left: x1 - 44,
-              top: 10,
+              left: x1 - 50,
+              top: 0,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: nextBill != null
                     ? () => _showCommitmentDetails(context, allCommitments, isDark)
                     : null,
                 child: Container(
-                  width: 88,
-                  height: 65,
-                  alignment: Alignment.bottomCenter,
+                  width: 100,
+                  height: 95,
+                  alignment: Alignment.center,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 22), // Clearance for diamond node
+                      const SizedBox(height: 36), // Clearance below diamond node
                       Text(
                         nextBill != null
                             ? (isNextOverdue
@@ -453,18 +455,20 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
 
             // Node 3: Second Milestone / Inflow
             Positioned(
-              left: x2 - 36,
-              top: 68,
+              left: x2 - 45,
+              top: 35,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: secondBill != null
                     ? () => _showCommitmentDetails(context, allCommitments, isDark)
                     : null,
                 child: SizedBox(
-                  width: 72,
+                  width: 90,
+                  height: 60,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const SizedBox(height: 25),
                       Text(
                         secondBill != null ? "Upcoming" : "Inflow",
                         style: TextStyle(

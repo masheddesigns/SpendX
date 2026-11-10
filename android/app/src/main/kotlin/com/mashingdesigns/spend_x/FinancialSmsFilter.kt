@@ -64,7 +64,7 @@ object FinancialSmsFilter {
 
     // 6. Financial action verbs / transaction contexts
     private val TRANSACTION_VERBS = Pattern.compile(
-        """\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|deposited|refunded|received|payment|paying|repayment|repay|repaid|cleared|settled|reversed|reversal|mandate|autopay|subscription|sip|cancelled|canceled|revoked|deactivated)\b""",
+        """\b(?:debited|debit|credited|credit|paid|spent|sent|transferred|withdrawn|deposited|deposit|refunded|received|payment|paying|repayment|repay|repaid|cleared|settled|reversed|reversal|mandate|autopay|subscription|sip|cancelled|canceled|revoked|deactivated|failed|failure|unsuccessful|declined)\b""",
         Pattern.CASE_INSENSITIVE
     )
 
@@ -131,6 +131,26 @@ object FinancialSmsFilter {
                               lowerBody.contains("sip") ||
                               lowerBody.contains("recurring"))
         if (isCancellation) {
+            return true
+        }
+
+        // 3.6 Check for AutoPay / Mandate / Subscription / SIP debit failure notifications
+        // (e.g. "Autopay debit failed for GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP: Autopay debit of ₹1000.00 ... has failed").
+        val isAutopayFailure = (lowerBody.contains("failed") ||
+                                lowerBody.contains("failure") ||
+                                lowerBody.contains("unsuccessful") ||
+                                lowerBody.contains("declined") ||
+                                lowerBody.contains("could not be processed")) &&
+                               (lowerBody.contains("mandate") ||
+                                lowerBody.contains("autopay") ||
+                                lowerBody.contains("auto-pay") ||
+                                lowerBody.contains("subscription") ||
+                                lowerBody.contains("standing instruction") ||
+                                lowerBody.contains("si ") ||
+                                lowerBody.contains("sip") ||
+                                lowerBody.contains("recurring") ||
+                                lowerBody.contains("deposit"))
+        if (isAutopayFailure) {
             return true
         }
 

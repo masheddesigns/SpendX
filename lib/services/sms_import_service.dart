@@ -161,6 +161,31 @@ class ObligationCancellationHit {
   });
 }
 
+/// A failed AutoPay, SIP debit, or recurring mandate payment detected in SMS or app notification.
+class FailedObligationHit {
+  final String title;
+  final double amount;
+  final String? merchant;
+  final String? last4;
+  final String? bankKeyword;
+  final String reason;
+  final String sender;
+  final String body;
+  final DateTime date;
+
+  const FailedObligationHit({
+    required this.title,
+    required this.amount,
+    this.merchant,
+    this.last4,
+    this.bankKeyword,
+    required this.reason,
+    required this.sender,
+    required this.body,
+    required this.date,
+  });
+}
+
 /// Everything a single SMS scan found.
 class SmsScanBundle {
   final List<SmsImportResult> transactions;
@@ -170,6 +195,7 @@ class SmsScanBundle {
   final List<DetectedLoan> loans;
   final List<UpcomingObligationHit> upcomingObligations;
   final List<ObligationCancellationHit> obligationCancellations;
+  final List<FailedObligationHit> failedObligations;
 
   const SmsScanBundle({
     required this.transactions,
@@ -179,6 +205,7 @@ class SmsScanBundle {
     this.loans = const [],
     this.upcomingObligations = const [],
     this.obligationCancellations = const [],
+    this.failedObligations = const [],
   });
 }
 
@@ -228,6 +255,7 @@ class SmsClassification {
   final BalanceHit? balance;
   final UpcomingObligationHit? upcomingObligation;
   final ObligationCancellationHit? obligationCancellation;
+  final FailedObligationHit? failedObligation;
   final SmsEventType eventType;
 
   const SmsClassification({
@@ -235,6 +263,7 @@ class SmsClassification {
     this.balance,
     this.upcomingObligation,
     this.obligationCancellation,
+    this.failedObligation,
     this.eventType = SmsEventType.infoOnly,
   });
 }
@@ -270,6 +299,17 @@ class SmsImportService {
         balance: balance,
         obligationCancellation: cancellation,
         eventType: SmsEventType.obligationCancelled,
+      );
+    }
+
+    // 0.6. Detect AutoPay / Mandate / SIP payment failures (e.g. Groww Stocks SIP, Netflix autopay failed)
+    final failedObligation = detectFailedObligation(body, sender);
+    if (failedObligation != null) {
+      final balance = _detectBalance(body, sender);
+      return SmsClassification(
+        balance: balance,
+        failedObligation: failedObligation,
+        eventType: SmsEventType.failed,
       );
     }
 
@@ -601,7 +641,9 @@ class SmsImportService {
     final balances = <BalanceHit>[];
     final upcomingObligations = <UpcomingObligationHit>[];
     final obligationCancellations = <ObligationCancellationHit>[];
+    final failedObligations = <FailedObligationHit>[];
     final seenCancellation = <String>{};
+    final seenFailed = <String>{};
     final accountMap =
         <String, ({DateTime? date, String bank, String? last4, double balance, String sender})>{};
     final cardMap =
@@ -737,6 +779,15 @@ class SmsImportService {
         final canKey = '${cancellationHit.merchant}|${cancellationHit.reason}|${cancellationHit.amount}';
         if (seenCancellation.add(canKey)) {
           obligationCancellations.add(cancellationHit);
+        }
+      }
+
+      // 1.7 Failed obligations (AutoPay / SIP debit failures)
+      final failedHit = detectFailedObligation(body, senderAddr, smsDate: smsDate);
+      if (failedHit != null) {
+        final failKey = '${failedHit.merchant ?? failedHit.title}|${failedHit.date.year}-${failedHit.date.month}-${failedHit.date.day}|${failedHit.amount}';
+        if (seenFailed.add(failKey)) {
+          failedObligations.add(failedHit);
         }
       }
 
@@ -881,6 +932,7 @@ class SmsImportService {
       loans: loans,
       upcomingObligations: upcomingObligations,
       obligationCancellations: obligationCancellations,
+      failedObligations: failedObligations,
     );
   }
 
@@ -1740,6 +1792,116 @@ class SmsImportService {
           sender: sender,
           body: body,
           smsDate: smsDate,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// Detects a failed AutoPay, SIP debit, or recurring mandate payment from an SMS or app notification.
+  FailedObligationHit? detectFailedObligation(
+    String body,
+    String sender, {
+    DateTime? smsDate,
+  }) {
+    if (_isOtpOrAuth(body)) return null;
+    final lower = body.toLowerCase();
+
+    // Must have a failure keyword
+    final isFailure = lower.contains('failed') ||
+        lower.contains('failure') ||
+        lower.contains('unsuccessful') ||
+        lower.contains('declined') ||
+        lower.contains('could not be processed');
+    if (!isFailure) return null;
+
+    // Must be about an autopay, mandate, standing instruction, subscription, or SIP
+    final isMandateContext = lower.contains('mandate') ||
+        lower.contains('autopay') ||
+        lower.contains('auto-pay') ||
+        lower.contains('auto pay') ||
+        lower.contains('standing instruction') ||
+        lower.contains('si ') ||
+        lower.contains('subscription') ||
+        lower.contains('sip') ||
+        lower.contains('recurring') ||
+        lower.contains('auto-debit') ||
+        lower.contains('autodebit');
+    if (!isMandateContext) return null;
+
+    final date = smsDate ?? DateTime.now();
+    final amount = _extractAmount(body) ?? 0.0;
+    final last4 = _last4(body);
+    final bankKeyword = _bankKeyword(sender, lower);
+
+    // 1. "Autopay debit failed for GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP"
+    final failedForMatch = RegExp(
+      r'(?:autopay|auto-pay|mandate|sip|subscription)\s+(?:debit\s+)?(?:has\s+)?failed\s+(?:for|on|towards)\s+([A-Za-z0-9 .&_-]+?)(?::|$|\.|\n)',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (failedForMatch != null) {
+      final merchant = failedForMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalized = _normalizeMerchantName(merchant);
+        final title = normalized.toLowerCase().contains('sip') ? normalized : '$normalized AutoPay';
+        return FailedObligationHit(
+          title: title,
+          amount: amount,
+          merchant: normalized,
+          last4: last4,
+          bankKeyword: bankKeyword,
+          reason: 'failed',
+          sender: sender,
+          body: body,
+          date: date,
+        );
+      }
+    }
+
+    // 2. "Autopay debit of ₹1000.00 by GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP for your account ... has failed"
+    // or "UPI AutoPay for GROWW ... debit of Rs.1000.00 has failed"
+    final debitByMatch = RegExp(
+      r'(?:upi\s+)?autopay\s+(?:debit\s+)?(?:of\s+(?:rs\.?|inr|₹)?\s*[\d,.]+\s+)?(?:by|for|towards|to)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:for\s+your|has|debit|of|failed|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (debitByMatch != null) {
+      final merchant = debitByMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalized = _normalizeMerchantName(merchant);
+        final title = normalized.toLowerCase().contains('sip') ? normalized : '$normalized AutoPay';
+        return FailedObligationHit(
+          title: title,
+          amount: amount,
+          merchant: normalized,
+          last4: last4,
+          bankKeyword: bankKeyword,
+          reason: 'failed',
+          sender: sender,
+          body: body,
+          date: date,
+        );
+      }
+    }
+
+    // 3. Fallback for known investment / subscription merchants
+    for (final m in [
+      'groww', 'zerodha', 'kuvera', 'smallcase', 'netflix', 'spotify', 'youtube', 'amazon',
+      'apple', 'jiofiber', 'jiohome', 'swiggy', 'zomato', 'tataplay', 'airtel'
+    ]) {
+      if (lower.contains(m) || sender.toLowerCase().contains(m)) {
+        final normalized = _normalizeMerchantName(m);
+        final title = normalized.toLowerCase().contains('sip') ? normalized : '$normalized AutoPay';
+        return FailedObligationHit(
+          title: title,
+          amount: amount,
+          merchant: normalized,
+          last4: last4,
+          bankKeyword: bankKeyword,
+          reason: 'failed',
+          sender: sender,
+          body: body,
+          date: date,
         );
       }
     }

@@ -102,6 +102,19 @@ void main() {
       expect(classification.transaction!.amount, 1500.0);
     });
 
+    test('1d_2. Groww AutoPay debit failed notification detection', () {
+      const sender = 'APP:com.nextbillion.groww:Autopay debit failed for GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP';
+      const body = 'Autopay debit failed for GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP: Autopay debit of ₹1000.00 by GROWW INVEST TECH PRIVATE LIMITED STOCKS SIP for your account XXXXXX9331 has failed. Click to check details.';
+
+      final classification = SmsImportService.instance.classifyMessage(body, sender);
+      expect(classification.eventType, SmsEventType.failed);
+      expect(classification.transaction, isNull, reason: 'Failed autopay must never create phantom expense transaction');
+      expect(classification.failedObligation, isNotNull);
+      expect(classification.failedObligation!.title, 'Groww Stocks SIP');
+      expect(classification.failedObligation!.amount, 1000.0);
+      expect(classification.failedObligation!.last4, '9331');
+    });
+
     test('1e. JioFinance payment notification', () {
       const sender = 'APP:in.jfs.jiofinance:JioFinance';
       const body = 'Paid ₹706.82 for JioFiber broadband bill';
