@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
 import '../../core/app_database.dart';
+import '../../core/database_access_gate.dart';
 import '../../core/tables_v24.dart';
 
 /// Mapping between domain [CanonicalEventType] and SQLite [TablesV24.economicEvents.event_type].
@@ -48,8 +50,12 @@ class CanonicalEventRepository {
       : _customExecutor = executor;
 
   Future<DatabaseExecutor> _getExecutor([DatabaseExecutor? executor]) async {
-    if (executor != null) return executor;
-    if (_customExecutor != null) return _customExecutor;
+    if (executor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(executor);
+    }
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await AppDatabase.instance.database;
   }
 
@@ -64,14 +70,38 @@ class CanonicalEventRepository {
 
     await _runInTransaction(db, (txn) async {
       final nowStr = event.createdAt.toUtc().toIso8601String();
+      final notesPayload = event.metadata.containsKey('related_entity_id')
+          ? jsonEncode(event.metadata)
+          : event.metadata['notes'] as String?;
+      final reversalTarget = event.reversalOfEventId ??
+          event.metadata['reversal_of_event_id'] as String? ??
+          event.metadata['reversal_of'] as String?;
+
+      if (reversalTarget != null && reversalTarget.isNotEmpty) {
+        final existingReversals = await txn.query(
+          TablesV24.economicEvents,
+          columns: ['id'],
+          where: 'reversal_of_event_id = ? AND id != ?',
+          whereArgs: [reversalTarget, event.id],
+          limit: 1,
+        );
+        if (existingReversals.isNotEmpty) {
+          throw AccountingInvariantException(
+            'Duplicate reversal rejected: Event $reversalTarget is already reversed by ${existingReversals.first['id']}.',
+            eventId: event.id,
+          );
+        }
+      }
+
       await txn.insert(TablesV24.economicEvents, {
         'id': event.id,
         'event_type': CanonicalEventTypeMapper.toSql(event.canonicalType),
         'lifecycle_status': 'draft',
+        'reversal_of_event_id': reversalTarget,
         'timestamp': event.occurredAt.toUtc().toIso8601String(),
         'currency': 'INR',
         'description': event.description,
-        'notes': event.metadata['notes'] as String?,
+        'notes': notesPayload,
         'created_at': nowStr,
         'updated_at': nowStr,
       });
@@ -234,14 +264,38 @@ class CanonicalEventRepository {
       final nowStr = event.createdAt.toUtc().toIso8601String();
 
       // Step A: Insert as draft (direct insert as posted is blocked by SQLite trigger)
+      final notesPayload = event.metadata.containsKey('related_entity_id')
+          ? jsonEncode(event.metadata)
+          : event.metadata['notes'] as String?;
+      final reversalTarget = event.reversalOfEventId ??
+          event.metadata['reversal_of_event_id'] as String? ??
+          event.metadata['reversal_of'] as String?;
+
+      if (reversalTarget != null && reversalTarget.isNotEmpty) {
+        final existingReversals = await txn.query(
+          TablesV24.economicEvents,
+          columns: ['id'],
+          where: 'reversal_of_event_id = ? AND id != ?',
+          whereArgs: [reversalTarget, event.id],
+          limit: 1,
+        );
+        if (existingReversals.isNotEmpty) {
+          throw AccountingInvariantException(
+            'Duplicate reversal rejected: Event $reversalTarget is already reversed by ${existingReversals.first['id']}.',
+            eventId: event.id,
+          );
+        }
+      }
+
       await txn.insert(TablesV24.economicEvents, {
         'id': event.id,
         'event_type': CanonicalEventTypeMapper.toSql(event.canonicalType),
         'lifecycle_status': 'draft',
+        'reversal_of_event_id': reversalTarget,
         'timestamp': event.occurredAt.toUtc().toIso8601String(),
         'currency': 'INR',
         'description': event.description,
-        'notes': event.metadata['notes'] as String?,
+        'notes': notesPayload,
         'created_at': nowStr,
         'updated_at': nowStr,
       });
@@ -311,6 +365,19 @@ class CanonicalEventRepository {
     final postings = await getPostingsForEvent(id);
     final evidence = await getEvidenceForEvent(id);
 
+    Map<String, dynamic> metadata = {};
+    final rawNotes = e['notes'] as String?;
+    if (rawNotes != null && rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
+      try {
+        metadata = jsonDecode(rawNotes) as Map<String, dynamic>;
+      } catch (_) {
+        metadata = {'notes': rawNotes};
+      }
+    } else if (rawNotes != null) {
+      metadata = {'notes': rawNotes};
+    }
+    if (e['category_id'] != null) metadata['category_id'] = e['category_id'];
+
     return EconomicEvent(
       id: e['id'] as String,
       canonicalType: CanonicalEventTypeMapper.fromSql(e['event_type'] as String),
@@ -320,11 +387,9 @@ class CanonicalEventRepository {
       occurredAt: DateTime.parse(e['timestamp'] as String),
       createdAt: DateTime.parse(e['created_at'] as String),
       description: e['description'] as String? ?? '',
+      reversalOfEventId: e['reversal_of_event_id'] as String?,
       evidenceIds: evidence.map((ev) => ev.id).toList(),
-      metadata: {
-        if (e['notes'] != null) 'notes': e['notes'],
-        if (e['category_id'] != null) 'category_id': e['category_id'],
-      },
+      metadata: metadata,
       postings: postings,
     );
   }
@@ -372,6 +437,7 @@ class CanonicalEventRepository {
           occurredAt: DateTime.parse(r['timestamp'] as String),
           createdAt: DateTime.parse(r['created_at'] as String),
           description: r['description'] as String? ?? '',
+          reversalOfEventId: r['reversal_of_event_id'] as String?,
           postings: postings,
         ),
       );

@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
 import 'package:uuid/uuid.dart';
 
 import '../../../data/core/app_database.dart';
+import '../../../data/core/database_access_gate.dart';
 import '../../../data/core/tables.dart';
 
 /// A learned mapping: merchant keyword → category + account.
@@ -41,7 +42,9 @@ class MerchantRuleRepo {
   MerchantRuleRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
 
   Future<DatabaseExecutor> get _database async {
-    if (_customExecutor != null) return _customExecutor;
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await AppDatabase.instance.database;
   }
 

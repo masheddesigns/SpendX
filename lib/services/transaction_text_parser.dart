@@ -26,7 +26,7 @@ class TransactionTextParser {
   /// stale cached entries from older builds can never be served.
   /// Mixed into the cache key — a version bump effectively wipes the cache
   /// without needing an explicit clear.
-  static const _parserVersion = 5;
+  static const _parserVersion = 6;
 
   /// Cache TTL — entries older than this are evicted on read. Prevents
   /// long-lived runs from accumulating drift; 5 minutes is well past any
@@ -220,6 +220,27 @@ class TransactionTextParser {
 
   static bool _isNoisyLine(String line) {
     final l = line.toLowerCase();
+
+    // NEVER drop lines that contain financial transaction verbs or currency tokens!
+    final hasFinancialAction = RegExp(
+      r'(?:₹|rs\.?|inr|payment|paying|repayment|repaid|debited|credited|spent|transferred|withdrawn|refunded|received)',
+      caseSensitive: false,
+    ).hasMatch(l);
+
+    if (hasFinancialAction) {
+      // Even if it has "thank you", keep it because it has a transaction verb or currency.
+      // Exception: only drop if it is strictly an available balance line on multi-line text
+      if (l.contains('available balance') || l.contains('avbl bal') || l.contains('closing balance')) {
+        // If it also has debited or credited or payment, keep it!
+        final hasPrimaryAction = RegExp(
+          r'(?:payment|paying|repayment|debited|credited|spent|transferred|refunded)',
+          caseSensitive: false,
+        ).hasMatch(l);
+        if (!hasPrimaryAction) return true;
+      }
+      return false;
+    }
+
     for (final f in _noiseFragments) {
       if (l.contains(f)) return true;
     }
@@ -279,20 +300,27 @@ class TransactionTextParser {
 
   // ── Amount extraction ─────────────────────────────────────────────
 
+  /// Tier 0: Multi-currency conversion where INR equivalent is given
   /// Tier 1: amount with action context (debited/paid/sent + Rs X)
   /// Tier 2: action keyword followed by amount
   /// Tier 3: any Rs/INR/₹ amount
+  /// Tier 4: standalone foreign currency (USD, EUR, GBP, etc.)
   static final _amountPatterns = <RegExp>[
+    // Multi-currency conversion: "USD 20.00 (approx. INR 1,680.00)", "USD 50 eqv Rs 4,200"
+    RegExp(
+      r'(?:approx\.?|eqv\.?|equivalent\s*(?:to)?)\s*(?:₹|Rs\.?|INR)?\s*([0-9,]+(?:\.\d{1,2})?)',
+      caseSensitive: false,
+    ),
     // "₹500 debited", "Rs 500 paid" (allows multiple spaces between symbol+number)
     RegExp(
       r'(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.\d{1,2})?)\s*'
       r'(?:has\s+been\s+|was\s+|is\s+)?'
-      r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited)',
+      r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited|invested|invest)',
       caseSensitive: false,
     ),
     // "debited Rs 500", "paid Rs.500", "received ₹500"
     RegExp(
-      r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited)'
+      r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited|invested|invest)'
       r'[^0-9]{0,30}?(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.\d{1,2})?)',
       caseSensitive: false,
     ),
@@ -304,6 +332,11 @@ class TransactionTextParser {
     // Bare amount: ₹500, Rs.500
     RegExp(
       r'(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.\d{1,2})?)',
+      caseSensitive: false,
+    ),
+    // Standalone foreign currency: USD 20.00, EUR 15.50, GBP 30.00, AED 100
+    RegExp(
+      r'(?:USD|EUR|GBP|AED|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
       caseSensitive: false,
     ),
   ];
@@ -485,7 +518,7 @@ class TransactionTextParser {
 
   static final _debitKeywords = RegExp(
     r'\b(debited|paid|sent|spent|charged|deducted|withdrawn|withdrew|'
-    r'purchase[ds]?|transferred?|swiped|outgoing)\b',
+    r'purchase[ds]?|transferred?|swiped|outgoing|invested|invest)\b',
     caseSensitive: false,
   );
 
@@ -515,7 +548,11 @@ class TransactionTextParser {
 
   static final _failurePatterns = RegExp(
     r'\b(?:failed|declined|cancelled|canceled|unsuccessful|'
-    r'transaction\s+failed|payment\s+failed|insufficient\s+balance)\b',
+    r'transaction\s+failed|payment\s+failed|insufficient\s+balance|'
+    r'could\s+not\s+be\s+processed|unable\s+to\s+process|timed?\s*out|'
+    r'expired|limit\s+exceeded|exceeded\s+limit|insufficient\s+funds|'
+    r'low\s+balance|payment\s+declined|reversed\s+within|refunded\s+within|'
+    r'will\s+be\s+(?:refunded|reversed)|incorrect\s+(?:pin|otp|cvv|credentials))\b',
     caseSensitive: false,
   );
 
@@ -591,15 +628,32 @@ class TransactionTextParser {
       r'(?:paid|sent|transferred|debited)\s+(?:via\s+upi\s+)?to\s+([A-Za-z0-9 .&@_-]{2,40})',
       caseSensitive: false,
     ),
+    // "debited towards MERCHANT", "paid towards MERCHANT"
+    RegExp(
+      r'(?:paid|sent|transferred|debited)\s+(?:towards|for)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "spent on MERCHANT", "spent at MERCHANT", "used at MERCHANT"
+    RegExp(
+      r'(?:spent|used)\s+(?:at|on)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
     // "via UPI to MERCHANT", "UPI to MERCHANT"
     RegExp(
       r'(?:via\s+upi\s+to|upi\s+to)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "towards MERCHANT"
+    RegExp(
+      r'\btowards\s+([A-Za-z0-9 .&@_-]{2,40})',
       caseSensitive: false,
     ),
     // "to MERCHANT" (with capital first letter)
     RegExp(r'\bto\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
     // "at MERCHANT"
     RegExp(r'\bat\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
+    // "on MERCHANT" (e.g. "spent on Myntra")
+    RegExp(r'\bon\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
     // "received from MERCHANT", "from MERCHANT"
     RegExp(r'\bfrom\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
   ];
@@ -609,6 +663,7 @@ class TransactionTextParser {
     'upi', 'bank', 'account', 'a/c', 'card', 'ref', 'txn', 'transaction',
     'payment', 'your', 'the', 'a', 'an', 'on', 'for', 'via', 'using',
     'credit', 'debit', 'rupay', 'visa', 'mastercard', 'edge', 'my', 'his', 'her',
+    'rs', 'inr', 'towards', 'debited', 'credited', 'emi', 'loan', 'with', 'from',
   };
 
   /// Returns (normalizedMerchant, source).
@@ -637,10 +692,11 @@ class TransactionTextParser {
       var merchant = m.group(1)!.trim();
       merchant = merchant
           .replaceAll(
-            RegExp(r'\s+(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank|bal|not\s+you|call).*$',
+            RegExp(r'\s+(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank|bal|not\s+you|call|has\s+been|debited|credited).*$',
                 caseSensitive: false),
             '',
           )
+          .replaceAll(RegExp(r'@[a-zA-Z0-9.-]+$'), '')
           .trim();
       if (merchant.isEmpty || merchant.length < 2) continue;
       final firstWord = merchant.split(' ').first.toLowerCase();

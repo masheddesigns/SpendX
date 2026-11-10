@@ -78,6 +78,9 @@ class EconomicEvent {
   /// Arbitrary structured audit metadata (merchant info, external refs, etc.).
   final Map<String, dynamic> metadata;
 
+  /// Structured pointer to the target [EconomicEvent] this event reverses, if applicable.
+  final String? reversalOfEventId;
+
   /// The list of posting legs for this event.
   final List<Posting> postings;
 
@@ -88,6 +91,7 @@ class EconomicEvent {
     required this.occurredAt,
     required this.createdAt,
     this.description = '',
+    this.reversalOfEventId,
     List<String>? evidenceIds,
     Map<String, dynamic>? metadata,
     List<Posting>? postings,
@@ -113,6 +117,7 @@ class EconomicEvent {
     required DateTime occurredAt,
     required DateTime createdAt,
     String description = '',
+    String? reversalOfEventId,
     List<String>? evidenceIds,
     Map<String, dynamic>? metadata,
     List<Posting>? postings,
@@ -124,6 +129,7 @@ class EconomicEvent {
       occurredAt: occurredAt,
       createdAt: createdAt,
       description: description,
+      reversalOfEventId: reversalOfEventId,
       evidenceIds: evidenceIds,
       metadata: metadata,
       postings: postings,
@@ -138,6 +144,7 @@ class EconomicEvent {
     required DateTime createdAt,
     required List<Posting> postings,
     String description = '',
+    String? reversalOfEventId,
     List<String>? evidenceIds,
     Map<String, dynamic>? metadata,
     EventBalanceValidator validator = const EventBalanceValidator(),
@@ -149,6 +156,7 @@ class EconomicEvent {
       occurredAt: occurredAt,
       createdAt: createdAt,
       description: description,
+      reversalOfEventId: reversalOfEventId,
       evidenceIds: evidenceIds,
       metadata: metadata,
       postings: postings,
@@ -170,6 +178,7 @@ class EconomicEvent {
       occurredAt: occurredAt,
       createdAt: createdAt,
       description: description,
+      reversalOfEventId: reversalOfEventId,
       evidenceIds: evidenceIds,
       metadata: metadata,
       postings: newPostings,

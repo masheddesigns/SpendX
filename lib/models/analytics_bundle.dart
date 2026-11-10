@@ -14,6 +14,7 @@ class AnalyticsBundle {
   final List<CreditCard> cards;
   final List<Category> categories;
   final List<Budget> budgets;
+  final double? canonicalNetWorth;
 
   const AnalyticsBundle({
     required this.transactions,
@@ -22,6 +23,7 @@ class AnalyticsBundle {
     required this.cards,
     required this.categories,
     required this.budgets,
+    this.canonicalNetWorth,
   });
 
   factory AnalyticsBundle.empty() => const AnalyticsBundle(

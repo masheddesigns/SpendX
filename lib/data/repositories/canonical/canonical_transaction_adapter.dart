@@ -24,6 +24,53 @@ class CanonicalTransactionAdapter {
     return sha256.convert(utf8.encode(input)).toString();
   }
 
+  /// Deterministic normalization for text payloads (SMS, OCR, imported bodies).
+  /// Trims, standardizes newlines, and collapses inline whitespace.
+  static String normalizePayloadText(String text) {
+    return text
+        .trim()
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll(RegExp(r'[ \t]+'), ' ');
+  }
+
+  /// One shared deterministic normalization and fingerprint function for raw evidence bodies.
+  /// Used for both evidence creation and duplicate lookup.
+  static String computeBodyFingerprint(String rawBody) {
+    return computeSha256(normalizePayloadText(rawBody));
+  }
+
+  /// Canonical serialization for manual transaction fingerprints.
+  /// Handles null values, field boundaries, date formatting, and account identity explicitly.
+  /// Strictly distinguishes null from literal "null" and empty strings via JSON array encoding.
+  /// Does not assume a userId field exists.
+  static String computeManualTransactionFingerprint({
+    required String type,
+    required double amount,
+    required DateTime date,
+    String? accountId,
+    String? categoryId,
+    String? notes,
+  }) {
+    final normType = type.trim().toLowerCase();
+    final minorUnits = toMinorUnits(amount);
+    final normDate = date.toUtc().toIso8601String();
+    final normAcc = accountId?.trim();
+    final normCat = categoryId?.trim();
+    final normNotes = notes != null ? normalizePayloadText(notes) : null;
+
+    final canonicalJson = jsonEncode([
+      'manual_v1',
+      normType,
+      minorUnits,
+      normDate,
+      normAcc,
+      normCat,
+      normNotes,
+    ]);
+    return computeSha256(canonicalJson);
+  }
+
   /// Ensures that all required account IDs referenced in [tx] exist in [TablesV24.accounts].
   /// If missing, creates minimal account records to satisfy foreign key constraints.
   static Future<void> ensureAccountsExist(
@@ -99,7 +146,8 @@ class CanonicalTransactionAdapter {
           subtype: 'liquid_cash',
           defaultName: 'Destination Account',
         );
-      } else if (tx.type == 'credit_payment') {
+      } else if (tx.type == 'credit_payment' ||
+          tx.type == 'credit_card_payment') {
         await ensureAccount(
           tx.relatedEntityId,
           accountType: 'liability',
@@ -141,6 +189,7 @@ class CanonicalTransactionAdapter {
         if (tx.accountId != null) 'account_id': tx.accountId,
         if (tx.categoryId != null) 'category_id': tx.categoryId,
         if (tx.relatedEntityId != null) 'related_entity_id': tx.relatedEntityId,
+        if (tx.interestAmount != null) 'interest_amount': tx.interestAmount,
         'created_at': nowStr,
         'updated_at': tx.updatedAt.toIso8601String(),
       },
@@ -345,18 +394,38 @@ class CanonicalTransactionAdapter {
             ? tx.relatedEntityId!
             : TablesV24.sysSuspenseLoan;
 
-        // Check if principal and interest split is specified in notes
-        final split = _parseLoanSplit(tx.notes, amountMinor);
+        // Structured interestAmount takes strict precedence over free-text notes
+        ({int principalMinor, int interestMinor})? split;
+        if (tx.interestAmount != null) {
+          final interestMinor = toMinorUnits(tx.interestAmount!);
+          if (interestMinor < 0 || interestMinor > amountMinor) {
+            throw ArgumentError(
+              'Invalid interestAmount: ₹${tx.interestAmount} cannot be negative or exceed total repayment amount of ₹${tx.amount}',
+            );
+          }
+          final principalMinor = amountMinor - interestMinor;
+          split = (
+            principalMinor: principalMinor,
+            interestMinor: interestMinor,
+          );
+        } else {
+          split = _parseLoanSplit(tx.notes, amountMinor);
+        }
         if (split != null && split.interestMinor > 0) {
-          return [
-            Posting(
-              id: 'pst_${eventId}_1',
-              economicEventId: eventId,
-              accountId: loanId,
-              direction: PostingDirection.debit,
-              amount: Money.fromPaise(split.principalMinor),
-              createdAt: now,
-            ),
+          final postings = <Posting>[];
+          if (split.principalMinor > 0) {
+            postings.add(
+              Posting(
+                id: 'pst_${eventId}_1',
+                economicEventId: eventId,
+                accountId: loanId,
+                direction: PostingDirection.debit,
+                amount: Money.fromPaise(split.principalMinor),
+                createdAt: now,
+              ),
+            );
+          }
+          postings.add(
             Posting(
               id: 'pst_${eventId}_2',
               economicEventId: eventId,
@@ -365,6 +434,8 @@ class CanonicalTransactionAdapter {
               amount: Money.fromPaise(split.interestMinor),
               createdAt: now,
             ),
+          );
+          postings.add(
             Posting(
               id: 'pst_${eventId}_3',
               economicEventId: eventId,
@@ -373,7 +444,8 @@ class CanonicalTransactionAdapter {
               amount: money,
               createdAt: now,
             ),
-          ];
+          );
+          return postings;
         }
 
         return [
@@ -424,9 +496,18 @@ class CanonicalTransactionAdapter {
     }
   }
 
-  /// Generates forensic [Evidence] if [tx.externalRef] is present.
-  static Evidence? toEvidence(Transaction tx, {required String eventId}) {
-    if (tx.externalRef == null || tx.externalRef!.isEmpty) return null;
+  /// Generates forensic [Evidence] for [tx].
+  static Evidence? toEvidence(
+    Transaction tx, {
+    required String eventId,
+    String? rawPayload,
+  }) {
+    final effectivePayload = rawPayload ?? tx.rawPayload;
+    final hasExternalRef = tx.externalRef != null && tx.externalRef!.trim().isNotEmpty;
+    final hasPayload = effectivePayload != null && effectivePayload.trim().isNotEmpty;
+
+    if (!hasExternalRef && !hasPayload) return null;
+
     const allowed = {
       'sms',
       'ocr',
@@ -440,6 +521,25 @@ class CanonicalTransactionAdapter {
     final resolvedSource = allowed.contains(tx.source)
         ? tx.source
         : (tx.source == 'review' ? 'sms' : 'manual');
+
+    final String fingerprint;
+    if (hasPayload) {
+      fingerprint = computeBodyFingerprint(effectivePayload);
+    } else if (resolvedSource == 'manual') {
+      fingerprint = computeManualTransactionFingerprint(
+        type: tx.type,
+        amount: tx.amount,
+        date: tx.date,
+        accountId: tx.accountId,
+        categoryId: tx.categoryId,
+        notes: tx.notes,
+      );
+    } else if (hasExternalRef) {
+      fingerprint = computeSha256(tx.externalRef!);
+    } else {
+      fingerprint = computeSha256('tx_$eventId');
+    }
+
     return Evidence(
       id: 'evi_$eventId',
       economicEventId: eventId,
@@ -448,7 +548,8 @@ class CanonicalTransactionAdapter {
       sourceTimestamp: tx.date,
       extractedAmount: Money.fromPaise(toMinorUnits(tx.amount)),
       externalReference: tx.externalRef,
-      bodyFingerprint: computeSha256(tx.externalRef!),
+      bodyFingerprint: fingerprint,
+      rawPayloadEncrypted: hasPayload ? effectivePayload : null,
       createdAt: tx.createdAt,
     );
   }
@@ -590,13 +691,18 @@ class CanonicalTransactionAdapter {
               orElse: () => postings.first,
             )
             .accountId;
+        relatedEntityId ??= meta['loan_id'] as String?;
         if (postings.length > 1) {
-          relatedEntityId ??= postings
-              .firstWhere(
-                (p) => p.direction == PostingDirection.debit,
-                orElse: () => postings.last,
-              )
-              .accountId;
+          final debitPosting = postings.firstWhere(
+            (p) =>
+                p.direction == PostingDirection.debit &&
+                p.accountId != TablesV24.sysExpInterest,
+            orElse: () => postings.firstWhere(
+              (p) => p.direction == PostingDirection.debit,
+              orElse: () => postings.last,
+            ),
+          );
+          relatedEntityId ??= debitPosting.accountId;
         }
         break;
 
@@ -640,6 +746,20 @@ class CanonicalTransactionAdapter {
       tags = tagsRaw.map((e) => e.toString()).toList();
     }
 
+    // Detect structured interest debit leg from canonical postings, or fallback to metadata
+    Posting? interestPosting;
+    for (final p in postings) {
+      if (p.accountId == TablesV24.sysExpInterest && p.direction == PostingDirection.debit) {
+        interestPosting = p;
+        break;
+      }
+    }
+    final double? interestAmount = interestPosting != null
+        ? interestPosting.amount.toRupees
+        : (meta['interest_amount'] is num
+            ? (meta['interest_amount'] as num).toDouble()
+            : null);
+
     return Transaction(
       id: event.id,
       userId: meta['user_id'] as String? ?? 'offline_user',
@@ -655,6 +775,7 @@ class CanonicalTransactionAdapter {
       externalRef: extRef,
       location: meta['location'] as String?,
       isDeleted: isReversed || event.description.startsWith('REVERSAL:'),
+      interestAmount: interestAmount,
       createdAt: event.createdAt,
       updatedAt: meta['updated_at'] != null
           ? DateTime.tryParse(meta['updated_at'] as String) ?? event.createdAt
@@ -676,14 +797,18 @@ class CanonicalTransactionAdapter {
       id: reversalId,
       canonicalType: CanonicalEventType.adjustment,
       lifecycleStatus: EventLifecycle.draft,
-      occurredAt: now,
+      occurredAt: originalEvent.occurredAt,
       createdAt: now,
       description:
           'REVERSAL: ${originalEvent.id}${reason != null ? " - $reason" : ""}',
+      reversalOfEventId: originalEvent.id,
       metadata: {
         'reversal_of': originalEvent.id,
+        'reversal_of_event_id': originalEvent.id,
         'reason': reason ?? 'Transaction deletion/correction',
         'is_reversal': true,
+        'created_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
       },
     );
 
@@ -710,7 +835,7 @@ class CanonicalTransactionAdapter {
   }
 
   static CanonicalEventType _resolveCanonicalType(Transaction tx) {
-    if (tx.type == 'credit_payment') {
+    if (tx.type == 'credit_payment' || tx.type == 'credit_card_payment') {
       return CanonicalEventType.cardPayment;
     }
     if (tx.type == 'refund') {
@@ -723,7 +848,7 @@ class CanonicalTransactionAdapter {
       'income' => CanonicalEventType.income,
       'transfer' => CanonicalEventType.transfer,
       'credit_card_purchase' => CanonicalEventType.cardPurchase,
-      'credit_payment' => CanonicalEventType.cardPayment,
+      'credit_payment' || 'credit_card_payment' => CanonicalEventType.cardPayment,
       'refund' => CanonicalEventType.refund,
       'loan_disbursement' => CanonicalEventType.loanDisbursement,
       'loan_repayment' => CanonicalEventType.loanRepayment,

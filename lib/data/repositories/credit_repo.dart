@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Database, DatabaseExecutor;
 
 import '../../domain/finance/finance.dart';
@@ -7,6 +8,7 @@ import '../../models/credit_emi.dart';
 import '../../models/emi_installment.dart';
 import '../../models/card_statement.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 import 'canonical/canonical_account_repository.dart';
 import 'canonical/canonical_credit_adapter.dart';
@@ -35,7 +37,9 @@ class CreditRepo {
   DatabaseExecutor? get executor => _customExecutor;
 
   Future<DatabaseExecutor> get _db async =>
-      _customExecutor ?? await AppDatabase.instance.database;
+      _customExecutor != null
+          ? DatabaseAccessGate.instance.wrapExecutor(_customExecutor)
+          : await AppDatabase.instance.database;
 
   CanonicalAccountRepository _getAccountRepo(DatabaseExecutor db) =>
       CanonicalAccountRepository(executor: db);
@@ -198,48 +202,62 @@ class CreditRepo {
   /// Posts a double-entry reconciliation event balancing against `sys_equity_opening`
   /// with explicit provenance in `opening_balance_reconciliations`.
   /// ZERO writes to mutable legacy balance columns.
+  /// When [statementClosingDate] is provided, reconciles point-in-time liability as of that date,
+  /// completely preserving transactions posted after the statement closing date.
   Future<void> reconcileOutstanding(
     String cardId,
     double targetUsedAmount, {
+    DateTime? statementClosingDate,
     String reason = 'Statement balance reconciliation',
     String provenance = 'sms_card_balance_update',
   }) async {
     final database = await _db;
-    await CanonicalCreditAdapter.ensureSystemAccountsExist(database);
+    await _runInTransaction(database, (txn) async {
+      await CanonicalCreditAdapter.ensureSystemAccountsExist(txn);
 
-    final currentLiability = await _getAccountRepo(database).getDerivedBalance(cardId);
-    final targetLiability = Money.fromRupees(targetUsedAmount);
-    final deltaPaise = targetLiability.minorUnits - currentLiability.minorUnits;
-
-    if (deltaPaise != 0) {
-      final rows = await database.query(
-        TablesV24.accounts,
-        columns: ['name'],
-        where: 'id = ?',
-        whereArgs: [cardId],
-        limit: 1,
+      final currentLiability = await _getAccountRepo(txn).getDerivedBalance(
+        cardId,
+        txn: txn,
+        asOf: statementClosingDate,
       );
-      final cardName = rows.isNotEmpty ? (rows.first['name'] as String) : 'Credit Card $cardId';
+      final targetLiability = Money.fromRupees(targetUsedAmount);
+      final deltaPaise = targetLiability.minorUnits - currentLiability.minorUnits;
 
-      final rec = CanonicalCreditAdapter.createReconciliationRecords(
-        cardId: cardId,
-        cardName: cardName,
-        currentLiability: currentLiability,
-        targetLiability: targetLiability,
-        reason: reason,
-        provenance: provenance,
-      );
-      if (rec != null) {
-        final eventRepo = _getEventRepo(database);
-        await eventRepo.createAndPostEvent(
-          rec.event,
-          postings: rec.postings,
-          evidence: [rec.evidence],
+      if (deltaPaise != 0) {
+        final rows = await txn.query(
+          TablesV24.accounts,
+          columns: ['name'],
+          where: 'id = ?',
+          whereArgs: [cardId],
+          limit: 1,
         );
-        final recRepo = _getReconciliationRepo(database);
-        await recRepo.saveReconciliation(rec.reconciliation);
+        final cardName = rows.isNotEmpty ? (rows.first['name'] as String) : 'Credit Card $cardId';
+
+        final effectiveReason = statementClosingDate != null
+            ? '$reason (as of ${statementClosingDate.toIso8601String()})'
+            : reason;
+
+        final rec = CanonicalCreditAdapter.createReconciliationRecords(
+          cardId: cardId,
+          cardName: cardName,
+          currentLiability: currentLiability,
+          targetLiability: targetLiability,
+          reason: effectiveReason,
+          provenance: provenance,
+          timestamp: statementClosingDate,
+        );
+        if (rec != null) {
+          final eventRepo = _getEventRepo(txn);
+          await eventRepo.createAndPostEvent(
+            rec.event,
+            postings: rec.postings,
+            evidence: [rec.evidence],
+          );
+          final recRepo = _getReconciliationRepo(txn);
+          await recRepo.saveReconciliation(rec.reconciliation);
+        }
       }
-    }
+    });
   }
 
   /// Alias to [reconcileOutstanding] for API parity with AccountRepo.updateBalance.
@@ -340,31 +358,123 @@ class CreditRepo {
   /// - Purchase / EMI: Dr Expense, Cr Card Liability
   Future<void> insertTransaction(CreditTransaction tx) async {
     final database = await _db;
-    final isPayment = tx.type.toLowerCase() == 'payment';
-    final assetAcc = isPayment ? (tx.categoryId ?? 'acc_bank_default') : null;
-    await CanonicalCreditAdapter.ensureAccountsExist(
-      database,
-      cardId: tx.cardId,
-      expenseAccountId: isPayment ? null : tx.categoryId,
-      assetAccountId: assetAcc,
-    );
+    await _runInTransaction(database, (txn) async {
+      final isPayment = tx.type.toLowerCase() == 'payment';
+      final isRefund = tx.type.toLowerCase() == 'refund';
+      final assetAcc = isPayment ? (tx.categoryId ?? 'acc_bank_default') : null;
 
-    final data = CanonicalCreditAdapter.toEconomicEventAndPostings(
-      tx,
-      defaultAssetAccountId: assetAcc,
-    );
-    final eventRepo = _getEventRepo(database);
-    await eventRepo.createAndPostEvent(
-      data.event,
-      postings: data.postings,
-      evidence: [data.evidence],
-    );
+      if (isRefund && tx.relatedEntityId != null && tx.relatedEntityId!.trim().isNotEmpty) {
+        final purchaseId = tx.relatedEntityId!.trim();
+
+        // 1. Original purchase must exist and be posted
+        final origRows = await txn.query(
+          TablesV24.economicEvents,
+          where: "id = ? AND lifecycle_status = 'posted'",
+          whereArgs: [purchaseId],
+        );
+        if (origRows.isEmpty) {
+          throw AccountingInvariantException(
+            'Refund rejected: Original purchase $purchaseId does not exist or is not posted.',
+          );
+        }
+        final origEvent = origRows.first;
+
+        // 2. Reject if original is already a reversal
+        if (origEvent['reversal_of_event_id'] != null ||
+            (origEvent['description'] as String? ?? '').startsWith('REVERSAL:')) {
+          throw AccountingInvariantException(
+            'Refund rejected: Cannot refund a reversal event ($purchaseId).',
+          );
+        }
+
+        // 3. Reject if original has already been deleted or reversed
+        final revRows = await txn.query(
+          TablesV24.economicEvents,
+          columns: ['id'],
+          where: "reversal_of_event_id = ? AND lifecycle_status = 'posted'",
+          whereArgs: [purchaseId],
+        );
+        if (revRows.isNotEmpty) {
+          throw AccountingInvariantException(
+            'Refund rejected: Original purchase $purchaseId has been reversed or deleted.',
+          );
+        }
+
+        // 4. Get original purchase amount
+        final origPostings = await txn.query(
+          TablesV24.postings,
+          where: 'economic_event_id = ? AND account_id = ?',
+          whereArgs: [purchaseId, tx.cardId],
+        );
+        if (origPostings.isEmpty) {
+          throw AccountingInvariantException(
+            'Refund rejected: Original purchase $purchaseId has no postings for card ${tx.cardId}.',
+          );
+        }
+        final origPaise = origPostings.first['amount_minor_units'] as int;
+
+        // 5. Query cumulative unreversed prior refunds
+        final priorRefundRows = await txn.rawQuery('''
+          SELECT COALESCE(SUM(p.amount_minor_units), 0) AS prior_refund_paise
+          FROM ${TablesV24.economicEvents} e
+          JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id AND p.account_id = ?
+          WHERE e.event_type = 'refund'
+            AND e.lifecycle_status = 'posted'
+            AND e.id != ?
+            AND (
+              e.notes LIKE ?
+              OR e.reversal_of_event_id = ?
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM ${TablesV24.economicEvents} r
+              WHERE r.reversal_of_event_id = e.id AND r.lifecycle_status = 'posted'
+            )
+        ''', [
+          tx.cardId,
+          tx.id,
+          '%"related_entity_id":"$purchaseId"%',
+          purchaseId,
+        ]);
+        final priorRefundPaise = (priorRefundRows.first['prior_refund_paise'] as num?)?.toInt() ?? 0;
+        final remainingPaise = origPaise - priorRefundPaise;
+        final thisRefundPaise = (tx.amount.abs() * 100.0).round();
+
+        if (thisRefundPaise > remainingPaise) {
+          throw AccountingInvariantException(
+            'Refund rejected: Refund amount ₹${tx.amount.abs()} exceeds remaining refundable ceiling '
+            '₹${remainingPaise / 100.0} for purchase $purchaseId.',
+          );
+        }
+      }
+
+      await CanonicalCreditAdapter.ensureAccountsExist(
+        txn,
+        cardId: tx.cardId,
+        expenseAccountId: isPayment ? null : tx.categoryId,
+        assetAccountId: assetAcc,
+      );
+
+      final data = CanonicalCreditAdapter.toEconomicEventAndPostings(
+        tx,
+        defaultAssetAccountId: assetAcc,
+      );
+      final eventRepo = _getEventRepo(txn);
+      await eventRepo.createAndPostEvent(
+        data.event,
+        postings: data.postings,
+        evidence: [data.evidence],
+      );
+    });
   }
 
   /// Returns the canonical derived liability balance for [cardId].
-  Future<Money> getDerivedBalance(String cardId) async {
-    final database = await _db;
-    return _getAccountRepo(database).getDerivedBalance(cardId);
+  Future<Money> getDerivedBalance(
+    String cardId, {
+    DatabaseExecutor? executor,
+    DateTime? asOf,
+  }) async {
+    final database = executor ?? await _db;
+    return _getAccountRepo(database).getDerivedBalance(cardId, txn: executor, asOf: asOf);
   }
 
   /// Bulk-insert credit transactions in a single batch.
@@ -388,6 +498,7 @@ class CreditRepo {
   }
 
   /// Projects card transaction history from canonical double-entry postings.
+  /// Strictly filters out reversed original transactions and reversal events.
   Future<List<CreditTransaction>> getTransactions(String cardId) async {
     final database = await _db;
     final query = '''
@@ -396,12 +507,26 @@ class CreditRepo {
         e.timestamp AS event_time,
         e.description AS description,
         e.event_type AS event_type,
+        e.notes AS notes,
         p.id AS posting_id,
         p.amount_minor_units AS amount_minor,
         p.direction AS direction
       FROM ${TablesV24.postings} p
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-      WHERE p.account_id = ? AND e.lifecycle_status = 'posted'
+      WHERE p.account_id = ? 
+        AND e.lifecycle_status = 'posted'
+        AND e.reversal_of_event_id IS NULL
+        AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
+        AND NOT EXISTS (
+          SELECT 1 FROM ${TablesV24.economicEvents} r
+          WHERE r.reversal_of_event_id = e.id AND r.lifecycle_status = 'posted'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM ${TablesV24.economicEvents} r
+          WHERE r.lifecycle_status = 'posted'
+            AND substr(r.description, 1, 10) = 'REVERSAL: '
+            AND (substr(r.description, 11) = e.id OR substr(r.description, 11, length(e.id) + 3) = e.id || ' - ')
+        )
       ORDER BY e.timestamp DESC, p.sequence_number ASC
     ''';
     final rows = await database.rawQuery(query, [cardId]);
@@ -412,6 +537,15 @@ class CreditRepo {
       final amount = amountMinor / 100.0;
       final date = DateTime.parse(r['event_time'] as String);
       final desc = (r['description'] as String?) ?? '';
+      final rawNotes = r['notes'] as String?;
+
+      String? relatedEntityId;
+      if (rawNotes != null && rawNotes.trim().startsWith('{') && rawNotes.trim().endsWith('}')) {
+        try {
+          final parsed = jsonDecode(rawNotes) as Map<String, dynamic>;
+          relatedEntityId = parsed['related_entity_id'] as String?;
+        } catch (_) {}
+      }
 
       final String type;
       if (eventType == 'credit_purchase') {
@@ -437,6 +571,7 @@ class CreditRepo {
         note: desc,
         type: type,
         status: 'active',
+        relatedEntityId: relatedEntityId,
       );
     }).toList();
   }
@@ -464,6 +599,23 @@ class CreditRepo {
           (p) => !p.accountId.startsWith('sys_exp_') && !p.accountId.startsWith('cat_'),
           orElse: () => postings.last,
         ).accountId;
+
+    final isReversal = event.reversalOfEventId != null || event.description.startsWith('REVERSAL:');
+    final hasReversal = (await database.rawQuery(
+      '''SELECT 1 FROM ${TablesV24.economicEvents} WHERE reversal_of_event_id = ? AND lifecycle_status = 'posted' LIMIT 1''',
+      [event.id],
+    )).isNotEmpty;
+
+    final status = (isReversal || hasReversal) ? 'reversed' : 'active';
+    final String type;
+    if (event.canonicalType == CanonicalEventType.cardPayment) {
+      type = 'payment';
+    } else if (event.canonicalType == CanonicalEventType.refund) {
+      type = 'refund';
+    } else {
+      type = 'purchase';
+    }
+
     return CreditTransaction(
       id: event.id,
       cardId: cardId,
@@ -471,8 +623,9 @@ class CreditRepo {
       date: event.occurredAt,
       category: (event.metadata['category_id'] as String?) ?? 'Credit Card',
       note: event.description,
-      type: event.canonicalType == CanonicalEventType.cardPayment ? 'payment' : 'purchase',
-      status: 'active',
+      type: type,
+      status: status,
+      relatedEntityId: event.metadata['related_entity_id'] as String?,
     );
   }
 
@@ -489,26 +642,58 @@ class CreditRepo {
 
   /// Deletes a credit transaction.
   /// If a posted canonical event exists for [id], posts a balanced double-entry reversal
-  /// preserving immutable ledger audit history.
+  /// preserving immutable ledger audit history with transactional duplicate protection.
   Future<void> deleteTransaction(String id) async {
     final database = await _db;
-    final eventRepo = _getEventRepo(database);
+    await _runInTransaction(database, (txn) async {
+      final eventRepo = _getEventRepo(txn);
 
-    final event = await eventRepo.getEvent(id);
-    if (event != null && event.lifecycleStatus == EventLifecycle.posted) {
-      final postings = await eventRepo.getPostingsForEvent(id);
-      final reversal = CanonicalCreditAdapter.createReversal(event, postings);
-      await eventRepo.createAndPostEvent(
-        reversal.event,
-        postings: reversal.postings,
+      final event = await eventRepo.getEvent(id);
+      if (event != null && event.lifecycleStatus == EventLifecycle.posted) {
+        // 1. Reject if target is already a reversal
+        if (event.reversalOfEventId != null ||
+            event.description.startsWith('REVERSAL:')) {
+          return;
+        }
+
+        // 2. Structured duplicate guard: check if a reversal already exists
+        final existingReversal = await txn.rawQuery(
+          '''
+          SELECT id FROM ${TablesV24.economicEvents}
+          WHERE reversal_of_event_id = ? AND lifecycle_status = 'posted'
+             OR (
+               substr(description, 1, 10) = 'REVERSAL: '
+               AND (substr(description, 11) = ? OR substr(description, 11, length(?) + 3) = ? || ' - ')
+             )
+          LIMIT 1;
+          ''',
+          [id, id, id, id],
+        );
+
+        if (existingReversal.isNotEmpty) {
+          // Idempotent rejection: already reversed
+          await txn.delete(
+            Tables.creditTransactions,
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          return;
+        }
+
+        final postings = await eventRepo.getPostingsForEvent(id);
+        final reversal = CanonicalCreditAdapter.createReversal(event, postings);
+        await eventRepo.createAndPostEvent(
+          reversal.event,
+          postings: reversal.postings,
+        );
+      }
+
+      await txn.delete(
+        Tables.creditTransactions,
+        where: 'id = ?',
+        whereArgs: [id],
       );
-    }
-
-    await database.delete(
-      Tables.creditTransactions,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    });
   }
 
   // --- Operational EMI / Installment metadata methods (transitional tables) ---

@@ -11,6 +11,7 @@ import '../data/repositories/salary_repo.dart';
 import '../data/repositories/lending_repo.dart';
 import '../data/repositories/category_repo.dart';
 import '../data/repositories/canonical/canonical_financial_query_repository.dart';
+import '../models/transaction.dart';
 
 class FinancialHealthService {
   final TransactionRepo transactionRepo;
@@ -79,9 +80,17 @@ class FinancialHealthService {
       if (t.type == 'income' && salaries.isEmpty) {
         weightedIncome += t.amount * w;
         totalWeightIncome += w;
-      } else if (t.type == 'expense') {
+      } else if (t.type == 'expense' || t.type == 'credit_card_purchase') {
         weightedExpenses += t.amount * w;
         totalWeightExpenses += w;
+      } else if (t.type == 'refund') {
+        weightedExpenses -= t.amount * w;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        final interest = _extractInterest(t);
+        if (interest > 0) {
+          weightedExpenses += interest * w;
+          totalWeightExpenses += w;
+        }
       }
     }
 
@@ -266,11 +275,11 @@ class FinancialHealthService {
   /// Calculates summarized metrics for a specific month.
   Future<Map<String, dynamic>> getMonthlySummary(DateTime month) async {
     final startOfMonth = DateTime(month.year, month.month, 1);
-    final endOfMonth = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    final nextMonthStart = DateTime(month.year, month.month + 1, 1);
     
     final txns = await transactionRepo.getAll();
 
-    final monthlyTxns = txns.where((t) => t.date.isAfter(startOfMonth.subtract(const Duration(seconds: 1))) && t.date.isBefore(endOfMonth.add(const Duration(seconds: 1)))).toList();
+    final monthlyTxns = txns.where((t) => !t.date.isBefore(startOfMonth) && t.date.isBefore(nextMonthStart)).toList();
     
     double income = 0;
     double expenses = 0;
@@ -279,10 +288,21 @@ class FinancialHealthService {
     for (var t in monthlyTxns) {
       if (t.type == 'income') {
         income += t.amount;
-      } else {
+      } else if (t.type == 'expense' || t.type == 'credit_card_purchase') {
         expenses += t.amount;
         final catId = t.categoryId ?? 'Other';
         categorySpending[catId] = (categorySpending[catId] ?? 0) + t.amount;
+      } else if (t.type == 'refund') {
+        expenses -= t.amount;
+        final catId = t.categoryId ?? 'Other';
+        categorySpending[catId] = (categorySpending[catId] ?? 0) - t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        final interest = _extractInterest(t);
+        if (interest > 0) {
+          expenses += interest;
+          final catId = t.categoryId ?? 'Other';
+          categorySpending[catId] = (categorySpending[catId] ?? 0) + interest;
+        }
       }
     }
     
@@ -290,18 +310,20 @@ class FinancialHealthService {
     double savingsRate = income > 0 ? (savings / income) * 100 : 0;
     
     // Previous month for comparison
-    final prevMonth = DateTime(month.year, month.month - 1, 1);
-    final prevStart = DateTime(prevMonth.year, prevMonth.month, 1);
-    final prevEnd = DateTime(prevMonth.year, prevMonth.month + 1, 0, 23, 59, 59);
-    final prevTxns = txns.where((t) => t.date.isAfter(prevStart.subtract(const Duration(seconds: 1))) && t.date.isBefore(prevEnd.add(const Duration(seconds: 1)))).toList();
+    final prevStart = DateTime(month.year, month.month - 1, 1);
+    final prevTxns = txns.where((t) => !t.date.isBefore(prevStart) && t.date.isBefore(startOfMonth)).toList();
     
     double prevIncome = 0;
     double prevExpenses = 0;
     for (var t in prevTxns) {
       if (t.type == 'income') {
         prevIncome += t.amount;
-      } else {
+      } else if (t.type == 'expense' || t.type == 'credit_card_purchase') {
         prevExpenses += t.amount;
+      } else if (t.type == 'refund') {
+        prevExpenses -= t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        prevExpenses += _extractInterest(t);
       }
     }
     double prevSavings = prevIncome - prevExpenses;
@@ -341,8 +363,15 @@ class FinancialHealthService {
       if (t.date.isAfter(targetDate)) {
         if (t.type == 'income') {
           delta += t.amount;
-        } else if (t.type == 'expense') {
+        } else if (t.type == 'expense' || t.type == 'credit_card_purchase') {
           delta -= t.amount;
+        } else if (t.type == 'refund') {
+          delta += t.amount;
+        } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+          final interest = _extractInterest(t);
+          if (interest > 0) {
+            delta -= interest;
+          }
         }
       }
     }
@@ -350,6 +379,19 @@ class FinancialHealthService {
     // Historical NW + Delta = Current NW
     // Historical NW = Current NW - Delta
     return currentNetWorth - delta;
+  }
+
+  static double _extractInterest(Transaction t) {
+    if (t.interestAmount != null) {
+      return t.interestAmount!;
+    }
+    if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+      final match = RegExp(r'Interest:\s*([\d\.]+)').firstMatch(t.notes);
+      if (match != null) {
+        return double.tryParse(match.group(1)!) ?? 0.0;
+      }
+    }
+    return 0.0;
   }
 
   /// Calculates a hypothetical health score for the end of the month based on projections.

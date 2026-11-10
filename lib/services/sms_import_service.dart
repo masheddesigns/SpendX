@@ -138,6 +138,29 @@ class UpcomingObligationHit {
   });
 }
 
+/// A cancelled or revoked recurring mandate, subscription, or AutoPay obligation.
+class ObligationCancellationHit {
+  final String title;
+  final double? amount;
+  final String merchant;
+  final String? last4;
+  final String reason;
+  final String sender;
+  final String body;
+  final DateTime? smsDate;
+
+  const ObligationCancellationHit({
+    required this.title,
+    this.amount,
+    required this.merchant,
+    this.last4,
+    required this.reason,
+    required this.sender,
+    required this.body,
+    this.smsDate,
+  });
+}
+
 /// Everything a single SMS scan found.
 class SmsScanBundle {
   final List<SmsImportResult> transactions;
@@ -146,6 +169,7 @@ class SmsScanBundle {
   final List<DetectedCard> cards;
   final List<DetectedLoan> loans;
   final List<UpcomingObligationHit> upcomingObligations;
+  final List<ObligationCancellationHit> obligationCancellations;
 
   const SmsScanBundle({
     required this.transactions,
@@ -154,6 +178,7 @@ class SmsScanBundle {
     this.cards = const [],
     this.loans = const [],
     this.upcomingObligations = const [],
+    this.obligationCancellations = const [],
   });
 }
 
@@ -190,6 +215,9 @@ enum SmsEventType {
   /// Bill payment reminder, recurring subscription mandate, or upcoming scheduled debit
   billReminder,
 
+  /// Mandate, subscription, or recurring AutoPay cancelled/revoked
+  obligationCancelled,
+
   /// Non-transactional notification, statement summary, or balance update only
   infoOnly,
 }
@@ -199,12 +227,14 @@ class SmsClassification {
   final ParsedTransaction? transaction;
   final BalanceHit? balance;
   final UpcomingObligationHit? upcomingObligation;
+  final ObligationCancellationHit? obligationCancellation;
   final SmsEventType eventType;
 
   const SmsClassification({
     this.transaction,
     this.balance,
     this.upcomingObligation,
+    this.obligationCancellation,
     this.eventType = SmsEventType.infoOnly,
   });
 }
@@ -232,6 +262,17 @@ class SmsImportService {
     final lower = body.toLowerCase();
     final isRefund = _isRefundText(lower);
 
+    // 0.5. Detect obligation cancellations / revocations (AutoPay, mandate, or subscription cancelled)
+    final cancellation = detectObligationCancellation(body, sender);
+    if (cancellation != null) {
+      final balance = _detectBalance(body, sender);
+      return SmsClassification(
+        balance: balance,
+        obligationCancellation: cancellation,
+        eventType: SmsEventType.obligationCancelled,
+      );
+    }
+
     // 1. Check for failed/declined/cancelled payments first so they are properly classified as failed
     // (except when the message is a confirmed reversal/refund credit).
     if (!isRefund && TransactionTextParser.isFailedPayment(body)) {
@@ -250,6 +291,44 @@ class SmsImportService {
       );
     }
 
+    // 1.7. Reject incoming UPI collect requests, payment demands, and mandate authorizations
+    // before they are actually executed or debited.
+    final isCollectRequest = RegExp(
+      r'\b(?:collect\s+request|has\s+requested|requested\s+(?:money|payment|rs\.?|inr|₹)|'
+      r'payment\s+request\s+received|request\s+received\s+from|demanded|authorization\s+request|'
+      r'tap\s+to\s+(?:approve|pay|accept|decline|reject)|approve\s+or\s+(?:decline|reject))\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+    if (isCollectRequest && !RegExp(r'\b(?:debited|paid\s+to|successful)\b', caseSensitive: false).hasMatch(lower)) {
+      return const SmsClassification();
+    }
+
+    // 1.8. Reject pure non-fiat reward points, coins, or miles credits without fiat currency
+    final isPurePointsCredit = RegExp(
+      r'\b(?:\d+[\d,]*\s*(?:neucoins?|supercoins?|reward\s*points?|bonus\s*points?|points?|miles?|cashpoints?)|'
+      r'(?:earned|credited)\s+\d+[\d,]*\s*(?:points?|coins?|neucoins?|supercoins?))\b',
+      caseSensitive: false,
+    ).hasMatch(lower) && !RegExp(r'(?:₹|rs\.?|inr)\s*[\d,]+', caseSensitive: false).hasMatch(lower);
+    if (isPurePointsCredit) {
+      return const SmsClassification();
+    }
+
+    // 1.9. Reject explicit promotional advertisements, scratch cards, referral invites, cashback schemes,
+    // and marketing pitches (e.g. from Google Pay, PhonePe, Paytm, or bank marketing broadcasts).
+    // These must NEVER create expense transactions or pollute financial accounts!
+    final isExplicitAdOrPromo = RegExp(
+      r'\b(?:scratch\s*card|win\s*up\s*to|earn\s*up\s*to|cashback\s*offer|'
+      r'get\s*(?:up\s*to\s*)?(?:rs\.?|inr|₹)?\s*\d+\s*cashback|flat\s*.*?\s*cashback|'
+      r'claim\s*now|claim\s*your|tap\s*to\s*(?:link|claim|apply|view|avail|pay|activate|recharge)|'
+      r'link\s*now|apply\s*now|invite\s*(?:friends|contacts)|refer\s*(?:&|and)\s*earn|'
+      r'referral\s*code|special\s*offer|flat\s*(?:rs\.?|inr|₹)?\s*\d+\s*(?:off|cashback)|'
+      r'use\s*coupon|use\s*code|limited\s*period\s*offer)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+    if (isExplicitAdOrPromo && !isRefund) {
+      return const SmsClassification();
+    }
+
     // 2. Hard reject non-transaction / promotional / telecom / weather / service messages.
     // Exception: Do not reject credit card payment confirmations, refunds, bills, or spends.
     final isCcPaymentCandidate = _isCreditCardPaymentText(lower, sender);
@@ -263,6 +342,36 @@ class SmsImportService {
       return const SmsClassification();
     }
 
+    // 2.2. If this is a credit card bill statement / bill generation notice:
+    // It announces total due / statement balance. It must NEVER create a purchase transaction!
+    if (isCcBillCandidate && !isCcPaymentCandidate) {
+      final balance = _detectBalance(body, sender);
+      final upcomingObligation = detectUpcomingObligation(body, sender);
+      return SmsClassification(
+        balance: balance,
+        upcomingObligation: upcomingObligation,
+        eventType: SmsEventType.billReminder,
+      );
+    }
+
+    // 2.3. Mandate / AutoPay / Standing Instruction registration notices:
+    // They announce mandate creation/registration. They must NEVER create an immediate purchase expense!
+    final isMandateRegistration = RegExp(
+      r'\b(?:mandate|e-mandate|emandate|autopay|standing\s+instruction)\b.*?'
+      r'\b(?:created|registered|set\s+up|activated)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+    if (isMandateRegistration &&
+        !RegExp(r'\b(?:has been debited|is debited|account.*debited with|card.*debited with)\b', caseSensitive: false).hasMatch(lower)) {
+      final balance = _detectBalance(body, sender);
+      final upcomingObligation = detectUpcomingObligation(body, sender);
+      return SmsClassification(
+        balance: balance,
+        upcomingObligation: upcomingObligation,
+        eventType: SmsEventType.billReminder,
+      );
+    }
+
     // 2. Personal numbers: SMS from numeric mobile numbers are personal texts,
     // not bank broadcast alerts.
     final cleanSender = sender.trim().replaceAll('+', '').replaceAll('-', '');
@@ -271,13 +380,14 @@ class SmsImportService {
     }
 
     // 3. Sender-based gatekeeping:
-    // If the sender does not match a verified bank/wallet code, only allow
+    // If the sender does not match a verified bank/wallet code or payment app, only allow
     // messages that contain both strong transaction language AND account identifiers.
     final isBank = _isBankSender(sender);
-    if (!isBank) {
+    final isPaymentApp = _isPaymentAppSender(sender);
+    if (!isBank && !isPaymentApp && !isCcPaymentCandidate && !isRefund) {
       final hasStrongSignal = RegExp(
         r'\b(?:debited\s*(?:from|by|with)|credited\s*(?:to|with)|has been debited|has been credited|'
-        r'sent from|transferred to|received in|payment of .* (?:to|from))\b',
+        r'sent from|transferred to|received in|payment of .* (?:to|from|towards))\b',
         caseSensitive: false,
       ).hasMatch(lower);
       final hasAccountSignal = RegExp(
@@ -291,18 +401,26 @@ class SmsImportService {
 
     final balance = _detectBalance(body, sender);
 
-    final parsed = TransactionTextParser.parse(body, source: 'sms');
-    if (parsed.amount <= 0 || parsed.confidence < 0.4) {
+    final parsed = TransactionTextParser.parse(
+      body,
+      source: isPaymentApp ? 'notification' : 'sms',
+    );
+    final minConfidence = isPaymentApp ? 0.25 : 0.4;
+    if (parsed.amount <= 0 || parsed.confidence < minConfidence) {
       return SmsClassification(balance: balance);
     }
 
-    // Must have direction signal or explicit financial verb (or be an identified CC payment / refund)
+    // Must have direction signal or explicit financial verb (or be an identified CC payment / refund).
+    // NEVER allow ambiguous messages or promotional ads without a genuine transaction direction verb!
+    final hasExplicitVerb = RegExp(
+      r'\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded|invested|invest)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
     if (!parsed.hasDirectionSignal &&
+        !hasExplicitVerb &&
         !isCcPaymentCandidate &&
-        !isRefund &&
-        !RegExp(r'\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded)\b',
-                caseSensitive: false)
-            .hasMatch(lower)) {
+        !isRefund) {
       return SmsClassification(balance: balance);
     }
 
@@ -366,6 +484,16 @@ class SmsImportService {
           sender.toLowerCase().contains('jtedge');
     }
 
+    final isTransferOrTopup = RegExp(
+      r'\b(?:loading\s+of\s+upi\s*lite|upi\s*lite\s*(?:top-?up|loading|balance)|'
+      r'towards\s+upi\s*lite|to\s+upi\s*lite|added\s+to\s+upi\s*lite|'
+      r'wallet\s*top-?up|paytm\s+wallet\s+top-?up|to\s+paytm\s+wallet|'
+      r'added\s+to\s+paytm\s+wallet|to\s+amazon\s+pay\s+balance|'
+      r'towards\s+wallet\s*top-?up|added\s+to\s+(?:your\s+)?wallet|'
+      r'top-?up\s+(?:of\s+)?(?:rs\.?|inr|₹).*?successful)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
     final SmsEventType eventType;
     final bool effectiveIsCredit;
 
@@ -375,6 +503,18 @@ class SmsImportService {
     } else if (isRefund) {
       eventType = SmsEventType.refund;
       effectiveIsCredit = true; // Refund credit
+    } else if (isTransferOrTopup) {
+      eventType = SmsEventType.transfer;
+      effectiveIsCredit = false; // Internal transfer
+      if (lower.contains('upi lite')) {
+        merchant = 'UPI Lite Top-Up';
+      } else if (lower.contains('paytm')) {
+        merchant = 'Paytm Wallet Top-Up';
+      } else if (lower.contains('amazon')) {
+        merchant = 'Amazon Pay Wallet Top-Up';
+      } else {
+        merchant = 'Wallet Top-Up';
+      }
     } else if (isCardSpend && !parsed.isCredit) {
       eventType = SmsEventType.creditCardPurchase;
       effectiveIsCredit = false;
@@ -460,6 +600,8 @@ class SmsImportService {
     final transactions = <SmsImportResult>[];
     final balances = <BalanceHit>[];
     final upcomingObligations = <UpcomingObligationHit>[];
+    final obligationCancellations = <ObligationCancellationHit>[];
+    final seenCancellation = <String>{};
     final accountMap =
         <String, ({DateTime? date, String bank, String? last4, double balance, String sender})>{};
     final cardMap =
@@ -589,6 +731,15 @@ class SmsImportService {
         }
       }
 
+      // 1.6 Obligation cancellations / revocations
+      final cancellationHit = detectObligationCancellation(body, senderAddr, smsDate: smsDate);
+      if (cancellationHit != null) {
+        final canKey = '${cancellationHit.merchant}|${cancellationHit.reason}|${cancellationHit.amount}';
+        if (seenCancellation.add(canKey)) {
+          obligationCancellations.add(cancellationHit);
+        }
+      }
+
       // 2. Transaction messages — skip non-transaction / intent SMS.
       if (!isCcPaymentCandidate &&
           !isRefundCandidate &&
@@ -598,8 +749,9 @@ class SmsImportService {
         continue;
       }
 
-      // Sender-based gatekeeping: non-bank senders must have strong signals.
-      if (!_isBankSender(senderAddr)) {
+      // Sender-based gatekeeping: non-bank / non-payment senders must have strong signals.
+      final isBankOrPayment = _isBankSender(senderAddr) || _isPaymentAppSender(senderAddr);
+      if (!isBankOrPayment) {
         final hasStrongSignal = RegExp(
           r'\b(?:debited\s*(?:from|by|with)|credited\s*(?:to|with)|has been debited|has been credited|'
           r'sent from|transferred to|received in|payment of .* (?:to|from))\b',
@@ -728,6 +880,7 @@ class SmsImportService {
       cards: cards,
       loans: loans,
       upcomingObligations: upcomingObligations,
+      obligationCancellations: obligationCancellations,
     );
   }
 
@@ -735,16 +888,18 @@ class SmsImportService {
     r'\b(?:available\s*balance|avail\.?\s*bal(?:ance)?|current\s*balance|'
     r'account\s*balance|your\s*balance|closing\s*balance|'
     r'updated\s*balance|new\s*bal(?:ance)?|balance|bal\.?)\b'
-    r'[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    r'.*?'
+    r'(?:(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|(?:is|of|:)\s*([\d,]+(?:\.\d+)?))',
     caseSensitive: false,
   );
 
   static final RegExp _creditDueRe = RegExp(
-    r'(?:revised\s+total\s+due|outstanding\s*(?:balance|amount|dues)?|total\s*(?:due|outstanding)|'
-    r'amount\s*due|bill\s*amount|payment\s*due|minimum\s*due|dues|'
+    r'(?:revised\s+total\s+due|total\s*(?:amt\.?|amount)?\s*due|outstanding\s*(?:balance|amount|dues)?|'
+    r'total\s*(?:due|outstanding)|amount\s*due|bill\s*amount|payment\s*due|minimum\s*due|min\s*due|dues|'
     r'total\s+of|minimum\s+of|'
-    r'bill\s+(?:of|for))'
-    r'[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    r'bill\s+(?:for\s+(?:your\s+)?[a-z0-9 ._-]*?(?:ending\s+\d{4}\s+)?of|of|for))\b'
+    r'.*?'
+    r'(?:(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)|(?:is|of|:)\s*([\d,]+(?:\.\d+)?))',
     caseSensitive: false,
   );
 
@@ -757,23 +912,29 @@ class SmsImportService {
 
   // Credit card available limit detection: "Avl Limit: INR 82,933.13", "YOUR AVAILABLE LIMIT IS RS. 77755.88"
   static final RegExp _ccAvailableLimitRe = RegExp(
-    r'(?:available\s*limit|avl\s*limit|avail(?:able)?\s*crd\s*lmt)[^\d₹]*?(?:inr|rs\.?)?\s*([\d,]+(?:\.\d+)?)',
+    r'(?:available\s*limit|avl\s*limit|avail(?:able)?\s*crd\s*lmt)\b'
+    r'.*?'
+    r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)',
     caseSensitive: false,
   );
 
   /// Credit card bill payment detection:
+  /// - "Thank you for payment of Rs 17,000 towards your SBI Card ending 8901 on 09-Nov-26. Available limit: Rs 1,00,000"
+  /// - "Thank you for paying Rs 12,000 towards your HDFC Bank Credit Card ending 1234"
   /// - "Payment of Rs 10,000.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System"
   /// - "DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 2000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6366"
   /// - "Your payment of Rs 13.02 for your Edge CSB Bank RuPay Credit Card was successful"
   /// - "Payment towards your card was successful"
   static final RegExp _ccPaymentRe = RegExp(
     r'(?:'
-    r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?received\s+(?:on|towards)\s+.*?(?:credit\s*card|card\s*ending)|'
-    r'payment\s+(?:of\s+.*?)?(?:towards|for)\s+.*?(?:credit\s*card|card\s*ending).*?(?:was\s+successful|received|processed|completed)|'
-    r'payment\s+received\s+towards\s+your\s+credit\s+card|'
+    r'(?:thank\s+you\s+for\s+)?(?:payment\s+of|paying|paid)\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|card|onecard|bobcard)|'
+    r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|processed|cleared|settled|successful)\s+(?:on|towards|for|to)\s+.*?(?:credit\s*card|card\s*ending|card\s*xx|sbi\s*card|onecard|bobcard)|'
+    r'(?:payment|bill\s+payment)\s+(?:of\s+.*?)?(?:towards|for)\s+.*?(?:credit\s*card|card\s*ending|sbi\s*card|onecard|bobcard).*?(?:was\s+successful|is\s+successful|received|processed|completed|settled|credited)|'
+    r'payment\s+(?:received|towards)\s+.*?(?:credit\s*card|card\s*ending|sbi\s*card|onecard|bobcard)|'
     r'received\s+on\s+your\s+(?:[A-Za-z0-9]+\s+)?credit\s+card|'
     r'payment\s+towards\s+credit\s+card\s+is\s+successful|'
-    r'bill\s+payment\s+of\s+.*?(?:received|successful|credited\s+to\s+.*?(?:card|cc))'
+    r'bill\s+payment\s+of\s+.*?(?:received|successful|completed|credited\s+to\s+.*?(?:card|cc))|'
+    r'(?:debited|paid)\s+(?:from\s+.*?)?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending)'
     r')',
     caseSensitive: false,
   );
@@ -794,15 +955,65 @@ class SmsImportService {
   /// Returns true if text indicates a credit card bill payment confirmation.
   static bool _isCreditCardPaymentText(String lower, [String sender = '']) {
     if (_ccPaymentRe.hasMatch(lower)) return true;
+
     final hasCardSignal = lower.contains('credit card') ||
         lower.contains('card ending') ||
-        lower.contains('cardmember') ||
         lower.contains('card xx') ||
+        lower.contains('card bill') ||
+        lower.contains('cardmember') ||
+        lower.contains('sbi card') ||
+        lower.contains('onecard') ||
+        lower.contains('bobcard') ||
+        lower.contains('bobcrd') ||
+        lower.contains('csb card') ||
+        lower.contains('edge card') ||
+        lower.contains('rupay credit') ||
         sender.toLowerCase().contains('crd') ||
         sender.toLowerCase().contains('jtedge');
-    final hasPaymentSignal = lower.contains('payment') &&
-        (lower.contains('received') || lower.contains('successful') || lower.contains('processed'));
-    return hasCardSignal && hasPaymentSignal;
+
+    if (!hasCardSignal) return false;
+
+    final hasPaymentWord = lower.contains('payment') ||
+        lower.contains('paying') ||
+        lower.contains('repayment') ||
+        lower.contains('repaid') ||
+        lower.contains('paid') ||
+        lower.contains('bill pay') ||
+        lower.contains('bill payment');
+
+    if (!hasPaymentWord) return false;
+
+    // Disqualify if it's explicitly asking to pay or is an unconfirmed statement announcement
+    if (lower.contains('please pay') ||
+        lower.contains('pay before') ||
+        lower.contains('pay by') ||
+        lower.contains('is due on') ||
+        lower.contains('total due') ||
+        lower.contains('minimum due') ||
+        lower.contains('min due') ||
+        lower.contains('statement generated') ||
+        lower.contains('statement has been generated')) {
+      final isConfirmedPayment = lower.contains('thank you') ||
+          lower.contains('received') ||
+          lower.contains('successful') ||
+          lower.contains('credited') ||
+          lower.contains('processed') ||
+          lower.contains('settled');
+      if (!isConfirmedPayment) return false;
+    }
+
+    final hasConfirmationWord = lower.contains('thank you') ||
+        lower.contains('received') ||
+        lower.contains('successful') ||
+        lower.contains('credited') ||
+        lower.contains('processed') ||
+        lower.contains('settled') ||
+        lower.contains('completed') ||
+        lower.contains('done') ||
+        lower.contains('towards') ||
+        lower.contains('debited');
+
+    return hasConfirmationWord;
   }
 
   /// Returns true if text indicates a credit card refund or reversal.
@@ -820,39 +1031,52 @@ class SmsImportService {
   static bool _isRefundText(String lower) {
     if (_ccRefundRe.hasMatch(lower)) return true;
 
+    // Conditional promise of future refund on a failed txn is NOT a completed refund
+    if (RegExp(r'\b(?:will be refunded|if debited|will be credited|will refund)\b', caseSensitive: false).hasMatch(lower)) {
+      return false;
+    }
+
     final hasRefundTerm = lower.contains('refund') ||
         lower.contains('reversal') ||
         lower.contains('reversed');
     if (!hasRefundTerm) return false;
 
-    // Must be a credit/receiving/processing signal
+    // Must be a credit/receiving/processing signal (excluding "could not be processed")
     final hasCreditSignal = lower.contains('credit') ||
         lower.contains('received') ||
-        lower.contains('processed') ||
+        (lower.contains('processed') && !lower.contains('not processed') && !lower.contains('could not be processed')) ||
         lower.contains('reversed to') ||
         lower.contains('refunded to');
 
-    // Reject if it's explicitly a debit / expense
-    final hasDebitSignal = lower.contains('debited') ||
-        lower.contains('paid to') ||
-        lower.contains('spent on');
+    // Reject if it's explicitly an outgoing debit / expense.
+    // Do not reject if "debited" merely refers to the original prior transaction (e.g. "refund for debited txn credited").
+    final hasDebitSignal = RegExp(
+      r'\b(?:has been debited|is debited|account.*debited with|card.*debited with|paid to|spent on)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
 
     return hasCreditSignal && !hasDebitSignal;
   }
 
   /// Returns true if text indicates a credit card bill statement or due date announcement.
   static bool _isCreditCardBillText(String lower) {
+    // If it's a confirmed payment, it is NEVER a bill statement!
+    if (_isCreditCardPaymentText(lower)) return false;
+
     final hasCardSignal = lower.contains('credit card') ||
         lower.contains('card ending') ||
         lower.contains('card xx') ||
         lower.contains('cardmember') ||
+        lower.contains('sbi card') ||
+        lower.contains('onecard') ||
+        lower.contains('bobcard') ||
         lower.contains('crd') ||
         lower.contains('rupay');
     final hasBillSignal = _creditDueRe.hasMatch(lower) ||
-        _ccAvailableLimitRe.hasMatch(lower) ||
         lower.contains('total due') ||
         lower.contains('amount due') ||
         lower.contains('minimum due') ||
+        lower.contains('min due') ||
         lower.contains('bill of rs') ||
         lower.contains('bill for rs') ||
         lower.contains('bill generated') ||
@@ -906,7 +1130,11 @@ class SmsImportService {
   /// transaction) or are clearly non-transactional — filtered out.
   static final RegExp _nonTransactionRe = RegExp(
     r'upcoming|will be debited|will be credited|has been enabled|'
-    r'loan facility|pre-approved|preapproved|eligible|expir(?:y|es|ing)|'
+    r'loan facility|pre-approved|preapproved|pre approved|eligible|expir(?:y|es|ing)|'
+    r'ready for your|ready for you|waiting for you|at your fingertips|'
+    r'borrow up to|avail up to|get up to\s+(?:rs|inr|₹)|apply for loan|'
+    r'scratch card|win up to|earn up to|cashback offer|'
+    r'offers?_rewards?|offer for you|special offer|'
     r'\breminder\b|verification code|\botp\b|one time password|'
     r'emandate registered|auto.?pay|scheduled debit|plan offer|spend limit|'
     r'\bmandate\b|mandate.*(?:creat|revok|cancel|activ)|'
@@ -943,7 +1171,7 @@ class SmsImportService {
   /// T (transactional), S (service), P (promotional).
   /// Some senders omit the trailing type letter (e.g. "JK-HDFCBK").
   static final RegExp _bankSenderRe = RegExp(
-    r'^[A-Z]{2,4}-[A-Z0-9]{2,8}(?:-[A-Z])?$',
+    r'^(?:[A-Z]{2,4}-[A-Z0-9]{2,8}(?:-[A-Z])?|[A-Z0-9]{4,9})$',
     caseSensitive: false,
   );
 
@@ -963,9 +1191,12 @@ class SmsImportService {
     'BANK', 'BNK',
   ];
 
-  /// Returns true if the sender looks like a bank SMS shortcode.
+  /// Returns true if the sender looks like a bank SMS shortcode or banking app.
   static bool _isBankSender(String sender) {
     if (sender.isEmpty) return false;
+    if (sender.startsWith('APP:')) {
+      return _isPaymentAppSender(sender);
+    }
     final upper = sender.toUpperCase().trim();
     if (!_bankSenderRe.hasMatch(upper)) return false;
 
@@ -992,6 +1223,27 @@ class SmsImportService {
         lower.contains('juspay') ||
         lower.contains('ipaytm') ||
         lower.contains('irsmsa');
+  }
+
+  /// Returns true if the sender indicates a financial or payment app push notification.
+  static bool _isPaymentAppSender(String sender) {
+    if (sender.isEmpty) return false;
+    if (sender.startsWith('APP:')) return true;
+    final lower = sender.toLowerCase().trim();
+    const paymentKeywords = [
+      'google pay', 'gpay', 'phonepe', 'paytm', 'cred', 'onecard', 'groww',
+      'jiofinance', 'tataneu', 'tata neu', 'jupiter', 'bhim', 'slice', 'fimmoney', 'fi money',
+      'super.money', 'supermoney', 'navi', 'payzapp', 'fedmobile', 'imobile',
+      'yono', 'amazon pay', 'mobikwik', 'freecharge', 'popclub', 'kiwi', 'cheq',
+      'wallet', 'upi', 'com.google.android.apps.nbu.paisa.user', 'com.phonepe.app',
+      'net.one97.paytm', 'com.dreamplug.androidapp', 'com.creditcard.onecard',
+      'com.nextbillion.groww', 'in.jfs.jiofinance', 'com.tatadigital.tcp',
+      'money.jupiter', 'in.org.npci.upiapp'
+    ];
+    for (final kw in paymentKeywords) {
+      if (lower.contains(kw)) return true;
+    }
+    return false;
   }
 
   /// UPI reference merchant: `UPI/DR/123456789012/MERCHANT`, `UPI/628001122334/UBER`, or `via UPI to MERCHANT`.
@@ -1169,7 +1421,8 @@ class SmsImportService {
       if (_creditDueRe.hasMatch(lower)) {
         final m = _creditDueRe.firstMatch(body);
         if (m != null) {
-          final amount = _parseAmount(m.group(1)!);
+          final raw = m.group(1) ?? m.group(2) ?? '';
+          final amount = _parseAmount(raw);
           if (amount >= 0) {
             final isStatementBill = lower.contains('bill') ||
                 lower.contains('statement') ||
@@ -1216,9 +1469,12 @@ class SmsImportService {
       }
     }
 
-    // Digital wallet balance — check BEFORE bank balance because wallet SMS
-    // also contain "balance" which would falsely match the bank pattern.
-    if (_isWalletSender(sender) || _walletBalanceRe.hasMatch(lower)) {
+    // Digital wallet balance — check BEFORE bank balance only if wallet signal is present
+    final hasWalletSignal = _isWalletSender(sender) ||
+        lower.contains('wallet') ||
+        lower.contains('amazon pay balance') ||
+        lower.contains('paytm balance');
+    if (hasWalletSignal && _walletBalanceRe.hasMatch(lower)) {
       final m = _walletBalanceRe.firstMatch(body);
       if (m != null) {
         final amount = _parseAmount(m.group(1)!);
@@ -1239,7 +1495,8 @@ class SmsImportService {
     // the trailing "Bal Rs X" on transaction messages.
     final bankBalance = _bankBalanceRe.firstMatch(body);
     if (bankBalance != null) {
-      final amount = _parseAmount(bankBalance.group(1)!);
+      final raw = bankBalance.group(1) ?? bankBalance.group(2) ?? '';
+      final amount = _parseAmount(raw);
       if (amount > 0 &&
           (bankKeyword != null || _last4(body) != null || _isBankSender(sender))) {
         return BalanceHit(
@@ -1249,6 +1506,233 @@ class SmsImportService {
           bankKeyword: bankKeyword,
           sender: sender,
           body: body,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// Detects a cancelled or revoked financial obligation (e-mandate, AutoPay, standing instruction, subscription).
+  ObligationCancellationHit? detectObligationCancellation(
+    String body,
+    String sender, {
+    DateTime? smsDate,
+  }) {
+    if (_isOtpOrAuth(body)) return null;
+    final lower = body.toLowerCase();
+
+    // Must have a cancellation/revocation keyword
+    final isRevoked = lower.contains('revoked') || lower.contains('revok');
+    final isCancelled = lower.contains('cancelled') ||
+        lower.contains('canceled') ||
+        lower.contains('deactivated') ||
+        lower.contains('stopped') ||
+        lower.contains('paused');
+
+    if (!isRevoked && !isCancelled) return null;
+
+    // Must be about an autopay, mandate, standing instruction, subscription, or SIP
+    final isMandateContext = lower.contains('mandate') ||
+        lower.contains('autopay') ||
+        lower.contains('auto-pay') ||
+        lower.contains('auto pay') ||
+        lower.contains('standing instruction') ||
+        lower.contains('si ') ||
+        lower.contains('subscription') ||
+        lower.contains('sip') ||
+        lower.contains('recurring') ||
+        lower.contains('auto-debit') ||
+        lower.contains('autodebit');
+
+    if (!isMandateContext) return null;
+
+    final reason = isRevoked ? 'revoked' : 'cancelled';
+
+    // 1. UPI AutoPay cancellation:
+    // e.g. "Dear UPI User, AutoPay of Rs. 199.00 for NETFLIX has been successfully revoked."
+    // e.g. "UPI AutoPay mandate for Netflix of Rs. 199.00 has been successfully revoked."
+    // e.g. "UPI AutoPay for Netflix has been cancelled."
+    // e.g. "AutoPay for Spotify has been cancelled."
+    final autopayMatch = RegExp(
+      r'(?:upi\s+)?autopay\s+(?:mandate\s+)?(?:(?:of\s+(?:rs\.?|inr|₹)?\s*[\d,.]+\s+)?(?:for\s+|towards\s+|to\s+|on\s+)|for\s+|towards\s+|of\s+)?([A-Za-z0-9 .&_-]+?)(?:\s+(?:debit|has|is|was|of|with|for|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (autopayMatch != null) {
+      final merchant = autopayMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 1a. Verb-first cancellation: "Cancelled your AutoPay of Rs 199 for Netflix"
+    final verbFirstMatch = RegExp(
+      r'(?:cancelled|canceled|revoked|stopped|paused|deactivated)\s+(?:your\s+)?(?:autopay|mandate|subscription|standing\s+instruction)\s+(?:of\s+(?:rs\.?|inr|₹)?\s*[\d,.]+\s+)?(?:for|towards|to|on)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:debit|has|is|was|of|with|for|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (verbFirstMatch != null) {
+      final merchant = verbFirstMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 1b. Inverted phrasing: "Your Netflix subscription has been cancelled" / "Your Spotify AutoPay has been cancelled"
+    final invertedMatch = RegExp(
+      r'([A-Za-z0-9 .&_-]+?)\s+(?:subscription|autopay|mandate|auto-debit)\s+(?:has\s+been|is|was)?\s*(?:cancelled|canceled|revoked|deactivated|stopped)',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (invertedMatch != null) {
+      var merchant = invertedMatch.group(1)!.trim();
+      merchant = merchant.replaceFirst(RegExp(r'^(?:your|the)\s+', caseSensitive: false), '').trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 1c. Google Play / App Store subscription cancellation:
+    // e.g. "Your Google Play subscription to Duolingo has been cancelled."
+    final appStoreMatch = RegExp(
+      r'(?:google\s+play\s+subscription\s+(?:to|for)\s+|apple\s+subscription\s+(?:to|for)\s+)([A-Za-z0-9 .&_-]+?)(?:\s+(?:has|is|was|of|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (appStoreMatch != null) {
+      final merchant = appStoreMatch.group(1)!.trim();
+      if (merchant.isNotEmpty) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant Subscription',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 2. OneCard / Card E-Mandate cancellation:
+    // e.g. "Hi Sivek, your emandate registered on NETFLIX of INR199.0 has been cancelled."
+    // e.g. "e-mandate registered on NETFLIX has been revoked."
+    // e.g. "Mandate for NETFLIX has been revoked."
+    final emandateMatch = RegExp(
+      r'(?:e-?mandate\s+(?:registered\s+(?:on|for)\s+|for\s+|towards\s+)|mandate\s+for\s+)([A-Za-z0-9 .&_-]+?)(?:\s+(?:of|has|is|was|on|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (emandateMatch != null) {
+      final merchant = emandateMatch.group(1)!.trim();
+      if (merchant.isNotEmpty) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant Subscription',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 3. Standing Instruction cancellation:
+    // e.g. "Standing Instruction towards Amazon of INR 799 has been cancelled."
+    // e.g. "Standing instruction for Netflix has been revoked."
+    // e.g. "Auto-debit for your Disney+ Hotstar subscription has been stopped."
+    final siMatch = RegExp(
+      r'(?:standing\s+instruction|auto-?debit)\s+(?:towards|for\s+(?:your\s+)?)\s*([A-Za-z0-9 .&_-]+?)(?:\s+(?:subscription|of|has|is|was|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (siMatch != null) {
+      final merchant = siMatch.group(1)!.trim();
+      if (merchant.isNotEmpty) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant Subscription',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 4. General Subscription cancellation:
+    // e.g. "Subscription for Netflix has been cancelled."
+    final subMatch = RegExp(
+      r'subscription\s+(?:for|to|towards|on)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:has|is|was|of|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (subMatch != null) {
+      final merchant = subMatch.group(1)!.trim();
+      if (merchant.isNotEmpty) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant Subscription',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 5. Fallback for known merchants when body mentions mandate/autopay + cancelled/revoked
+    for (final m in [
+      'netflix', 'spotify', 'youtube', 'amazon', 'groww', 'disney', 'hotstar',
+      'apple', 'jiofiber', 'jiohome', 'duolingo', 'swiggy', 'zomato',
+      'tataplay', 'airtel', 'google', 'openai', 'chatgpt', 'truecaller'
+    ]) {
+      if (lower.contains(m)) {
+        final normalizedMerchant = _normalizeMerchantName(m);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
         );
       }
     }
@@ -1458,6 +1942,51 @@ class SmsImportService {
       );
     }
 
+    // 7. AutoPay / Mandate / Standing Instruction Registration / Creation:
+    // e.g. "UPI AutoPay mandate for Netflix of Rs. 199.00 has been successfully created. Next debit on 15-Nov-2026"
+    // e.g. "Mandate created for Rs 499.00 towards Spotify. Next debit date: 25/11/2026"
+    // e.g. "E-mandate of Rs 1,000.00 successfully registered on Card XX1234 towards Zerodha. Next debit on 10/12/2026"
+    // e.g. "Standing instruction of Rs 299.00 set up for Amazon Prime. Start date: 01-Dec-2026"
+    final isMandateRegistration = RegExp(
+      r'\b(?:mandate|e-mandate|emandate|autopay|standing\s+instruction|si)\b.*?'
+      r'\b(?:created|registered|set\s+up|activated|scheduled)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
+    if (isMandateRegistration) {
+      final amtMatch = RegExp(
+        r'(?:of|for|amount)\s+(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)',
+        caseSensitive: false,
+      ).firstMatch(body) ?? RegExp(r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)', caseSensitive: false).firstMatch(body);
+      final amount = amtMatch != null ? _parseAmount(amtMatch.group(1)!) : 0.0;
+
+      final merchantMatch = RegExp(
+        r'(?:for|towards|on)\s+([A-Za-z0-9 .&_-]+?)(?:\s+of|\s+has|\s+is|\s+next|\s+start|\.|$)',
+        caseSensitive: false,
+      ).firstMatch(body);
+      var merchant = merchantMatch != null ? merchantMatch.group(1)!.trim() : 'Subscription';
+      if (merchant.toLowerCase().contains('mandate') || merchant.toLowerCase().contains('autopay')) {
+        merchant = 'Subscription';
+      }
+      final normalizedMerchant = _normalizeMerchantName(merchant);
+
+      final nextDate = _extractDueDate(body) ?? smsDate?.add(const Duration(days: 30)) ?? DateTime.now().add(const Duration(days: 30));
+
+      return UpcomingObligationHit(
+        title: '$normalizedMerchant AutoPay',
+        amount: amount,
+        dueDate: nextDate,
+        merchant: normalizedMerchant,
+        last4: _last4(body),
+        bankKeyword: _bankKeyword(sender, lower),
+        reminderType: ReminderType.service,
+        isMandate: true,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
     return null;
   }
 
@@ -1475,6 +2004,40 @@ class SmsImportService {
   }
 
   String? _bankKeyword(String sender, String lower) {
+    if (sender.startsWith('APP:')) {
+      final parts = sender.split(':');
+      final pkg = parts.length > 1 ? parts[1].toLowerCase() : '';
+      final title = parts.length > 2 ? parts[2].toLowerCase() : '';
+      final appRef = '$pkg $title';
+
+      if (appRef.contains('fedmobile') || appRef.contains('federal')) return 'fedbnk';
+      if (appRef.contains('sbicard')) return 'sbicrd';
+      if (appRef.contains('sbi') || appRef.contains('yono')) return 'sbi';
+      if (appRef.contains('hdfc') || appRef.contains('payzapp')) return 'hdfc';
+      if (appRef.contains('icici') || appRef.contains('imobile') || appRef.contains('pockets')) return 'icici';
+      if (appRef.contains('axis')) return 'axisbk';
+      if (appRef.contains('kotak')) return 'kotak';
+      if (appRef.contains('bobcard')) return 'bobcrd';
+      if (appRef.contains('bankofbaroda') || appRef.contains('bobworld') || appRef.contains('bob')) return 'bob';
+      if (appRef.contains('canara')) return 'canbnk';
+      if (appRef.contains('pnb')) return 'pnb';
+      if (appRef.contains('unionbank')) return 'union';
+      if (appRef.contains('idfc')) return 'idfcfb';
+      if (appRef.contains('indusind')) return 'indus';
+      if (appRef.contains('rbl')) return 'rbl';
+      if (appRef.contains('onecard')) return 'onecrd';
+      if (appRef.contains('slice')) return 'slice';
+      if (appRef.contains('jupiter')) return 'jupiter';
+      if (appRef.contains('fi') || appRef.contains('epifi')) return 'fip';
+      if (appRef.contains('cheq')) return 'cheq';
+      if (appRef.contains('cred')) return 'cred';
+      if (appRef.contains('gpay') || appRef.contains('google')) return 'gpay';
+      if (appRef.contains('phonepe')) return 'phonepe';
+      if (appRef.contains('paytm')) return 'paytm';
+      if (appRef.contains('amazon')) return 'amazon';
+      if (appRef.contains('aubank')) return 'aubank';
+    }
+
     // Sender format is usually `<3rdParty>-<BANKCODE>-<Type>`; the middle
     // segment is the bank code (e.g. "VA-FEDBNK-T" -> "fedbnk").
     final parts = sender.split('-');
@@ -1485,9 +2048,12 @@ class SmsImportService {
     final letters = RegExp(r'[a-z]+').allMatches(sender.toLowerCase()).map(
       (m) => m.group(0)!,
     );
-    if (letters.isNotEmpty) return letters.first;
-    // Fall back to a bank name like "hdfc", "axis", "sbi", "icici" in body.
-    for (final bank in ['hdfc', 'axis', 'icici', 'sbi', 'kotak', 'yes bank', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind', 'canara', 'bob']) {
+    for (final l in letters) {
+      if (l == 'app' || l == 'com' || l == 'in' || l == 'org' || l == 'net') continue;
+      if (bankNames.containsKey(l)) return l;
+    }
+    // Fall back to a bank name like "hdfc", "axis", "sbi", "icici", "federal" in body.
+    for (final bank in ['hdfc', 'axis', 'icici', 'sbi', 'federal', 'fedmobile', 'kotak', 'yes bank', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind', 'canara', 'bob', 'bank of baroda']) {
       if (lower.contains(bank)) return bank.replaceAll(' ', '');
     }
     return null;
@@ -1498,16 +2064,23 @@ class SmsImportService {
     'sbiinb': 'State Bank of India',
     'sbi': 'State Bank of India',
     'sbicrd': 'SBI Cards',
+    'sbiyono': 'State Bank of India',
+    'yono': 'State Bank of India',
     'fedbnk': 'Federal Bank',
+    'fedmobile': 'Federal Bank',
+    'federal': 'Federal Bank',
     'axsbk': 'Axis Bank',
     'axisbk': 'Axis Bank',
+    'axis': 'Axis Bank',
     'axns': 'Axis Bank',
     'icicib': 'ICICI Bank',
     'icicit': 'ICICI Bank',
     'icici': 'ICICI Bank',
+    'imobile': 'ICICI Bank',
     'hdfcbk': 'HDFC Bank',
     'hdfcbn': 'HDFC Bank',
     'hdfc': 'HDFC Bank',
+    'payzapp': 'HDFC Bank',
     'kotakb': 'Kotak Mahindra Bank',
     'kotak': 'Kotak Mahindra Bank',
     'jiopbs': 'Jio Payments Bank',
@@ -1561,6 +2134,15 @@ class SmsImportService {
     final digits = m.group(1) ?? m.group(2);
     if (digits == null) return null;
     return digits.length > 4 ? digits.substring(digits.length - 4) : digits;
+  }
+
+  static double? _extractAmount(String body) {
+    final m = RegExp(r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)', caseSensitive: false).firstMatch(body);
+    if (m != null) {
+      final amt = _parseAmount(m.group(1)!);
+      if (amt > 0) return amt;
+    }
+    return null;
   }
 
   static double _parseAmount(String raw) {

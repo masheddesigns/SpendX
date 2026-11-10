@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../models/budget.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 import 'canonical/canonical_financial_query_repository.dart';
 
@@ -16,7 +17,9 @@ class BudgetRepo {
         _queryRepo = queryRepo;
 
   Future<DatabaseExecutor> get _db async =>
-      _customExecutor ?? await db.database;
+      _customExecutor != null
+          ? DatabaseAccessGate.instance.wrapExecutor(_customExecutor)
+          : await db.database;
 
   CanonicalFinancialQueryRepository _getQueryRepo(DatabaseExecutor executor) =>
       _queryRepo ?? CanonicalFinancialQueryRepository(executor: executor);

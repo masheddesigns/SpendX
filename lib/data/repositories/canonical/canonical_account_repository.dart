@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
 import '../../core/app_database.dart';
+import '../../core/database_access_gate.dart';
 import '../../core/tables_v24.dart';
 
 /// Canonical Account Repository for SpendX 2.0.
@@ -17,9 +18,11 @@ class CanonicalAccountRepository {
   CanonicalAccountRepository({DatabaseExecutor? executor})
       : _customExecutor = executor;
 
-  Future<DatabaseExecutor> _getExecutor(Transaction? txn) async {
-    if (txn != null) return txn;
-    if (_customExecutor != null) return _customExecutor;
+  Future<DatabaseExecutor> _getExecutor([DatabaseExecutor? txn]) async {
+    if (txn != null) return DatabaseAccessGate.instance.wrapExecutor(txn);
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await AppDatabase.instance.database;
   }
 
@@ -91,7 +94,7 @@ class CanonicalAccountRepository {
   }
 
   /// Retrieves an account by [id].
-  Future<Account?> getAccount(String id, {Transaction? txn}) async {
+  Future<Account?> getAccount(String id, {DatabaseExecutor? txn}) async {
     final db = await _getExecutor(txn);
     final rows = await db.query(
       TablesV24.accounts,
@@ -146,7 +149,11 @@ class CanonicalAccountRepository {
   ///    are included. Drafts, reversed, or deleted events are strictly excluded.
   /// 2. Assets & Expenses have normal DEBIT balance: SUM(debit) - SUM(credit).
   /// 3. Liabilities, Equity, & Income have normal CREDIT balance: SUM(credit) - SUM(debit).
-  Future<Money> getDerivedBalance(String accountId, {Transaction? txn}) async {
+  Future<Money> getDerivedBalance(
+    String accountId, {
+    DatabaseExecutor? txn,
+    DateTime? asOf,
+  }) async {
     final db = await _getExecutor(txn);
     final acc = await getAccount(accountId, txn: txn);
     if (acc == null) {
@@ -159,12 +166,19 @@ class CanonicalAccountRepository {
         ? "CASE WHEN p.direction = 'debit' THEN p.amount_minor_units ELSE -p.amount_minor_units END"
         : "CASE WHEN p.direction = 'credit' THEN p.amount_minor_units ELSE -p.amount_minor_units END";
 
+    final whereArgs = <dynamic>[accountId];
+    String whereClause = "WHERE p.account_id = ? AND e.lifecycle_status = 'posted'";
+    if (asOf != null) {
+      whereClause += ' AND e.timestamp <= ?';
+      whereArgs.add(asOf.toUtc().toIso8601String());
+    }
+
     final result = await db.rawQuery('''
       SELECT COALESCE(SUM($formula), 0) AS derived_balance
       FROM ${TablesV24.postings} p
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-      WHERE p.account_id = ? AND e.lifecycle_status = 'posted'
-    ''', [accountId]);
+      $whereClause
+    ''', whereArgs);
 
     final rawBalance = (result.first['derived_balance'] as num?)?.toInt() ?? 0;
     return Money.fromMinorUnits(rawBalance, currency: acc.currency);

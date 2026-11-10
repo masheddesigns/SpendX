@@ -5,6 +5,7 @@ import '../../domain/finance/finance.dart';
 import '../../models/goal.dart';
 import '../../models/goal_log.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 import 'canonical/canonical_earmark_repository.dart';
 import 'canonical/canonical_goal_adapter.dart';
@@ -31,8 +32,10 @@ class GoalRepo {
         _earmarkRepo = earmarkRepo ?? CanonicalEarmarkRepository(executor: executor);
 
   Future<DatabaseExecutor> _getDb([Transaction? txn]) async {
-    if (txn != null) return txn;
-    if (_customExecutor != null) return _customExecutor;
+    if (txn != null) return DatabaseAccessGate.instance.wrapExecutor(txn);
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await db.database;
   }
 

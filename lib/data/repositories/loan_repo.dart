@@ -4,6 +4,7 @@ import '../../domain/finance/finance.dart';
 import '../../models/loan.dart';
 import '../../models/loan_installment.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 import 'canonical/canonical_account_repository.dart';
 import 'canonical/canonical_event_repository.dart';
@@ -35,7 +36,9 @@ class LoanRepo {
   DatabaseExecutor? get executor => _customExecutor;
 
   Future<DatabaseExecutor> get _db async =>
-      _customExecutor ?? await AppDatabase.instance.database;
+      _customExecutor != null
+          ? DatabaseAccessGate.instance.wrapExecutor(_customExecutor)
+          : await AppDatabase.instance.database;
 
   CanonicalAccountRepository _getAccountRepo(DatabaseExecutor db) =>
       CanonicalAccountRepository(executor: db);
@@ -62,6 +65,9 @@ class LoanRepo {
   // ============================================================================
   // DERIVED READ METHODS (3 methods)
   // ============================================================================
+
+  /// Lists all active loans projected with their canonical derived liability balances.
+  Future<List<Loan>> getAll() => getLoans();
 
   /// Lists all active loans projected with their canonical derived liability balances.
   Future<List<Loan>> getLoans() async {
@@ -537,6 +543,32 @@ class LoanRepo {
         );
       }
 
+      // 1. Reject if target is itself a reversal
+      if (event.reversalOfEventId != null ||
+          event.description.startsWith('REVERSAL:')) {
+        throw AccountingInvariantException('Cannot reverse a reversal event: $eventId');
+      }
+
+      // 2. Structured duplicate guard: check if a reversal already exists
+      final existingReversals = await txn.rawQuery(
+        '''
+        SELECT id FROM ${TablesV24.economicEvents}
+        WHERE reversal_of_event_id = ? AND lifecycle_status = 'posted'
+           OR (
+             substr(description, 1, 10) = 'REVERSAL: '
+             AND (substr(description, 11) = ? OR substr(description, 11, length(?) + 3) = ? || ' - ')
+           )
+        LIMIT 1;
+        ''',
+        [eventId, eventId, eventId, eventId],
+      );
+
+      if (existingReversals.isNotEmpty) {
+        throw AccountingInvariantException(
+          'Event $eventId has already been reversed by ${existingReversals.first['id']}. Duplicate reversals are prohibited.',
+        );
+      }
+
       final postings = await eventRepo.getPostingsForEvent(eventId);
       final reversal = CanonicalLoanAdapter.createReversal(event, postings);
 
@@ -728,16 +760,35 @@ class LoanRepo {
 
   Future<void> _checkDuplicateExternalRef(
     DatabaseExecutor db,
-    String externalRef,
+    String? externalRef,
   ) async {
-    final res = await db.rawQuery('''
+    if (externalRef == null || externalRef.trim().isEmpty) return;
+    final trimmedRef = externalRef.trim();
+
+    // 1. Primary Check: Query the indexed column `external_reference`
+    final res = await db.query(
+      TablesV24.evidence,
+      columns: ['id'],
+      where: 'external_reference = ?',
+      whereArgs: [trimmedRef],
+      limit: 1,
+    );
+    if (res.isNotEmpty) {
+      throw AccountingInvariantException(
+        'Duplicate loan transaction detected with external reference: $trimmedRef',
+      );
+    }
+
+    // 2. Compatibility Fallback Check: For legacy unencrypted payloads where external_reference was null
+    final legacyRes = await db.rawQuery('''
       SELECT COUNT(*) as count FROM ${TablesV24.evidence}
-      WHERE raw_payload_encrypted LIKE ?
-    ''', ['%"external_ref":"$externalRef"%']);
-    final count = (res.first['count'] as num?)?.toInt() ?? 0;
+      WHERE external_reference IS NULL
+        AND raw_payload_encrypted LIKE ?
+    ''', ['%"external_ref":"$trimmedRef"%']);
+    final count = (legacyRes.first['count'] as num?)?.toInt() ?? 0;
     if (count > 0) {
       throw AccountingInvariantException(
-        'Duplicate loan transaction detected with external reference: $externalRef',
+        'Duplicate loan transaction detected with external reference: $trimmedRef',
       );
     }
   }

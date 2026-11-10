@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqlite3/sqlite3.dart' as ffi;
+import '../../core/logging/app_logger.dart';
 import 'tables.dart';
-import 'spendx_database_factory.dart' hide InvalidDatabaseKeyException;
 import '../migrations/ledger_backfill_service.dart';
 import '../migrations/migration_v24_service.dart';
 import '../security/database_key_manager.dart';
@@ -12,11 +14,66 @@ import '../security/database_encryption_migration_service.dart';
 import '../../services/evidence_pruning_service.dart';
 import '../../services/backup_file_service.dart';
 import 'database_lifecycle_coordinator.dart';
+import 'database_access_gate.dart';
+import 'gated_database.dart';
+import 'restore_recovery_service.dart';
+import 'reversal_index_compatibility_service.dart';
+
+part 'spendx_database_factory_impl.dart';
+
+/// Immutable result of [AppDatabase.runPostRestoreIntegrityChecks].
+///
+/// All four fixed validation checks are captured here; the caller decides
+/// whether to accept the result or initiate rollback.
+class PostRestoreValidationResult {
+  /// True iff `PRAGMA integrity_check` returned `ok`.
+  final bool integrityCheckPassed;
+
+  /// Raw output string of `PRAGMA integrity_check` for diagnostic logging.
+  final String integrityCheckOutput;
+
+  /// Number of rows returned by `PRAGMA foreign_key_check` (0 = clean).
+  final int foreignKeyViolations;
+
+  /// Value of `PRAGMA user_version` read from the reopened database.
+  final int userVersion;
+
+  /// Table names confirmed present via `sqlite_master` query.
+  final Set<String> canonicalTablesPresent;
+
+  /// Table names the caller required to be present.
+  final Set<String> canonicalTablesExpected;
+
+  const PostRestoreValidationResult({
+    required this.integrityCheckPassed,
+    required this.integrityCheckOutput,
+    required this.foreignKeyViolations,
+    required this.userVersion,
+    required this.canonicalTablesPresent,
+    required this.canonicalTablesExpected,
+  });
+
+  /// True iff all four checks pass: integrity ok, no FK violations, correct
+  /// user_version, all expected canonical tables present.
+  bool get isValid =>
+      integrityCheckPassed &&
+      foreignKeyViolations == 0 &&
+      userVersion == 24 &&
+      canonicalTablesExpected.every(canonicalTablesPresent.contains);
+
+  /// Human-readable summary for diagnostic logging.
+  String get summary =>
+      'integrity=${integrityCheckPassed ? "ok" : integrityCheckOutput}, '
+      'fk_violations=$foreignKeyViolations, '
+      'user_version=$userVersion, '
+      'tables=${canonicalTablesPresent.join(",")}';
+}
 
 
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
+  static GatedDatabase? _gatedDatabase;
   static Future<Database>? _initFuture;
 
   /// Test-only seam to disable automatic plaintext migration if testing
@@ -29,15 +86,101 @@ class AppDatabase {
   /// default. Setting it also drops any cached connection.
   static String? _testDbPath;
   static void setTestDatabasePath(String? path) {
+    if (const bool.fromEnvironment('dart.vm.product')) {
+      throw UnsupportedError('setTestDatabasePath is strictly prohibited in release builds');
+    }
     _testDbPath = path;
     _database = null;
+    _gatedDatabase = null;
     _initFuture = null;
   }
 
   AppDatabase._init();
 
+  /// Whether the database connection is currently open.
+  bool get isOpen => _database != null && _database!.isOpen;
+
+  /// Runs the fixed set of post-restore integrity checks directly on the
+  /// underlying database connection, bypassing the [DatabaseAccessGate].
+  ///
+  /// The set of queries is not caller-configurable: this method always executes
+  /// exactly these four read-only SQLite PRAGMA / schema queries and nothing
+  /// else:
+  ///   1. `PRAGMA integrity_check` — verifies B-tree and page consistency.
+  ///   2. `PRAGMA foreign_key_check` — verifies referential integrity.
+  ///   3. `PRAGMA user_version` — confirms the schema generation is v24.
+  ///   4. `SELECT name FROM sqlite_master WHERE type='table' AND name IN (…)` —
+  ///      confirms the three canonical ledger tables are present.
+  ///
+  /// **Guards (both must hold, in order):**
+  ///   1. The [DatabaseLifecycleCoordinator] must be in the
+  ///      [DatabaseLifecycleState.restoring] state — the native exclusive
+  ///      restore lease is held iff this is true, so this acts as a proxy for
+  ///      the lease check without requiring the token to be passed through.
+  ///   2. An open [Database] connection must be available (i.e. the caller has
+  ///      already called `AppDatabase.instance.database` after the atomic swap).
+  ///
+  /// Returns a [PostRestoreValidationResult] with all check outcomes populated.
+  /// Throws [StateError] if either guard fails.
+  ///
+  /// This method is not a general-purpose SQL execution interface.  Any change
+  /// to the fixed query set requires a corresponding change to the reviewer's
+  /// acceptance criteria.
+  Future<PostRestoreValidationResult> runPostRestoreIntegrityChecks({
+    required List<String> canonicalTableNames,
+  }) async {
+    if (DatabaseLifecycleCoordinator.instance.currentState !=
+        DatabaseLifecycleState.restoring) {
+      throw StateError(
+        'runPostRestoreIntegrityChecks() may only be called while the lifecycle '
+        'coordinator is in the restoring state. '
+        'Current state: ${DatabaseLifecycleCoordinator.instance.currentState}',
+      );
+    }
+    final db = _database;
+    if (db == null || !db.isOpen) {
+      throw StateError(
+        'runPostRestoreIntegrityChecks(): no open database connection. '
+        'The database must be reopened before validation queries can be run.',
+      );
+    }
+
+    // 1. Structural integrity
+    final integrityRows = await db.rawQuery('PRAGMA integrity_check;');
+    final integrity = integrityRows.isNotEmpty
+        ? (integrityRows.first.values.first as String? ?? '')
+        : '';
+
+    // 2. Referential integrity
+    final fkRows = await db.rawQuery('PRAGMA foreign_key_check;');
+
+    // 3. Schema generation
+    final verRows = await db.rawQuery('PRAGMA user_version;');
+    final userVersion = verRows.isNotEmpty
+        ? (verRows.first.values.first as num?)?.toInt() ?? 0
+        : 0;
+
+    // 4. Canonical table presence
+    final inClause = canonicalTableNames.map((n) => "'$n'").join(', ');
+    final tableRows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ($inClause);",
+    );
+    final foundTables = tableRows.map((r) => r['name'] as String? ?? '').toSet();
+
+    return PostRestoreValidationResult(
+      integrityCheckPassed: integrity.toLowerCase() == 'ok',
+      integrityCheckOutput: integrity,
+      foreignKeyViolations: fkRows.length,
+      userVersion: userVersion,
+      canonicalTablesPresent: foundTables,
+      canonicalTablesExpected: canonicalTableNames.toSet(),
+    );
+  }
+
   Future<Database> get database async {
-    if (_database != null && _database!.isOpen) return _database!;
+    if (_database != null && _database!.isOpen) {
+      return _gatedDatabase ??= DatabaseAccessGate.instance.wrapDatabase(_database!);
+    }
     _initFuture ??= _initDB('spendx.db');
     try {
       final db = await _initFuture!;
@@ -46,18 +189,39 @@ class AppDatabase {
           DatabaseLifecycleState.closed) {
         DatabaseLifecycleCoordinator.instance.markActive();
       }
-      return db;
+      if (DatabaseAccessGate.instance.isOpen) {
+        await DatabaseAccessGate.instance.ensureNativeLeaseAcquired();
+      }
+      return _gatedDatabase = DatabaseAccessGate.instance.wrapDatabase(db);
     } catch (e) {
       _initFuture = null;
+      _gatedDatabase = null;
       rethrow;
     }
   }
 
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, _testDbPath ?? filePath);
+    final effectiveFile = const bool.fromEnvironment('dart.vm.product')
+        ? filePath
+        : (_testDbPath ?? filePath);
+    final path = join(dbPath, effectiveFile);
 
     await SpendXDatabaseFactory.instance.initialize();
+    if (dbPath.isNotEmpty && !dbPath.contains('.dart_tool')) {
+      try {
+        await databaseFactory.setDatabasesPath(dbPath);
+      } catch (_) {}
+    }
+
+    // Check for interrupted restore recovery before opening or migrating.
+    // Runs on cold start / restart; skipped when an active in-isolate restore is in progress.
+    if (DatabaseLifecycleCoordinator.instance.currentState !=
+        DatabaseLifecycleState.restoring) {
+      await RestoreRecoveryService.instance.reconcile(
+        dbPath: path,
+      );
+    }
 
     // Check for interrupted migration recovery
     await DatabaseEncryptionMigrationService.instance.recoverInterruptedMigration(
@@ -72,7 +236,7 @@ class AppDatabase {
     if (hasBytes && DatabaseEncryptionMigrationService.isPlaintextSqliteFile(path)) {
       if (autoMigrateLegacyPlaintext) {
         // Inspect schema version of the legacy database
-        final tempDb = await SpendXDatabaseFactory.instance.openPlaintextDatabase(path);
+        final tempDb = await _openPrimaryPlaintextInternal(path: path);
         int currentVersion = 0;
         try {
           final verRows = await tempDb.rawQuery('PRAGMA user_version;');
@@ -120,7 +284,10 @@ class AppDatabase {
             await _applyUpgrades(db, oldVersion);
           },
           onOpen: (db) async {
-            await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+            await db.execute(TablesV24.createEconomicEventsUniqueReversalIndex);
+            if (DatabaseAccessGate.instance.isOpen) {
+              await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+            }
             await BackupFileService.cleanOrphanedStagingDirectories();
           },
         );
@@ -135,8 +302,8 @@ class AppDatabase {
     );
     final blobKey = SpendXDatabaseKeyManager.keyToSqlCipherBlob(key);
 
-    return await SpendXDatabaseFactory.instance.openEncryptedDatabase(
-      path,
+    return await _openPrimaryEncryptedInternal(
+      path: path,
       password: blobKey,
       version: 24,
       onConfigure: (db) async {
@@ -148,7 +315,10 @@ class AppDatabase {
         await _applyUpgrades(db, oldVersion);
       },
       onOpen: (db) async {
-        await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+        await ReversalIndexCompatibilityService.ensureReversalIndex(db);
+        if (DatabaseAccessGate.instance.isOpen) {
+          await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+        }
         await BackupFileService.cleanOrphanedStagingDirectories();
       },
     );
@@ -414,6 +584,7 @@ class AppDatabase {
   Future<void> close() async {
     final db = _database;
     _database = null;
+    _gatedDatabase = null;
     _initFuture = null;
     DatabaseLifecycleCoordinator.instance.markClosed();
     if (db != null && db.isOpen) {
@@ -424,17 +595,37 @@ class AppDatabase {
   /// Returns the absolute path to the active database file on disk.
   Future<String> getDatabasePath() async {
     final dbDir = await getDatabasesPath();
-    return join(dbDir, _testDbPath ?? 'spendx.db');
+    if ((Platform.isAndroid || Platform.isIOS) && dbDir.contains('.dart_tool')) {
+      throw StateError(
+        'Security violation: Invalid mobile databases directory pointing to .dart_tool: $dbDir',
+      );
+    }
+    final effectiveFile = const bool.fromEnvironment('dart.vm.product')
+        ? 'spendx.db'
+        : (_testDbPath ?? 'spendx.db');
+    return join(dbDir, effectiveFile);
   }
 
   /// Flushes pending WAL frames and prepares database for atomic snapshot or swap.
-  Future<void> checkpointWal() async {
+  /// Returns a map with 'busy', 'log', and 'checkpointed' counts from PRAGMA wal_checkpoint(TRUNCATE).
+  Future<Map<String, int>> checkpointWal() async {
     final db = _database;
     if (db != null && db.isOpen) {
       try {
-        await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
-      } catch (_) {}
+        final res = await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
+        if (res.isNotEmpty) {
+          final row = res.first;
+          return {
+            'busy': (row['busy'] as num?)?.toInt() ?? 0,
+            'log': (row['log'] as num?)?.toInt() ?? 0,
+            'checkpointed': (row['checkpointed'] as num?)?.toInt() ?? 0,
+          };
+        }
+      } catch (_) {
+        return {'busy': 1, 'log': 0, 'checkpointed': 0};
+      }
     }
+    return {'busy': 0, 'log': 0, 'checkpointed': 0};
   }
 
   /// V20: ensure ledger_transactions.category_id is TEXT (V17 created it as

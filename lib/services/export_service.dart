@@ -1,6 +1,7 @@
 import '../core/logging/app_logger.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:csv/csv.dart' as csv_pkg;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -48,24 +49,42 @@ class ExportService {
   // ─── Full Backup Export ──────────────────────────────────────────────
 
   /// Generates the canonical spendx_backup.spendx package and opens a save dialog.
-  Future<void> exportFullBackup() async {
+  Future<String?> exportFullBackup({String? password}) async {
     try {
-      String? outputFile = await FilePicker.platform.saveFile(
+      // 1. Generate canonical backup package in local app storage first
+      final (packageFile, manifest) =
+          await BackupService.instance.createBackupPackage(
+        password: password,
+      );
+
+      final Uint8List packageBytes = await packageFile.readAsBytes();
+
+      // 2. Open platform file-saving dialog with required bytes supplied
+      final String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Save Backup',
         fileName: BackupFileService.backupFileName,
         type: FileType.custom,
         allowedExtensions: ['spendx'],
+        bytes: packageBytes,
       );
 
       if (outputFile == null) {
         AppLogger.d('[EXPORT] Backup export canceled by user');
-        return;
+        return null;
       }
 
-      await BackupService.instance.createBackupPackage(
-        outputFile: File(outputFile),
+      // On desktop platforms where saveFile returns a path without automatically writing bytes:
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        final savedFile = File(outputFile);
+        if (!await savedFile.exists() || await savedFile.length() == 0) {
+          await packageFile.copy(outputFile);
+        }
+      }
+
+      AppLogger.d(
+        '[EXPORT] Backup saved to $outputFile (checksum: ${manifest.databaseSha256})',
       );
-      AppLogger.d('[EXPORT] Backup saved to $outputFile');
+      return outputFile;
     } catch (e) {
       AppLogger.d('[EXPORT] Failed to export backup: $e');
       rethrow;

@@ -13,6 +13,7 @@ import 'services/live_sms_service.dart';
 import 'services/notification_service_v2.dart';
 import 'services/reminder_service.dart';
 import 'data/core/app_database.dart';
+import 'data/core/tracked_database_task_queue.dart';
 import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
 import 'core/config/app_env.dart';
@@ -67,12 +68,14 @@ void main() {
           rethrow;
         }
       } else {
-        // NEW: Lightweight DB Pre-warm
+        // NEW: Lightweight DB Pre-warm (tracked background task)
         // Starts opening the DB and running migrations in background to prevent cold hits
-        unawaited(
-          AppDatabase.instance.database.then((_) {}).catchError((e, st) {
+        TrackedDatabaseTaskQueue.instance.runTracked(
+          'app_db_prewarm',
+          () => AppDatabase.instance.database,
+          onError: (e, st) {
             AppLogger.e('DB Pre-warm failed', e, st);
-          }),
+          },
         );
       }
 

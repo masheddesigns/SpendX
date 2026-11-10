@@ -16,6 +16,8 @@ class Transaction {
   final String? externalRef;
   final String? location;
   final bool isDeleted;
+  final String? rawPayload;
+  final double? interestAmount;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -34,6 +36,8 @@ class Transaction {
     this.externalRef,
     this.location,
     this.isDeleted = false,
+    this.rawPayload,
+    this.interestAmount,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : id = id ?? const Uuid().v4(),
@@ -77,6 +81,8 @@ class Transaction {
       externalRef: map['external_ref'] as String?,
       location: map['location'] as String?,
       isDeleted: (map['is_deleted'] as int? ?? 0) == 1,
+      rawPayload: map['raw_payload'] as String?,
+      interestAmount: (map['interest_amount'] as num?)?.toDouble(),
       createdAt: map['created_at'] != null ? DateTime.parse(map['created_at'] as String) : DateTime.now(),
       updatedAt: map['updated_at'] != null ? DateTime.parse(map['updated_at'] as String) : DateTime.now(),
     );
@@ -131,6 +137,8 @@ class Transaction {
     String? externalRef,
     String? location,
     bool? isDeleted,
+    String? rawPayload,
+    double? interestAmount,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -149,6 +157,8 @@ class Transaction {
       externalRef: externalRef ?? this.externalRef,
       location: location ?? this.location,
       isDeleted: isDeleted ?? this.isDeleted,
+      rawPayload: rawPayload ?? this.rawPayload,
+      interestAmount: interestAmount ?? this.interestAmount,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

@@ -52,7 +52,6 @@ final dashboardSummaryProvider = Provider<DashboardSummaryData>((ref) {
 
   final currentMonthStart = DateTime(now.year, now.month, 1);
   final previousMonthStart = DateTime(now.year, now.month - 1, 1);
-  final previousMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
 
   double income = 0, expense = 0;
   double curMonthExp = 0, prevMonthExp = 0;
@@ -61,19 +60,34 @@ final dashboardSummaryProvider = Provider<DashboardSummaryData>((ref) {
     if (startDate == null || !t.date.isBefore(startDate)) {
       if (t.type == 'income') {
         income += t.amount;
-      } else if (t.type == 'expense') {
+      } else if (t.type == 'expense' || t.type == 'credit_card_purchase') {
         expense += t.amount;
+      } else if (t.type == 'refund') {
+        expense -= t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        expense += _extractInterest(t);
       }
     }
 
-    if (!t.date.isBefore(currentMonthStart) && t.type == 'expense') {
-      curMonthExp += t.amount;
+    if (!t.date.isBefore(currentMonthStart)) {
+      if (t.type == 'expense' || t.type == 'credit_card_purchase') {
+        curMonthExp += t.amount;
+      } else if (t.type == 'refund') {
+        curMonthExp -= t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        curMonthExp += _extractInterest(t);
+      }
     }
 
     if (!t.date.isBefore(previousMonthStart) &&
-        t.date.isBefore(previousMonthEnd) &&
-        t.type == 'expense') {
-      prevMonthExp += t.amount;
+        t.date.isBefore(currentMonthStart)) {
+      if (t.type == 'expense' || t.type == 'credit_card_purchase') {
+        prevMonthExp += t.amount;
+      } else if (t.type == 'refund') {
+        prevMonthExp -= t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        prevMonthExp += _extractInterest(t);
+      }
     }
   }
 
@@ -85,6 +99,19 @@ final dashboardSummaryProvider = Provider<DashboardSummaryData>((ref) {
     previousMonthExpense: prevMonthExp,
   );
 });
+
+double _extractInterest(spx.Transaction t) {
+  if (t.interestAmount != null) {
+    return t.interestAmount!;
+  }
+  if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+    final match = RegExp(r'Interest:\s*([\d\.]+)').firstMatch(t.notes);
+    if (match != null) {
+      return double.tryParse(match.group(1)!) ?? 0.0;
+    }
+  }
+  return 0.0;
+}
 
 final dashboardTransactionsProvider = Provider<List<spx.Transaction>>((ref) {
   final period = ref.watch(dashboardPeriodProvider);

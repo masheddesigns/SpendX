@@ -78,6 +78,8 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+
     }
 
     private fun queryInboxSince(sinceEpochMs: Long?, limit: Int): List<Map<String, Any?>> {

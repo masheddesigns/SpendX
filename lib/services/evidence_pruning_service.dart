@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../core/logging/app_logger.dart';
 import '../data/core/app_database.dart';
+import '../data/core/database_access_gate.dart';
 import '../data/core/tables_v24.dart';
 
 /// EvidencePruningService — Enforces privacy retention by purging raw SMS/evidence payloads
@@ -28,7 +29,9 @@ class EvidencePruningService {
     DatabaseExecutor? executor,
   }) async {
     final cutoff = (referenceTime ?? DateTime.now().toUtc()).toIso8601String();
-    final db = executor ?? await AppDatabase.instance.database;
+    final db = executor != null
+        ? DatabaseAccessGate.instance.wrapExecutor(executor)
+        : await AppDatabase.instance.database;
 
     final updatedCount = await db.rawUpdate('''
       UPDATE ${TablesV24.evidence}

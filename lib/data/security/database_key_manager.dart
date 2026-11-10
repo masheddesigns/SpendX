@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
@@ -78,7 +79,28 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   static final Map<String, String> _testFallback = {};
   static File? _testStorageFile;
 
+  /// Test-only hook to simulate production / release execution in unit tests.
+  @visibleForTesting
+  static bool? isProductionExecutionOverride;
+
+  /// Whether current execution is considered production (release mode or mobile OS).
+  static bool get _isProductionExecution {
+    if (isProductionExecutionOverride != null) {
+      return isProductionExecutionOverride!;
+    }
+    if (kReleaseMode) return true;
+    try {
+      if (Platform.isAndroid || Platform.isIOS) return true;
+    } catch (_) {}
+    return false;
+  }
+
   static File _getTestStorageFile() {
+    if (_isProductionExecution) {
+      throw StateError(
+        'Security violation: .dart_tool test storage is strictly prohibited on production or mobile platforms.',
+      );
+    }
     if (_testStorageFile != null) return _testStorageFile!;
     final dir = Directory(p.join('.dart_tool', 'sqflite_common_ffi'));
     if (!dir.existsSync()) {
@@ -91,6 +113,7 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   }
 
   static void _loadTestStorage() {
+    if (_isProductionExecution) return;
     try {
       final f = _getTestStorageFile();
       if (f.existsSync()) {
@@ -108,6 +131,7 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   }
 
   static void _saveTestStorage() {
+    if (_isProductionExecution) return;
     try {
       final f = _getTestStorageFile();
       f.writeAsStringSync(jsonEncode(_testFallback));
@@ -115,6 +139,10 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
   }
 
   static bool _isTestEnvironmentError(Object e) {
+    // In release mode or on mobile devices (Android/iOS), NEVER classify any error
+    // as a test-environment error. Key-storage failures must fail closed.
+    if (_isProductionExecution) return false;
+
     final msg = e.toString();
     return e is MissingPluginException ||
         msg.contains('MissingPluginException') ||
@@ -155,7 +183,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
         _loadTestStorage();
         return _testFallback[key];
       }
-      rethrow;
+      if (e is DatabaseKeyException) rethrow;
+      throw DatabaseKeyAccessException(
+        'Failed to read from SecureStorage: $e',
+        e,
+      );
     }
   }
 
@@ -174,7 +206,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
         _saveTestStorage();
         return;
       }
-      rethrow;
+      if (e is DatabaseKeyException) rethrow;
+      throw DatabaseKeyAccessException(
+        'Failed to write to SecureStorage: $e',
+        e,
+      );
     }
   }
 
@@ -193,7 +229,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
         _saveTestStorage();
         return;
       }
-      rethrow;
+      if (e is DatabaseKeyException) rethrow;
+      throw DatabaseKeyAccessException(
+        'Failed to delete from SecureStorage: $e',
+        e,
+      );
     }
   }
 
@@ -210,7 +250,11 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
         _loadTestStorage();
         return _testFallback.containsKey(key);
       }
-      rethrow;
+      if (e is DatabaseKeyException) rethrow;
+      throw DatabaseKeyAccessException(
+        'Failed to check containsKey in SecureStorage: $e',
+        e,
+      );
     }
   }
 }

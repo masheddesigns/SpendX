@@ -4,10 +4,16 @@ import '../../models/lending.dart';
 import 'package:sqflite/sqflite.dart';
 
 class LendingRepo {
+  final DatabaseExecutor? _customExecutor;
   final _dbProvider = AppDatabase.instance;
 
+  LendingRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
+
+  Future<DatabaseExecutor> get _db async =>
+      _customExecutor ?? await _dbProvider.database;
+
   Future<List<Lending>> getAll({bool? settledFilter}) async {
-    final db = await _dbProvider.database;
+    final db = await _db;
     String? where;
     List<dynamic>? whereArgs;
     
@@ -26,7 +32,7 @@ class LendingRepo {
   }
 
   Future<Lending?> getById(String id) async {
-    final db = await _dbProvider.database;
+    final db = await _db;
     final maps = await db.query(
       Tables.lendings,
       where: 'id = ?',
@@ -37,7 +43,7 @@ class LendingRepo {
   }
 
   Future<String> insert(Lending lending) async {
-    final db = await _dbProvider.database;
+    final db = await _db;
     await db.insert(
       Tables.lendings,
       lending.toMap(),
@@ -47,7 +53,7 @@ class LendingRepo {
   }
 
   Future<int> update(Lending lending) async {
-    final db = await _dbProvider.database;
+    final db = await _db;
     return await db.update(
       Tables.lendings,
       lending.toMap(),
@@ -57,7 +63,7 @@ class LendingRepo {
   }
 
   Future<int> delete(String id) async {
-    final db = await _dbProvider.database;
+    final db = await _db;
     return await db.delete(
       Tables.lendings,
       where: 'id = ?',

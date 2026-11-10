@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'reversal_index_compatibility_service.dart';
 
 /// SpendX 2.0 Canonical Double-Entry SQLite Schema (v24).
 ///
@@ -113,6 +114,12 @@ class TablesV24 {
 
   static const createEconomicEventsCategoryIndex = '''
     CREATE INDEX IF NOT EXISTS idx_events_category ON $economicEvents(category_id);
+  ''';
+
+  static const createEconomicEventsUniqueReversalIndex = '''
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_events_unique_reversal
+    ON $economicEvents(reversal_of_event_id)
+    WHERE reversal_of_event_id IS NOT NULL;
   ''';
 
   // ============================================================================
@@ -388,6 +395,7 @@ class TablesV24 {
     createEconomicEventsTimestampIndex,
     createEconomicEventsTypeStatusIndex,
     createEconomicEventsCategoryIndex,
+    createEconomicEventsUniqueReversalIndex,
     createEvidence,
     createEvidenceEventIndex,
     createEvidenceExternalRefIndex,
@@ -432,7 +440,11 @@ class TablesV24 {
   /// Creates all v24 canonical tables and indexes.
   static Future<void> createAllV24(DatabaseExecutor db) async {
     for (final q in allTableCreateQueries) {
-      await db.execute(q);
+      if (q == createEconomicEventsUniqueReversalIndex) {
+        await ReversalIndexCompatibilityService.ensureReversalIndex(db);
+      } else {
+        await db.execute(q);
+      }
     }
   }
 

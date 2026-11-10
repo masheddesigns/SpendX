@@ -418,7 +418,8 @@ class FinancialTransactionService {
           tx.type == 'fuel_expense' ||
           tx.source == 'credit_card_purchase' ||
           isCcPayment;
-      if (isBillSpend && tx.amount > 0) {
+      final isIncome = tx.type == 'income';
+      if ((isBillSpend || isIncome) && tx.amount > 0) {
         final rRepo = ReminderRepo(database: db);
         await rRepo.settleMatching(
           amount: tx.amount,
@@ -426,6 +427,7 @@ class FinancialTransactionService {
           notes: tx.notes,
           linkedEntityId: tx.relatedEntityId,
           isCreditCardPayment: isCcPayment,
+          isIncome: isIncome,
         );
       }
     } catch (_) {}

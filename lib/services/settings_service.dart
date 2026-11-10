@@ -158,7 +158,11 @@ class SettingsService extends ChangeNotifier {
   // --- Features & Settings ---
 
   String get primaryCurrency {
-    return _prefs.getString(_currencyKey) ?? 'INR';
+    try {
+      return _prefs.getString(_currencyKey) ?? 'INR';
+    } catch (_) {
+      return 'INR';
+    }
   }
 
   String get currencySymbol {

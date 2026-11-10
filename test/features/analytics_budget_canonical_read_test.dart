@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
+import 'package:spend_x/data/core/database_access_gate.dart';
 import 'package:spend_x/data/core/tables.dart';
 import 'package:spend_x/data/providers.dart' as app_data;
 import 'package:spend_x/data/repositories/transaction_repo.dart';
@@ -49,6 +50,7 @@ void main() {
     late ProviderContainer container;
 
     setUp(() async {
+      DatabaseAccessGate.instance.resetForTesting();
       db = await openDatabase(
         inMemoryDatabasePath,
         onConfigure: (db) async {
@@ -70,7 +72,7 @@ void main() {
       canonicalEventRepo = CanonicalEventRepository(executor: db);
       canonicalQueryRepo = CanonicalFinancialQueryRepository(executor: db);
       budgetRepo = BudgetRepo(executor: db, queryRepo: canonicalQueryRepo);
-      categoryRepo = CategoryRepo();
+      categoryRepo = CategoryRepo(executor: db);
       analyticsRepo = AnalyticsRepo(executor: db);
       analyticsService = AnalyticsService();
       financialHealthService = FinancialHealthService(
@@ -78,7 +80,7 @@ void main() {
         accountRepo: accountRepo,
         loanRepo: loanRepo,
         salaryRepo: SalaryRepo(),
-        lendingRepo: LendingRepo(),
+        lendingRepo: LendingRepo(executor: db),
         categoryRepo: categoryRepo,
         queryRepo: canonicalQueryRepo,
       );
@@ -100,6 +102,7 @@ void main() {
     tearDown(() async {
       container.dispose();
       await db.close();
+      DatabaseAccessGate.instance.resetForTesting();
     });
 
     // Helper to insert category and its canonical expense/income account

@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
 import '../../core/app_database.dart';
+import '../../core/database_access_gate.dart';
 import '../../core/tables_v24.dart';
 
 /// Canonical Opening Balance Reconciliation Repository for SpendX 2.0.
@@ -18,8 +19,10 @@ class CanonicalOpeningBalanceRepository {
       : _customExecutor = executor;
 
   Future<DatabaseExecutor> _getExecutor(Transaction? txn) async {
-    if (txn != null) return txn;
-    if (_customExecutor != null) return _customExecutor;
+    if (txn != null) return DatabaseAccessGate.instance.wrapExecutor(txn);
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await AppDatabase.instance.database;
   }
 

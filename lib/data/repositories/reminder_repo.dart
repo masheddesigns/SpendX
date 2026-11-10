@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../models/credit_card.dart';
 import '../../models/reminder_model.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 import 'credit_repo.dart';
 
@@ -12,7 +13,9 @@ class ReminderRepo {
   ReminderRepo({this.database});
 
   Future<DatabaseExecutor> get _db async =>
-      database ?? await AppDatabase.instance.database;
+      database != null
+          ? DatabaseAccessGate.instance.wrapExecutor(database!)
+          : await AppDatabase.instance.database;
 
   Future<List<Reminder>> getAll() async {
     final executor = await _db;
@@ -95,6 +98,7 @@ class ReminderRepo {
     String? notes,
     String? linkedEntityId,
     bool isCreditCardPayment = false,
+    bool isIncome = false,
   }) async {
     final all = await getAll();
     int settledCount = 0;
@@ -121,7 +125,9 @@ class ReminderRepo {
         continue;
       }
       if (reminder.type == ReminderType.salary) {
-        continue;
+        if (!isIncome) continue;
+      } else {
+        if (isIncome) continue;
       }
 
       bool matches = false;

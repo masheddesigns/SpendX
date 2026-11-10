@@ -1096,6 +1096,7 @@ void main() {
           notes: 'Zomato',
           externalRef: '629000111222',
           source: 'sms',
+          rawPayload: rawBody,
         );
         await FinancialTransactionService(database: db).createTransaction(tx1);
 
@@ -1103,6 +1104,7 @@ void main() {
         final eventRepo = CanonicalEventRepository(executor: db);
         final existingEvidence = await eventRepo.getEvidenceByExternalReference('629000111222');
         expect(existingEvidence, isNotNull);
+        expect(existingEvidence?.bodyFingerprint, fingerprint);
 
         // Attempt second ingestion with same reference
         final duplicateCheck = await eventRepo.getEvidenceByExternalReference('629000111222');

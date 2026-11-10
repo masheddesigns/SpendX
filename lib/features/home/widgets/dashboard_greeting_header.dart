@@ -17,7 +17,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final analytics = ref.watch(analyticsSummaryProvider);
+    final netWorth = ref.watch(netWorthProvider);
 
     final now = DateTime.now();
     final greeting = _getGreeting(now.hour);
@@ -98,7 +98,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Net · ${AppFormat.compact(analytics.netWorth)}',
+                          'Net · ${AppFormat.compact(netWorth)}',
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,

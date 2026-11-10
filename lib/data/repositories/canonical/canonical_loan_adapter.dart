@@ -344,6 +344,9 @@ class CanonicalLoanAdapter {
       sourceType: 'manual',
       sourceTimestamp: timestamp,
       extractedAmount: amount,
+      externalReference: (externalRef != null && externalRef.trim().isNotEmpty)
+          ? externalRef.trim()
+          : null,
       bodyFingerprint: hash,
       rawPayloadEncrypted: payload,
       createdAt: timestamp,
@@ -423,6 +426,9 @@ class CanonicalLoanAdapter {
       sourceType: 'manual',
       sourceTimestamp: timestamp,
       extractedAmount: principalAmount,
+      externalReference: (externalRef != null && externalRef.trim().isNotEmpty)
+          ? externalRef.trim()
+          : null,
       bodyFingerprint: hash,
       rawPayloadEncrypted: payload,
       createdAt: timestamp,
@@ -503,6 +509,9 @@ class CanonicalLoanAdapter {
       sourceType: 'manual',
       sourceTimestamp: timestamp,
       extractedAmount: interestAmount,
+      externalReference: (externalRef != null && externalRef.trim().isNotEmpty)
+          ? externalRef.trim()
+          : null,
       bodyFingerprint: hash,
       rawPayloadEncrypted: payload,
       createdAt: timestamp,
@@ -598,6 +607,9 @@ class CanonicalLoanAdapter {
       sourceType: 'manual',
       sourceTimestamp: timestamp,
       extractedAmount: totalEmi,
+      externalReference: (externalRef != null && externalRef.trim().isNotEmpty)
+          ? externalRef.trim()
+          : null,
       bodyFingerprint: hash,
       rawPayloadEncrypted: payload,
       createdAt: timestamp,
@@ -751,10 +763,12 @@ class CanonicalLoanAdapter {
       id: reversalId,
       canonicalType: originalEvent.canonicalType,
       lifecycleStatus: EventLifecycle.posted,
-      occurredAt: now,
+      occurredAt: originalEvent.occurredAt,
       description: 'REVERSAL: ${originalEvent.id}',
+      reversalOfEventId: originalEvent.id,
       metadata: {
         'reversal_of': originalEvent.id,
+        'reversal_of_event_id': originalEvent.id,
       },
       postings: reversalPostings,
       createdAt: now,

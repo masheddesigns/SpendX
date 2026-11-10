@@ -847,9 +847,12 @@ class _NetPositionHorizonCard extends ConsumerWidget {
       liabilities = summaryAsync.value!.liabilities;
       netWorth = summaryAsync.value!.netWorth;
     } else {
-      assets = accounts
-          .where((a) => a.isAsset)
+      final positiveAssets = accounts
+          .where((a) => a.isAsset && a.balance > 0)
           .fold<double>(0, (sum, a) => sum + a.balance);
+      final accountOverdrafts = accounts
+          .where((a) => a.isAsset && a.balance < 0)
+          .fold<double>(0, (sum, a) => sum + a.balance.abs());
       final accountLiabilities = accounts
           .where((a) => !a.isAsset)
           .fold<double>(0, (sum, a) => sum + a.balance.abs());
@@ -860,12 +863,12 @@ class _NetPositionHorizonCard extends ConsumerWidget {
         (sum, loan) =>
             sum + (loan.total - loan.paidAmount).clamp(0, double.infinity),
       );
-      liabilities = accountLiabilities + cardOutstanding + loanOutstanding;
+      assets = positiveAssets;
+      liabilities = accountLiabilities + accountOverdrafts + cardOutstanding + loanOutstanding;
       netWorth = assets - liabilities;
     }
 
     final isSolvent = netWorth >= 0;
-    final isOverdrawn = assets < 0;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1051,7 +1054,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                 // Assets & Liabilities Split Strip
                 Row(
                   children: [
-                    // Assets Column (Amber when overdrawn, Emerald when positive - NEVER GREEN IF NEGATIVE)
+                    // Assets Column (Emerald when positive, Neutral when zero - NEVER NEGATIVE)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1059,38 +1062,28 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                           Row(
                             children: [
                               Text(
-                                isOverdrawn
-                                    ? 'Total Assets (Overdrawn)'
-                                    : 'Total Assets',
+                                'Total Assets',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
-                                  color: isOverdrawn
-                                      ? (isDark
-                                          ? const Color(0xFFFBBF24)
-                                          : const Color(0xFFD97706))
-                                      : (isDark
-                                          ? const Color(0xFF94A3B8)
-                                          : const Color(0xFF64748B)),
+                                  color: isDark
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF64748B),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            isOverdrawn
-                                ? AppFormat.currency(assets)
+                            assets <= 0
+                                ? AppFormat.currency(0)
                                 : '+${AppFormat.currency(assets)}',
                             style: TextStyle(
                               fontSize: 14.5,
                               fontWeight: FontWeight.w700,
-                              color: isOverdrawn
-                                  ? (isDark
-                                      ? const Color(0xFFFBBF24)
-                                      : const Color(0xFFD97706))
-                                  : (isDark
-                                      ? const Color(0xFF34D399)
-                                      : const Color(0xFF16A34A)),
+                              color: isDark
+                                  ? const Color(0xFF34D399)
+                                  : const Color(0xFF16A34A),
                               fontFeatures: const [FontFeature.tabularFigures()],
                             ),
                           ),

@@ -35,49 +35,97 @@ class CanonicalFinancialQueryRepository {
     return await AppDatabase.instance.database;
   }
 
-  /// Calculates total net asset value across all asset accounts.
+  /// Calculates total net asset value across all active non-system asset accounts.
+  /// Gross assets include all accounts with non-negative balance.
+  /// Overdrawn accounts (negative balance) are treated as overdraft liabilities.
   Future<Money> getTotalAssets({Transaction? txn, String currency = 'INR'}) async {
     final db = await _getExecutor(txn);
     final result = await db.rawQuery('''
       SELECT COALESCE(
         SUM(
-          CASE
-            WHEN p.direction = 'debit' THEN p.amount_minor_units
-            ELSE -p.amount_minor_units
-          END
+          CASE WHEN account_balance > 0 THEN account_balance ELSE 0 END
         ), 0
       ) AS total_assets
-      FROM ${TablesV24.postings} p
-      JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-      JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-      WHERE a.account_type = 'asset'
-        AND a.is_active = 1
-        AND e.lifecycle_status = 'posted';
+      FROM (
+        SELECT p.account_id,
+          SUM(
+            CASE
+              WHEN p.direction = 'debit' THEN p.amount_minor_units
+              ELSE -p.amount_minor_units
+            END
+          ) AS account_balance
+        FROM ${TablesV24.postings} p
+        JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+        JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+        WHERE a.account_type = 'asset'
+          AND a.is_system = 0
+          AND a.is_active = 1
+          AND e.lifecycle_status = 'posted'
+        GROUP BY p.account_id
+      );
     ''');
 
     final amount = (result.first['total_assets'] as num?)?.toInt() ?? 0;
     return Money.fromMinorUnits(amount, currency: currency);
   }
 
-  /// Calculates total liabilities across all liability accounts.
+  /// Calculates total liabilities across all active non-system liability accounts
+  /// plus any bank account overdrafts (asset accounts with negative balance).
   Future<Money> getTotalLiabilities({Transaction? txn, String currency = 'INR'}) async {
     final db = await _getExecutor(txn);
     final result = await db.rawQuery('''
-      SELECT COALESCE(
-        SUM(
-          CASE
-            WHEN p.direction = 'credit' THEN p.amount_minor_units
-            ELSE -p.amount_minor_units
-          END
-        ), 0
-      ) AS total_liabilities
-      FROM ${TablesV24.postings} p
-      JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-      JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-      WHERE a.account_type = 'liability'
-        AND a.is_active = 1
-        AND e.lifecycle_status = 'posted';
-    ''');
+      SELECT (
+        (
+          SELECT COALESCE(
+            SUM(
+              CASE WHEN account_liability > 0 THEN account_liability ELSE 0 END
+            ), 0
+          )
+          FROM (
+            SELECT p.account_id,
+              SUM(
+                CASE
+                  WHEN p.direction = 'credit' THEN p.amount_minor_units
+                  ELSE -p.amount_minor_units
+                END
+              ) AS account_liability
+            FROM ${TablesV24.postings} p
+            JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+            JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+            WHERE a.account_type = 'liability'
+              AND a.is_system = 0
+              AND a.is_active = 1
+              AND e.lifecycle_status = 'posted'
+            GROUP BY p.account_id
+          )
+        )
+        +
+        (
+          SELECT COALESCE(
+            SUM(
+              CASE WHEN account_balance < 0 THEN -account_balance ELSE 0 END
+            ), 0
+          )
+          FROM (
+            SELECT p.account_id,
+              SUM(
+                CASE
+                  WHEN p.direction = 'debit' THEN p.amount_minor_units
+                  ELSE -p.amount_minor_units
+                END
+              ) AS account_balance
+            FROM ${TablesV24.postings} p
+            JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+            JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+            WHERE a.account_type = 'asset'
+              AND a.is_system = 0
+              AND a.is_active = 1
+              AND e.lifecycle_status = 'posted'
+            GROUP BY p.account_id
+          )
+        )
+      ) AS total_liabilities;
+    ''',);
 
     final amount = (result.first['total_liabilities'] as num?)?.toInt() ?? 0;
     return Money.fromMinorUnits(amount, currency: currency);
@@ -94,6 +142,7 @@ class CanonicalFinancialQueryRepository {
   Future<Money> getTotalIncome({
     DateTime? startDate,
     DateTime? endDate,
+    bool? isExclusiveEndDate,
     Transaction? txn,
     String currency = 'INR',
   }) async {
@@ -106,11 +155,17 @@ class CanonicalFinancialQueryRepository {
 
     if (startDate != null) {
       whereClauses.add('e.timestamp >= ?');
-      whereArgs.add(startDate.toIso8601String());
+      whereArgs.add(startDate.toUtc().toIso8601String());
     }
     if (endDate != null) {
-      whereClauses.add('e.timestamp <= ?');
-      whereArgs.add(endDate.toIso8601String());
+      final isMidnight = endDate.hour == 0 &&
+          endDate.minute == 0 &&
+          endDate.second == 0 &&
+          endDate.millisecond == 0 &&
+          endDate.microsecond == 0;
+      final op = (isExclusiveEndDate ?? isMidnight) ? '<' : '<=';
+      whereClauses.add('e.timestamp $op ?');
+      whereArgs.add(endDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');
@@ -137,6 +192,7 @@ class CanonicalFinancialQueryRepository {
   Future<Money> getTotalExpenses({
     DateTime? startDate,
     DateTime? endDate,
+    bool? isExclusiveEndDate,
     Transaction? txn,
     String currency = 'INR',
   }) async {
@@ -149,11 +205,17 @@ class CanonicalFinancialQueryRepository {
 
     if (startDate != null) {
       whereClauses.add('e.timestamp >= ?');
-      whereArgs.add(startDate.toIso8601String());
+      whereArgs.add(startDate.toUtc().toIso8601String());
     }
     if (endDate != null) {
-      whereClauses.add('e.timestamp <= ?');
-      whereArgs.add(endDate.toIso8601String());
+      final isMidnight = endDate.hour == 0 &&
+          endDate.minute == 0 &&
+          endDate.second == 0 &&
+          endDate.millisecond == 0 &&
+          endDate.microsecond == 0;
+      final op = (isExclusiveEndDate ?? isMidnight) ? '<' : '<=';
+      whereClauses.add('e.timestamp $op ?');
+      whereArgs.add(endDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');
@@ -187,6 +249,7 @@ class CanonicalFinancialQueryRepository {
   Future<Money> getCashFlow({
     DateTime? startDate,
     DateTime? endDate,
+    bool? isExclusiveEndDate,
     bool includeOpeningBalances = false,
     Transaction? txn,
     String currency = 'INR',
@@ -204,11 +267,17 @@ class CanonicalFinancialQueryRepository {
 
     if (startDate != null) {
       whereClauses.add('e.timestamp >= ?');
-      whereArgs.add(startDate.toIso8601String());
+      whereArgs.add(startDate.toUtc().toIso8601String());
     }
     if (endDate != null) {
-      whereClauses.add('e.timestamp <= ?');
-      whereArgs.add(endDate.toIso8601String());
+      final isMidnight = endDate.hour == 0 &&
+          endDate.minute == 0 &&
+          endDate.second == 0 &&
+          endDate.millisecond == 0 &&
+          endDate.microsecond == 0;
+      final op = (isExclusiveEndDate ?? isMidnight) ? '<' : '<=';
+      whereClauses.add('e.timestamp $op ?');
+      whereArgs.add(endDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');
@@ -235,18 +304,21 @@ class CanonicalFinancialQueryRepository {
   Future<Money> getNetOperatingIncome({
     DateTime? startDate,
     DateTime? endDate,
+    bool? isExclusiveEndDate,
     Transaction? txn,
     String currency = 'INR',
   }) async {
     final income = await getTotalIncome(
       startDate: startDate,
       endDate: endDate,
+      isExclusiveEndDate: isExclusiveEndDate,
       txn: txn,
       currency: currency,
     );
     final expenses = await getTotalExpenses(
       startDate: startDate,
       endDate: endDate,
+      isExclusiveEndDate: isExclusiveEndDate,
       txn: txn,
       currency: currency,
     );
@@ -313,6 +385,7 @@ class CanonicalFinancialQueryRepository {
       JOIN ${TablesV24.accounts} a ON p.account_id = a.id
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
       WHERE a.account_type = 'asset'
+        AND a.is_system = 0
         AND a.is_active = 1
         AND (a.subtype IN ('bank', 'cash', 'savings', 'wallet', 'liquid_cash', 'asset') OR a.subtype IS NULL)
         AND e.lifecycle_status = 'posted';
@@ -417,6 +490,7 @@ class CanonicalFinancialQueryRepository {
 
           // If this reminder is for a credit card, check if it was already paid
           CreditCard? matchedCard;
+          double totalPaid = 0.0;
           if (isCreditReminder) {
             if (cardId != null && cardId.isNotEmpty) {
               matchedCard = cards.where((c) => c.id == cardId).firstOrNull;
@@ -432,25 +506,29 @@ class CanonicalFinancialQueryRepository {
             }
 
             if (matchedCard != null) {
-              final minPayDate = dueDate.subtract(const Duration(days: 25)).toIso8601String();
-              final maxPayDate = dueDate.add(const Duration(days: 25)).toIso8601String();
+              // QUALIFICATION (DEF-517): The 26-day window around due date is an attribution heuristic,
+              // not a guaranteed deterministic statement association. Where no explicit statement foreign
+              // key exists, payments or merchant refunds occurring within this span are attributed to this
+              // cycle obligation. Cross-cycle attribution is theoretically possible if dates overlap.
+              final dueUtc = dueDate.toUtc();
+              final minPayDateUtc = dueUtc.subtract(const Duration(days: 26)).toIso8601String();
+              final maxPayDateUtc = dueUtc.add(const Duration(days: 26)).toIso8601String();
+              final minPayDateLocal = dueDate.subtract(const Duration(days: 26)).toIso8601String();
+              final maxPayDateLocal = dueDate.add(const Duration(days: 26)).toIso8601String();
 
-              double totalPaid = 0.0;
               try {
                 final v24Pay = await db.rawQuery('''
                   SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
                   FROM ${TablesV24.postings} p
                   JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
                   WHERE e.lifecycle_status = 'posted'
-                    AND (p.account_id = ? OR e.description LIKE ? OR e.description LIKE ?)
-                    AND (e.event_type = 'liability_settlement' OR e.description LIKE '%credit%' OR e.description LIKE '%card%')
-                    AND e.timestamp BETWEEN ? AND ?;
+                    AND p.account_id = ?
+                    AND p.direction = 'debit'
+                    AND e.timestamp >= ? AND e.timestamp <= ?;
                 ''', [
                   matchedCard.id,
-                  '%${matchedCard.bank}%',
-                  '%${matchedCard.name}%',
-                  minPayDate,
-                  maxPayDate,
+                  minPayDateUtc,
+                  maxPayDateUtc,
                 ]);
                 totalPaid = ((v24Pay.first['total_minor'] as num?)?.toDouble() ?? 0.0) / 100.0;
               } catch (_) {}
@@ -463,24 +541,20 @@ class CanonicalFinancialQueryRepository {
                     WHERE is_deleted = 0
                       AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
                       AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
-                      AND date BETWEEN ? AND ?;
+                      AND date >= ? AND date <= ?;
                   ''', [
                     matchedCard.id,
                     '%${matchedCard.bank}%',
                     '%${matchedCard.name}%',
-                    minPayDate,
-                    maxPayDate,
+                    minPayDateLocal,
+                    maxPayDateLocal,
                   ]);
                   totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
                 } catch (_) {}
               }
-              final isPastDue = dueDate.isBefore(now);
-              final isCardPaid = totalPaid >= amount - 1.0 ||
-                  matchedCard.lastStatementBalance <= 0.01 ||
-                  matchedCard.outstanding <= 0.01 ||
-                  (isPastDue && matchedCard.outstanding < amount);
 
-              if (isCardPaid) {
+              final remaining = (amount - totalPaid).clamp(0.0, amount);
+              if (remaining <= 0.01) {
                 // Credit card bill already paid in full!
                 final oldId = r['id'] as String?;
                 if (oldId != null && oldId.isNotEmpty) {
@@ -490,6 +564,9 @@ class CanonicalFinancialQueryRepository {
                   );
                 }
                 seenCommitments.add('card:${matchedCard.id}');
+                if (cardId != null && cardId.isNotEmpty) {
+                  seenCommitments.add('card:$cardId');
+                }
                 continue; // Skip paid credit card bill!
               }
             }
@@ -513,7 +590,9 @@ class CanonicalFinancialQueryRepository {
           if (seenCommitments.contains('norm:$normKey') ||
               (cardId != null &&
                   cardId.isNotEmpty &&
-                  seenCommitments.contains('card:$cardId'))) {
+                  seenCommitments.contains('card:$cardId')) ||
+              (matchedCard != null &&
+                  seenCommitments.contains('card:${matchedCard.id}'))) {
             final oldId = r['id'] as String?;
             if (oldId != null && oldId.isNotEmpty) {
               await db.rawUpdate(
@@ -528,13 +607,20 @@ class CanonicalFinancialQueryRepository {
           if (cardId != null && cardId.isNotEmpty) {
             seenCommitments.add('card:$cardId');
           }
+          if (matchedCard != null) {
+            seenCommitments.add('card:${matchedCard.id}');
+          }
           seenCommitments.add('title:${title.toLowerCase()}');
-          total14d += amount;
+
+          final effectiveAmount = (isCreditReminder && matchedCard != null)
+              ? (amount - totalPaid).clamp(0.0, amount)
+              : amount;
+          total14d += effectiveAmount;
 
           items.add(
             CommitmentItem(
               title: title,
-              amount: Money.fromRupees(amount, currency: currency),
+              amount: Money.fromRupees(effectiveAmount, currency: currency),
               dueDate: dueDate,
               type: rType == 'credit' ? 'credit_card' : 'bill',
             ),
@@ -560,16 +646,17 @@ class CanonicalFinancialQueryRepository {
         final nextDue = card.nextDueDate;
 
         if (nextDue.isBefore(endWindow) || nextDue.isAtSameMomentAs(endWindow)) {
-          if (card.outstanding <= 0.01) {
-            seenCommitments.add('card:${card.id}');
-            continue;
-          }
-
           // Check if statement balance has already been paid
           final lastStmt = card.lastStatementBalance;
           if (lastStmt > 0) {
-            final minPayDate = nextDue.subtract(const Duration(days: 25)).toIso8601String();
-            final maxPayDate = nextDue.add(const Duration(days: 25)).toIso8601String();
+            // QUALIFICATION (DEF-517): Heuristic 26-day payment/refund attribution window around nextDue.
+            // When no deterministic statement reference exists, debit postings on card in this range are allocated here.
+            final dueUtc = nextDue.toUtc();
+            final minPayDateUtc = dueUtc.subtract(const Duration(days: 26)).toIso8601String();
+            final maxPayDateUtc = dueUtc.add(const Duration(days: 26)).toIso8601String();
+            final minPayDateLocal = nextDue.subtract(const Duration(days: 26)).toIso8601String();
+            final maxPayDateLocal = nextDue.add(const Duration(days: 26)).toIso8601String();
+
             double totalPaid = 0.0;
             try {
               final v24Pay = await db.rawQuery('''
@@ -577,15 +664,13 @@ class CanonicalFinancialQueryRepository {
                 FROM ${TablesV24.postings} p
                 JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
                 WHERE e.lifecycle_status = 'posted'
-                  AND (p.account_id = ? OR e.description LIKE ? OR e.description LIKE ?)
-                  AND (e.event_type = 'liability_settlement' OR e.description LIKE '%credit%' OR e.description LIKE '%card%')
-                  AND e.timestamp BETWEEN ? AND ?;
+                  AND p.account_id = ?
+                  AND p.direction = 'debit'
+                  AND e.timestamp >= ? AND e.timestamp <= ?;
               ''', [
                 card.id,
-                '%${card.bank}%',
-                '%${card.name}%',
-                minPayDate,
-                maxPayDate,
+                minPayDateUtc,
+                maxPayDateUtc,
               ]);
               totalPaid = ((v24Pay.first['total_minor'] as num?)?.toDouble() ?? 0.0) / 100.0;
             } catch (_) {}
@@ -598,28 +683,36 @@ class CanonicalFinancialQueryRepository {
                   WHERE is_deleted = 0
                     AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
                     AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
-                    AND date BETWEEN ? AND ?;
+                    AND date >= ? AND date <= ?;
                 ''', [
                   card.id,
                   '%${card.bank}%',
                   '%${card.name}%',
-                  minPayDate,
-                  maxPayDate,
+                  minPayDateLocal,
+                  maxPayDateLocal,
                 ]);
                 totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
               } catch (_) {}
             }
 
-            if (totalPaid >= lastStmt - 1.0) {
-              seenCommitments.add('card:${card.id}');
-              continue;
+            final remaining = (lastStmt - totalPaid).clamp(0.0, lastStmt);
+            seenCommitments.add('card:${card.id}');
+            if (remaining > 0.01) {
+              total14d += remaining;
+              items.add(
+                CommitmentItem(
+                  title: card.name,
+                  amount: Money.fromRupees(remaining, currency: currency),
+                  dueDate: nextDue,
+                  type: 'credit_card',
+                ),
+              );
             }
+            continue;
           }
 
-          final dueAmount = card.lastStatementBalance > 0
-              ? card.lastStatementBalance
-              : card.outstanding;
-          if (dueAmount > 0) {
+          final dueAmount = card.outstanding;
+          if (dueAmount > 0.01) {
             total14d += dueAmount;
             seenCommitments.add('card:${card.id}');
             items.add(
@@ -747,6 +840,7 @@ class CanonicalFinancialQueryRepository {
     String categoryId, {
     DateTime? startDate,
     DateTime? endDate,
+    bool? isExclusiveEndDate,
     Transaction? txn,
     String currency = 'INR',
   }) async {
@@ -760,11 +854,17 @@ class CanonicalFinancialQueryRepository {
 
     if (startDate != null) {
       whereClauses.add('e.timestamp >= ?');
-      whereArgs.add(startDate.toIso8601String());
+      whereArgs.add(startDate.toUtc().toIso8601String());
     }
     if (endDate != null) {
-      whereClauses.add('e.timestamp <= ?');
-      whereArgs.add(endDate.toIso8601String());
+      final isMidnight = endDate.hour == 0 &&
+          endDate.minute == 0 &&
+          endDate.second == 0 &&
+          endDate.millisecond == 0 &&
+          endDate.microsecond == 0;
+      final op = (isExclusiveEndDate ?? isMidnight) ? '<' : '<=';
+      whereClauses.add('e.timestamp $op ?');
+      whereArgs.add(endDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');
@@ -792,6 +892,7 @@ class CanonicalFinancialQueryRepository {
   Future<Map<String, Money>> getAllCategorySpending({
     DateTime? startDate,
     DateTime? endDate,
+    bool? isExclusiveEndDate,
     Transaction? txn,
     String currency = 'INR',
   }) async {
@@ -804,11 +905,17 @@ class CanonicalFinancialQueryRepository {
 
     if (startDate != null) {
       whereClauses.add('e.timestamp >= ?');
-      whereArgs.add(startDate.toIso8601String());
+      whereArgs.add(startDate.toUtc().toIso8601String());
     }
     if (endDate != null) {
-      whereClauses.add('e.timestamp <= ?');
-      whereArgs.add(endDate.toIso8601String());
+      final isMidnight = endDate.hour == 0 &&
+          endDate.minute == 0 &&
+          endDate.second == 0 &&
+          endDate.millisecond == 0 &&
+          endDate.microsecond == 0;
+      final op = (isExclusiveEndDate ?? isMidnight) ? '<' : '<=';
+      whereClauses.add('e.timestamp $op ?');
+      whereArgs.add(endDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');
@@ -870,9 +977,9 @@ class CanonicalFinancialQueryRepository {
       WHERE a.account_type = 'expense'
         AND e.lifecycle_status = 'posted'
         AND e.timestamp >= ?
-        AND e.timestamp <= ?
+        AND e.timestamp < ?
       GROUP BY strftime('%Y-%m-%d', e.timestamp);
-    ''', [startDate.toIso8601String(), now.toIso8601String()]);
+    ''', [startDate.toUtc().toIso8601String(), now.toUtc().toIso8601String()]);
 
     final capLimit = capitalOneOffThreshold?.minorUnits ?? 10000000; // Default ₹1,00,000 = 10^7 paise
     final dailySpends = <int>[];
@@ -926,11 +1033,11 @@ class CanonicalFinancialQueryRepository {
 
     if (fromDate != null) {
       whereClauses.add('e.due_date >= ?');
-      whereArgs.add(fromDate.toIso8601String());
+      whereArgs.add(fromDate.toUtc().toIso8601String());
     }
     if (toDate != null) {
-      whereClauses.add('e.due_date <= ?');
-      whereArgs.add(toDate.toIso8601String());
+      whereClauses.add('e.due_date < ?');
+      whereArgs.add(toDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');
@@ -962,11 +1069,11 @@ class CanonicalFinancialQueryRepository {
 
     if (fromDate != null) {
       whereClauses.add('e.due_date >= ?');
-      whereArgs.add(fromDate.toIso8601String());
+      whereArgs.add(fromDate.toUtc().toIso8601String());
     }
     if (toDate != null) {
-      whereClauses.add('e.due_date <= ?');
-      whereArgs.add(toDate.toIso8601String());
+      whereClauses.add('e.due_date < ?');
+      whereArgs.add(toDate.toUtc().toIso8601String());
     }
 
     final where = whereClauses.join(' AND ');

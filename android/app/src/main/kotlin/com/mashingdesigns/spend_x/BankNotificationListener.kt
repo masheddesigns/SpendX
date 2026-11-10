@@ -3,6 +3,7 @@ package com.mashingdesigns.spend_x
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 
@@ -17,32 +18,97 @@ import io.flutter.plugin.common.MethodChannel
 class BankNotificationListener : NotificationListenerService() {
 
     companion object {
-        // Known banking and UPI app packages in India
+        // Known banking, UPI, and financial payment app packages in India
         private val PAYMENT_PACKAGES = setOf(
+            // Top UPI & Payment Apps
             "com.google.android.apps.nbu.paisa.user", // Google Pay
             "com.phonepe.app",                       // PhonePe
             "net.one97.paytm",                       // Paytm
             "in.amazon.mShop.android.shopping",      // Amazon Pay
+            "in.org.npci.upiapp",                    // BHIM NPCI
+            "com.dreamplug.androidapp",              // CRED (Official)
+            "com.cred.club",                         // CRED (Legacy / Web)
+            "com.creditcard.onecard",                // OneCard (Official)
+            "co.onecard",                            // OneCard (Legacy)
+            "money.jupiter",                         // Jupiter
+            "indwin.c3.shareTrade",                  // Slice
+            "com.epifi.slice",                       // Slice legacy
+            "money.fi",                              // Fi Money
+            "com.supermoney.app",                    // super.money
+            "com.navi.naviPay",                      // Navi UPI & Loans
+            "in.jfs.jiofinance",                     // JioFinance
+            "com.nextbillion.groww",                 // Groww
+            "com.groww.stocks",                      // Groww alternate
+            "com.tatadigital.tcp",                   // Tata Neu / Tata Pay
+            "com.jio.myjio",                         // MyJio / JioPaymentsBank
+            "com.google.android.apps.walletnfcrel",  // Google Wallet
+            "com.paypal.android.p2pmobile",          // PayPal
+            "com.policybazaar",                      // PolicyBazaar
+            "com.freecharge.android",                // Freecharge
+            "com.mobikwik_new",                      // MobiKwik
+            "com.popclub.app",                       // POPclub UPI
+            "com.kiwi.credit",                       // Kiwi UPI
+            "com.cheq.cheqone",                      // CheQ
+            "com.fampay.in",                         // FamApp / FamPay
+            "com.postpe.app",                        // PostPe
+            "com.bharatpe",                          // BharatPe
+            "com.sbicard.app",                       // SBI Card (Official)
+            "com.bobcard.app",                       // Bobcard / BOB Credit Card
+            "com.rblbank.cards",                     // RBL MyCard
+            "com.kotak.cards",                       // Kotak Cards
+            "com.slicepay",                          // Slice UPI & Credit
+            "in.onecard.app",                        // OneCard alternate
+            "com.canarabank.canaracard",             // Canara Credit Card
+            "com.enStage.wibmo.hdfc",                // HDFC SmartHub / PayZapp
+            "com.axisbank.axispay",                  // Axis Pay UPI
+            "com.paytmbank.mobile",                  // Paytm Payments Bank
+            "com.bajajfinserv.direct",               // Bajaj Finserv
+            "com.vivo.unionpay",                     // Vivo Pay / UnionPay
+            "com.zerodha.kite3",                     // Zerodha Kite
+            "com.zerodha.coin",                      // Zerodha Coin
+            "com.indmoney",                          // INDmoney
+            "in.upstox.app",                         // Upstox
+            "com.msf.angelmobile",                   // Angel One
+            "com.kuvera.app",                        // Kuvera
+            "com.etmoney.android",                   // ET Money
+            "in.dhan.app",                           // Dhan
+            "com.myairtelapp",                       // Airtel Thanks / Airtel Payments Bank
+
+            // Major Indian Banks
+            "com.sbi.lotusintouch",                  // SBI YONO
+            "com.sbi.SBIFreedomPlus",                // SBI FreedomPlus / YONO Lite
+            "com.sbi.upi",                           // BHIM SBI Pay
             "com.csam.icici.bank.imobile",           // ICICI iMobile
             "com.icicibank.pockets",                 // ICICI Pockets
             "com.snapwork.hdfc",                     // HDFC MobileBanking
             "com.hdfcbank.payzapp",                  // HDFC PayZapp
             "com.axis.mobile",                       // Axis Mobile
-            "com.sbi.lotusintouch",                  // SBI YONO
             "com.msf.kbank.mobile",                  // Kotak Mobile
+            "com.kotak.invest",                      // Kotak Cherry
             "com.bankofbaroda.mconnect",             // BOB World
-            "money.jupiter",                         // Jupiter
-            "com.epifi.slice",                       // Slice / Fi
-            "co.onecard",                            // OneCard
-            "com.cred.club",                         // CRED
-            "com.freecharge.android",                // Freecharge
-            "com.mobikwik_new",                      // MobiKwik
+            "in.co.bankofbaroda.bobworld",           // BOB World alternate
             "com.idfcfirstbank.optimus",             // IDFC First Bank
             "com.fedmobile",                         // Federal Bank FedMobile
-            "com.canarabank.mobility",               // Canara Bank
+            "com.canarabank.mobility",               // Canara ai1
             "com.pnb.pnbone",                        // PNB One
+            "com.unionbank.mbanking",                // Union Bank Vyom
             "com.aubank.aubank",                     // AU Small Finance Bank
-            "com.indusind.indusmobile"               // IndusInd
+            "com.indusind.indusmobile",              // IndusInd Mobile
+            "com.rblbank.mobank",                    // RBL MoBank
+            "com.bandhan.mBandhan",                  // Bandhan Bank
+            "com.sc.breeze.in",                      // Standard Chartered India
+            "com.hsbc.in.hsbcpersonalbanking",       // HSBC India
+            "com.dbs.in.dbsmbanking",                // DBS digibank
+            "com.citibank.mobile.in",                // Citi Mobile India
+            "com.boi.mpay",                          // BOI Mobile Omni
+            "com.mgs.centralbank",                   // Central Bank Cent Mobile
+            "com.infrasofttech.IndianBank",          // Indian Bank IndOASIS
+            "com.lcode.uco",                         // UCO mBanking Plus
+            "com.cub.cucebanking",                   // City Union Bank
+            "com.tmb.tmbdigilobby",                  // TMB MBank
+            "com.sib.mirrorplus",                    // South Indian Bank Mirror+
+            "com.lcode.smartbank",                   // Karnataka Bank KBL Mobile Plus
+            "com.kvb.mobilebanking"                  // Karur Vysya Bank DLite
         )
     }
 
@@ -55,13 +121,30 @@ class BankNotificationListener : NotificationListenerService() {
         // Ignore SpendX's own notifications
         if (pkg == packageName) return
 
+        val channelId = (sbn.notification?.channelId ?: "").lowercase()
+        val tag = (sbn.tag ?: "").lowercase()
+        val category = (sbn.notification?.category ?: "").lowercase()
+
+        // Strictly drop promotional, marketing, offer, reward, and advertisement notifications
+        if (channelId.contains("offer") || channelId.contains("reward") || channelId.contains("promo") ||
+            channelId.contains("marketing") || channelId.contains("deal") || channelId.contains("campaign") ||
+            channelId.contains("recommend") || channelId.contains("advertis") ||
+            tag.contains("offer") || tag.contains("reward") || tag.contains("promo") ||
+            tag.contains("marketing") || tag.contains("deal") || tag.contains("campaign") ||
+            category == Notification.CATEGORY_PROMO || category == Notification.CATEGORY_RECOMMENDATION) {
+            Log.d("SpendX_Notif", "Dropped promotional/offer notification: pkg=$pkg, tag=$tag, channel=$channelId")
+            return
+        }
+
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
+        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
 
         val messageText = when {
             bigText.isNotBlank() && bigText.length > text.length -> bigText
             text.isNotBlank() -> text
+            subText.isNotBlank() -> subText
             else -> ""
         }
 
@@ -77,10 +160,14 @@ class BankNotificationListener : NotificationListenerService() {
         val isFromPaymentPackage = PAYMENT_PACKAGES.contains(pkg)
 
         // Clean sender / title display
-        val senderTitle = if (title.isNotBlank() && title != fullBody) title else pkg
+        val displaySender = if (title.isNotBlank() && title != fullBody) title else pkg
+        val senderTitle = if (isFromPaymentPackage) "APP:$pkg:$displaySender" else displaySender
 
-        // If from a known payment package OR passes the FinancialSmsFilter
-        val isFinancial = isFromPaymentPackage || FinancialSmsFilter.isFinancial(senderTitle, fullBody)
+        // Strictly evaluate every incoming notification against FinancialSmsFilter.
+        // Even notifications from known payment packages (e.g. Google Pay, PhonePe) frequently
+        // include ads, cashbacks, scratch cards, or loan offers that must NEVER become expense transactions.
+        val isFinancial = FinancialSmsFilter.isFinancial(senderTitle, fullBody)
+        Log.d("SpendX_Notif", "onNotificationPosted: pkg=$pkg, sender=$senderTitle, isFinancial=$isFinancial, body=$fullBody")
         if (!isFinancial) return
 
         // Deliver to Flutter live on UI thread or queue for later
@@ -90,7 +177,7 @@ class BankNotificationListener : NotificationListenerService() {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
                     MainActivity.CHANNEL,
-                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody))
+                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody, pkg))
             }
         } else {
             SmsStore.queue(this, senderTitle, fullBody)

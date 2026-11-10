@@ -1,7 +1,7 @@
 name: spend_x
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.6.0+16
+version: 1.6.0+22
 
 environment:
   sdk: ^3.10.8
@@ -58,6 +58,8 @@ dependencies:
   sqlcipher_flutter_libs: ^0.7.0+eol
   sqflite_common_ffi: ^2.4.0+3
   sqlite3: ^3.5.2
+  spendx_process_lock:
+    path: packages/spendx_process_lock
 
 dev_dependencies:
   flutter_test:

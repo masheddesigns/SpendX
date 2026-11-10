@@ -27,10 +27,26 @@ class NetWorthService {
     final liabilitiesMoney = await _queryRepo.getTotalLiabilities();
     final netWorthMoney = await _queryRepo.getNetWorth();
 
+    final rawAssets = assetsMoney.toRupees;
+    final rawLiabilities = liabilitiesMoney.toRupees;
+    final netWorth = netWorthMoney.toRupees;
+
+    // Financial invariant: Gross Assets cannot be negative in accounting presentation.
+    // If net asset balance is negative, it represents an overdraft liability.
+    final double displayAssets;
+    final double displayLiabilities;
+    if (rawAssets < 0) {
+      displayAssets = 0.0;
+      displayLiabilities = rawLiabilities + rawAssets.abs();
+    } else {
+      displayAssets = rawAssets;
+      displayLiabilities = rawLiabilities;
+    }
+
     return NetWorthSummary(
-      totalAssets: assetsMoney.toRupees,
-      totalLiabilities: liabilitiesMoney.toRupees,
-      netWorth: netWorthMoney.toRupees,
+      totalAssets: displayAssets,
+      totalLiabilities: displayLiabilities,
+      netWorth: netWorth,
     );
   }
 }

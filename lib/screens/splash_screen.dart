@@ -14,6 +14,7 @@ import '../services/recurring_engine.dart';
 import '../services/settings_service.dart';
 import '../services/snapshot_trigger.dart';
 import '../services/spending_insights_service.dart';
+import '../data/core/tracked_database_task_queue.dart';
 import '../features/home/screens/home_screen.dart';
 import 'onboarding_screen.dart';
 import '../shared/widgets/app_page_route.dart';
@@ -172,15 +173,23 @@ class _SplashScreenState extends State<SplashScreen>
       // Request permissions (non-blocking)
       _requestPermissions();
 
-      // Generate recurring transactions (non-blocking)
-      RecurringEngine.checkAndGenerate().then((changed) {
-        if (changed) debugPrint('\u{1F501} Recurring transactions generated');
-      }).catchError((e) {
-        debugPrint('\u26A0\uFE0F Recurring engine error (non-fatal): $e');
-      });
+      // Generate recurring transactions (tracked background task)
+      TrackedDatabaseTaskQueue.instance.runTracked(
+        'recurring_check_generate',
+        () async {
+          final changed = await RecurringEngine.checkAndGenerate();
+          if (changed) debugPrint('\u{1F501} Recurring transactions generated');
+        },
+        onError: (e, st) {
+          debugPrint('\u26A0\uFE0F Recurring engine error (non-fatal): $e');
+        },
+      );
 
-      // Daily net worth snapshot
-      SnapshotTrigger.instance.onAppOpen();
+      // Daily net worth snapshot (tracked background task)
+      TrackedDatabaseTaskQueue.instance.runTracked(
+        'snapshot_daily_networth',
+        () => SnapshotTrigger.instance.onAppOpen(),
+      );
 
       _initWorkDone = true;
       _attemptHomeNavigation();

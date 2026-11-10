@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart' hide Transaction;
+import '../../domain/finance/finance.dart';
 import '../../models/analytics_bundle.dart';
 import '../../models/transaction.dart';
 import '../../models/bank_account.dart';
@@ -12,6 +13,7 @@ import 'loan_repo.dart';
 import 'credit_repo.dart';
 import 'category_repo.dart';
 import 'budget_repo.dart';
+import 'canonical/canonical_financial_query_repository.dart';
 
 class AnalyticsRepo {
   final DatabaseExecutor? _customExecutor;
@@ -27,13 +29,15 @@ class AnalyticsRepo {
     CreditRepo? creditRepo,
     CategoryRepo? categoryRepo,
     BudgetRepo? budgetRepo,
+    CanonicalFinancialQueryRepository? queryRepo,
   }) async {
     final txRepo = transactionRepo ?? TransactionRepo(executor: _customExecutor);
     final accRepo = accountRepo ?? AccountRepo(executor: _customExecutor);
     final lRepo = loanRepo ?? LoanRepo(executor: _customExecutor);
     final cRepo = creditRepo ?? CreditRepo(executor: _customExecutor);
-    final catRepo = categoryRepo ?? CategoryRepo();
+    final catRepo = categoryRepo ?? CategoryRepo(executor: _customExecutor);
     final bRepo = budgetRepo ?? BudgetRepo(executor: _customExecutor);
+    final qRepo = queryRepo ?? CanonicalFinancialQueryRepository(executor: _customExecutor);
 
     final results = await Future.wait<dynamic>([
       txRepo.getAll(),
@@ -42,6 +46,7 @@ class AnalyticsRepo {
       cRepo.getAll(),
       catRepo.getAll(),
       bRepo.getAll(),
+      qRepo.getNetWorth(),
     ]);
 
     return AnalyticsBundle(
@@ -51,6 +56,7 @@ class AnalyticsRepo {
       cards: results[3] as List<CreditCard>,
       categories: results[4] as List<Category>,
       budgets: results[5] as List<Budget>,
+      canonicalNetWorth: (results[6] as Money).toRupees,
     );
   }
 }

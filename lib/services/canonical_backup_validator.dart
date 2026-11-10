@@ -38,6 +38,15 @@ class RestoreException extends BackupException {
   String toString() => 'RestoreException: $message';
 }
 
+/// Thrown when restore rollback fails or results in an ambiguous state,
+/// requiring quarantine and keeping admission closed.
+class RestoreQuarantinedException extends RestoreException {
+  const RestoreQuarantinedException(super.message);
+
+  @override
+  String toString() => 'RestoreQuarantinedException: $message';
+}
+
 /// Thrown when an encrypted backup requires a password that was not provided.
 class BackupPasswordRequiredException extends BackupException {
   const BackupPasswordRequiredException(super.message);

@@ -3,13 +3,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_settings_service.dart';
+import 'platform_process_lock_service.dart';
 import '../data/repositories/category_repo.dart';
 import '../data/repositories/transaction_repo.dart';
+import '../data/core/tracked_database_task_queue.dart';
 import '../features/budget/smart_budget_engine.dart';
 import '../models/notification_settings.dart';
 import '../models/reminder_model.dart';
@@ -130,6 +133,43 @@ class NotificationServiceV2 {
     }
   }
 
+  /// Checks whether the application is permitted to schedule exact alarms.
+  ///
+  /// On Android 12+ (API 31+), this requires user authorization under
+  /// SCHEDULE_EXACT_ALARM. On older versions or non-Android platforms,
+  /// this returns true.
+  Future<bool> canScheduleExactAlarms() async {
+    try {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (androidPlugin == null) return true;
+      return await androidPlugin.canScheduleExactNotifications() ?? false;
+    } catch (e) {
+      AppLogger.w('Error checking exact alarm permission: $e');
+      return false;
+    }
+  }
+
+  /// Explicitly requests exact alarm permission from the user by launching the
+  /// system "Alarms & reminders" settings page on Android 12+ (API 31+).
+  Future<bool?> requestExactAlarmsPermission() async {
+    try {
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (androidPlugin != null) {
+        return await androidPlugin.requestExactAlarmsPermission();
+      }
+      return true;
+    } catch (e) {
+      AppLogger.w('Error requesting exact alarm permission: $e');
+      return false;
+    }
+  }
+
   Future<void> showNotification({
     required String title,
     required String body,
@@ -170,6 +210,7 @@ class NotificationServiceV2 {
     required DateTime scheduledDate,
     String? category,
     String? payload,
+    AndroidScheduleMode? scheduleMode,
   }) async {
     // Ensure timezone is initialized before scheduling
     if (!_initialized) await init();
@@ -182,25 +223,58 @@ class NotificationServiceV2 {
 
     if (scheduledDate.isBefore(DateTime.now())) return;
 
-    await _plugin.zonedSchedule(
-      id: id,
-      title: title,
-      body: body,
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'scheduled_channel',
-          'Scheduled Notifications',
-          channelDescription: 'SpendX daily reminder',
-          icon: '@drawable/ic_notification',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
+    final targetMode = scheduleMode ??
+        ((await canScheduleExactAlarms())
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle);
+
+    const notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'scheduled_channel',
+        'Scheduled Notifications',
+        channelDescription: 'SpendX daily reminder',
+        icon: '@drawable/ic_notification',
+        importance: Importance.high,
+        priority: Priority.high,
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: payload,
+      iOS: DarwinNotificationDetails(),
     );
+
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
+        notificationDetails: notificationDetails,
+        androidScheduleMode: targetMode,
+        payload: payload,
+      );
+    } on PlatformException catch (e) {
+      // If exact alarm failed due to permission denial/revocation, fall back gracefully to inexact
+      if (targetMode == AndroidScheduleMode.exactAllowWhileIdle &&
+          (e.code == 'exact_alarms_not_permitted' ||
+              (e.message?.contains('exact_alarms_not_permitted') ?? false) ||
+              (e.message?.contains('ExactAlarmPermissionException') ?? false))) {
+        AppLogger.w(
+          '[NOTIFICATION] Exact alarm permission unavailable/revoked ($e). '
+          'Gracefully degrading schedule #$id to inexactAllowWhileIdle.',
+        );
+        await _plugin.zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
+          notificationDetails: notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: payload,
+        );
+      } else {
+        AppLogger.e('[NOTIFICATION] Failed to schedule notification #$id: $e');
+      }
+    } catch (e) {
+      AppLogger.e('[NOTIFICATION] Unexpected error scheduling notification #$id: $e');
+    }
   }
 
   Future<void> cancelNotification(String id) async {
@@ -476,11 +550,15 @@ class NotificationServiceV2 {
         if (decoded['source_type'] != 'live_choice') return;
         final reviewId = decoded['review_id'] as String?;
         if (reviewId == null || reviewId.isEmpty) return;
-        unawaited(
-          finalizeLiveChoice(
-            reviewId: reviewId,
-            isExpense: actionId == liveExpenseAction,
-          ).then((_) => handleNotificationNavigation('review', '')),
+        TrackedDatabaseTaskQueue.instance.runTracked(
+          'notification_finalize_live_choice',
+          () async {
+            await finalizeLiveChoice(
+              reviewId: reviewId,
+              isExpense: actionId == liveExpenseAction,
+            );
+            await handleNotificationNavigation('review', '');
+          },
         );
         return;
       }
@@ -644,7 +722,14 @@ class NotificationServiceV2 {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
 
-    Future<void> doSchedule(AndroidNotificationSound? snd) =>
+    final targetMode = (await canScheduleExactAlarms())
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+
+    Future<void> doSchedule(
+      AndroidNotificationSound? snd, {
+      AndroidScheduleMode? mode,
+    }) =>
         _plugin.zonedSchedule(
           id: reminderId,
           title: 'SpendX Reminder',
@@ -663,15 +748,52 @@ class NotificationServiceV2 {
             ),
             iOS: const DarwinNotificationDetails(),
           ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidScheduleMode: mode ?? targetMode,
           matchDateTimeComponents: DateTimeComponents.time,
         );
 
     try {
       await doSchedule(resolvedSound);
+    } on PlatformException catch (e) {
+      if ((e.code == 'exact_alarms_not_permitted' ||
+              (e.message?.contains('exact_alarms_not_permitted') ?? false) ||
+              (e.message?.contains('ExactAlarmPermissionException') ?? false))) {
+        AppLogger.w(
+          '[NOTIFICATION] Exact alarm permission revoked for daily reminder. '
+          'Gracefully degrading to inexactAllowWhileIdle.',
+        );
+        try {
+          await doSchedule(
+            resolvedSound,
+            mode: AndroidScheduleMode.inexactAllowWhileIdle,
+          );
+        } catch (_) {
+          await doSchedule(
+            null,
+            mode: AndroidScheduleMode.inexactAllowWhileIdle,
+          );
+        }
+      } else {
+        // Custom sound file missing or other platform exception — fall back to system default sound
+        try {
+          await doSchedule(null);
+        } catch (_) {
+          await doSchedule(
+            null,
+            mode: AndroidScheduleMode.inexactAllowWhileIdle,
+          );
+        }
+      }
     } catch (_) {
       // Custom sound file missing — fall back to system default
-      await doSchedule(null);
+      try {
+        await doSchedule(null);
+      } catch (_) {
+        await doSchedule(
+          null,
+          mode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      }
     }
   }
 
@@ -1362,9 +1484,23 @@ class _ReminderAlertDialog extends StatelessWidget {
 /// Expense/Income choice) when the app was terminated. Best-effort: finalizes
 /// the pending review item; if it fails the item stays pending for in-app
 /// review.
+///
+/// Milestone 4.5A.2.5 Native Ticket Protocol:
+/// 1. Prior Ticket Acquisition: Must acquire an operation-scoped native ticket
+///    from [PlatformProcessLockService] before accessing any database executor or
+///    repository.
+/// 2. Fail-Closed Guarantee: If ticket acquisition fails (e.g. admission closed
+///    due to active or pending restore, or native platform error), the operation
+///    aborts immediately without accessing [AppDatabase] or any repository. The review
+///    item remains pending for in-app review.
+/// 3. Tracked Task Execution: Executes within [TrackedDatabaseTaskQueue] so that
+///    it participates in gate tracking and drain coordination.
+/// 4. Safe Release: Releases the native ticket in a finally block to prevent ticket
+///    leaks on success, cancellation, or exception.
 @pragma('vm:entry-point')
 Future<void> notificationTapBackground(NotificationResponse response) async {
   try {
+    WidgetsFlutterBinding.ensureInitialized();
     final actionId = response.actionId;
     if (actionId != NotificationServiceV2.liveExpenseAction &&
         actionId != NotificationServiceV2.liveIncomeAction) {
@@ -1376,9 +1512,43 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
     if (decoded['source_type'] != 'live_choice') return;
     final reviewId = decoded['review_id'] as String?;
     if (reviewId == null || reviewId.isEmpty) return;
-    await NotificationServiceV2.finalizeLiveChoice(
-      reviewId: reviewId,
-      isExpense: actionId == NotificationServiceV2.liveExpenseAction,
-    );
-  } catch (_) {}
+
+    final NativeTicketResult ticket;
+    try {
+      // Native process-lock ticket acquisition.
+      // Engine identity is lifecycle-bound to the host FlutterEngine instance on the native side.
+      ticket = await PlatformProcessLockService.instance.acquireOperationTicket(
+        tag: 'notification_tap_background',
+      );
+    } catch (e) {
+      // Fail closed: Do NOT access the database or repositories if ticket acquisition fails.
+      AppLogger.w('[NOTIFICATION_BG] Failed to acquire native operation ticket: $e. Aborting background DB access.');
+      return;
+    }
+
+    try {
+      await TrackedDatabaseTaskQueue.instance.run(
+        'notification_tap_background_finalize',
+        () async {
+          await NotificationServiceV2.finalizeLiveChoice(
+            reviewId: reviewId,
+            isExpense: actionId == NotificationServiceV2.liveExpenseAction,
+          );
+        },
+      );
+    } catch (e, st) {
+      AppLogger.e('[NOTIFICATION_BG] Error finalizing live choice under native ticket', e, st);
+    } finally {
+      try {
+        await PlatformProcessLockService.instance.releaseOperationTicket(
+          ticket.ticketId,
+          engineId: ticket.engineId,
+        );
+      } catch (e) {
+        AppLogger.w('[NOTIFICATION_BG] Error releasing native operation ticket: $e');
+      }
+    }
+  } catch (e, st) {
+    AppLogger.e('[NOTIFICATION_BG] Unexpected failure in notificationTapBackground', e, st);
+  }
 }

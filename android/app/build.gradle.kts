@@ -33,13 +33,14 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.mashingdesigns.spend_x"
+        val customAppId = (project.findProperty("customApplicationId") as String?)?.trim()
+        applicationId = if (!customAppId.isNullOrEmpty()) customAppId else "com.mashingdesigns.spend_x"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = (project.findProperty("customVersionCode") as String?)?.toIntOrNull() ?: flutter.versionCode
+        versionName = (project.findProperty("customVersionName") as String?)?.trim() ?: flutter.versionName
     }
 
     signingConfigs {
@@ -62,6 +63,10 @@ android {
             )
         }
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 flutter {
@@ -70,4 +75,36 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    testImplementation("junit:junit:4.13.2")
+}
+
+tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
+    doFirst {
+        val registrantFile = file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+        if (registrantFile.exists()) {
+            val lines = registrantFile.readLines()
+            if (lines.any { it.contains("IntegrationTestPlugin") }) {
+                val newLines = mutableListOf<String>()
+                var skipping = false
+                for (line in lines) {
+                    if (!skipping && line.contains("IntegrationTestPlugin")) {
+                        if (newLines.isNotEmpty() && newLines.last().trim() == "try {") {
+                            newLines.removeAt(newLines.size - 1)
+                        }
+                        skipping = true
+                        continue
+                    }
+                    if (skipping) {
+                        if (line.contains("}")) {
+                            skipping = false
+                        }
+                        continue
+                    }
+                    newLines.add(line)
+                }
+                registrantFile.writeText(newLines.joinToString("\n") + "\n")
+                logger.info("Sanitized GeneratedPluginRegistrant.java by removing IntegrationTestPlugin for release build.")
+            }
+        }
+    }
 }

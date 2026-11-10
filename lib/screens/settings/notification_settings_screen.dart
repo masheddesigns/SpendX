@@ -22,6 +22,7 @@ class _NotificationSettingsScreenState
   bool _loading = true;
   bool _liveSmsEnabled = true;
   bool _notifListenerEnabled = false;
+  bool _exactAlarmEnabled = true;
 
   @override
   void initState() {
@@ -33,10 +34,12 @@ class _NotificationSettingsScreenState
     final settings = await _service.load();
     final liveSms = await LiveSmsService.instance.enabled;
     final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
+    final exactAlarm = await NotificationServiceV2().canScheduleExactAlarms();
     setState(() {
       _settings = settings;
       _liveSmsEnabled = liveSms;
       _notifListenerEnabled = notifListener;
+      _exactAlarmEnabled = exactAlarm;
       _loading = false;
     });
   }
@@ -64,6 +67,59 @@ class _NotificationSettingsScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (!_exactAlarmEnabled) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.error.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Exact Alarms Disabled',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Reminders will be delivered using inexact alarms and may be slightly delayed. Tap to allow exact alarms in system settings.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.onErrorContainer.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await NotificationServiceV2().requestExactAlarmsPermission();
+                      final updated = await NotificationServiceV2().canScheduleExactAlarms();
+                      setState(() => _exactAlarmEnabled = updated);
+                    },
+                    child: const Text('Enable'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           _sectionLabel('GLOBAL'),
           _card([
             ListTile(
@@ -226,6 +282,33 @@ class _NotificationSettingsScreenState
           const SizedBox(height: 24),
           _sectionLabel('SYSTEM'),
           _card([
+            ListTile(
+              leading: Icon(
+                Icons.alarm,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text(
+                'Exact Alarm Permission',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                _exactAlarmEnabled
+                    ? 'Granted — precise reminder delivery'
+                    : 'Denied/revoked — inexact fallback active',
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: _exactAlarmEnabled
+                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  : TextButton(
+                      onPressed: () async {
+                        await NotificationServiceV2().requestExactAlarmsPermission();
+                        final updated = await NotificationServiceV2().canScheduleExactAlarms();
+                        setState(() => _exactAlarmEnabled = updated);
+                      },
+                      child: const Text('Fix'),
+                    ),
+            ),
+            const Divider(),
             _toggle(
               'Backup Notifications',
               'Status of manual and auto backups',

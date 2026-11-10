@@ -390,10 +390,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               ),
 
               // Credit card outstanding
-              if (cards.isNotEmpty)
+              if (cards.where((c) => c.outstanding > 0).isNotEmpty)
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _buildCcLiabilityTile(cards[i]),
+                    (ctx, i) {
+                      final activeCards = cards.where((c) => c.outstanding > 0).toList();
+                      return _buildCcLiabilityTile(activeCards[i]);
+                    },
                     childCount: cards.where((c) => c.outstanding > 0).length,
                   ),
                 ),
@@ -533,7 +536,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       ),
                       child: _heroStat(
                         'Total Assets',
-                        AppFormat.currency(data.assets),
+                        AppFormat.currency(data.assets < 0 ? 0 : data.assets),
                         isDark
                             ? const Color(0xFF4CAF50)
                             : const Color(0xFF2E7D32),
@@ -679,7 +682,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               ),
             ),
             Text(
-              AppFormat.currency(total),
+              AppFormat.currency(title == 'Assets' ? (total < 0 ? 0 : total) : total),
               style: TextStyle(
                 color: color,
                 fontSize: 14,
@@ -730,10 +733,15 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 ),
               ),
               Text(
-                AppFormat.currency(a.balance),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: color),
+                a.balance < 0
+                    ? 'Overdrawn: ${AppFormat.currency(a.balance.abs())}'
+                    : AppFormat.currency(a.balance),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: a.balance < 0
+                      ? const Color(0xFFD97706)
+                      : color,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),

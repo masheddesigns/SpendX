@@ -692,7 +692,11 @@ class DatabaseEncryptionMigrationService {
     if (_isMigrationRunning) {
       throw StateError('Database migration is already in progress.');
     }
-    await DatabaseLifecycleCoordinator.instance.beginMigration();
+    final isNestedUnderRestore = DatabaseLifecycleCoordinator.instance.currentState ==
+        DatabaseLifecycleState.restoring;
+    if (!isNestedUnderRestore) {
+      await DatabaseLifecycleCoordinator.instance.beginMigration();
+    }
     _isMigrationRunning = true;
     final stopwatch = Stopwatch()..start();
 
@@ -747,7 +751,10 @@ class DatabaseEncryptionMigrationService {
       // 2. CHECKPOINT 1: PREFLIGHT
       await journal.record(MigrationState.preflight);
 
-      final plainDb = await _factory.openPlaintextDatabase(sourcePath);
+      final plainDb = await _factory.openPlaintextDatabase(
+        sourcePath,
+        bypassPrimaryGuard: true,
+      );
       AccountingFingerprint preFingerprint;
       try {
         final fileSize = await sourceFile.length();
@@ -786,7 +793,10 @@ class DatabaseEncryptionMigrationService {
       }
       await journal.record(MigrationState.exporting);
 
-      final exportDb = await _factory.openPlaintextDatabase(sourcePath);
+      final exportDb = await _factory.openPlaintextDatabase(
+        sourcePath,
+        bypassPrimaryGuard: true,
+      );
       try {
         // Attach staged target with SQLCipher raw hex key
         await exportDb.execute(
@@ -1012,7 +1022,9 @@ class DatabaseEncryptionMigrationService {
       rethrow;
     } finally {
       _isMigrationRunning = false;
-      DatabaseLifecycleCoordinator.instance.endMigration();
+      if (!isNestedUnderRestore) {
+        DatabaseLifecycleCoordinator.instance.endMigration();
+      }
     }
   }
 
@@ -1050,6 +1062,7 @@ class DatabaseEncryptionMigrationService {
       final db = await _factory.openEncryptedDatabase(
         sourcePath,
         password: blobKey,
+        bypassPrimaryGuard: true,
       );
 
       try {

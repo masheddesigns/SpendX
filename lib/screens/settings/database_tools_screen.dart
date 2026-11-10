@@ -37,6 +37,31 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
     }
   }
 
+  Future<void> _runExportBackup() async {
+    if (_isBusy) return;
+    setState(() => _isBusy = true);
+    try {
+      final path = await ExportService.instance.exportFullBackup();
+      if (mounted) {
+        if (path != null) {
+          CustomSnackBar.show(context, message: 'Export Backup complete');
+        } else {
+          CustomSnackBar.show(context, message: 'Export canceled');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: 'Export Backup failed: $e',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
   Future<void> _runImportBackup() async {
     if (_isBusy) return;
     setState(() => _isBusy = true);
@@ -49,7 +74,9 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
 
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
-        final success = await ImportService.instance.importFromFile(file);
+        final container = mounted ? ProviderScope.containerOf(context) : null;
+        final success = await ImportService.instance
+            .importFromFile(file, container: container);
         if (mounted) {
           if (success) {
             CustomSnackBar.show(context, message: 'Import complete');
@@ -174,14 +201,9 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
                 icon: Icons.backup,
                 color: cs.primary,
                 title: 'Export Full Backup',
-                subtitle: 'Save a complete SpendX backup (JSON)',
+                subtitle: 'Save a complete SpendX backup (.spendx)',
                 onTap: () {
-                  if (!_isBusy) {
-                    _runAction(
-                      ExportService.instance.exportFullBackup,
-                      'Export Backup',
-                    );
-                  }
+                  if (!_isBusy) _runExportBackup();
                 },
               ),
               const SizedBox(height: 12),

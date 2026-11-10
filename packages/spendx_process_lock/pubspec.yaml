@@ -1,0 +1,15 @@
+name: spendx_process_lock
+description: Process Lock lease manager and engine ticket plugin for SpendX.
+version: 0.0.1
+publish_to: "none"
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.mashingdesigns.spend_x
+        pluginClass: SpendXProcessLockPlugin

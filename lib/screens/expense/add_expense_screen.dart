@@ -8,6 +8,7 @@ import '../../features/transactions/providers/transaction_providers.dart';
 import '../../core/utils/category_classifier.dart';
 import '../../core/utils/merchant_extractor.dart';
 import '../../data/providers.dart' show cardsProvider;
+import '../../data/core/tracked_database_task_queue.dart';
 import '../../models/bank_account.dart';
 import '../../models/credit_card.dart';
 import '../../models/transaction.dart';
@@ -73,7 +74,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.initState();
     _amountController.addListener(() => setState(() {}));
     _notesController.addListener(() {
-      unawaited(_maybeAutoSelectCategoryFromNotes());
+      TrackedDatabaseTaskQueue.instance.runTracked(
+        'add_expense_auto_select_category',
+        () => _maybeAutoSelectCategoryFromNotes(),
+      );
     });
     _selectedCategoryId = widget.initialCategoryId;
     if (widget.existingTransaction != null) {
@@ -305,8 +309,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     if (_selectedCategoryId != null &&
         _notesController.text.trim().isNotEmpty) {
-      unawaited(
-        ref.read(learnMerchantRuleProvider)(
+      TrackedDatabaseTaskQueue.instance.runTracked(
+        'add_expense_learn_merchant_rule',
+        () => ref.read(learnMerchantRuleProvider)(
           text: _notesController.text,
           categoryId: _selectedCategoryId!,
           accountId: _selectedPaymentMethodId,

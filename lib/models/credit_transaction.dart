@@ -9,6 +9,7 @@ class CreditTransaction {
   final String status; // active, converted_to_emi, reversed, pending
   final String? statementId;
   final String? categoryId;
+  final String? relatedEntityId;
 
   CreditTransaction({
     required this.id,
@@ -21,6 +22,7 @@ class CreditTransaction {
     required this.status,
     this.statementId,
     this.categoryId,
+    this.relatedEntityId,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +37,7 @@ class CreditTransaction {
       'status': status,
       'statementId': statementId,
       'categoryId': categoryId,
+      if (relatedEntityId != null) 'relatedEntityId': relatedEntityId,
     };
   }
 
@@ -50,6 +53,35 @@ class CreditTransaction {
       status: map['status'] ?? 'active',
       statementId: map['statementId'],
       categoryId: map['categoryId'],
+      relatedEntityId: map['relatedEntityId'] ?? map['related_entity_id'],
+    );
+  }
+
+  CreditTransaction copyWith({
+    String? id,
+    String? cardId,
+    double? amount,
+    DateTime? date,
+    String? category,
+    String? note,
+    String? type,
+    String? status,
+    String? statementId,
+    String? categoryId,
+    String? relatedEntityId,
+  }) {
+    return CreditTransaction(
+      id: id ?? this.id,
+      cardId: cardId ?? this.cardId,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      category: category ?? this.category,
+      note: note ?? this.note,
+      type: type ?? this.type,
+      status: status ?? this.status,
+      statementId: statementId ?? this.statementId,
+      categoryId: categoryId ?? this.categoryId,
+      relatedEntityId: relatedEntityId ?? this.relatedEntityId,
     );
   }
 }

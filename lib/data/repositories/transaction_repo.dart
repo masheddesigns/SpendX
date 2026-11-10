@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart' show Database, DatabaseExecutor;
+import '../../domain/finance/finance.dart';
 import '../../models/transaction.dart';
 import '../core/app_database.dart';
 import '../core/tables_v24.dart';
@@ -45,22 +46,165 @@ class TransactionRepo {
     final database = await _db;
     debugPrint('🧠 CANONICAL DB INSERT START: ${txn.id}');
 
-    await CanonicalTransactionAdapter.ensureAccountsExist(database, txn);
-    final event = CanonicalTransactionAdapter.toEconomicEvent(txn);
-    final postings =
-        CanonicalTransactionAdapter.toPostings(txn, eventId: event.id);
-    final evidence =
-        CanonicalTransactionAdapter.toEvidence(txn, eventId: event.id);
+    Future<String> executeInsert(DatabaseExecutor executor) async {
+      await _validateRefundCeiling(executor, txn);
 
-    final repo = _eventRepo(database);
-    await repo.createAndPostEvent(
-      event,
-      postings: postings,
-      evidence: evidence != null ? [evidence] : null,
+      await CanonicalTransactionAdapter.ensureAccountsExist(executor, txn);
+      final event = CanonicalTransactionAdapter.toEconomicEvent(txn);
+      final postings =
+          CanonicalTransactionAdapter.toPostings(txn, eventId: event.id);
+      final evidence =
+          CanonicalTransactionAdapter.toEvidence(txn, eventId: event.id);
+
+      final repo = _eventRepo(executor);
+      await repo.createAndPostEvent(
+        event,
+        postings: postings,
+        evidence: evidence != null ? [evidence] : null,
+      );
+
+      debugPrint('🧠 CANONICAL DB INSERT DONE: ${txn.id}');
+      return txn.id;
+    }
+
+    if (database is Database) {
+      return await database.transaction((txnExec) => executeInsert(txnExec));
+    }
+    return await executeInsert(database);
+  }
+
+  Future<void> _validateRefundCeiling(
+    DatabaseExecutor executor,
+    Transaction txn, {
+    String? excludeEventId,
+  }) async {
+    if (txn.type != 'refund' ||
+        txn.relatedEntityId == null ||
+        txn.relatedEntityId!.isEmpty) {
+      return;
+    }
+
+    // 1. Resolve and validate original purchase event lifecycle
+    final origRows = await executor.query(
+      TablesV24.economicEvents,
+      columns: [
+        'id',
+        'event_type',
+        'lifecycle_status',
+        'reversal_of_event_id',
+        'description'
+      ],
+      where: 'id = ?',
+      whereArgs: [txn.relatedEntityId],
+      limit: 1,
     );
+    if (origRows.isEmpty) {
+      throw ArgumentError(
+        'Cannot process refund: original transaction ${txn.relatedEntityId} not found.',
+      );
+    }
 
-    debugPrint('🧠 CANONICAL DB INSERT DONE: ${txn.id}');
-    return txn.id;
+    final orig = origRows.first;
+    if (orig['lifecycle_status'] != 'posted') {
+      throw ArgumentError(
+        'Cannot process refund: original transaction ${txn.relatedEntityId} is not in posted status (current: ${orig['lifecycle_status']}).',
+      );
+    }
+
+    // Check if original is itself a reversal
+    if (orig['reversal_of_event_id'] != null ||
+        (orig['description'] as String? ?? '').startsWith('REVERSAL:')) {
+      throw ArgumentError(
+        'Cannot process refund: original transaction ${txn.relatedEntityId} is a reversal.',
+      );
+    }
+
+    // Check if original event type is a valid refundable purchase
+    const validPurchaseTypes = {'expense', 'credit_purchase'};
+    final origType = orig['event_type'] as String;
+    if (!validPurchaseTypes.contains(origType)) {
+      throw ArgumentError(
+        'Cannot process refund: original transaction ${txn.relatedEntityId} is of type "$origType", which is not a refundable purchase.',
+      );
+    }
+
+    // Check if original purchase has already been reversed or deleted
+    final origReversals = await executor.rawQuery(
+      '''
+      SELECT id FROM ${TablesV24.economicEvents}
+      WHERE reversal_of_event_id = ? AND lifecycle_status = 'posted'
+         OR (
+           substr(description, 1, 10) = 'REVERSAL: '
+           AND (
+             substr(description, 11) = ?
+             OR substr(description, 11, length(?) + 3) = ? || ' - '
+           )
+         )
+      LIMIT 1;
+      ''',
+      [
+        txn.relatedEntityId,
+        txn.relatedEntityId,
+        txn.relatedEntityId,
+        txn.relatedEntityId
+      ],
+    );
+    if (origReversals.isNotEmpty) {
+      throw ArgumentError(
+        'Cannot process refund: original transaction ${txn.relatedEntityId} has already been reversed or deleted.',
+      );
+    }
+
+    // 2. Original transaction amount in minor units (sum of debit postings)
+    final origPostings = await executor.rawQuery(
+      '''
+      SELECT COALESCE(SUM(amount_minor_units), 0) AS total_minor
+      FROM ${TablesV24.postings}
+      WHERE economic_event_id = ? AND direction = 'debit';
+      ''',
+      [txn.relatedEntityId],
+    );
+    final originalMinorUnits =
+        (origPostings.first['total_minor'] as num?)?.toInt() ?? 0;
+
+    // 3. Existing posted refunds for this original purchase that have not been reversed
+    final whereClauses = [
+      "e.event_type = 'refund'",
+      "e.lifecycle_status = 'posted'",
+      "p.direction = 'debit'",
+      "( (json_valid(e.notes) = 1 AND json_extract(e.notes, '\$.related_entity_id') = ?) OR e.description = ? )",
+      "NOT EXISTS (SELECT 1 FROM ${TablesV24.economicEvents} r WHERE r.reversal_of_event_id = e.id AND r.lifecycle_status = 'posted')",
+    ];
+    final whereArgs = <dynamic>[txn.relatedEntityId, txn.relatedEntityId];
+
+    if (excludeEventId != null && excludeEventId.isNotEmpty) {
+      whereClauses.add("e.id != ?");
+      whereArgs.add(excludeEventId);
+    }
+
+    final refundRows = await executor.rawQuery(
+      '''
+      SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_refunded_minor
+      FROM ${TablesV24.postings} p
+      JOIN ${TablesV24.economicEvents} e ON e.id = p.economic_event_id
+      WHERE ${whereClauses.join(' AND ')};
+      ''',
+      whereArgs,
+    );
+    final alreadyRefundedMinor =
+        (refundRows.first['total_refunded_minor'] as num?)?.toInt() ?? 0;
+    final newRefundMinor = CanonicalTransactionAdapter.toMinorUnits(txn.amount);
+
+    if (alreadyRefundedMinor + newRefundMinor > originalMinorUnits) {
+      final remainingMinor = originalMinorUnits - alreadyRefundedMinor;
+      throw ArgumentError(
+        'Refund ceiling exceeded for transaction ${txn.relatedEntityId}. '
+        'Original amount: $originalMinorUnits paise, '
+        'Already refunded: $alreadyRefundedMinor paise, '
+        'Attempted: $newRefundMinor paise. '
+        'Maximum allowable refund is ${remainingMinor > 0 ? remainingMinor : 0} paise.',
+      );
+    }
   }
 
   /// Bulk-insert transactions. Duplicates (by external_ref) are silently ignored.
@@ -84,6 +228,8 @@ class TransactionRepo {
         final exists = await existsByExternalRef(tx.externalRef!, executor: txn);
         if (exists) continue; // Deduplicate
       }
+
+      await _validateRefundCeiling(txn, tx);
 
       await CanonicalTransactionAdapter.ensureAccountsExist(txn, tx);
       final event = CanonicalTransactionAdapter.toEconomicEvent(tx);
@@ -258,25 +404,53 @@ class TransactionRepo {
     required double amount,
     required DateTime from,
     required DateTime to,
+    String? accountId,
   }) async {
     final database = await _db;
     final minorUnits = CanonicalTransactionAdapter.toMinorUnits(amount);
+    final fromUtc = from.toUtc().toIso8601String();
+    final toUtc = to.toUtc().toIso8601String();
 
-    final rows = await database.rawQuery('''
-      SELECT DISTINCT e.id
-      FROM ${TablesV24.economicEvents} e
-      JOIN ${TablesV24.postings} p ON e.id = p.economic_event_id
-      WHERE e.lifecycle_status = 'posted'
-        AND p.amount_minor_units = ?
-        AND e.timestamp BETWEEN ? AND ?
-      LIMIT 5;
-    ''', [minorUnits, from.toIso8601String(), to.toIso8601String()]);
+    final String query;
+    final List<dynamic> args;
+
+    if (accountId != null && accountId.isNotEmpty) {
+      query = '''
+        SELECT DISTINCT e.id
+        FROM ${TablesV24.economicEvents} e
+        JOIN ${TablesV24.postings} p ON e.id = p.economic_event_id
+        WHERE e.lifecycle_status = 'posted'
+          AND p.amount_minor_units = ?
+          AND e.timestamp BETWEEN ? AND ?
+          AND p.account_id = ?
+        LIMIT 5;
+      ''';
+      args = [minorUnits, fromUtc, toUtc, accountId];
+    } else {
+      query = '''
+        SELECT DISTINCT e.id
+        FROM ${TablesV24.economicEvents} e
+        JOIN ${TablesV24.postings} p ON e.id = p.economic_event_id
+        WHERE e.lifecycle_status = 'posted'
+          AND p.amount_minor_units = ?
+          AND e.timestamp BETWEEN ? AND ?
+        LIMIT 5;
+      ''';
+      args = [minorUnits, fromUtc, toUtc];
+    }
+
+    final rows = await database.rawQuery(query, args);
 
     final results = <Transaction>[];
     for (final r in rows) {
       final id = r['id'] as String;
       final tx = await getById(id);
-      if (tx != null) results.add(tx);
+      if (tx != null) {
+        if (accountId != null && accountId.isNotEmpty && tx.accountId != accountId) {
+          continue;
+        }
+        results.add(tx);
+      }
     }
     return results;
   }
@@ -287,57 +461,112 @@ class TransactionRepo {
 
   Future<int> update(Transaction txn) async {
     final database = await _db;
-    final repo = _eventRepo(database);
 
-    // 1. Locate original event
-    final original = await repo.getEvent(txn.id);
-    if (original == null) {
-      // If not existing, insert as new
-      await insert(txn);
+    Future<int> executeUpdate(DatabaseExecutor dbExec) async {
+      final repo = _eventRepo(dbExec);
+
+      // 1. Locate original event
+      final original = await repo.getEvent(txn.id);
+      if (original == null) {
+        // If not existing, insert as new
+        await insert(txn);
+        return 1;
+      }
+
+      // 2. Reject update if target event is itself a reversal or marked deleted
+      final eventRow = await dbExec.query(
+        TablesV24.economicEvents,
+        columns: ['reversal_of_event_id', 'description'],
+        where: 'id = ?',
+        whereArgs: [txn.id],
+      );
+      if (eventRow.isNotEmpty && eventRow.first['reversal_of_event_id'] != null) {
+        return 0;
+      }
+      if (original.description.startsWith('REVERSAL:') ||
+          original.metadata['is_reversal'] == true) {
+        return 0;
+      }
+
+      // 3. Idempotency guard: verify whether a reversal already exists for this original event
+      final existingReversal = await dbExec.rawQuery(
+        '''
+        SELECT id FROM ${TablesV24.economicEvents}
+        WHERE reversal_of_event_id = ?
+           OR (
+             substr(description, 1, 10) = 'REVERSAL: '
+             AND (
+               substr(description, 11) = ?
+               OR substr(description, 11, length(?) + 3) = ? || ' - '
+             )
+           )
+        LIMIT 1;
+        ''',
+        [txn.id, txn.id, txn.id, txn.id],
+      );
+      if (existingReversal.isNotEmpty) {
+        return 0; // Already reversed, deleted, or corrected! Reject duplicate update.
+      }
+
+      // 4. Validate refund ceiling and original purchase lifecycle if updating a refund
+      Transaction effectiveTxn = txn;
+      if (txn.type == 'refund' || original.canonicalType == CanonicalEventType.refund) {
+        final relId = txn.relatedEntityId ?? original.metadata['related_entity_id'] as String?;
+        if (relId != null && relId.isNotEmpty) {
+          effectiveTxn = txn.copyWith(relatedEntityId: relId);
+          await _validateRefundCeiling(dbExec, effectiveTxn, excludeEventId: txn.id);
+        }
+      }
+
+      // 5. Post reversal event negating the original
+      final reversal = CanonicalTransactionAdapter.createReversal(
+        original,
+        original.postings,
+        reason: 'Transaction update',
+      );
+      await repo.createAndPostEvent(
+        reversal.event,
+        postings: reversal.postings,
+      );
+      await dbExec.update(
+        TablesV24.economicEvents,
+        {'reversal_of_event_id': original.id},
+        where: 'id = ?',
+        whereArgs: [reversal.event.id],
+      );
+
+      // 6. Post replacement event with new transaction state
+      final replacementId =
+          '${txn.id}:corr:${DateTime.now().millisecondsSinceEpoch}';
+      final replacementTxn = effectiveTxn.copyWith(id: replacementId);
+      await CanonicalTransactionAdapter.ensureAccountsExist(
+          dbExec, replacementTxn);
+
+      final replacementEvent =
+          CanonicalTransactionAdapter.toEconomicEvent(replacementTxn);
+      final replacementPostings = CanonicalTransactionAdapter.toPostings(
+        replacementTxn,
+        eventId: replacementId,
+      );
+      final replacementEvidence = CanonicalTransactionAdapter.toEvidence(
+        replacementTxn,
+        eventId: replacementId,
+      );
+
+      await repo.createAndPostEvent(
+        replacementEvent,
+        postings: replacementPostings,
+        evidence:
+            replacementEvidence != null ? [replacementEvidence] : null,
+      );
+
       return 1;
     }
 
-    // 2. Post reversal event negating the original
-    final reversal = CanonicalTransactionAdapter.createReversal(
-      original,
-      original.postings,
-      reason: 'Transaction update',
-    );
-    await repo.createAndPostEvent(
-      reversal.event,
-      postings: reversal.postings,
-    );
-    await database.update(
-      TablesV24.economicEvents,
-      {'reversal_of_event_id': original.id},
-      where: 'id = ?',
-      whereArgs: [reversal.event.id],
-    );
-
-    // 3. Post replacement event with new transaction state
-    final replacementId = '${txn.id}:corr:${DateTime.now().millisecondsSinceEpoch}';
-    final replacementTxn = txn.copyWith(id: replacementId);
-    await CanonicalTransactionAdapter.ensureAccountsExist(database, replacementTxn);
-
-    final replacementEvent =
-        CanonicalTransactionAdapter.toEconomicEvent(replacementTxn);
-    final replacementPostings = CanonicalTransactionAdapter.toPostings(
-      replacementTxn,
-      eventId: replacementId,
-    );
-    final replacementEvidence = CanonicalTransactionAdapter.toEvidence(
-      replacementTxn,
-      eventId: replacementId,
-    );
-
-    await repo.createAndPostEvent(
-      replacementEvent,
-      postings: replacementPostings,
-      evidence:
-          replacementEvidence != null ? [replacementEvidence] : null,
-    );
-
-    return 1;
+    if (database is Database) {
+      return await database.transaction((txnExec) => executeUpdate(txnExec));
+    }
+    return await executeUpdate(database);
   }
 
   Future<void> updateTransaction(Transaction txn) async {
@@ -429,8 +658,8 @@ class TransactionRepo {
     DateTime end,
   ) async {
     final database = await _db;
-    final startStr = start.toIso8601String();
-    final endStr = end.toIso8601String();
+    final startStr = start.toUtc().toIso8601String();
+    final endStr = end.toUtc().toIso8601String();
 
     final summary = await database.rawQuery('''
       SELECT
@@ -524,11 +753,19 @@ class TransactionRepo {
     };
   }
 
-  Future<List<Map<String, dynamic>>> getMonthlyStats(int monthsBack) async {
+  Future<List<Map<String, dynamic>>> getMonthlyStats(
+    int monthsBack, {
+    Duration? timeZoneOffset,
+  }) async {
     final database = await _db;
+    final offset = timeZoneOffset ?? DateTime.now().timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final minutes = offset.inMinutes.abs();
+    final tzModifier = '$sign$minutes minutes';
+
     return await database.rawQuery('''
       SELECT 
-        strftime('%Y-%m', e.timestamp) AS month,
+        strftime('%Y-%m', datetime(e.timestamp, '$tzModifier')) AS month,
         COALESCE(SUM(
           CASE
             WHEN a.account_type = 'income' AND p.direction = 'credit' THEN p.amount_minor_units
@@ -556,7 +793,7 @@ class TransactionRepo {
 
   Future<List<Map<String, dynamic>>> getCategoryBreakdown(int monthsBack) async {
     final database = await _db;
-    final cutoff = DateTime.now().subtract(Duration(days: monthsBack * 30));
+    final cutoff = DateTime.now().toUtc().subtract(Duration(days: monthsBack * 30));
     return await database.rawQuery('''
       SELECT
         a.id AS category_id,
@@ -589,7 +826,7 @@ class TransactionRepo {
     int limit = 10,
   }) async {
     final database = await _db;
-    final cutoff = DateTime.now().subtract(Duration(days: monthsBack * 30));
+    final cutoff = DateTime.now().toUtc().subtract(Duration(days: monthsBack * 30));
     return await database.rawQuery('''
       SELECT
         a.name AS category_name,
@@ -616,7 +853,7 @@ class TransactionRepo {
 
   Future<double> getAvgDailySpending(int days) async {
     final database = await _db;
-    final cutoff = DateTime.now().subtract(Duration(days: days));
+    final cutoff = DateTime.now().toUtc().subtract(Duration(days: days));
     final result = await database.rawQuery('''
       SELECT AVG(daily_total) AS avg_daily FROM (
         SELECT date(e.timestamp) AS day,
@@ -640,65 +877,15 @@ class TransactionRepo {
     return (result.first['avg_daily'] as num?)?.toDouble() ?? 0.0;
   }
 
-  Future<Map<String, dynamic>> getStatsForMonth(int year, int month) async {
-    final database = await _db;
-    final monthStr = '$year-${month.toString().padLeft(2, '0')}';
-
-    final summary = await database.rawQuery('''
-      SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN a.account_type = 'income' AND p.direction = 'credit' THEN p.amount_minor_units
-            WHEN a.account_type = 'income' AND p.direction = 'debit' THEN -p.amount_minor_units
-            ELSE 0
-          END
-        ), 0) / 100.0 AS income,
-        COALESCE(SUM(
-          CASE
-            WHEN a.account_type = 'expense' AND p.direction = 'debit' THEN p.amount_minor_units
-            WHEN a.account_type = 'expense' AND p.direction = 'credit' THEN -p.amount_minor_units
-            ELSE 0
-          END
-        ), 0) / 100.0 AS expense,
-        COUNT(DISTINCT e.id) AS txn_count,
-        COALESCE(MAX(CASE WHEN a.account_type = 'expense' AND p.direction = 'debit' THEN p.amount_minor_units ELSE 0 END), 0) / 100.0 AS biggest_expense
-      FROM ${TablesV24.postings} p
-      JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-      JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-      WHERE e.lifecycle_status = 'posted'
-        AND e.event_type != 'opening_balance'
-        AND strftime('%Y-%m', e.timestamp) = ?;
-    ''', [monthStr]);
-
-    final topCats = await database.rawQuery('''
-      SELECT a.id AS category_id, a.name, a.icon_name AS icon, a.color_hex AS color,
-             COALESCE(SUM(
-               CASE
-                 WHEN p.direction = 'debit' THEN p.amount_minor_units
-                 WHEN p.direction = 'credit' THEN -p.amount_minor_units
-                 ELSE 0
-               END
-             ), 0) / 100.0 AS total
-      FROM ${TablesV24.postings} p
-      JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-      JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-      WHERE e.lifecycle_status = 'posted'
-        AND a.account_type = 'expense'
-        AND e.event_type != 'opening_balance'
-        AND strftime('%Y-%m', e.timestamp) = ?
-      GROUP BY a.id
-      ORDER BY total DESC
-      LIMIT 5;
-    ''', [monthStr]);
-
-    return {
-      'income': (summary.first['income'] as num?)?.toDouble() ?? 0.0,
-      'expense': (summary.first['expense'] as num?)?.toDouble() ?? 0.0,
-      'txn_count': (summary.first['txn_count'] as num?)?.toInt() ?? 0,
-      'biggest_expense':
-          (summary.first['biggest_expense'] as num?)?.toDouble() ?? 0.0,
-      'top_categories': topCats,
-    };
+  Future<Map<String, dynamic>> getStatsForMonth(
+    int year,
+    int month, {
+    Duration? timeZoneOffset,
+  }) async {
+    final offset = timeZoneOffset ?? DateTime.now().timeZoneOffset;
+    final startLocal = DateTime.utc(year, month, 1).subtract(offset);
+    final endLocal = DateTime.utc(year, month + 1, 1).subtract(offset);
+    return getStatsForRange(startLocal, endLocal);
   }
 
   Future<Map<String, dynamic>> getStatsForYear(int year) async {

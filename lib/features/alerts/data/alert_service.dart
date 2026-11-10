@@ -8,6 +8,7 @@ import '../../../data/repositories/salary_repo.dart';
 import '../../../models/reminder_model.dart';
 import '../../../models/salary_payment.dart';
 import '../../../services/salary_service.dart';
+import '../../../data/core/tracked_database_task_queue.dart';
 import 'app_alert.dart';
 
 class AlertService {
@@ -44,7 +45,10 @@ class AlertService {
 
   Stream<List<AppAlert>> watchActiveAlerts() {
     _ensureListening();
-    unawaited(refresh());
+    TrackedDatabaseTaskQueue.instance.runTracked(
+      'alert_service_refresh',
+      () => refresh(),
+    );
     return _controller.stream;
   }
 
@@ -205,7 +209,10 @@ class AlertService {
   void _handleSourceChanged() {
     _invalidateCache();
     databaseService.invalidateAlertCache();
-    unawaited(refresh());
+    TrackedDatabaseTaskQueue.instance.runTracked(
+      'alert_service_source_changed',
+      () => refresh(),
+    );
   }
 
   AppAlert _mapReminderToAlert(Reminder reminder) {

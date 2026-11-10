@@ -14,7 +14,6 @@ final homeSummaryProvider = Provider<DashboardSummaryData>((ref) {
   final now = DateTime.now();
   final currentMonthStart = DateTime(now.year, now.month, 1);
   final previousMonthStart = DateTime(now.year, now.month - 1, 1);
-  final previousMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
 
   double income = 0, expense = 0;
   double prevMonthExp = 0;
@@ -23,13 +22,21 @@ final homeSummaryProvider = Provider<DashboardSummaryData>((ref) {
     if (!t.date.isBefore(currentMonthStart) && !t.date.isAfter(now)) {
       if (t.type == 'income') {
         income += t.amount;
-      } else if (t.type == 'expense') {
+      } else if (t.type == 'expense' || t.type == 'credit_card_purchase') {
         expense += t.amount;
+      } else if (t.type == 'refund') {
+        expense -= t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        expense += _extractInterest(t);
       }
     } else if (!t.date.isBefore(previousMonthStart) &&
-        !t.date.isAfter(previousMonthEnd)) {
-      if (t.type == 'expense') {
+        t.date.isBefore(currentMonthStart)) {
+      if (t.type == 'expense' || t.type == 'credit_card_purchase') {
         prevMonthExp += t.amount;
+      } else if (t.type == 'refund') {
+        prevMonthExp -= t.amount;
+      } else if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+        prevMonthExp += _extractInterest(t);
       }
     }
   }
@@ -43,6 +50,19 @@ final homeSummaryProvider = Provider<DashboardSummaryData>((ref) {
     previousMonthExpense: prevMonthExp,
   );
 });
+
+double _extractInterest(spx.Transaction t) {
+  if (t.interestAmount != null) {
+    return t.interestAmount!;
+  }
+  if (t.type == 'loan_repayment' || t.type == 'loan_payment') {
+    final match = RegExp(r'Interest:\s*([\d\.]+)').firstMatch(t.notes);
+    if (match != null) {
+      return double.tryParse(match.group(1)!) ?? 0.0;
+    }
+  }
+  return 0.0;
+}
 
 /// Provides the last 10 transactions for the home screen preview.
 /// Uses the canonical transactions from transactionsProvider.

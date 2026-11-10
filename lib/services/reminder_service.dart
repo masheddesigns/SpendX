@@ -6,6 +6,7 @@ import '../core/database/database_service.dart';
 import '../data/repositories/reminder_repo.dart';
 import '../features/alerts/data/alert_service.dart';
 import '../models/reminder_model.dart';
+import '../data/core/tracked_database_task_queue.dart';
 import 'notification_service_v2.dart';
 
 class ReminderService extends ChangeNotifier {
@@ -31,7 +32,10 @@ class ReminderService extends ChangeNotifier {
     await refreshDueReminders();
     await _notificationService.checkBudgetAlerts();
     _periodicTimer = Timer.periodic(_backgroundCheckInterval, (_) {
-      unawaited(checkAndDispatchAlerts());
+      TrackedDatabaseTaskQueue.instance.runTracked(
+        'reminder_check_and_dispatch',
+        () => checkAndDispatchAlerts(),
+      );
     });
   }
 

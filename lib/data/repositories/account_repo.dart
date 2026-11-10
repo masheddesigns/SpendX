@@ -4,6 +4,7 @@ import '../../domain/finance/money.dart';
 import '../../models/bank_account.dart';
 import '../../models/credit_card.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 import 'canonical/canonical_account_adapter.dart';
 import 'canonical/canonical_account_repository.dart';
@@ -27,7 +28,9 @@ class AccountRepo {
   AccountRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
 
   Future<DatabaseExecutor> _getExecutor() async {
-    if (_customExecutor != null) return _customExecutor;
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await db.database;
   }
 

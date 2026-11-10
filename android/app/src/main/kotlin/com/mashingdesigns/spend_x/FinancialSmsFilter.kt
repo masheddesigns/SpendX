@@ -22,9 +22,14 @@ object FinancialSmsFilter {
     private val NON_FINANCIAL_REGEX = Pattern.compile(
         """\b(?:data usage|data quota|daily data|high speed data|pack validity|recharge|plan expir|airtel thanks|jiofiber|myjio|callertune|hello tune)\b|""" +
         """\b(?:out for delivery|delivered|order placed|order confirmed|shipped|tracking id|courier|awb|dispatch)\b|""" +
-        """\b(?:feedback|survey|rate us|rate your|review us|rating|winner|congratulations|claim now|flat \d+% off|use coupon|use code|voucher)\b|""" +
+        """\b(?:feedback|survey|rate us|rate your|review us|rating|winner|congratulations|claim now|claim your|flat \d+%(?: off)?|use coupon|use code|voucher)\b|""" +
+        """\b(?:ready for your|ready for you|waiting for you|at your fingertips|borrow up to|avail up to|get up to)\b|""" +
+        """\b(?:pre-approved|preapproved|pre approved|loan offer|instant loan|personal loan|apply now|get a loan|get instant|cash loan)\b|""" +
+        """\b(?:cashback offer|scratch card|win up to|earn up to|scratch & win|play & win|rewards? earned|coins? earned|cashback on your|flat .*?cashback|win .*?cashback|earn .*?cashback)\b|""" +
+        """\b(?:tap to (?:link|claim|apply|view|avail|pay|activate|recharge)|link now|invite (?:friends|contacts)|refer (?:&|and) earn|referral code|limited period offer)\b|""" +
+        """\b(?:collect request|has requested|demanded|authorization request|approve or decline)\b|""" +
+        """\b(?:neucoins?|supercoins?|reward points?|bonus points?|cash points?|miles?)\b|""" +
         """\b(?:traded value|contract note|demat|depository|cdsl|nsdl|national stock exchange|bse ltd)\b|""" +
-        """\b(?:upcoming debit|will be debited|emandate registered|mandate created)\b|""" +
         """\b(?:terms & conditions|privacy policy|kyc update|service request)\b|""" +
         """\b(?:imd|ksdma|ndma|weather|forecast|heavy rain|cyclone|thunderstorm)\b|""" +
         """(?:റീചാർജ്|കാലഹരണപ്പെട്ടു|പ്ലാൻ|ജിയോ|ഡാറ്റ|ഫീഡ്‌ബാക്ക്|ഇടിമിന്നൽ|മഴ|കാറ്റ്)""",
@@ -45,7 +50,10 @@ object FinancialSmsFilter {
         "CANBNK", "PNBSMS", "IDFC", "INDUS", "YESBK", "YESBNK", "UNIONB",
         "INDIANB", "CENTBK", "UCOBNK", "IOB", "KVB", "CUB", "SIBLTD",
         "KBL", "TMB", "BNDHAN", "RBL", "SCISMS", "CITIBK", "HSBC", "STANBK",
-        "AUBANK", "AUCCB", "EQUITAS", "UJJIVAN", "PAYU", "RAZORP", "EPFO"
+        "AUBANK", "AUCCB", "EQUITAS", "UJJIVAN", "PAYU", "RAZORP", "EPFO",
+        "CRED", "GROWW", "JIOFINANCE", "TATANEU", "BHIM", "ONECARD", "SLICE",
+        "FIMONEY", "JUPITER", "NAVI", "SUPER", "GOOGLE", "GPAY", "PHONEPE",
+        "PAYZAPP", "FEDMOBILE", "YONO", "AMAZON"
     )
 
     // 5. Monetary amount required: ₹ 500, Rs. 500.00, INR 1,500, 500.00 INR, etc.
@@ -56,14 +64,14 @@ object FinancialSmsFilter {
 
     // 6. Financial action verbs / transaction contexts
     private val TRANSACTION_VERBS = Pattern.compile(
-        """\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|deposited|refunded|received)\b""",
+        """\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|deposited|refunded|received|payment|paying|repayment|repay|repaid|cleared|settled|reversed|reversal|mandate|autopay|subscription|sip|cancelled|canceled|revoked|deactivated)\b""",
         Pattern.CASE_INSENSITIVE
     )
 
     // 7. Balance or account statement keywords
     private val BALANCE_KEYWORDS = Pattern.compile(
         """\b(?:available\s*balance|avail\.?\s*bal(?:ance)?|account\s*balance|closing\s*bal(?:ance)?|""" +
-        """current\s*balance|total\s*due|minimum\s*due|amount\s*due|payment\s*due|bill\s*(?:amount|for|of)|""" +
+        """current\s*balance|total\s*due|minimum\s*due|min\s*due|amount\s*due|payment\s*due|due\s*(?:date|on|by)|payable\s*(?:by|before)?|bill\s*(?:amount|for|of)|""" +
         """available\s*limit|avl\s*limit|credit\s*limit|outstanding\s*(?:balance|amount|dues))\b""",
         Pattern.CASE_INSENSITIVE
     )
@@ -103,6 +111,27 @@ object FinancialSmsFilter {
             if (cleanSender.contains(pattern)) {
                 return false
             }
+        }
+
+        // 3.5 Check for AutoPay / Mandate / Subscription cancellation notifications.
+        // These are critical financial state updates that frequently omit explicit currency amounts
+        // (e.g. "UPI AutoPay for Netflix has been successfully revoked").
+        val lowerBody = body.lowercase()
+        val isCancellation = (lowerBody.contains("revok") ||
+                              lowerBody.contains("cancel") ||
+                              lowerBody.contains("deactivat") ||
+                              lowerBody.contains("stopped") ||
+                              lowerBody.contains("paused")) &&
+                             (lowerBody.contains("mandate") ||
+                              lowerBody.contains("autopay") ||
+                              lowerBody.contains("auto-pay") ||
+                              lowerBody.contains("subscription") ||
+                              lowerBody.contains("standing instruction") ||
+                              lowerBody.contains("si ") ||
+                              lowerBody.contains("sip") ||
+                              lowerBody.contains("recurring"))
+        if (isCancellation) {
+            return true
         }
 
         val hasAmount = AMOUNT_REGEX.matcher(body).find()

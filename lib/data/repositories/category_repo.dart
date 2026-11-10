@@ -4,6 +4,7 @@ import '../../core/constants/default_categories.dart';
 import '../../core/constants/category_meta.dart';
 import '../../models/category.dart';
 import '../core/app_database.dart';
+import '../core/database_access_gate.dart';
 import '../core/tables.dart';
 
 class CategoryRepo {
@@ -12,7 +13,9 @@ class CategoryRepo {
   CategoryRepo({DatabaseExecutor? executor}) : _customExecutor = executor;
 
   Future<DatabaseExecutor> get _db async {
-    if (_customExecutor != null) return _customExecutor;
+    if (_customExecutor != null) {
+      return DatabaseAccessGate.instance.wrapExecutor(_customExecutor);
+    }
     return await AppDatabase.instance.database;
   }
 

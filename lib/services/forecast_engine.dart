@@ -100,7 +100,7 @@ class ForecastEngine {
     final now = DateTime.now();
     final startOfMonth = DateTime(now.year, now.month, 1);
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
-    final endOfMonth = DateTime(now.year, now.month, daysInMonth, 23, 59, 59);
+    final nextMonthStart = DateTime(now.year, now.month + 1, 1);
     final daysElapsed = now.day.clamp(1, daysInMonth);
     final remainingDays = (daysInMonth - daysElapsed).clamp(0, daysInMonth);
 
@@ -123,11 +123,11 @@ class ForecastEngine {
     // Contractual upcoming inflows and commitments until month end
     final upcomingIncome = await queryRepo.getUpcomingExpectedInflows(
       fromDate: now,
-      toDate: endOfMonth,
+      toDate: nextMonthStart,
     );
     final upcomingCommitments = await queryRepo.getUpcomingExpectedCommitments(
       fromDate: now,
-      toDate: endOfMonth,
+      toDate: nextMonthStart,
     );
 
     // Projected totals: actual MTD + known upcoming + remaining discretionary burn
@@ -141,10 +141,9 @@ class ForecastEngine {
 
     // Previous month total expenses for overspend comparison
     final startOfPrevMonth = DateTime(now.year, now.month - 1, 1);
-    final endOfPrevMonth = DateTime(now.year, now.month, 0, 23, 59, 59);
     final prevTotalExpense = await queryRepo.getTotalExpenses(
       startDate: startOfPrevMonth,
-      endDate: endOfPrevMonth,
+      endDate: startOfMonth,
     );
 
     // Category breakdown derived from canonical postings
@@ -154,7 +153,7 @@ class ForecastEngine {
     );
     final prevCatSpending = await queryRepo.getAllCategorySpending(
       startDate: startOfPrevMonth,
-      endDate: endOfPrevMonth,
+      endDate: startOfMonth,
     );
 
     final categoryForecasts = <String, CategoryForecast>{};

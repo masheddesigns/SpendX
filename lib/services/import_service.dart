@@ -1,6 +1,7 @@
 // ignore_for_file: curly_braces_in_flow_control_structures
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:csv/csv.dart' as csv_pkg;
 import 'package:intl/intl.dart';
 import 'backup_service.dart';
@@ -33,10 +34,10 @@ class ImportService {
 
   // ─── SpendX Backup Restore ────────────────────────────
 
-  Future<bool> importFromFile(File file) async {
+  Future<bool> importFromFile(File file, {ProviderContainer? container}) async {
     _log("file selected: ${file.path}");
     try {
-      final success = await BackupService.instance.restoreFromFile(file);
+      final success = await BackupService.instance.restoreFromFile(file, container: container);
       return success;
     } catch (e) {
       _log("restore error: $e");

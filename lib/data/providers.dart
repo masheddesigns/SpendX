@@ -1230,6 +1230,7 @@ final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
       ref.watch(categoriesProvider.select((a) => a.valueOrNull ?? const []));
   final budgets =
       ref.watch(budgetsProvider.select((a) => a.valueOrNull ?? const []));
+  final canonicalNetWorth = ref.watch(netWorthProvider);
 
   debugPrint('\u{1F4CA} Analytics provider: txns=${txns.length}, '
       'accounts=${accounts.length}, loans=${loans.length}, cards=${cards.length}');
@@ -1241,6 +1242,7 @@ final analyticsSummaryProvider = Provider<AnalyticsSummary>((ref) {
     cards: cards,
     categories: categories,
     budgets: budgets,
+    canonicalNetWorth: canonicalNetWorth,
   );
   return ref.read(analyticsServiceProvider).computeSummary(bundle);
 });
