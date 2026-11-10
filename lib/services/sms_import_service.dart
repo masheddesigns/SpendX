@@ -344,7 +344,7 @@ class SmsImportService {
 
     // 2.2. If this is a credit card bill statement / bill generation notice:
     // It announces total due / statement balance. It must NEVER create a purchase transaction!
-    if (isCcBillCandidate && !isCcPaymentCandidate) {
+    if (isCcBillCandidate && !isCcPaymentCandidate && !isCcSpend) {
       final balance = _detectBalance(body, sender);
       final upcomingObligation = detectUpcomingObligation(body, sender);
       return SmsClassification(
@@ -934,7 +934,7 @@ class SmsImportService {
     r'received\s+on\s+your\s+(?:[A-Za-z0-9]+\s+)?credit\s+card|'
     r'payment\s+towards\s+credit\s+card\s+is\s+successful|'
     r'bill\s+payment\s+of\s+.*?(?:received|successful|completed|credited\s+to\s+.*?(?:card|cc))|'
-    r'(?:debited|paid)\s+(?:from\s+.*?)?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending)'
+    r'(?:debited|paid)\s+(?:from\s+[a-z0-9 ._-]*?(?:a/c|account)\s+.*?)?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending)'
     r')',
     caseSensitive: false,
   );
@@ -954,6 +954,13 @@ class SmsImportService {
 
   /// Returns true if text indicates a credit card bill payment confirmation.
   static bool _isCreditCardPaymentText(String lower, [String sender = '']) {
+    // If paid/spent from a credit card to a merchant, this is an outbound purchase, not a bill repayment towards the card!
+    if (RegExp(r'\b(?:paid|spent|charged)\s+from\s+(?:your\s+)?[a-z0-9 ._-]*?credit\s*card\s+to\b', caseSensitive: false).hasMatch(lower) ||
+        lower.contains('from your edge csb bank rupay credit card to') ||
+        lower.contains('from your credit card to')) {
+      return false;
+    }
+
     if (_ccPaymentRe.hasMatch(lower)) return true;
 
     final hasCardSignal = lower.contains('credit card') ||
