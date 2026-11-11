@@ -512,13 +512,13 @@ class TransactionTextParser {
 
   static final _creditKeywords = RegExp(
     r'\b(credited|received|deposit(?:ed)?|refund(?:ed)?|cashback|salary|'
-    r'bonus|collected|reimburs(?:ed|ement)?)\b',
+    r'bonus|collected|reimburs(?:ed|ement)?|paid\s*(?:to\s*)?you|sent\s*(?:to\s*)?you|transferred?\s*(?:to\s*)?you)\b',
     caseSensitive: false,
   );
 
   static final _debitKeywords = RegExp(
-    r'\b(debited|paid|sent|spent|charged|deducted|withdrawn|withdrew|'
-    r'purchase[ds]?|transferred?|swiped|outgoing|invested|invest)\b',
+    r'\b(debited|paid(?!\s*(?:to\s*)?you\b)|sent(?!\s*(?:to\s*)?you\b)|spent|charged|deducted|withdrawn|withdrew|'
+    r'purchase[ds]?|transferred?(?!\s*(?:to\s*)?you\b)|swiped|outgoing|invested|invest)\b',
     caseSensitive: false,
   );
 
@@ -623,6 +623,11 @@ class TransactionTextParser {
   // match via the open-ended word boundary; only the apostrophe character
   // itself is excluded from the captured name.
   static final _merchantPatterns = <RegExp>[
+    // "MERCHANT paid you", "MERCHANT sent you"
+    RegExp(
+      r'(?:^|:\s*)([A-Za-z0-9 .&-]{2,40})\s+(?:paid|sent)\s+you\b',
+      caseSensitive: false,
+    ),
     // "paid to MERCHANT", "sent to MERCHANT", "debited via UPI to MERCHANT"
     RegExp(
       r'(?:paid|sent|transferred|debited)\s+(?:via\s+upi\s+)?to\s+([A-Za-z0-9 .&@_-]{2,40})',

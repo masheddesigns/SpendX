@@ -11,6 +11,7 @@ import 'package:spend_x/data/repositories/category_repo.dart';
 import 'package:spend_x/data/repositories/credit_repo.dart';
 import 'package:spend_x/data/repositories/loan_repo.dart';
 import 'package:spend_x/data/repositories/reminder_repo.dart';
+import 'package:spend_x/data/repositories/transaction_repo.dart';
 import 'package:spend_x/models/bank_account.dart';
 import 'package:spend_x/models/credit_card.dart';
 import 'package:spend_x/models/loan.dart';
@@ -824,6 +825,65 @@ void main() {
         expect(classification.transaction, isNotNull, reason: 'Failed for: $text');
         expect(classification.eventType, SmsEventType.creditCardPayment, reason: 'Wrong type for: $text');
       }
+    });
+  });
+
+  group('Defect 25: Cross-Source Payment App vs Bank SMS Deduplication & Balance Ingestion', () {
+    test('25a. Google Pay incoming payment followed by Jio Payments Bank SMS deduplicates and updates balance', () async {
+      // 1. Google Pay push notification arrives first
+      const gpaySender = 'APP:com.google.android.apps.nbu.paisa.user:Google Pay';
+      const gpayBody = 'RAVEENDRAN K paid you ₹6,000.00';
+
+      final res1 = await LiveSmsService.instance.testProcessBody(gpayBody, sender: gpaySender);
+      expect(res1.added, true);
+      expect(res1.transaction, isNotNull);
+      expect(res1.transaction!.amount, 6000.0);
+      expect(res1.transaction!.type, 'income');
+      expect(res1.transaction!.notes, 'Raveendran K');
+
+      final initialTxCount = (await TransactionRepo().getAll()).where((t) => t.type != 'opening_balance' && t.type != 'reconciliation').length;
+
+      // 2. Jio Payments Bank SMS arrives seconds later with account last4 and balance
+      const jioSender = 'JX-JIOPBS-S';
+      const jioBody = 'A/c x3284 credited with Rs. 6000.00 on 10-Nov-2026. Bal: Rs. 12742.91. - JPBL';
+
+      final res2 = await LiveSmsService.instance.testProcessBody(jioBody, sender: jioSender);
+      // Must NOT add duplicate transaction!
+      expect(res2.added, false);
+
+      final postTxCount = (await TransactionRepo().getAll()).where((t) => t.type != 'opening_balance' && t.type != 'reconciliation').length;
+      expect(postTxCount, initialTxCount, reason: 'Duplicate transaction was inserted!');
+
+      // Bank account balance must be updated to 12742.91
+      final accounts = await AccountRepo().getAll();
+      final jioAcc = accounts.where((a) => a.last4 == '3284').firstOrNull;
+      expect(jioAcc, isNotNull);
+      expect(jioAcc!.balance, 12742.91);
+
+      // Existing transaction must be enriched with the Jio account ID
+      final allTxns = await TransactionRepo().getAll();
+      final incomeTx = allTxns.firstWhere((t) => t.amount == 6000.0);
+      expect(incomeTx.accountId, jioAcc.id);
+      expect(incomeTx.notes, 'Raveendran K');
+    });
+
+    test('25b. Repeated balance statement does not produce oscillating duplicate reconciliation records', () async {
+      const jioSender = 'JX-JIOPBS-S';
+      const jioBody = 'A/c x3284 credited with Rs. 6000.00 on 10-Nov-2026. Bal: Rs. 12742.91. - JPBL';
+
+      // First attempt creates account and sets balance
+      final res1 = await LiveSmsService.instance.testProcessBody(jioBody, sender: jioSender);
+      expect(res1.added, true);
+
+      // Second attempt to process the exact same message body must be ignored as duplicate
+      final res2 = await LiveSmsService.instance.testProcessBody(jioBody, sender: jioSender);
+      expect(res2.added, false);
+
+      // Account balance remains stable at 12742.91
+      final accounts = await AccountRepo().getAll();
+      final jioAcc = accounts.where((a) => a.last4 == '3284').firstOrNull;
+      expect(jioAcc, isNotNull);
+      expect(jioAcc!.balance, 12742.91);
     });
   });
 }

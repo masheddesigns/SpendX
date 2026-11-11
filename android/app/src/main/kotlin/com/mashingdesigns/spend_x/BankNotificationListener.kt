@@ -6,6 +6,8 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
+import java.util.Collections
+import java.util.LinkedHashSet
 
 /**
  * Listens for system notifications posted by banking and UPI payment apps
@@ -20,6 +22,19 @@ class BankNotificationListener : NotificationListenerService() {
     companion object {
         @Volatile
         var instance: BankNotificationListener? = null
+
+        private val PROCESSED_KEYS: MutableSet<String> = Collections.synchronizedSet(object : LinkedHashSet<String>() {
+            override fun add(element: String): Boolean {
+                if (size >= 300) {
+                    val it = iterator()
+                    if (it.hasNext()) {
+                        it.next()
+                        it.remove()
+                    }
+                }
+                return super.add(element)
+            }
+        })
 
         // Known banking, UPI, and financial payment app packages in India
         private val PAYMENT_PACKAGES = setOf(
@@ -197,6 +212,14 @@ class BankNotificationListener : NotificationListenerService() {
         }
 
         if (fullBody.isBlank()) return
+
+        val sbnKey = sbn.key ?: "${pkg}_${sbn.id}_${sbn.postTime}"
+        val dedupKey = "$sbnKey|${fullBody.hashCode()}"
+        if (PROCESSED_KEYS.contains(dedupKey)) {
+            Log.d("SpendX_Notif", "Skipping already processed active notification: $dedupKey")
+            return
+        }
+        PROCESSED_KEYS.add(dedupKey)
 
         val isFromPaymentPackage = PAYMENT_PACKAGES.contains(pkg)
 

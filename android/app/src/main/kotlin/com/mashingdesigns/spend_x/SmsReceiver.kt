@@ -38,11 +38,13 @@ class SmsReceiver : BroadcastReceiver() {
 
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
-            // Pass [sender, body] so Dart can process live.
-            MethodChannel(
-                engine.dartExecutor.binaryMessenger,
-                MainActivity.CHANNEL,
-            ).invokeMethod("onSmsReceived", listOf(sender, fullBody))
+            // Pass [sender, body] so Dart can process live on UI thread.
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                MethodChannel(
+                    engine.dartExecutor.binaryMessenger,
+                    MainActivity.CHANNEL,
+                ).invokeMethod("onSmsReceived", listOf(sender, fullBody))
+            }
         } else {
             // App is killed / engine not cached: queue and notify user
             SmsStore.queue(context, sender, fullBody)
