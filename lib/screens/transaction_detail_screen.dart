@@ -9,6 +9,7 @@ import '../widgets/spendx_app_bar.dart';
 import '../widgets/custom_dialog.dart';
 import '../widgets/custom_snackbar.dart';
 import 'expense/add_expense_screen.dart';
+import 'bank/account_list_screen.dart' show resolveAccountDisplayName;
 import '../domain/credit/credit_card_service.dart';
 import '../utils/text_formatter.dart';
 import '../data/providers.dart';
@@ -368,7 +369,39 @@ class _UnifiedTransactionDetailScreenState
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isIncome = _tx.type == 'income';
-    final amountColor = isIncome ? AppTheme.semanticIncome : AppTheme.semanticExpense;
+    final isCcPayment = _tx.type == 'credit_payment' || _tx.source == 'credit_card_payment';
+    final isTransfer = _tx.isTransferType || isCcPayment;
+
+    final Color amountColor;
+    final String sign;
+    final IconData heroIcon;
+
+    if (isCcPayment) {
+      amountColor = AppTheme.primaryBlue;
+      sign = '→';
+      heroIcon = Icons.credit_card_rounded;
+    } else if (isTransfer) {
+      amountColor = AppTheme.primaryBlue;
+      sign = '→';
+      heroIcon = Icons.swap_horiz_rounded;
+    } else if (isIncome) {
+      amountColor = AppTheme.semanticIncome;
+      sign = '+';
+      heroIcon = Icons.arrow_downward_rounded;
+    } else {
+      amountColor = AppTheme.semanticExpense;
+      sign = '-';
+      heroIcon = Icons.arrow_upward_rounded;
+    }
+
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? [];
+    final cards = ref.watch(cardsProvider).valueOrNull ?? [];
+    final accountMap = {
+      for (final a in accounts) a.id: resolveAccountDisplayName(a.name),
+      for (final c in cards) c.id: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card'),
+    };
+    final fromName = accountMap[_tx.accountId] ?? (_tx.accountId != null ? 'Account' : null);
+    final toName = accountMap[_tx.relatedEntityId] ?? (_tx.relatedEntityId != null ? 'Card / Account' : null);
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
@@ -416,16 +449,14 @@ class _UnifiedTransactionDetailScreenState
                             ),
                           ),
                           child: Icon(
-                            isIncome
-                                ? Icons.arrow_downward_rounded
-                                : Icons.arrow_upward_rounded,
+                            heroIcon,
                             color: amountColor,
                             size: 28,
                           ),
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          '${isIncome ? '+' : '-'}${AppFormat.currency(_tx.amount.abs())}',
+                          '$sign ${AppFormat.currency(_tx.amount.abs())}',
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w700,
@@ -442,7 +473,9 @@ class _UnifiedTransactionDetailScreenState
                             borderRadius: BorderRadius.circular(AppRadius.full),
                           ),
                           child: Text(
-                            _cat?.name ?? 'Uncategorized',
+                            isCcPayment
+                                ? 'Credit Card Payment'
+                                : (isTransfer ? 'Transfer' : (_cat?.name ?? 'Uncategorized')),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -476,13 +509,41 @@ class _UnifiedTransactionDetailScreenState
                           value: DateFormat('hh:mm a').format(_tx.date),
                           isDark: isDark,
                         ),
-                        _buildDivider(isDark),
-                        _buildDetailItem(
-                          icon: Icons.category_rounded,
-                          label: 'Category',
-                          value: _cat?.name ?? 'None',
-                          isDark: isDark,
-                        ),
+                        if (isTransfer && (fromName != null || toName != null)) ...[
+                          _buildDivider(isDark),
+                          _buildDetailItem(
+                            icon: Icons.swap_horiz_rounded,
+                            label: 'Flow',
+                            value: '${fromName ?? "Default"} → ${toName ?? "Destination"}',
+                            isDark: isDark,
+                          ),
+                        ] else if (fromName != null) ...[
+                          _buildDivider(isDark),
+                          _buildDetailItem(
+                            icon: Icons.account_balance_rounded,
+                            label: 'Account',
+                            value: fromName,
+                            isDark: isDark,
+                          ),
+                        ],
+                        if (!isTransfer) ...[
+                          _buildDivider(isDark),
+                          _buildDetailItem(
+                            icon: Icons.category_rounded,
+                            label: 'Category',
+                            value: _cat?.name ?? 'None',
+                            isDark: isDark,
+                          ),
+                        ],
+                        if (_tx.externalRef != null && _tx.externalRef!.isNotEmpty) ...[
+                          _buildDivider(isDark),
+                          _buildDetailItem(
+                            icon: Icons.tag_rounded,
+                            label: 'Reference / ID',
+                            value: _tx.externalRef!,
+                            isDark: isDark,
+                          ),
+                        ],
                         _buildDivider(isDark),
                         _buildDetailItem(
                           icon: Icons.notes_rounded,

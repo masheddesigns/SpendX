@@ -770,7 +770,10 @@ class CanonicalTransactionAdapter {
       date: event.occurredAt,
       notes: meta['notes'] as String? ?? event.description,
       tags: tags,
-      source: meta['source'] as String? ?? 'manual',
+      source: meta['source'] as String? ??
+          (event.canonicalType == CanonicalEventType.cardPayment
+              ? 'credit_card_payment'
+              : 'manual'),
       relatedEntityId: relatedEntityId,
       externalRef: extRef,
       location: meta['location'] as String?,

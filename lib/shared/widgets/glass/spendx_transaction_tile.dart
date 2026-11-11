@@ -38,8 +38,14 @@ class SpendXTransactionTile extends StatelessWidget {
     final isIncome = transaction.isIncomeType;
     final isTransfer = transaction.isTransferType;
 
+    final isCcPayment = transaction.type == 'credit_payment' ||
+        transaction.source == 'credit_card_payment' ||
+        transaction.source == 'credit_payment';
+
     FinancialSemanticType semanticType;
-    if (isIncome) {
+    if (isCcPayment || isTransfer) {
+      semanticType = FinancialSemanticType.transfer;
+    } else if (isIncome) {
       semanticType = FinancialSemanticType.income;
     } else if (isExpense) {
       semanticType = FinancialSemanticType.expense;
@@ -61,10 +67,17 @@ class SpendXTransactionTile extends StatelessWidget {
       iconColor = AppTheme.semanticTransfer;
     }
 
+    if (isCcPayment) {
+      iconData = Icons.credit_card_rounded;
+      iconColor = AppTheme.semanticTransfer;
+    }
+
     final dateStr = DateFormat('dd MMM').format(transaction.date);
     final title = transaction.notes.isNotEmpty
         ? transaction.notes
-        : (category?.name ?? (isTransfer ? 'Transfer' : 'Transaction'));
+        : (isCcPayment
+            ? 'Credit Card Payment'
+            : (category?.name ?? (isTransfer ? 'Transfer' : 'Transaction')));
 
     return Material(
       color: Colors.transparent,

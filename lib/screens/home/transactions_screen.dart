@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/providers.dart' show cardsProvider;
 import '../../features/accounts/providers/account_providers.dart';
 import '../../features/transactions/providers/transaction_providers.dart';
 import '../../models/transaction.dart';
@@ -96,6 +97,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
     final paginatedState = ref.watch(paginatedTransactionsProvider);
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
     final accountsAsync = ref.watch(accountsProvider);
+    final cardsAsync = ref.watch(cardsProvider);
 
     return categoryMapAsync.when(
       loading: () => const Center(
@@ -111,6 +113,8 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
         final accountsMap = <String, String>{
           for (final a in (accountsAsync.valueOrNull ?? []))
             a.id: resolveAccountDisplayName(a.name),
+          for (final c in (cardsAsync.valueOrNull ?? []))
+            c.id: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card'),
         };
 
         // Source transactions (either filter IDs or paginated feed)
@@ -671,10 +675,15 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                     ...List.generate(txnsInGroup.length, (index) {
                       final t = txnsInGroup[index];
                       final isLast = index == txnsInGroup.length - 1;
+                      final fromName = accountsMap[t.accountId];
+                      final toName = accountsMap[t.relatedEntityId];
+                      final flowLabel = (t.isTransferType && toName != null)
+                          ? (fromName != null ? '$fromName → $toName' : '→ $toName')
+                          : (fromName ?? '');
                       return SpendXTransactionTile(
                         transaction: t,
                         category: categoriesMap[t.categoryId],
-                        accountName: accountsMap[t.accountId],
+                        accountName: flowLabel,
                         showDivider: !isLast,
                         onTap: () async {
                           final result = await Navigator.push(

@@ -70,7 +70,9 @@ class CanonicalEventRepository {
 
     await _runInTransaction(db, (txn) async {
       final nowStr = event.createdAt.toUtc().toIso8601String();
-      final notesPayload = event.metadata.containsKey('related_entity_id')
+      final notesPayload = (event.metadata.containsKey('related_entity_id') ||
+              event.metadata.containsKey('source') ||
+              event.metadata.length > 1)
           ? jsonEncode(event.metadata)
           : event.metadata['notes'] as String?;
       final reversalTarget = event.reversalOfEventId ??
@@ -264,7 +266,9 @@ class CanonicalEventRepository {
       final nowStr = event.createdAt.toUtc().toIso8601String();
 
       // Step A: Insert as draft (direct insert as posted is blocked by SQLite trigger)
-      final notesPayload = event.metadata.containsKey('related_entity_id')
+      final notesPayload = (event.metadata.containsKey('related_entity_id') ||
+              event.metadata.containsKey('source') ||
+              event.metadata.length > 1)
           ? jsonEncode(event.metadata)
           : event.metadata['notes'] as String?;
       final reversalTarget = event.reversalOfEventId ??

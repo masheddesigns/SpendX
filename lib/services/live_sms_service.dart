@@ -13,6 +13,7 @@ import '../core/utils/category_resolver.dart';
 import '../core/utils/merchant_extractor.dart';
 import '../data/core/app_database.dart';
 import '../data/core/database_lifecycle_coordinator.dart';
+import '../data/core/tables.dart';
 import '../data/core/tables_v24.dart';
 import '../data/core/tracked_database_task_queue.dart';
 import '../data/repositories/account_repo.dart';
@@ -654,17 +655,17 @@ class LiveSmsService with WidgetsBindingObserver {
   Future<void> _repairOscillatingReconciliationAdjustments() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('repair_oscillating_reconciliation_v4') == true) {
+      if (prefs.getBool('repair_oscillating_reconciliation_v5') == true) {
         return;
       }
 
       final db = await AppDatabase.instance.database;
       final rows = await db.rawQuery('''
-        SELECT id, occurred_at, description, metadata
+        SELECT id, timestamp, description, notes
         FROM ${TablesV24.economicEvents}
         WHERE event_type = 'opening_balance'
           AND description LIKE 'Reconciliation adjustment%'
-        ORDER BY occurred_at DESC;
+        ORDER BY timestamp DESC;
       ''');
 
       if (rows.length >= 2) {
@@ -683,13 +684,13 @@ class LiveSmsService with WidgetsBindingObserver {
 
       // Deduplicate duplicate income transactions of same amount from recent days
       final incomeEvents = await db.rawQuery('''
-        SELECT e.id, e.occurred_at, e.description, p.amount_minor_units
+        SELECT e.id, e.timestamp, e.description, p.amount_minor_units
         FROM ${TablesV24.economicEvents} e
         JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
         WHERE e.event_type = 'income'
           AND p.direction = 'debit'
-          AND e.occurred_at >= datetime('now', '-2 days')
-        ORDER BY e.occurred_at DESC;
+          AND e.timestamp >= datetime('now', '-2 days')
+        ORDER BY e.timestamp DESC;
       ''');
 
       final seenAmounts = <int, String>{};
@@ -727,7 +728,7 @@ class LiveSmsService with WidgetsBindingObserver {
         await AccountRepo().updateBalance(jioAcc.id, 12742.91);
       }
 
-      await prefs.setBool('repair_oscillating_reconciliation_v4', true);
+      await prefs.setBool('repair_oscillating_reconciliation_v5', true);
     } catch (e) {
       AppLogger.w('[LiveSmsService] Reconciliation repair skipped: $e');
     }
@@ -1015,7 +1016,7 @@ class LiveSmsService with WidgetsBindingObserver {
             newTransaction: updatedTx,
           );
           createdTx = updatedTx;
-          await _syncCardReminderOnPayment(matchedCard);
+          await _syncCardReminderOnPayment(matchedCard, paymentAmount: parsed.amount);
         } else if (!await _alreadyInApp(parsed, isCcPayment: true, candidateAccountId: matchedCard?.id)) {
           // Standalone CC payment confirmation received
           final externalRef = parsed.refId ??
@@ -1043,7 +1044,7 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await FinancialTransactionService().createTransaction(tx);
           createdTx = tx;
-          await _syncCardReminderOnPayment(matchedCard);
+          await _syncCardReminderOnPayment(matchedCard, paymentAmount: parsed.amount);
         }
       } else {
         // Classify Instrument & Resolve Account first to establish candidate account identity (DEF-512)
@@ -1742,9 +1743,12 @@ class LiveSmsService with WidgetsBindingObserver {
 
       // 1. Primary UTR / External Reference check (DEF-510)
       if (parsed.refId != null && parsed.refId!.trim().isNotEmpty) {
+        final ref = parsed.refId!.trim();
         final existingRef =
-            await eventRepo.getEvidenceByExternalReference(parsed.refId!.trim());
+            await eventRepo.getEvidenceByExternalReference(ref);
         if (existingRef != null) return true;
+        final existsInTx = await TransactionRepo().existsByExternalRef(ref);
+        if (existsInTx) return true;
       } else {
         // DEF-510: Check the deterministic synthetic reference assigned when bank UTR is missing
         final syntheticRef = computeSyntheticReference(
@@ -1755,6 +1759,8 @@ class LiveSmsService with WidgetsBindingObserver {
         final existingRef =
             await eventRepo.getEvidenceByExternalReference(syntheticRef);
         if (existingRef != null) return true;
+        final existsInTx = await TransactionRepo().existsByExternalRef(syntheticRef);
+        if (existsInTx) return true;
       }
 
       // 2. Deterministic Raw Body Fingerprint check (DEF-509)
@@ -2101,13 +2107,23 @@ class LiveSmsService with WidgetsBindingObserver {
   }
 
   /// Synchronizes or settles all credit card due reminders upon receiving a bill payment.
-  Future<void> _syncCardReminderOnPayment(CreditCard? matchedCard) async {
+  Future<void> _syncCardReminderOnPayment(CreditCard? matchedCard, {double? paymentAmount}) async {
     if (matchedCard == null) return;
     try {
+      if (paymentAmount != null && paymentAmount > 0) {
+        final db = await AppDatabase.instance.database;
+        await db.rawUpdate(
+          'UPDATE ${Tables.creditCards} SET last_statement_balance = MAX(0, last_statement_balance - ?) WHERE id = ?',
+          [paymentAmount, matchedCard.id],
+        );
+      }
       final updatedCard = await CreditRepo().getCard(matchedCard.id);
       if (updatedCard != null) {
         final reminderRepo = ReminderRepo();
-        final isFullyPaid = updatedCard.outstanding <= 0;
+        final remainingDue = updatedCard.lastStatementBalance > 0
+            ? updatedCard.lastStatementBalance
+            : updatedCard.outstanding;
+        final isFullyPaid = remainingDue <= 0.01;
 
         // 1. Primary card due reminder
         await reminderRepo.insertGlobalReminder(
@@ -2117,7 +2133,7 @@ class LiveSmsService with WidgetsBindingObserver {
             title: 'Credit Card Due: ${updatedCard.name}',
             linkedEntityId: updatedCard.id,
             dueDate: updatedCard.nextDueDate,
-            amount: updatedCard.outstanding,
+            amount: isFullyPaid ? 0.0 : remainingDue,
             isActive: !isFullyPaid,
             status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
             recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
@@ -2138,7 +2154,7 @@ class LiveSmsService with WidgetsBindingObserver {
               isActive: !isFullyPaid,
               status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
               recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
-              amount: isFullyPaid ? r.amount : updatedCard.outstanding,
+              amount: isFullyPaid ? 0.0 : remainingDue,
             );
             await reminderRepo.upsert(updated);
           }

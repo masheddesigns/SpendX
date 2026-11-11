@@ -39,18 +39,21 @@ class TransactionTile extends StatelessWidget {
   /// Only labels that ADD meaning — no "Card" (implied), no "Manual" (obvious).
   String _buildSubtitle() {
     final src = transaction.source;
+    final isCcPayment = src == 'credit_card_payment' || src == 'credit_payment' || transaction.type == 'credit_payment';
     final isAuto = src == 'sms_auto' || src == 'sms_import' || src == 'sms_review';
     final isLoan = src == 'loan_payment';
-    final isTransfer = src == 'bank_transfer';
+    final isTransfer = src == 'bank_transfer' || transaction.type == 'transfer';
 
     // Only show labels that add meaning
-    final sourceLabel = isAuto
-        ? 'Auto-detected'
-        : isLoan
-            ? 'Loan EMI'
-            : isTransfer
-                ? 'Transfer'
-                : null;
+    final sourceLabel = isCcPayment
+        ? 'CC Payment'
+        : isAuto
+            ? 'Auto-detected'
+            : isLoan
+                ? 'Loan EMI'
+                : isTransfer
+                    ? 'Transfer'
+                    : null;
 
     // Build: "notes \u00b7 source" or "date \u00b7 source" or just notes/date
     final notesText = transaction.notes.isNotEmpty
@@ -67,6 +70,24 @@ class TransactionTile extends StatelessWidget {
     }
 
     return notesText;
+  }
+
+  String _buildTitle() {
+    final type = transaction.type.trim().toLowerCase();
+    final src = transaction.source.trim().toLowerCase();
+    if (type == 'credit_payment' || src == 'credit_card_payment' || src == 'credit_payment') {
+      return transaction.notes.isNotEmpty ? transaction.notes : 'Credit Card Payment';
+    }
+    if (type == 'transfer' || src == 'bank_transfer' || src == 'transfer') {
+      return transaction.notes.isNotEmpty ? transaction.notes : 'Account Transfer';
+    }
+    if (category != null) {
+      return TextFormatter.toSmartTitleCase(category!.name);
+    }
+    if (transaction.notes.isNotEmpty) {
+      return TextFormatter.toSmartTitleCase(transaction.notes);
+    }
+    return 'Needs Category';
   }
 
   bool _isAutoDetected() {
@@ -207,7 +228,8 @@ class TransactionTile extends StatelessWidget {
         specialIcon = Icons.shopping_bag;
         break;
       case 'credit_payment':
-        specialIcon = Icons.account_balance_wallet;
+      case 'credit_card_payment':
+        specialIcon = Icons.credit_card;
         break;
       case 'emi_installment':
         specialIcon = Icons.repeat;
@@ -219,6 +241,12 @@ class TransactionTile extends StatelessWidget {
       case 'fuel_expense':
         specialIcon = Icons.local_gas_station;
         break;
+    }
+
+    if (transaction.type == 'credit_payment') {
+      specialIcon = Icons.credit_card;
+    } else if (transaction.type == 'transfer') {
+      specialIcon = Icons.swap_horiz_rounded;
     }
 
     if (specialIcon != null) {
@@ -279,12 +307,17 @@ class TransactionTile extends StatelessWidget {
   Color? _specialIconColor(String source) {
     if (source == 'income' ||
         source == 'lending_received' ||
-        source == 'credit_payment' ||
         source == 'refund' ||
         source == 'loan_disbursement') {
       return Colors.green;
     }
-    if (source == 'transfer') return Colors.blue;
+    if (source == 'transfer' ||
+        source == 'credit_payment' ||
+        source == 'credit_card_payment' ||
+        transaction.type == 'credit_payment' ||
+        transaction.type == 'transfer') {
+      return Colors.blue;
+    }
     if (source == 'emi_installment' || source == 'loan_payment') {
       return Colors.orange;
     }
@@ -311,8 +344,10 @@ class TransactionTile extends StatelessWidget {
       amountColor = Colors.green;
       sign = '+';
     } else if (type == 'transfer' ||
+        type == 'credit_payment' ||
         source == 'transfer' ||
-        source == 'credit_payment') {
+        source == 'credit_payment' ||
+        source == 'credit_card_payment') {
       amountColor = Colors.blue;
       sign = '→';
     } else if (type == 'expense' ||
@@ -351,7 +386,7 @@ class TransactionTile extends StatelessWidget {
           children: [
             Flexible(
               child: Text(
-                TextFormatter.toSmartTitleCase(category?.name ?? 'Needs Category'),
+                _buildTitle(),
                 style: AppTextStyles.titleMedium,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

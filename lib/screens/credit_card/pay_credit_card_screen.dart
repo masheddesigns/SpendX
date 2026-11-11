@@ -12,6 +12,7 @@ import '../../shared/widgets/app_account_picker.dart';
 import '../../domain/credit/credit_card_service.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../features/salary/providers/salary_providers.dart';
+import '../../features/transactions/providers/transaction_providers.dart' show paginatedTransactionsProvider;
 import '../../data/providers.dart' as app_data;
 
 class PayCreditCardScreen extends ConsumerStatefulWidget {
@@ -68,6 +69,9 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
     ref.invalidate(app_data.cardsProvider);
     ref.invalidate(app_data.accountsProvider);
     ref.invalidate(bankAccountsProvider);
+    ref.invalidate(app_data.transactionsProvider);
+    ref.invalidate(paginatedTransactionsProvider);
+    ref.invalidate(app_data.remindersProvider);
 
     if (mounted) {
       Navigator.pop(context, true);

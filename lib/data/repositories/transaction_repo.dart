@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart' show Database, DatabaseExecutor;
 import '../../domain/finance/finance.dart';
 import '../../models/transaction.dart';
 import '../core/app_database.dart';
+import '../core/tables.dart';
 import '../core/tables_v24.dart';
 import 'canonical/canonical_event_repository.dart';
 import 'canonical/canonical_transaction_adapter.dart';
@@ -372,7 +373,16 @@ class TransactionRepo {
       'SELECT id FROM ${TablesV24.evidence} WHERE external_reference = ? LIMIT 1;',
       [externalRef],
     );
-    return res.isNotEmpty;
+    if (res.isNotEmpty) return true;
+    try {
+      final resLegacy = await database.rawQuery(
+        'SELECT id FROM ${Tables.transactions} WHERE external_ref = ? LIMIT 1;',
+        [externalRef],
+      );
+      return resLegacy.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<Set<String>> getExistingExternalRefs(

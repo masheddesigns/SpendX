@@ -794,9 +794,24 @@ class TransactionTextParser {
       r'\bUPI\s*/\s*(?:(?:P2M|P2P|P2A|DR|CR|REV)\s*/\s*)?([0-9]{6,18})(?:/|\b)',
       caseSensitive: false,
     ),
+    // Standard Bank & UPI UTR, RRN, IMPS, NEFT, RTGS, Order ID, Payment ID formats
     RegExp(
-      r'(?:UPI\s*(?:Ref|Txn)|UTR|Ref(?:erence)?|Txn|Transaction)\s*'
-      r'(?:[Nn]o\.?|ID|#|:)?\s*\.?\s*([A-Za-z0-9]{6,})',
+      r'\b(?:UPI\s*Ref(?:\s*no\.?)?|UPI\s*Txn(?:\s*no\.?)?|UTR(?:\s*no\.?)?|'
+      r'RRN(?:\s*no\.?)?|Ref(?:\s*no\.?)?|Reference(?:\s*no\.?)?|'
+      r'Txn\s*ID|Transaction\s*(?:ID|Ref|No\.?)|Payment\s*ID|Order\s*ID|'
+      r'IMPS\s*(?:Ref|Txn|No\.?)?|NEFT\s*(?:Ref|Txn|No\.?)?|RTGS\s*(?:Ref|Txn|No\.?)?|'
+      r'Auth(?:\s*Code)?|Approval(?:\s*Code)?)\s*[:#\.\-\s]+([A-Za-z0-9_\-]{6,24})\b',
+      caseSensitive: false,
+    ),
+    // Bare alphanumeric references (e.g., "Ref 431526789012" or "Txn: 624952623558")
+    RegExp(
+      r'\b(?:UPI\s*(?:Ref|Txn)|UTR|RRN|Ref(?:erence)?|Txn|Transaction)\s*'
+      r'(?:[Nn]o\.?|ID|#|:)?\s*[:#\.\-\s]*([A-Za-z0-9]{6,24})',
+      caseSensitive: false,
+    ),
+    // 12-digit standard Indian Banking RRN / UTR
+    RegExp(
+      r'\b(?:rrn|utr)\s*[:#\.\-\s]*([0-9]{12})\b',
       caseSensitive: false,
     ),
   ];
@@ -804,7 +819,13 @@ class TransactionTextParser {
   static String? _extractRefId(String text) {
     for (final p in _refPatterns) {
       final m = p.firstMatch(text);
-      if (m != null) return m.group(1);
+      if (m != null) {
+        final raw = m.group(1)?.trim();
+        if (raw != null && raw.isNotEmpty) {
+          // Strip any trailing punctuation
+          return raw.replaceAll(RegExp(r'[\.\,\:\;\-]+$'), '');
+        }
+      }
     }
     return null;
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../data/providers.dart' show invalidateAllFinancialProviders;
+import '../../../data/providers.dart' show cardsProvider, invalidateAllFinancialProviders;
 import '../../../models/transaction.dart';
 import '../../../screens/bank/account_list_screen.dart' show resolveAccountDisplayName;
 import '../../../screens/expense/add_expense_screen.dart';
@@ -43,12 +43,27 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     final paginatedState = ref.watch(paginatedTransactionsProvider);
     final categoryMapAsync = ref.watch(transactionCategoryMapProvider);
     final accountsAsync = ref.watch(accountsProvider);
+    final cardsAsync = ref.watch(cardsProvider);
 
     final categoriesMap = categoryMapAsync.valueOrNull ?? {};
     final accountsMap = {
       for (final a in (accountsAsync.valueOrNull ?? []))
         a.id: resolveAccountDisplayName(a.name),
+      for (final c in (cardsAsync.valueOrNull ?? []))
+        c.id: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card'),
     };
+
+    String resolveFlow(Transaction t) {
+      final fromName = accountsMap[t.accountId];
+      final toName = accountsMap[t.relatedEntityId];
+      if (t.isTransferType && toName != null) {
+        if (fromName != null) {
+          return '$fromName → $toName';
+        }
+        return '→ $toName';
+      }
+      return fromName ?? '';
+    }
 
     final recentTxns = paginatedState.items.take(8).toList();
     final isLoading = paginatedState.items.isEmpty && paginatedState.hasMore;
@@ -247,7 +262,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                             return SpendXTransactionTile(
                               transaction: t,
                               category: categoriesMap[t.categoryId],
-                              accountName: accountsMap[t.accountId],
+                              accountName: resolveFlow(t),
                               showDivider: !isLastInGroup,
                               onTap: () async {
                                 await Navigator.push(

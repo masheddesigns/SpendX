@@ -5,6 +5,9 @@ import '../../models/credit_emi.dart';
 import '../../models/emi_installment.dart';
 import '../../models/card_statement.dart';
 import '../../models/reminder_model.dart';
+import '../../models/transaction.dart';
+import '../../data/core/app_database.dart';
+import '../../data/core/tables.dart';
 import '../../data/repositories/credit_repo.dart';
 import '../../data/repositories/ledger_repo.dart';
 import '../../data/repositories/reminder_repo.dart';
@@ -148,69 +151,76 @@ class CreditCardService {
     String? accountId,
     String? note,
   }) async {
-    final paymentTxn = CreditTransaction(
-      id: const Uuid().v4(),
-      cardId: cardId,
+    final card = await _creditRepo.getCard(cardId);
+    final cardName = card?.name ?? (card?.bank != null && card!.bank.isNotEmpty ? '${card.bank} Credit Card' : 'Credit Card');
+    final defaultNote = note ?? 'Payment to $cardName';
+    final txnId = const Uuid().v4();
+
+    // 1. Create canonical transaction with double-entry postings:
+    // Debits card liability, credits paying bank asset, inserts transaction, auto-settles reminders.
+    final tx = Transaction(
+      id: txnId,
+      userId: 'offline_user',
+      type: 'credit_payment',
+      accountId: accountId,
+      relatedEntityId: cardId,
       amount: paymentAmount,
       date: date,
-      category: 'payment',
-      type: 'payment',
-      status: 'active',
-      note: note,
+      notes: defaultNote,
+      source: 'credit_card_payment',
     );
+    await _svc.createTransaction(tx);
 
-    await _creditRepo.insertTransaction(paymentTxn);
-
-    // Ledger Record (Credit Card Side - Reduces Outstanding)
-    await _svc.appendLedger(
-      LedgerTransaction(
-        type: LedgerType.credit_payment,
-        amount: paymentAmount,
-        date: date,
-        creditCardId: cardId,
-        note: note ?? 'Credit Card Payment',
-        referenceId: paymentTxn.id,
-      ),
-    );
-
-    // Ledger Record (Bank Account Side - Reduces Balance)
-    if (accountId != null) {
-      await _svc.appendLedger(
-        LedgerTransaction(
-          type: LedgerType.expense,
-          amount: paymentAmount,
-          date: date,
-          accountId: accountId,
-          note: note ?? 'CC Payment: ${paymentTxn.id.substring(0, 8)}',
-          referenceId: paymentTxn.id,
-        ),
-      );
-    }
-
-    // Sync to Reminders after payment
+    // 2. Decrement last_statement_balance in credit_cards table
     try {
-      final card = await _creditRepo.getCard(cardId);
-      if (card != null) {
-        final outstanding = await calculateOutstanding(card.id);
+      final db = await AppDatabase.instance.database;
+      await db.rawUpdate(
+        'UPDATE ${Tables.creditCards} SET last_statement_balance = MAX(0, last_statement_balance - ?) WHERE id = ?',
+        [paymentAmount, cardId],
+      );
+    } catch (_) {}
+
+    // 3. Sync to Reminders after payment
+    try {
+      final updatedCard = await _creditRepo.getCard(cardId);
+      if (updatedCard != null) {
+        final remainingDue = updatedCard.lastStatementBalance > 0
+            ? updatedCard.lastStatementBalance
+            : updatedCard.outstanding;
+        final isPaid = remainingDue <= 0.01;
+
         await _reminderRepo.insertGlobalReminder(
           Reminder(
-            id: 'credit_due_${card.id}',
+            id: 'credit_due_${updatedCard.id}',
             type: ReminderType.credit,
-            title: 'Credit Card Due: ${card.name}',
-            linkedEntityId: card.id,
-            dueDate: card.nextDueDate,
-            amount: outstanding,
-            isActive: outstanding > 0,
-            status: outstanding <= 0
-                ? ReminderStatus.inactive
-                : ReminderStatus.upcoming,
-            recordStatus: outstanding <= 0
-                ? ReminderRecordStatus.done
-                : ReminderRecordStatus.pending,
+            title: 'Credit Card Due: ${updatedCard.name}',
+            linkedEntityId: updatedCard.id,
+            dueDate: updatedCard.nextDueDate,
+            amount: isPaid ? 0.0 : remainingDue,
+            isActive: !isPaid,
+            status: isPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
+            recordStatus: isPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
             sourceType: ReminderSourceType.credit,
-            sourceId: card.id,
+            sourceId: updatedCard.id,
           ).toMap(),
         );
+
+        final all = await _reminderRepo.getAll();
+        for (final r in all) {
+          if (r.id == 'credit_due_${updatedCard.id}') continue;
+          final isLinked = r.linkedEntityId == updatedCard.id ||
+              r.sourceId == updatedCard.id ||
+              r.id.contains(updatedCard.id);
+          if (isLinked) {
+            final updated = r.copyWith(
+              isActive: !isPaid,
+              status: isPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
+              recordStatus: isPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
+              amount: isPaid ? 0.0 : remainingDue,
+            );
+            await _reminderRepo.upsert(updated);
+          }
+        }
       }
     } catch (_) {
       // Non-fatal if reminder sync fails

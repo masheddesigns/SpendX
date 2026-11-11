@@ -19,6 +19,7 @@ import 'package:spend_x/models/reminder_model.dart';
 import 'package:spend_x/services/live_sms_service.dart';
 import 'package:spend_x/services/sms_import_service.dart';
 import 'package:spend_x/services/transaction_text_parser.dart';
+import 'package:spend_x/domain/credit/credit_card_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -884,6 +885,105 @@ void main() {
       final jioAcc = accounts.where((a) => a.last4 == '3284').firstOrNull;
       expect(jioAcc, isNotNull);
       expect(jioAcc!.balance, 12742.91);
+    });
+  });
+
+  group('Defect 26: Expanded Transaction Reference (UTR / RRN / Order ID) Parsing & Ingestion', () {
+    test('26a. Correctly extracts UTR, RRN, IMPS ref and UPI slash references', () {
+      final t1 = TransactionTextParser.parse('Paid Rs. 450 to Uber via UPI/628001122334/Uber. Ref: 628001122334');
+      expect(t1.refId, '628001122334');
+
+      final t2 = TransactionTextParser.parse('A/c *1234 debited for Rs 1200 on 10-Nov-26. UTR No. 431526789012. Avl Bal Rs 5000');
+      expect(t2.refId, '431526789012');
+
+      final t3 = TransactionTextParser.parse('Rs. 2500 debited from A/c 5678. RRN: 624952623558. Ref no. 624952623558.');
+      expect(t3.refId, '624952623558');
+
+      final t4 = TransactionTextParser.parse('Payment of Rs 999 to Amazon successful. Order ID: OD884920482019');
+      expect(t4.refId, 'OD884920482019');
+
+      final t5 = TransactionTextParser.parse('IMPS Ref No 512345678901 for Rs. 3500.00 to JOHN DOE completed');
+      expect(t5.refId, '512345678901');
+    });
+
+    test('26b. Ingests externalRef and deduplicates subsequent messages with same reference', () async {
+      const sms1 = 'A/c *3284 debited for Rs 500.00 on 10-Nov-26. UPI/628001122334/Swiggy. UTR: 628001122334. Avl Bal Rs 12242.91';
+      final res1 = await LiveSmsService.instance.testProcessBody(sms1, sender: 'VM-JIOBNK');
+      expect(res1.added, true);
+      expect(res1.transaction, isNotNull);
+      expect(res1.transaction!.externalRef, '628001122334');
+
+      // Second message with identical UTR must be deduplicated
+      const sms2 = 'Your bank a/c was debited with Rs 500.00 for UPI transaction. Ref no 628001122334.';
+      final res2 = await LiveSmsService.instance.testProcessBody(sms2, sender: 'VK-UPIBNK');
+      expect(res2.added, false);
+    });
+  });
+
+  group('Defect 27: Credit Card Repayment Flow, Statement Due Decrement & Reminder Settlement', () {
+    test('27a. processPayment creates canonical credit_payment transaction, decrements statement balance and settles reminder', () async {
+      // 1. Setup a bank account and credit card
+      final bankId = await AccountRepo().insertAccount(BankAccount(
+        name: 'HDFC Savings Account',
+        bank: 'HDFC',
+        last4: '4321',
+        accountType: 'savings',
+        balance: 25000.0,
+      ));
+
+      final cardId = await CreditRepo().insert(CreditCard(
+        name: 'HDFC Millennia',
+        bank: 'HDFC Bank',
+        last4: '9988',
+        limitAmount: 100000.0,
+        usedAmount: 5000.0,
+        lastStatementBalance: 5000.0,
+        dueDay: 25,
+      ));
+
+      // 2. Insert initial reminder for credit card due
+      final reminderRepo = ReminderRepo();
+      await reminderRepo.insertGlobalReminder(Reminder(
+        id: 'credit_due_$cardId',
+        type: ReminderType.credit,
+        title: 'Credit Card Due: HDFC Millennia',
+        linkedEntityId: cardId,
+        dueDate: DateTime.now().add(const Duration(days: 10)),
+        amount: 5000.0,
+        isActive: true,
+        status: ReminderStatus.upcoming,
+        recordStatus: ReminderRecordStatus.pending,
+        sourceType: ReminderSourceType.credit,
+        sourceId: cardId,
+      ).toMap());
+
+      // 3. Process payment of 5000 towards the card
+      final creditService = CreditCardService();
+      await creditService.processPayment(
+        cardId: cardId,
+        paymentAmount: 5000.0,
+        date: DateTime.now(),
+        accountId: bankId,
+        note: 'Payment to HDFC Millennia',
+      );
+
+      // 4. Verify canonical transaction exists in transactions table with flow
+      final allTxns = await TransactionRepo().getAll();
+      final paymentTx = allTxns.firstWhere((t) => t.type == 'credit_payment' && t.amount == 5000.0);
+      expect(paymentTx.accountId, bankId);
+      expect(paymentTx.relatedEntityId, cardId);
+      expect(paymentTx.source, 'credit_card_payment');
+
+      // 5. Verify statement balance was decremented to 0 in credit_cards table
+      final updatedCard = await CreditRepo().getCard(cardId);
+      expect(updatedCard, isNotNull);
+      expect(updatedCard!.lastStatementBalance, 0.0);
+
+      // 6. Verify reminder is marked done/inactive
+      final updatedReminder = await reminderRepo.getById('credit_due_$cardId');
+      expect(updatedReminder, isNotNull);
+      expect(updatedReminder!.recordStatus, ReminderRecordStatus.done);
+      expect(updatedReminder.isActive, false);
     });
   });
 }

@@ -346,6 +346,15 @@ class FinancialTransactionService {
           // 3. Standard transaction routed through TransactionRepo
           final txRepo = _getTransactionRepo(t);
           await txRepo.insert(tx);
+
+          if (tx.type == 'credit_payment' && tx.relatedEntityId != null && tx.relatedEntityId!.isNotEmpty) {
+            try {
+              await t.rawUpdate(
+                'UPDATE ${Tables.creditCards} SET last_statement_balance = MAX(0, last_statement_balance - ?) WHERE id = ?',
+                [tx.amount, tx.relatedEntityId],
+              );
+            } catch (_) {}
+          }
         }
       }
 
@@ -531,6 +540,17 @@ class FinancialTransactionService {
       Future<void> canonicalDelete(DatabaseExecutor t) async {
         final txRepo = _getTransactionRepo(t);
         await txRepo.delete(transactionId);
+
+        if (oldTransaction != null &&
+            oldTransaction.type == 'credit_payment' &&
+            oldTransaction.relatedEntityId != null) {
+          try {
+            await t.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET last_statement_balance = last_statement_balance + ? WHERE id = ?',
+              [oldTransaction.amount, oldTransaction.relatedEntityId],
+            );
+          } catch (_) {}
+        }
       }
 
       if (txn != null) {
