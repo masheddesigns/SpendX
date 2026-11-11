@@ -388,8 +388,8 @@ class CanonicalEventRepository {
       lifecycleStatus: (e['lifecycle_status'] as String) == 'posted'
           ? EventLifecycle.posted
           : EventLifecycle.draft,
-      occurredAt: DateTime.parse(e['timestamp'] as String),
-      createdAt: DateTime.parse(e['created_at'] as String),
+      occurredAt: DateTime.parse(e['timestamp'] as String).toLocal(),
+      createdAt: DateTime.parse(e['created_at'] as String).toLocal(),
       description: e['description'] as String? ?? '',
       reversalOfEventId: e['reversal_of_event_id'] as String?,
       evidenceIds: evidence.map((ev) => ev.id).toList(),
@@ -438,8 +438,8 @@ class CanonicalEventRepository {
           canonicalType:
               CanonicalEventTypeMapper.fromSql(r['event_type'] as String),
           lifecycleStatus: EventLifecycle.posted,
-          occurredAt: DateTime.parse(r['timestamp'] as String),
-          createdAt: DateTime.parse(r['created_at'] as String),
+          occurredAt: DateTime.parse(r['timestamp'] as String).toLocal(),
+          createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
           description: r['description'] as String? ?? '',
           reversalOfEventId: r['reversal_of_event_id'] as String?,
           postings: postings,

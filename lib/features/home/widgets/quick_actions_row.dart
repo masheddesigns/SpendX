@@ -32,11 +32,13 @@ class QuickActionsRow extends ConsumerWidget {
     final today = DateTime(now.year, now.month, now.day);
 
     int countActivityOnDay(DateTime day) {
-      final start = DateTime(day.year, day.month, day.day);
-      final end = start.add(const Duration(days: 1));
-      return allTxns
-          .where((t) => !t.date.isBefore(start) && t.date.isBefore(end))
-          .length;
+      return allTxns.where((t) {
+        if (t.isDeleted) return false;
+        final local = t.date.toLocal();
+        return local.year == day.year &&
+            local.month == day.month &&
+            local.day == day.day;
+      }).length;
     }
 
     final rhythmDays = [
@@ -361,25 +363,21 @@ class _RhythmNode extends StatelessWidget {
       );
     } else if (day.isCompleted) {
       nodeCircle = Container(
-        width: 14,
-        height: 14,
+        width: 16,
+        height: 16,
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFF64748B),
+          color: const Color(0xFF10B981),
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1),
-            width: 1.5,
-          ),
-        ),
-        child: Center(
-          child: Container(
-            width: 4.5,
-            height: 4.5,
-            decoration: const BoxDecoration(
-              color: Color(0xFF4ADE80),
-              shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withValues(alpha: 0.30),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
             ),
-          ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(Icons.check_rounded, size: 10, color: Colors.white),
         ),
       );
     } else {

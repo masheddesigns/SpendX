@@ -4,7 +4,6 @@ import '../../domain/finance/finance.dart';
 import '../../models/transaction.dart';
 import '../core/app_database.dart';
 import '../core/tables.dart';
-import '../core/tables_v24.dart';
 import 'canonical/canonical_event_repository.dart';
 import 'canonical/canonical_transaction_adapter.dart';
 

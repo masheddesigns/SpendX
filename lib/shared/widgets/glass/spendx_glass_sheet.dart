@@ -32,9 +32,12 @@ class SpendXGlassSheet extends StatelessWidget {
     Widget? trailing,
     bool isDismissible = true,
     bool enableDrag = true,
+    bool useRootNavigator = true,
   }) {
     return showModalBottomSheet<T>(
       context: context,
+      useRootNavigator: useRootNavigator,
+      useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -77,86 +80,96 @@ class SpendXGlassSheet extends StatelessWidget {
       borderRadius: BorderRadius.vertical(top: topRadius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 28.0, sigmaY: 28.0),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: sheetGradient,
-            borderRadius: BorderRadius.vertical(top: topRadius),
-            border: Border(
-              top: BorderSide(color: borderColor, width: 0.75),
-              left: BorderSide(color: borderColor, width: 0.5),
-              right: BorderSide(color: borderColor, width: 0.5),
-            ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: double.infinity,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
           ),
-          child: Stack(
-            children: [
-              // Top Specular Highlight Gleam
-              Positioned(
-                top: 0,
-                left: 20,
-                right: 20,
-                height: 1.0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.white.withValues(alpha: isDark ? 0.45 : 0.70),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.5, 1.0],
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: sheetGradient,
+              borderRadius: BorderRadius.vertical(top: topRadius),
+              border: Border(
+                top: BorderSide(color: borderColor, width: 0.75),
+                left: BorderSide(color: borderColor, width: 0.5),
+                right: BorderSide(color: borderColor, width: 0.5),
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Top Specular Highlight Gleam
+                Positioned(
+                  top: 0,
+                  left: 20,
+                  right: 20,
+                  height: 1.0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: isDark ? 0.45 : 0.70),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  10,
-                  20,
-                  bottomInset > 0 ? bottomInset + 16 : 28,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Centered Drag Affordance Pill
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.28)
-                              : Colors.black.withValues(alpha: 0.20),
-                          borderRadius: BorderRadius.circular(AppRadius.full),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    10,
+                    20,
+                    bottomInset > 0 ? bottomInset + 16 : 28,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Centered Drag Affordance Pill
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.28)
+                                : Colors.black.withValues(alpha: 0.20),
+                            borderRadius: BorderRadius.circular(AppRadius.full),
+                          ),
                         ),
                       ),
-                    ),
-                    if (title != null) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title!,
-                              style: AppTextStyles.heading.copyWith(
-                                color: isDark
-                                    ? AppTheme.darkTextPrimary
-                                    : AppTheme.lightTextPrimary,
+                      if (title != null) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title!,
+                                style: AppTextStyles.heading.copyWith(
+                                  color: isDark
+                                      ? AppTheme.darkTextPrimary
+                                      : AppTheme.lightTextPrimary,
+                                ),
                               ),
                             ),
-                          ),
-                          ?trailing,
-                        ],
+                            ?trailing,
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: child,
                       ),
-                      const SizedBox(height: 12),
                     ],
-                    Flexible(child: child),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

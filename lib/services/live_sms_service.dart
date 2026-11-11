@@ -14,7 +14,6 @@ import '../core/utils/merchant_extractor.dart';
 import '../data/core/app_database.dart';
 import '../data/core/database_lifecycle_coordinator.dart';
 import '../data/core/tables.dart';
-import '../data/core/tables_v24.dart';
 import '../data/core/tracked_database_task_queue.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';

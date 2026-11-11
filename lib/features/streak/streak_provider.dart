@@ -18,37 +18,41 @@ final streakProvider = FutureProvider<Streak>((ref) {
 });
 
 /// Evaluates and updates the streak for today.
-/// Safe to call multiple times — deduplicates per day.
+/// Safe to call multiple times — dynamically derived from ledger history and signals.
 final evaluateStreakProvider = FutureProvider<Streak>((ref) async {
   final repo = ref.read(streakRepoProvider);
-  var streak = await repo.get();
+  final saved = await repo.get();
 
-  // Already evaluated today — no double-counting
-  if (streak.evaluatedToday) {
-    debugPrint('🔥 Streak already evaluated today: ${streak.current}');
-    return streak;
-  }
-
-  // Gather all signals
+  final transactions = await ref.read(transactionsProvider.future);
   final anomalies = await ref.read(anomalyProvider.future);
   final goals = await ref.read(activeGoalsProvider.future);
   final healthScore = await ref.read(financialHealthScoreProvider.future);
-  final transactions = await ref.read(transactionsProvider.future);
 
-  // Count today's transactions
   final now = DateTime.now();
-  final todayStart = DateTime(now.year, now.month, now.day);
-  final todayTxCount = transactions.where((t) =>
-      !t.date.isBefore(todayStart)).length;
 
-  // Build progress map for goals
+  // Dynamic ledger-based calculation
+  var currentStreak = StreakEngine().computeStreak(
+    transactions: transactions,
+    now: now,
+    savedStreak: saved.current,
+    lastEvaluated: saved.lastEvaluated,
+  );
+
+  // Today win check
+  final todayTxCount = transactions.where((t) {
+    if (t.isDeleted) return false;
+    final local = t.date.toLocal();
+    return local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+  }).length;
+
   final progressMap = <String, GoalProgress>{};
   for (final goal in goals) {
     progressMap[goal.id] = ref.read(goalProgressProvider(goal));
   }
 
-  // Evaluate
-  final won = StreakEngine().didUserWinToday(
+  final wonToday = StreakEngine().didUserWinToday(
     anomalies: anomalies,
     goals: goals,
     progressMap: progressMap,
@@ -56,14 +60,21 @@ final evaluateStreakProvider = FutureProvider<Streak>((ref) async {
     healthScore: healthScore.score,
   );
 
-  if (won) {
-    streak = streak.increment();
-    debugPrint('🔥 Streak incremented to ${streak.current} (best: ${streak.best})');
-  } else {
-    streak = streak.reset();
-    debugPrint('🔥 Streak reset to 0');
+  if (wonToday && currentStreak == 0) {
+    currentStreak = 1;
   }
 
-  await repo.save(streak);
-  return streak;
+  final bestStreak = currentStreak > saved.best ? currentStreak : saved.best;
+  final updated = Streak(
+    current: currentStreak,
+    best: bestStreak,
+    lastEvaluated: now,
+  );
+
+  if (updated.current != saved.current || updated.best != saved.best) {
+    await repo.save(updated);
+    debugPrint('🔥 Streak saved: current=${updated.current}, best=${updated.best}');
+  }
+
+  return updated;
 });

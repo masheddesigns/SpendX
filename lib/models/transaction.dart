@@ -73,7 +73,7 @@ class Transaction {
       categoryId: map['category_id'] as String?,
       accountId: map['account_id'] as String? ?? map['related_entity_id'] as String?,
       amount: (map['amount'] as num).toDouble(),
-      date: DateTime.parse(map['date'] as String),
+      date: DateTime.parse(map['date'] as String).toLocal(),
       notes: map['notes'] as String? ?? map['note'] as String? ?? '',
       tags: _parseTags(map['tags']),
       source: map['source'] as String? ?? 'manual',

@@ -91,84 +91,90 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     bool isDark,
   ) {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final monthName = DateFormat('MMMM').format(now).toUpperCase();
     final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
     final hasShortfall = calc.hasShortfall;
     final safeAmount = calc.safeToSpend.toRupees;
     final shortfallAmount = calc.cashflowShortfall.toRupees;
 
-    // Upcoming commitment milestones (the branches)
-    CommitmentItem? nextBill;
-    CommitmentItem? secondBill;
-    int daysUntilBill = 0;
-    if (calc.commitmentItems.isNotEmpty) {
-      nextBill = calc.commitmentItems.first;
-      if (calc.commitmentItems.length > 1) {
-        secondBill = calc.commitmentItems[1];
-      }
-      final today = DateTime(now.year, now.month, now.day);
+    // ── Strict Chronological Partitioning of Obligations ──
+    final overdueItems = calc.commitmentItems.where((c) {
+      final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+      return c.isOverdue || due.isBefore(today);
+    }).toList();
+
+    final dueTodayItems = calc.commitmentItems.where((c) {
+      final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+      return !c.isOverdue && due.isAtSameMomentAs(today);
+    }).toList();
+
+    final futureItems = calc.commitmentItems.where((c) {
+      final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+      return !c.isOverdue && due.isAfter(today);
+    }).toList()..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    // The forward journey nodes strictly track FUTURE milestones
+    final CommitmentItem? nextBill = futureItems.firstOrNull;
+    final CommitmentItem? secondBill =
+        futureItems.length > 1 ? futureItems[1] : null;
+
+    final hasOverdue = overdueItems.isNotEmpty;
+    final hasDueToday = dueTodayItems.isNotEmpty;
+
+    // Human copy — calm, accurate, prioritized
+    final String statusLine;
+    final double displayAmount;
+    final String amountCaption;
+
+    if (hasOverdue) {
+      final primary = overdueItems.first;
+      final itemDay = DateTime(
+        primary.dueDate.year,
+        primary.dueDate.month,
+        primary.dueDate.day,
+      );
+      final overdueDays = today.difference(itemDay).inDays;
+      final remainingCount = calc.commitmentItems.length - 1;
+      final suffix = remainingCount > 0 ? " (+$remainingCount more)" : "";
+      statusLine =
+          "${primary.title} is $overdueDays ${overdueDays == 1 ? 'day' : 'days'} overdue$suffix";
+      displayAmount = shortfallAmount.abs() > 0
+          ? shortfallAmount.abs()
+          : primary.amount.toRupees;
+      amountCaption = "unpaid obligations need coverage";
+    } else if (hasDueToday) {
+      final primary = dueTodayItems.first;
+      final remainingCount = calc.commitmentItems.length - 1;
+      final suffix = remainingCount > 0 ? " (+$remainingCount more)" : "";
+      statusLine = "${primary.title} is due today$suffix";
+      displayAmount = hasShortfall ? shortfallAmount.abs() : safeAmount;
+      amountCaption = hasShortfall
+          ? "to cover before end of day"
+          : "comfortable to spend after today's bills";
+    } else if (nextBill != null) {
       final itemDay = DateTime(
         nextBill.dueDate.year,
         nextBill.dueDate.month,
         nextBill.dueDate.day,
       );
-      daysUntilBill = itemDay.difference(today).inDays;
-    }
-
-    final isOverdue = nextBill != null && (nextBill.isOverdue || daysUntilBill < 0);
-    final overdueDays = daysUntilBill.abs();
-    final otherBillsCount = calc.commitmentItems.length - 1;
-    final otherSuffix = otherBillsCount > 0 ? " (+$otherBillsCount more)" : "";
-
-    // Human copy — calm, accurate, encouraging (no negative days)
-    final String statusLine;
-    final double displayAmount;
-    final String amountCaption;
-
-    if (hasShortfall) {
-      if (nextBill != null) {
-        if (isOverdue) {
-          statusLine = overdueDays == 0
-              ? "${nextBill.title} is due today$otherSuffix"
-              : "${nextBill.title} is $overdueDays ${overdueDays == 1 ? 'day' : 'days'} overdue$otherSuffix";
-        } else if (daysUntilBill == 0) {
-          statusLine = "${nextBill.title} is due today$otherSuffix";
-        } else if (daysUntilBill == 1) {
-          statusLine = "Next bill is tomorrow: ${nextBill.title}$otherSuffix";
-        } else {
-          statusLine = "$daysUntilBill days until ${nextBill.title}$otherSuffix";
-        }
+      final daysUntilBill = itemDay.difference(today).inDays;
+      final remainingCount = futureItems.length - 1;
+      final suffix = remainingCount > 0 ? " (+$remainingCount more)" : "";
+      if (daysUntilBill == 1) {
+        statusLine = "Tomorrow: ${nextBill.title}$suffix";
       } else {
-        statusLine = "Keeping spending steady this week";
+        statusLine = "$daysUntilBill days until ${nextBill.title}$suffix";
       }
-      displayAmount = shortfallAmount.abs();
-      amountCaption = isOverdue
-          ? "unpaid obligations need coverage"
-          : "to cover before then";
-    } else if (safeAmount > 0) {
-      if (nextBill != null) {
-        if (isOverdue) {
-          statusLine = overdueDays == 0
-              ? "${nextBill.title} is due today$otherSuffix"
-              : "${nextBill.title} is $overdueDays ${overdueDays == 1 ? 'day' : 'days'} overdue$otherSuffix";
-        } else if (daysUntilBill == 0) {
-          statusLine = "${nextBill.title} is due today$otherSuffix";
-        } else if (daysUntilBill == 1) {
-          statusLine = "Tomorrow: ${nextBill.title}$otherSuffix";
-        } else {
-          statusLine = "$daysUntilBill days until ${nextBill.title}$otherSuffix";
-        }
-      } else {
-        statusLine = "Clear sailing through the week";
-      }
-      displayAmount = safeAmount;
-      amountCaption = isOverdue
-          ? "comfortable to spend after settling overdue bills"
+      displayAmount = hasShortfall ? shortfallAmount.abs() : safeAmount;
+      amountCaption = hasShortfall
+          ? "to cover before then"
           : "comfortable to spend until your next bill";
     } else {
-      statusLine = "Fresh cycle starting";
-      displayAmount = 0.0;
-      amountCaption = "breathing room ready";
+      statusLine = "Clear sailing through the week";
+      displayAmount = safeAmount;
+      amountCaption =
+          safeAmount > 0 ? "comfortable to spend" : "breathing room ready";
     }
 
     return Padding(
@@ -198,6 +204,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               daysInMonth: daysInMonth,
               nextBill: nextBill,
               secondBill: secondBill,
+              hasDueToday: hasDueToday,
               allCommitments: calc.commitmentItems,
               isDark: isDark,
             ),
@@ -212,6 +219,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     nextBill: nextBill,
                     secondBill: secondBill,
                     hasShortfall: hasShortfall,
+                    hasOverdue: hasOverdue,
+                    hasDueToday: hasDueToday,
                     pulse: _pulseAnimation.value,
                     isDark: isDark,
                   ),
@@ -303,16 +312,68 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             ),
           ),
 
-          // ── Unambiguous Safe-to-Spend Status Indicator ──
-          if (hasShortfall)
+          // ── Overdue Obligations Alert Banner ──
+          if (hasOverdue)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showCommitmentDetails(
+                context,
+                calc.commitmentItems,
+                isDark,
+              ),
+              child: Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF2E151B)
+                      : const Color(0xFFFFF1F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFE11D48).withValues(alpha: 0.4),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      size: 13,
+                      color: Color(0xFFE11D48),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${overdueItems.length} overdue obligation${overdueItems.length > 1 ? 's require' : ' requires'} coverage',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFE11D48),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (hasShortfall)
             Container(
               margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 4,
+              ),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF22161A) : const Color(0xFFFBF1EE),
+                color: isDark
+                    ? const Color(0xFF22161A)
+                    : const Color(0xFFFBF1EE),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isDark ? const Color(0x40E05260) : const Color(0x35F87171),
+                  color: isDark
+                      ? const Color(0x40E05260)
+                      : const Color(0x35F87171),
                   width: 0.8,
                 ),
               ),
@@ -322,7 +383,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   Icon(
                     Icons.pause_circle_outline_rounded,
                     size: 13,
-                    color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48),
+                    color: isDark
+                        ? const Color(0xFFFCA5A5)
+                        : const Color(0xFFE11D48),
                   ),
                   const SizedBox(width: 5),
                   Text(
@@ -330,7 +393,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFBE123C),
+                      color: isDark
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFFBE123C),
                     ),
                   ),
                 ],
@@ -350,6 +415,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     required int daysInMonth,
     required CommitmentItem? nextBill,
     required CommitmentItem? secondBill,
+    required bool hasDueToday,
     required List<CommitmentItem> allCommitments,
     required bool isDark,
   }) {
@@ -362,18 +428,15 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
         final x2 = w * 0.68;
         final x3 = w * 0.90;
 
-        final isNextOverdue = nextBill != null && (nextBill.isOverdue || nextBill.daysUntil < 0);
-        final nextDaysUntil = nextBill?.daysUntil ?? 0;
-
         return Stack(
           fit: StackFit.expand,
           children: [
             // Node 1: Today
             Positioned(
-              left: x0 - 32,
-              top: 52,
+              left: x0 - 45,
+              top: 50,
               child: SizedBox(
-                width: 64,
+                width: 90,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -382,29 +445,45 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                        color: hasDueToday
+                            ? const Color(0xFFD97706)
+                            : (isDark
+                                ? const Color(0xFFA5B4FC)
+                                : const Color(0xFF4F46E5)),
                       ),
                     ),
                     Text(
-                      '${now.day} ${DateFormat('MMM').format(now)}',
+                      hasDueToday
+                          ? '${now.day} ${DateFormat('MMM').format(now)} • Due'
+                          : '${now.day} ${DateFormat('MMM').format(now)}',
                       style: TextStyle(
                         fontSize: 9,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        fontWeight:
+                            hasDueToday ? FontWeight.w700 : FontWeight.w500,
+                        color: hasDueToday
+                            ? (isDark
+                                ? const Color(0xFFFBBF24)
+                                : const Color(0xFFD97706))
+                            : (isDark
+                                ? const Color(0xFF64748B)
+                                : const Color(0xFF94A3B8)),
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
             ),
 
-            // Node 2: Primary Milestone (Next / Overdue Bill)
+            // Node 2: Primary Milestone (Next Future Bill or Mid-cycle)
             Positioned(
               left: x1 - 50,
               top: 0,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: nextBill != null
-                    ? () => _showCommitmentDetails(context, allCommitments, isDark)
+                    ? () =>
+                        _showCommitmentDetails(context, allCommitments, isDark)
                     : null,
                 child: Container(
                   width: 100,
@@ -415,36 +494,26 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     children: [
                       const SizedBox(height: 36), // Clearance below diamond node
                       Text(
-                        nextBill != null
-                            ? (isNextOverdue
-                                ? 'OVERDUE'
-                                : nextDaysUntil == 0
-                                    ? 'DUE TODAY'
-                                    : 'Next bill')
-                            : 'Milestone',
+                        nextBill != null ? 'Next bill' : 'Milestone',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: isNextOverdue
-                              ? const Color(0xFFE11D48)
-                              : nextDaysUntil == 0
-                                  ? const Color(0xFFD97706)
-                                  : (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)),
+                          color: isDark
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFFD97706),
                         ),
                         textAlign: TextAlign.center,
                       ),
                       Text(
                         nextBill != null
-                            ? (isNextOverdue
-                                ? '${nextDaysUntil.abs()}d ago'
-                                : DateFormat('d MMM').format(nextBill.dueDate))
-                            : '14d',
+                            ? DateFormat('d MMM').format(nextBill.dueDate)
+                            : '${now.add(const Duration(days: 7)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 7)))}',
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
-                          color: isNextOverdue
-                              ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFBE123C))
-                              : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF78716C),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -461,7 +530,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: secondBill != null
-                    ? () => _showCommitmentDetails(context, allCommitments, isDark)
+                    ? () =>
+                        _showCommitmentDetails(context, allCommitments, isDark)
                     : null,
                 child: SizedBox(
                   width: 90,
@@ -476,8 +546,12 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: secondBill != null
-                              ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
-                              : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C)),
+                              ? (isDark
+                                  ? const Color(0xFFA5B4FC)
+                                  : const Color(0xFF4F46E5))
+                              : (isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF78716C)),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -487,7 +561,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                             : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
                         style: TextStyle(
                           fontSize: 9,
-                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          color: isDark
+                              ? const Color(0xFF64748B)
+                              : const Color(0xFF94A3B8),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -511,7 +587,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -519,7 +597,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       '$daysInMonth ${DateFormat('MMM').format(now)}',
                       style: TextStyle(
                         fontSize: 9,
-                        color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF64748B)
+                            : const Color(0xFF94A3B8),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -539,8 +619,20 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     bool isDark,
   ) {
     HapticService.instance.tap();
-    final overdue = commitments.where((c) => c.isOverdue || c.daysUntil < 0).toList();
-    final upcoming = commitments.where((c) => !c.isOverdue && c.daysUntil >= 0).toList();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final overdue = commitments.where((c) {
+      final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+      return c.isOverdue || due.isBefore(today);
+    }).toList();
+    final dueToday = commitments.where((c) {
+      final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+      return !c.isOverdue && due.isAtSameMomentAs(today);
+    }).toList();
+    final upcoming = commitments.where((c) {
+      final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+      return !c.isOverdue && due.isAfter(today);
+    }).toList()..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
     SpendXGlassSheet.show(
       context: context,
@@ -577,7 +669,48 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     ],
                   ),
                 ),
-                ...overdue.map((c) => _buildCommitmentTile(context, sheetContext, c, isDark, isOverdue: true)),
+                ...overdue.map((c) => _buildCommitmentTile(
+                      context,
+                      sheetContext,
+                      c,
+                      isDark,
+                      isOverdue: true,
+                    )),
+                const SizedBox(height: 12),
+              ],
+              if (dueToday.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD97706),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'DUE TODAY (${dueToday.length})',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: Color(0xFFD97706),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ...dueToday.map((c) => _buildCommitmentTile(
+                      context,
+                      sheetContext,
+                      c,
+                      isDark,
+                      isOverdue: false,
+                    )),
                 const SizedBox(height: 12),
               ],
               if (upcoming.isNotEmpty) ...[
@@ -589,11 +722,19 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.8,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF78716C),
                     ),
                   ),
                 ),
-                ...upcoming.map((c) => _buildCommitmentTile(context, sheetContext, c, isDark, isOverdue: false)),
+                ...upcoming.map((c) => _buildCommitmentTile(
+                      context,
+                      sheetContext,
+                      c,
+                      isDark,
+                      isOverdue: false,
+                    )),
               ],
             ],
           ),
@@ -917,6 +1058,8 @@ class _OrganicPathPainter extends CustomPainter {
   final CommitmentItem? nextBill;
   final CommitmentItem? secondBill;
   final bool hasShortfall;
+  final bool hasOverdue;
+  final bool hasDueToday;
   final double pulse;
   final bool isDark;
 
@@ -926,6 +1069,8 @@ class _OrganicPathPainter extends CustomPainter {
     required this.nextBill,
     this.secondBill,
     required this.hasShortfall,
+    this.hasOverdue = false,
+    this.hasDueToday = false,
     required this.pulse,
     required this.isDark,
   });
@@ -936,7 +1081,7 @@ class _OrganicPathPainter extends CustomPainter {
 
     // Key trail anchor coordinates
     final p0 = Offset(w * 0.12, 38); // Today
-    final p1 = Offset(w * 0.40, 22); // Next Bill / Overdue
+    final p1 = Offset(w * 0.40, 22); // Next Future Bill
     final p2 = Offset(w * 0.68, 54); // Second Bill or Inflow
     final p3 = Offset(w * 0.90, 34); // Month end
 
@@ -951,13 +1096,13 @@ class _OrganicPathPainter extends CustomPainter {
       p1.dy,
     );
 
-    final isOverdue = nextBill != null && (nextBill!.isOverdue || nextBill!.daysUntil < 0);
-
     final activePaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFF4F46E5),
-          isOverdue
+          hasDueToday
+              ? const Color(0xFFD97706)
+              : const Color(0xFF4F46E5),
+          hasOverdue
               ? const Color(0xFFE11D48)
               : hasShortfall
                   ? (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706))
@@ -1000,20 +1145,27 @@ class _OrganicPathPainter extends CustomPainter {
     canvas.drawPath(futurePath, futurePaint);
 
     // ── 3. Draw Node 1: Today (Glowing Concentric Pulsing Halo) ──
+    final Color todayBaseColor = hasDueToday
+        ? const Color(0xFFD97706)
+        : (hasOverdue ? const Color(0xFFE11D48) : const Color(0xFF4F46E5));
+    final Color todayBorderColor = hasDueToday
+        ? const Color(0xFFFBBF24)
+        : (hasOverdue ? const Color(0xFFFCA5A5) : const Color(0xFF818CF8));
+
     final haloRadius = 13.0 + (pulse * 3.5);
     final haloPaint = Paint()
-      ..color = const Color(0xFF4F46E5).withValues(alpha: 0.15 + (pulse * 0.10))
+      ..color = todayBaseColor.withValues(alpha: 0.15 + (pulse * 0.10))
       ..style = PaintingStyle.fill;
     canvas.drawCircle(p0, haloRadius, haloPaint);
 
     final todayBorderPaint = Paint()
-      ..color = const Color(0xFF818CF8)
+      ..color = todayBorderColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5;
     canvas.drawCircle(p0, 7.5, todayBorderPaint);
 
     final todayCenterPaint = Paint()
-      ..color = const Color(0xFF4F46E5)
+      ..color = todayBaseColor
       ..style = PaintingStyle.fill;
     canvas.drawCircle(p0, 5.0, todayCenterPaint);
 
@@ -1026,14 +1178,11 @@ class _OrganicPathPainter extends CustomPainter {
       ..lineTo(p1.dx - diamondRadius, p1.dy)
       ..close();
 
-    final diamondHaloColor = isOverdue
-        ? const Color(0xFFE11D48).withValues(alpha: 0.25 + (pulse * 0.15))
-        : (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706))
-            .withValues(alpha: 0.20);
+    final diamondHaloColor = (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706))
+        .withValues(alpha: 0.20);
 
-    final diamondStrokeColor = isOverdue
-        ? const Color(0xFFE11D48)
-        : (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706));
+    final diamondStrokeColor =
+        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
 
     final diamondHalo = Paint()
       ..color = diamondHaloColor

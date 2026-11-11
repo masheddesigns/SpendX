@@ -20,6 +20,10 @@ import 'package:spend_x/services/live_sms_service.dart';
 import 'package:spend_x/services/sms_import_service.dart';
 import 'package:spend_x/services/transaction_text_parser.dart';
 import 'package:spend_x/domain/credit/credit_card_service.dart';
+import 'package:spend_x/models/transaction.dart';
+import 'package:spend_x/features/streak/streak_engine.dart';
+import 'package:spend_x/domain/finance/safe_to_spend.dart';
+import 'package:spend_x/domain/finance/money.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -984,6 +988,167 @@ void main() {
       expect(updatedReminder, isNotNull);
       expect(updatedReminder!.recordStatus, ReminderRecordStatus.done);
       expect(updatedReminder.isActive, false);
+    });
+  });
+
+  group('Defect 28: Homepage Dates, Chronological Forward Waypoints, and Streak/Rhythm Calculation', () {
+    test('28a. StreakEngine computeStreak tracks consecutive active days dynamically', () {
+      final engine = StreakEngine();
+      final now = DateTime(2026, 11, 11, 10, 0, 0); // Wednesday Nov 11
+      final today = DateTime(2026, 11, 11);
+      final yesterday = DateTime(2026, 11, 10);
+      final twoDaysAgo = DateTime(2026, 11, 9);
+
+      // Case 1: Transactions logged on yesterday (Nov 10) and today (Nov 11)
+      final txnsActive = [
+        Transaction(
+          id: 't1',
+          userId: 'u1',
+          type: 'expense',
+          amount: 250.0,
+          date: yesterday.add(const Duration(hours: 14)), // Nov 10, 2 PM
+          notes: 'Grocery',
+          createdAt: yesterday,
+          updatedAt: yesterday,
+        ),
+        Transaction(
+          id: 't2',
+          userId: 'u1',
+          type: 'income',
+          amount: 6000.0,
+          date: today.add(const Duration(hours: 9)), // Nov 11, 9 AM
+          notes: 'Freelance credit',
+          createdAt: today,
+          updatedAt: today,
+        ),
+      ];
+
+      expect(engine.computeStreak(transactions: txnsActive, now: now), 2);
+
+      // Case 2: Morning check before today's activity is logged (yesterday had activity)
+      final txnsPendingToday = [
+        Transaction(
+          id: 't3',
+          userId: 'u1',
+          type: 'expense',
+          amount: 150.0,
+          date: yesterday.add(const Duration(hours: 12)),
+          notes: 'Lunch',
+          createdAt: yesterday,
+          updatedAt: yesterday,
+        ),
+      ];
+
+      // Streak stays alive from yesterday (1 day), not wiped out to 0!
+      expect(engine.computeStreak(transactions: txnsPendingToday, now: now), 1);
+
+      // Case 3: 3-day consecutive run (Nov 9, Nov 10, Nov 11)
+      final txnsThreeDays = [
+        ...txnsActive,
+        Transaction(
+          id: 't4',
+          userId: 'u1',
+          type: 'expense',
+          amount: 50.0,
+          date: twoDaysAgo.add(const Duration(hours: 18)),
+          notes: 'Chai',
+          createdAt: twoDaysAgo,
+          updatedAt: twoDaysAgo,
+        ),
+      ];
+
+      expect(engine.computeStreak(transactions: txnsThreeDays, now: now), 3);
+
+      // Case 4: Missed both yesterday and today -> streak lapses to 0
+      final txnsLapsed = [
+        Transaction(
+          id: 't5',
+          userId: 'u1',
+          type: 'expense',
+          amount: 500.0,
+          date: twoDaysAgo.add(const Duration(hours: 10)),
+          notes: 'Old bill',
+          createdAt: twoDaysAgo,
+          updatedAt: twoDaysAgo,
+        ),
+      ];
+
+      expect(engine.computeStreak(transactions: txnsLapsed, now: now), 0);
+    });
+
+    test('28b. Forward journey waypoints are strictly chronologically monotonic without duplicate today nodes', () {
+      final now = DateTime(2026, 11, 11, 10, 0, 0); // Nov 11
+      final today = DateTime(now.year, now.month, now.day);
+
+      final commitments = [
+        CommitmentItem(
+          title: 'Airtel Broadband Overdue',
+          amount: Money.fromRupees(999),
+          dueDate: DateTime(2026, 10, 29), // 13 days overdue
+          type: 'bill',
+          isOverdue: true,
+        ),
+        CommitmentItem(
+          title: 'Groww Stocks SIP',
+          amount: Money.fromRupees(2000),
+          dueDate: today, // Due Today (Nov 11)
+          type: 'bill',
+        ),
+        CommitmentItem(
+          title: 'Tata Neu Credit Card',
+          amount: Money.fromRupees(12500),
+          dueDate: DateTime(2026, 11, 19), // Future 8 days out
+          type: 'credit_card',
+        ),
+        CommitmentItem(
+          title: 'Electricity Bill',
+          amount: Money.fromRupees(1800),
+          dueDate: DateTime(2026, 11, 25), // Future 14 days out
+          type: 'bill',
+        ),
+      ];
+
+      // Partition logic as used in SafeToSpendCard
+      final overdueItems = commitments.where((c) {
+        final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+        return c.isOverdue || due.isBefore(today);
+      }).toList();
+
+      final dueTodayItems = commitments.where((c) {
+        final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+        return !c.isOverdue && due.isAtSameMomentAs(today);
+      }).toList();
+
+      final futureItems = commitments.where((c) {
+        final due = DateTime(c.dueDate.year, c.dueDate.month, c.dueDate.day);
+        return !c.isOverdue && due.isAfter(today);
+      }).toList()..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+      // Overdue is partitioned separately
+      expect(overdueItems.length, 1);
+      expect(overdueItems.first.title, 'Airtel Broadband Overdue');
+
+      // Due Today is anchored to Today node
+      expect(dueTodayItems.length, 1);
+      expect(dueTodayItems.first.title, 'Groww Stocks SIP');
+
+      // Forward waypoints strictly start with the NEXT FUTURE date
+      final nextBill = futureItems.firstOrNull;
+      final secondBill = futureItems.length > 1 ? futureItems[1] : null;
+
+      expect(nextBill, isNotNull);
+      expect(nextBill!.title, 'Tata Neu Credit Card');
+      expect(nextBill.dueDate, DateTime(2026, 11, 19));
+
+      expect(secondBill, isNotNull);
+      expect(secondBill!.title, 'Electricity Bill');
+      expect(secondBill.dueDate, DateTime(2026, 11, 25));
+
+      // Strict forward chronological monotonicity:
+      // Today (Nov 11) < Next Bill (Nov 19) < Second Bill (Nov 25) < Month End (Nov 30)
+      expect(today.isBefore(nextBill.dueDate), isTrue);
+      expect(nextBill.dueDate.isBefore(secondBill.dueDate), isTrue);
+      expect(secondBill.dueDate.isBefore(DateTime(2026, 11, 30)), isTrue);
     });
   });
 }
