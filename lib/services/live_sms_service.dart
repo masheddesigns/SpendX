@@ -514,10 +514,10 @@ class LiveSmsService with WidgetsBindingObserver {
 
       try {
         final nowMs = DateTime.now().millisecondsSinceEpoch;
-        final sinceEpochMs = nowMs - const Duration(hours: 24).inMilliseconds;
+        final sinceEpochMs = nowMs - const Duration(days: 30).inMilliseconds;
         final inboxMessages = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
           'sinceEpochMs': sinceEpochMs,
-          'limit': 50,
+          'limit': 200,
         });
         if (inboxMessages != null && inboxMessages.isNotEmpty) {
           for (final raw in inboxMessages) {
@@ -1180,6 +1180,26 @@ class LiveSmsService with WidgetsBindingObserver {
             } catch (_) {}
           }
 
+          // Settle matching upcoming obligation / subscription / AutoPay reminder for debits
+          if (type == 'expense' || type == 'credit_card_purchase' || type == 'transfer' || type == 'credit_payment') {
+            try {
+              final settled = await ReminderRepo().settleMatching(
+                amount: tx.amount,
+                date: tx.date,
+                title: tx.notes,
+                merchant: parsed.merchant,
+                notes: '${tx.notes} ${parsed.rawText}',
+                isCreditCardPayment: type == 'credit_payment',
+                isIncome: false,
+              );
+              if (settled > 0) {
+                AppLogger.i('[LiveSmsService] Auto-settled $settled reminder(s) for ${parsed.merchant ?? tx.notes} (₹${tx.amount})');
+              }
+            } catch (e) {
+              AppLogger.w('[LiveSmsService] reminder settle error: $e');
+            }
+          }
+
           // Sync upcoming card reminder if this was a credit card purchase
           if (instrument.instrumentType == 'credit_card' && instrument.accountId != null) {
             try {
@@ -1712,6 +1732,29 @@ class LiveSmsService with WidgetsBindingObserver {
         for (final failed in bundle.failedObligations) {
           await _handleFailedObligation(failed);
         }
+      }
+
+      // 4. Retroactive reconciliation: Settle any active reminders that have already been paid in recent transactions
+      try {
+        final recentTxns = await TransactionRepo().getAll();
+        for (final tx in recentTxns) {
+          if (tx.type == 'expense' ||
+              tx.type == 'credit_payment' ||
+              tx.type == 'transfer' ||
+              tx.type == 'credit_card_purchase') {
+            await ReminderRepo().settleMatching(
+              amount: tx.amount,
+              date: tx.date,
+              title: tx.notes,
+              merchant: tx.notes,
+              notes: '${tx.notes} ${tx.rawPayload ?? ''}',
+              isCreditCardPayment: tx.type == 'credit_payment',
+              isIncome: false,
+            );
+          }
+        }
+      } catch (e) {
+        AppLogger.w('[LiveSmsService] retroactive reminder settlement error: $e');
       }
     } catch (e) {
       AppLogger.w('[LiveSmsService] syncUpcomingObligationsFromInbox error: $e');

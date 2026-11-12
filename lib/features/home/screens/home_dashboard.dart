@@ -80,6 +80,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
       onRefresh: () async {
         try {
           await LiveSmsService.instance.drainPending();
+          await LiveSmsService.instance.syncUpcomingObligationsFromInbox();
         } catch (_) {}
         invalidateAllFinancialProviders(ref);
         ref.invalidate(evaluateStreakProvider);

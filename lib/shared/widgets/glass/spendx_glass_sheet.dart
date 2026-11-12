@@ -85,18 +85,20 @@ class SpendXGlassSheet extends StatelessWidget {
             minWidth: double.infinity,
             maxHeight: MediaQuery.sizeOf(context).height * 0.85,
           ),
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: sheetGradient,
-              borderRadius: BorderRadius.vertical(top: topRadius),
-              border: Border(
-                top: BorderSide(color: borderColor, width: 0.75),
-                left: BorderSide(color: borderColor, width: 0.5),
-                right: BorderSide(color: borderColor, width: 0.5),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: sheetGradient,
+                borderRadius: BorderRadius.vertical(top: topRadius),
+                border: Border(
+                  top: BorderSide(color: borderColor, width: 0.75),
+                  left: BorderSide(color: borderColor, width: 0.5),
+                  right: BorderSide(color: borderColor, width: 0.5),
+                ),
               ),
-            ),
-            child: Stack(
+              child: Stack(
               children: [
                 // Top Specular Highlight Gleam
                 Positioned(
@@ -157,6 +159,19 @@ class SpendXGlassSheet extends StatelessWidget {
                               ),
                             ),
                             ?trailing,
+                            IconButton(
+                              icon: Icon(
+                                Icons.close_rounded,
+                                size: 20,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -170,6 +185,7 @@ class SpendXGlassSheet extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

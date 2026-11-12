@@ -1398,6 +1398,7 @@ class SmsImportService {
     if (upper.contains('APPLE')) return 'Apple';
     if (upper.contains('DUOLINGO')) return 'Duolingo';
     if (upper.contains('GROWW')) return 'Groww Stocks SIP';
+    if (upper.contains('CURSOR')) return 'Cursor';
     if (upper.contains('ANOMALY')) return 'Anomaly';
     if (upper.contains('AMAZON')) return 'Amazon';
     if (upper.contains('JIOHOME') || upper.contains('JIOFIB')) return 'JioHome';
@@ -1611,6 +1612,31 @@ class SmsImportService {
 
     final reason = isRevoked ? 'revoked' : 'cancelled';
 
+    // 0. SBI / NPCI Mandate revocation:
+    // e.g. "UPI-Mandate successfully Revoked  by Cursor for Rs649.00 -SBI"
+    // e.g. "UPI-Mandate successfully Revoked towards Netflix for Rs199.00"
+    // e.g. "Mandate successfully Revoked by Spotify for Rs179.00"
+    final sbiRevokeMatch = RegExp(
+      r'(?:upi-?)?mandate\s+(?:successfully\s+)?(?:revoked|cancelled|canceled)\s+(?:by|towards|for)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:for|of|\.|$))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (sbiRevokeMatch != null) {
+      final merchant = sbiRevokeMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
     // 1. UPI AutoPay cancellation:
     // e.g. "Dear UPI User, AutoPay of Rs. 199.00 for NETFLIX has been successfully revoked."
     // e.g. "UPI AutoPay mandate for Netflix of Rs. 199.00 has been successfully revoked."
@@ -1780,7 +1806,7 @@ class SmsImportService {
 
     // 5. Fallback for known merchants when body mentions mandate/autopay + cancelled/revoked
     for (final m in [
-      'netflix', 'spotify', 'youtube', 'amazon', 'groww', 'disney', 'hotstar',
+      'netflix', 'spotify', 'youtube', 'amazon', 'groww', 'cursor', 'disney', 'hotstar',
       'apple', 'jiofiber', 'jiohome', 'duolingo', 'swiggy', 'zomato',
       'tataplay', 'airtel', 'google', 'openai', 'chatgpt', 'truecaller'
     ]) {

@@ -180,9 +180,9 @@ class ReminderRepo {
       final reminderAmt = reminder.amount;
       final amountMatches = reminderAmt == null || (reminderAmt - amount).abs() <= 1.0;
 
-      // 3. Date window check (+/- 20 days around transaction date)
+      // 3. Date window check (+/- 30 days around transaction date)
       final rDate = reminder.dueDate ?? reminder.createdAt;
-      final dateMatches = rDate.difference(date).inDays.abs() <= 20;
+      final dateMatches = rDate.difference(date).inDays.abs() <= 30;
 
       // 4. Token / merchant / title match
       if (!matches && amountMatches && dateMatches && searchTokens.isNotEmpty) {
@@ -263,8 +263,6 @@ class ReminderRepo {
       final rDate = reminder.dueDate ?? reminder.createdAt;
       final now = DateTime.now();
       final isPastDue = rDate.isBefore(now);
-      final minDate = rDate.subtract(const Duration(days: 25)).toIso8601String();
-      final maxDate = rDate.add(const Duration(days: 25)).toIso8601String();
 
       final isCc = reminder.type == ReminderType.credit ||
           reminder.title.toLowerCase().contains('credit card') ||
@@ -303,19 +301,26 @@ class ReminderRepo {
           final minPaise = ((rAmt - 1.0) * 100).round();
           final maxPaise = ((rAmt + 1.0) * 100).round();
           final v24Rows = await db.rawQuery('''
-            SELECT e.id, e.description, e.timestamp, e.event_type, e.notes,
+            SELECT e.id, e.description, e.merchant_normalized, e.timestamp, e.event_type, e.notes,
                    (p.amount_minor_units / 100.0) AS amount, p.account_id
             FROM ${TablesV24.postings} p
             JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
             WHERE e.lifecycle_status = 'posted'
-              AND p.amount_minor_units BETWEEN ? AND ?
-              AND e.timestamp BETWEEN ? AND ?;
-          ''', [minPaise, maxPaise, minDate, maxDate]);
+              AND p.amount_minor_units BETWEEN ? AND ?;
+          ''', [minPaise, maxPaise]);
 
           for (final row in v24Rows) {
+            final rowTimeStr = row['timestamp'] as String?;
+            if (rowTimeStr != null) {
+              final rowTime = DateTime.tryParse(rowTimeStr);
+              if (rowTime != null && rowTime.difference(rDate).inDays.abs() > 30) {
+                continue;
+              }
+            }
             final desc = ((row['description'] as String?) ?? '').toLowerCase();
+            final merchant = ((row['merchant_normalized'] as String?) ?? '').toLowerCase();
             final notes = ((row['notes'] as String?) ?? '').toLowerCase();
-            final fullText = '$desc $notes';
+            final fullText = '$desc $merchant $notes';
             final evType = row['event_type'] as String? ?? '';
 
             if (isCc) {
@@ -361,11 +366,17 @@ class ReminderRepo {
             SELECT id, amount, type, source, notes, related_entity_id, external_ref, date
             FROM ${Tables.transactions}
             WHERE is_deleted = 0
-              AND amount BETWEEN ? AND ?
-              AND date BETWEEN ? AND ?;
-          ''', [rAmt - 1.0, rAmt + 1.0, minDate, maxDate]);
+              AND amount BETWEEN ? AND ?;
+          ''', [rAmt - 1.0, rAmt + 1.0]);
 
           for (final tx in rows) {
+            final txDateStr = tx['date'] as String?;
+            if (txDateStr != null) {
+              final txDate = DateTime.tryParse(txDateStr);
+              if (txDate != null && txDate.difference(rDate).inDays.abs() > 30) {
+                continue;
+              }
+            }
             final txType = tx['type'] as String? ?? '';
             final txSource = tx['source'] as String? ?? '';
             final notes = (tx['notes'] as String? ?? '').toLowerCase();
@@ -391,7 +402,7 @@ class ReminderRepo {
 
               if (isPaymentType ||
                   matchesEntity ||
-                  (matchesTitle && (txType == 'expense' || txType == 'transfer'))) {
+                  (matchesTitle && (txType == 'expense' || txType == 'transfer' || txType == 'credit_card_purchase'))) {
                 matched = true;
                 break;
               }
@@ -408,7 +419,7 @@ class ReminderRepo {
                   .where((t) => t.length >= 3)
                   .toSet();
               final hasToken = cleanTokens.any((t) => notes.contains(t));
-              if (hasToken && (txType == 'expense' || txType == 'transfer')) {
+              if (hasToken) {
                 matched = true;
                 break;
               }

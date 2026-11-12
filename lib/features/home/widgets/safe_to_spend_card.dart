@@ -273,7 +273,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           // ── Positive, Dignified Amount (No scary negative sign) ──
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => _showBreakdownSheet(context, calc, isDark),
+            onTap: calc.commitmentItems.any((c) => c.isOverdue)
+                ? () => _showCommitmentDetails(context, calc.commitmentItems, isDark)
+                : () => _showBreakdownSheet(context, calc, isDark),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -982,43 +984,81 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     ),
                   ),
                   child: Column(
-                    children: calc.commitmentItems.map((item) {
-                      final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-                      final itemDay = DateTime(item.dueDate.year, item.dueDate.month, item.dueDate.day);
-                      final diff = itemDay.difference(today).inDays;
-                      final dueStr = diff == 0 ? 'Due today' : diff < 0 ? '${diff.abs()}d overdue' : 'Due in ${diff}d';
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.payment_rounded,
-                              size: 14,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '${item.title} ($dueStr)',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                    children: [
+                      ...calc.commitmentItems.map((item) {
+                        final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                        final itemDay = DateTime(item.dueDate.year, item.dueDate.month, item.dueDate.day);
+                        final diff = itemDay.difference(today).inDays;
+                        final dueStr = diff == 0 ? 'Due today' : diff < 0 ? '${diff.abs()}d overdue' : 'Due in ${diff}d';
+                        final isOverdue = diff < 0;
+                        return InkWell(
+                          onTap: () {
+                            Navigator.of(ctx).pop();
+                            _showCommitmentDetails(context, calc.commitmentItems, isDark);
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  item.type == 'credit_card'
+                                      ? Icons.credit_card_rounded
+                                      : Icons.payment_rounded,
+                                  size: 14,
+                                  color: isOverdue
+                                      ? const Color(0xFFE11D48)
+                                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${item.title} ($dueStr)',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w500,
+                                      color: isOverdue
+                                          ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48))
+                                          : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155)),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '-${AppFormat.currency(item.amount.toRupees.abs())}',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 14,
+                                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                ),
+                              ],
                             ),
-                            Text(
-                              '-${AppFormat.currency(item.amount.toRupees.abs())}',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48),
-                              ),
-                            ),
-                          ],
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          _showCommitmentDetails(context, calc.commitmentItems, isDark);
+                        },
+                        child: Text(
+                          'Tap any obligation above to cancel or mark as paid →',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
                 ),
               ],
