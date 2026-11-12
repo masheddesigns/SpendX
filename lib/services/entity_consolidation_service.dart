@@ -377,15 +377,19 @@ class EntityConsolidationService {
 
   String _normalizeBank(String raw) {
     final lower = raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    if (lower.contains('hdfc') || lower.contains('tnbpay') || lower.contains('tneu')) return 'hdfc';
+    if (lower.contains('hdfc') || lower.contains('tnbpay') || lower.contains('tneu') || lower.contains('swiggy')) return 'hdfc';
     if (lower.contains('sbi') || lower.contains('statebank')) return 'sbi';
     if (lower.contains('icici') || lower.contains('amzn') || lower.contains('amazon')) return 'icici';
-    if (lower.contains('axis') || lower.contains('fkart') || lower.contains('flipkart')) return 'axis';
-    if (lower.contains('federal') || lower.contains('fed')) return 'federal';
+    if (lower.contains('axis') || lower.contains('fkart') || lower.contains('flipkart') || lower.contains('airtel')) return 'axis';
+    if (lower.contains('federal') || lower.contains('fed') || lower.contains('scapia')) return 'federal';
     if (lower.contains('bob') || lower.contains('baroda')) return 'bob';
-    if (lower.contains('kotak')) return 'kotak';
-    if (lower.contains('onecard')) return 'onecard';
+    if (lower.contains('kotak') || lower.contains('myntra')) return 'kotak';
+    if (lower.contains('onecard') || lower.contains('onecrd')) return 'onecard';
     if (lower.contains('csb') || lower.contains('jupiter') || lower.contains('jtedge')) return 'csb';
+    if (lower.contains('rbl') || lower.contains('zomato')) return 'rbl';
+    if (lower.contains('aubank') || lower.contains('aubnk') || lower.contains('ixigo')) return 'aubank';
+    if (lower.contains('idfc')) return 'idfc';
+    if (lower.contains('indus')) return 'indusind';
     return lower;
   }
 }

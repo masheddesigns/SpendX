@@ -2329,6 +2329,10 @@ class SmsImportService {
         senderLower.contains('jupiter') ||
         senderLower.contains('onecrd') ||
         senderLower.contains('onecard') ||
+        senderLower.contains('scapia') ||
+        senderLower.contains('zomato') ||
+        senderLower.contains('myntra') ||
+        senderLower.contains('ixigo') ||
         senderLower.contains('cred') ||
         senderLower.contains('cheq');
 
@@ -2357,6 +2361,18 @@ class SmsImportService {
       }
       if (senderLower.contains('jtedge') || senderLower.contains('jupiter')) {
         return 'csb'; // Jupiter Edge card is issued by CSB Bank
+      }
+      if (senderLower.contains('scapia')) {
+        return 'fedbnk'; // Scapia card is issued by Federal Bank
+      }
+      if (senderLower.contains('zomato')) {
+        return 'rbl'; // Zomato card is issued by RBL Bank
+      }
+      if (senderLower.contains('myntra')) {
+        return 'kotak'; // Myntra card is issued by Kotak Mahindra Bank
+      }
+      if (senderLower.contains('ixigo')) {
+        return 'aubank'; // Ixigo card is issued by AU Small Finance Bank
       }
       if (senderLower.contains('onecrd') || senderLower.contains('onecard')) {
         return 'onecrd';
