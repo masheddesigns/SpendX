@@ -53,7 +53,6 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     setState(() => _scanningInbox = true);
     try {
       final res = await InboxAuditService.instance.runAudit(
-        daysBack: 14,
         pushToReviewQueue: true,
       );
       ref.invalidate(reviewQueueProvider);

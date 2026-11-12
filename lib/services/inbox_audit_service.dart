@@ -144,7 +144,7 @@ class InboxAuditService {
   /// has elapsed. Safe to call on app launch, resume, or pull-to-refresh.
   Future<InboxAuditResult?> runAutoAuditIfDue({
     Duration interval = const Duration(hours: 6),
-    int daysBack = 14,
+    int? daysBack,
     bool pushToReviewQueue = true,
   }) async {
     try {
@@ -178,14 +178,15 @@ class InboxAuditService {
     return null;
   }
 
-  /// Runs an inbox diagnostic scan for the specified window (default 14 days).
+  /// Runs an inbox diagnostic scan. If [daysBack] is omitted, defaults dynamically
+  /// to the 1st of the previous calendar month up to today.
   ///
   /// Any uncaptured financial alerts are optionally pushed to [ReviewRepo] so the user
   /// can confirm them into the accounting ledger.
   Future<InboxAuditResult> runAudit({
-    int daysBack = 14,
+    int? daysBack,
     bool pushToReviewQueue = true,
-    int limit = 400,
+    int limit = 500,
   }) async {
     final hasPermission = await Permission.sms.isGranted;
     if (!hasPermission) {
@@ -213,7 +214,15 @@ class InboxAuditService {
 
       // 2. Query recent inbox SMS messages from telephony provider
       final now = DateTime.now();
-      final sinceEpochMs = now.subtract(Duration(days: daysBack)).millisecondsSinceEpoch;
+      final DateTime cutoffDate;
+      if (daysBack != null) {
+        cutoffDate = now.subtract(Duration(days: daysBack));
+      } else {
+        final year = now.month == 1 ? now.year - 1 : now.year;
+        final month = now.month == 1 ? 12 : now.month - 1;
+        cutoffDate = DateTime(year, month, 1);
+      }
+      final sinceEpochMs = cutoffDate.millisecondsSinceEpoch;
       final rawInbox = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
         'sinceEpochMs': sinceEpochMs,
         'limit': limit,

@@ -518,13 +518,16 @@ class LiveSmsService with WidgetsBindingObserver {
       }
 
       try {
-        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final now = DateTime.now();
+        // Dynamic scan window: from the 1st of the previous calendar month up to today.
+        final startOfPreviousMonth = DateTime(
+          now.month == 1 ? now.year - 1 : now.year,
+          now.month == 1 ? 12 : now.month - 1,
+          1,
+        );
         final txCount = await TransactionRepo().getCount();
-        // On first install / empty ledger, scan past 90 days (1000 messages) to establish full financial position.
-        // On ongoing syncs, scan past 30 days (200 messages) for fast, lightweight background sync.
-        final daysToScan = txCount == 0 ? 90 : 30;
-        final limitToScan = txCount == 0 ? 1000 : 200;
-        final sinceEpochMs = nowMs - Duration(days: daysToScan).inMilliseconds;
+        final sinceEpochMs = startOfPreviousMonth.millisecondsSinceEpoch;
+        final limitToScan = txCount == 0 ? 2000 : 800;
         final inboxMessages = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
           'sinceEpochMs': sinceEpochMs,
           'limit': limitToScan,
@@ -1825,11 +1828,12 @@ class LiveSmsService with WidgetsBindingObserver {
     }
   }
 
-  /// Scans device SMS inbox for upcoming e-mandates, subscriptions, bill dues, and cancellations.
+  /// Scans device SMS inbox for upcoming e-mandates, subscriptions, bill dues, and cancellations
+  /// from the 1st of the previous calendar month up to today.
   Future<void> syncUpcomingObligationsFromInbox() async {
     try {
       final bundle = await SmsImportService.instance.scan(
-        options: const SmsScanOptions(daysBack: 60),
+        options: SmsScanOptions.fromPreviousMonth(),
       );
       if (bundle.upcomingObligations.isNotEmpty) {
         for (final obligation in bundle.upcomingObligations) {

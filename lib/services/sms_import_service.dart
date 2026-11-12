@@ -211,9 +211,41 @@ class SmsScanBundle {
 
 /// Scan window options.
 class SmsScanOptions {
-  /// Days of SMS to look back. `null` = scan everything.
+  /// Days of SMS to look back. If specified, overrides the default window.
   final int? daysBack;
-  const SmsScanOptions({this.daysBack});
+
+  /// Explicit start cutoff date. If provided, overrides [daysBack].
+  final DateTime? sinceDate;
+
+  /// If true, scans all available SMS without date cutoffs.
+  final bool scanAll;
+
+  const SmsScanOptions({
+    this.daysBack,
+    this.sinceDate,
+    this.scanAll = false,
+  });
+
+  /// Factory creating an option to scan from the 1st of the previous calendar month up to now.
+  factory SmsScanOptions.fromPreviousMonth([DateTime? referenceDate]) {
+    final now = referenceDate ?? DateTime.now();
+    final year = now.month == 1 ? now.year - 1 : now.year;
+    final month = now.month == 1 ? 12 : now.month - 1;
+    return SmsScanOptions(sinceDate: DateTime(year, month, 1));
+  }
+
+  /// Calculates the effective cutoff date. Defaults to the 1st of the previous calendar month.
+  DateTime? getEffectiveCutoff([DateTime? referenceDate]) {
+    if (scanAll) return null;
+    if (sinceDate != null) return sinceDate;
+    final now = referenceDate ?? DateTime.now();
+    if (daysBack != null) {
+      return now.subtract(Duration(days: daysBack!));
+    }
+    final year = now.month == 1 ? now.year - 1 : now.year;
+    final month = now.month == 1 ? 12 : now.month - 1;
+    return DateTime(year, month, 1);
+  }
 }
 
 /// High-level financial event type classified from an incoming SMS.
@@ -596,15 +628,16 @@ class SmsImportService {
     );
   }
 
-  Future<List<SmsMessage>> _queryInbox() async {
+  Future<List<SmsMessage>> _queryInbox({DateTime? since}) async {
     // Use native query with date sorting — the flutter_sms_inbox library caps
     // at 1000 and doesn't sort, so OneCard/HDFC bills from months ago are missed.
     try {
+      final sinceMs = since?.millisecondsSinceEpoch ?? 0;
       final List<dynamic> raw = await _channel.invokeMethod('queryInboxSince', {
-        'sinceEpochMs': 0,
+        'sinceEpochMs': sinceMs,
         'limit': 20000,
       });
-      AppLogger.d('[SmsScan] Native queryInboxSince returned ${raw.length} raw messages');
+      AppLogger.d('[SmsScan] Native queryInboxSince returned ${raw.length} raw messages (since: $since)');
       final result = raw.map((m) {
         final map = Map<String, dynamic>.from(m as Map);
         return SmsMessage.fromJson(map);
@@ -627,12 +660,9 @@ class SmsImportService {
       return const SmsScanBundle(transactions: [], balances: []);
     }
 
-    final messages = await _queryInbox();
-    AppLogger.d('[SmsScan] _queryInbox returned ${messages.length} messages');
-
-    final cutoff = options.daysBack == null
-        ? null
-        : DateTime.now().subtract(Duration(days: options.daysBack!));
+    final cutoff = options.getEffectiveCutoff();
+    final messages = await _queryInbox(since: cutoff);
+    AppLogger.d('[SmsScan] _queryInbox returned ${messages.length} messages (cutoff: $cutoff)');
 
     final seenTx = <String>{};
     final seenBal = <String>{};
