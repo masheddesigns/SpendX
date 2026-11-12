@@ -190,7 +190,7 @@ class MoreScreen extends ConsumerWidget {
                     icon: Icons.health_and_safety_outlined,
                     iconColor: const Color(0xFF10B981),
                     title: 'Data Health & Integrity',
-                    subtitle: 'Audit ledger balance parity and schema diagnostics',
+                    subtitle: 'Audit ledger parity, schema & inbox gap diagnostics',
                     isDark: isDark,
                     onTap: () => _push(context, const DataHealthScreen()),
                   ),
