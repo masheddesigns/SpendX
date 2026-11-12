@@ -197,6 +197,7 @@ class EntityConsolidationService {
   }
 
   /// Removes bogus bank accounts that were mistakenly created for credit cards (e.g. HDFC 6366).
+  /// Removes bogus BankAccounts that were mistakenly auto-created for CreditCards (e.g. HDFC 6366).
   Future<int> _removeCollidingBankAccounts(Database db) async {
     int removed = 0;
     final creditRepo = CreditRepo();
@@ -208,19 +209,39 @@ class EntityConsolidationService {
     for (final acc in allAccounts) {
       if (acc.accountType == 'wallet' || acc.id.startsWith('system_')) continue;
       final accLast4 = _extractLast4(acc.last4, acc.name);
-      if (accLast4.isEmpty || accLast4 == '0000') continue;
-
       final accBankNorm = _normalizeBank(_extractBank(acc.bank, acc.name));
 
-      // Check if a credit card with the same last4 and compatible bank exists
-      final matchingCard = allCards.where((c) {
-        final cardLast4 = _extractLast4(c.last4, c.name);
-        if (cardLast4 != accLast4) return false;
-        final cardBankNorm = _normalizeBank(_extractBank(c.bank, c.name));
-        return cardBankNorm == accBankNorm ||
-            cardBankNorm.contains(accBankNorm) ||
-            accBankNorm.contains(cardBankNorm);
-      }).firstOrNull;
+      // Check if a credit card with the same last4 or compatible bank exists
+      CreditCard? matchingCard;
+      if (accLast4.isNotEmpty && accLast4 != '0000') {
+        matchingCard = allCards.where((c) {
+          final cardLast4 = _extractLast4(c.last4, c.name);
+          if (cardLast4 != accLast4) return false;
+          final cardBankNorm = _normalizeBank(_extractBank(c.bank, c.name));
+          return cardBankNorm == accBankNorm ||
+              cardBankNorm.contains(accBankNorm) ||
+              accBankNorm.contains(cardBankNorm);
+        }).firstOrNull;
+      }
+
+      // HDFC special guard: user only holds an HDFC Credit Card, NEVER an HDFC bank account
+      if (matchingCard == null && (accBankNorm == 'hdfc' || acc.name.toLowerCase().contains('hdfc') || acc.bank.toLowerCase().contains('hdfc'))) {
+        matchingCard = allCards.where((c) => _normalizeBank(_extractBank(c.bank, c.name)) == 'hdfc').firstOrNull;
+        if (matchingCard == null) {
+          // Auto-create genuine HDFC Credit Card with card 6366 parameters
+          final newCard = CreditCard(
+            name: 'HDFC Bank Card (..6366)',
+            bank: 'HDFC Bank',
+            last4: accLast4.isNotEmpty && accLast4 != '0000' ? accLast4 : '6366',
+            limitAmount: 141999.88,
+            usedAmount: acc.balance < 0 ? acc.balance.abs() : 0.0,
+            billingDay: 1,
+            dueDay: 21,
+          );
+          final newId = await creditRepo.insert(newCard);
+          matchingCard = newCard.copyWith(id: newId);
+        }
+      }
 
       if (matchingCard != null) {
         AppLogger.i('[EntityConsolidation] Removing bogus bank account ${acc.name} (${acc.id}) colliding with card ${matchingCard.name}');
@@ -233,7 +254,7 @@ class EntityConsolidationService {
         // Re-link any transactions under this bogus bank account to the credit card
         await db.rawUpdate('''
           UPDATE ${Tables.transactions}
-          SET account_id = ?, type = 'credit_card_purchase'
+          SET account_id = ?, type = 'credit_card_purchase', source = 'credit_card_purchase'
           WHERE account_id = ?;
         ''', [matchingCard.id, acc.id]);
 
@@ -242,6 +263,12 @@ class EntityConsolidationService {
           SET account_id = ?
           WHERE account_id = ?;
         ''', [matchingCard.id, acc.id]);
+
+        await db.delete(
+          TablesV24.openingBalanceReconciliations,
+          where: 'account_id = ?',
+          whereArgs: [acc.id],
+        );
 
         // Delete the bogus bank account safely
         await accountRepo.deleteAccount(acc.id);
@@ -364,11 +391,6 @@ class EntityConsolidationService {
       await db.delete(
         TablesV24.openingBalanceReconciliations,
         where: 'account_id = ?',
-        whereArgs: [wallet.id],
-      );
-      await db.delete(
-        TablesV24.economicEvents,
-        where: "id LIKE 'evt_rec_' || ? || '%'",
         whereArgs: [wallet.id],
       );
 

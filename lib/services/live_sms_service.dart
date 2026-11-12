@@ -26,6 +26,7 @@ import '../data/repositories/transaction_repo.dart';
 import '../domain/finance/finance.dart';
 import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
+import '../models/card_statement.dart';
 import '../models/credit_card.dart';
 import '../models/loan.dart';
 import '../models/recurring_template.dart';
@@ -559,6 +560,7 @@ class LiveSmsService with WidgetsBindingObserver {
           // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
           final latestBankBalances = <String, ({double amount, DateTime date})>{};
           final latestCardBalances = <String, ({double amount, bool isAvailableLimit, double? creditLimit, DateTime date})>{};
+          final latestCardStatements = <String, ({double amount, DateTime? dueDate, double? minDue, DateTime date, bool isStatementBill})>{};
 
           for (final raw in inboxMessages) {
             if (raw is Map) {
@@ -587,14 +589,28 @@ class LiveSmsService with WidgetsBindingObserver {
                 } else if (hit.kind == BalanceKind.creditCard) {
                   final key = hit.last4 ?? hit.bankKeyword;
                   if (key != null && key.isNotEmpty) {
-                    final existing = latestCardBalances[key];
-                    if (existing == null || smsDate == null || existing.date.isBefore(smsDate)) {
-                      latestCardBalances[key] = (
-                        amount: hit.amount,
-                        isAvailableLimit: hit.isAvailableLimit,
-                        creditLimit: hit.creditLimit,
-                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                      );
+                    if (hit.isStatementBill || hit.dueDate != null) {
+                      final existingStmt = latestCardStatements[key];
+                      if (existingStmt == null || smsDate == null || existingStmt.date.isBefore(smsDate)) {
+                        latestCardStatements[key] = (
+                          amount: hit.amount,
+                          dueDate: hit.dueDate,
+                          minDue: hit.minDue,
+                          date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                          isStatementBill: hit.isStatementBill,
+                        );
+                      }
+                    }
+                    if (hit.isAvailableLimit || !hit.isStatementBill) {
+                      final existing = latestCardBalances[key];
+                      if (existing == null || smsDate == null || existing.date.isBefore(smsDate)) {
+                        latestCardBalances[key] = (
+                          amount: hit.amount,
+                          isAvailableLimit: hit.isAvailableLimit,
+                          creditLimit: hit.creditLimit,
+                          date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                        );
+                      }
                     }
                   }
                 }
@@ -653,6 +669,79 @@ class LiveSmsService with WidgetsBindingObserver {
                   await CreditRepo().update(card.copyWith(limitAmount: bestHit.creditLimit!));
                 }
                 AppLogger.i('[LiveSmsService] Reconciled credit balance for ${card.name} to ₹${bestHit.amount} from latest SMS dated ${bestHit.date}');
+              }
+            }
+          }
+
+          // Apply latest detected credit card statements with time-stamped repayment reconciliation
+          if (latestCardStatements.isNotEmpty) {
+            final cards = await CreditRepo().getAll();
+            final db = await AppDatabase.instance.database;
+            for (final card in cards) {
+              final matchByLast4 = card.last4.isNotEmpty ? latestCardStatements[card.last4] : null;
+              var bestStmt = matchByLast4;
+              if (bestStmt == null) {
+                for (final entry in latestCardStatements.entries) {
+                  if (card.bank.toLowerCase().contains(entry.key.toLowerCase()) ||
+                      card.name.toLowerCase().contains(entry.key.toLowerCase())) {
+                    bestStmt = entry.value;
+                    break;
+                  }
+                }
+              }
+              if (bestStmt != null && bestStmt.amount > 0) {
+                // Calculate all repayments received on or after this statement's timestamp
+                final paymentsAfterStmtResult = await db.rawQuery('''
+                  SELECT COALESCE(SUM(amount), 0) AS total_paid
+                  FROM ${Tables.transactions}
+                  WHERE related_entity_id = ?
+                    AND type = 'credit_payment'
+                    AND is_deleted = 0
+                    AND date >= ?;
+                ''', [card.id, bestStmt.date.toIso8601String()]);
+                final totalPaidAfter = (paymentsAfterStmtResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+                final remainingDue = (bestStmt.amount - totalPaidAfter).clamp(0.0, bestStmt.amount);
+
+                final updated = card.copyWith(
+                  lastStatementBalance: remainingDue,
+                  dueDay: bestStmt.dueDate?.day ?? card.dueDay,
+                );
+                await CreditRepo().update(updated);
+
+                // Insert into card_statements table if not existing
+                final stmtId = 'stmt_${card.id}_${bestStmt.date.millisecondsSinceEpoch}';
+                final existingStmt = await db.query(Tables.cardStatements, where: 'id = ?', whereArgs: [stmtId], limit: 1);
+                if (existingStmt.isEmpty) {
+                  await CreditRepo().insertStatement(CardStatement(
+                    id: stmtId,
+                    cardId: card.id,
+                    startDate: bestStmt.date.subtract(const Duration(days: 30)),
+                    endDate: bestStmt.date,
+                    statementAmount: bestStmt.amount,
+                    minimumDue: bestStmt.minDue ?? (bestStmt.amount * 0.05),
+                    generatedDate: bestStmt.date,
+                  ));
+                }
+
+                // Sync reminder
+                final isFullyPaid = remainingDue <= 0.01;
+                final dueDateTime = bestStmt.dueDate ?? card.nextDueDate;
+                await ReminderRepo().insertGlobalReminder(
+                  Reminder(
+                    id: 'credit_due_${card.id}',
+                    type: ReminderType.credit,
+                    title: 'Credit Card Due: ${card.name}',
+                    linkedEntityId: card.id,
+                    dueDate: dueDateTime,
+                    amount: isFullyPaid ? 0.0 : remainingDue,
+                    isActive: !isFullyPaid,
+                    status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
+                    recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
+                    sourceType: ReminderSourceType.credit,
+                    sourceId: card.id,
+                  ).toMap(),
+                );
+                AppLogger.i('[LiveSmsService] Time-stamped statement bill for ${card.name}: original ₹${bestStmt.amount} (dated ${bestStmt.date}), repayments after bill ₹$totalPaidAfter, net statement due ₹$remainingDue');
               }
             }
           }
@@ -883,10 +972,17 @@ class LiveSmsService with WidgetsBindingObserver {
         lowerSender.contains('bobone') ||
         lowerSender.contains('sbicrd') ||
         lowerSender.contains('jtedge') ||
+        lowerSender.contains('tnbpay') ||
         lowerBody.contains('credit card') ||
         lowerBody.contains('card ending') ||
         lowerBody.contains('card xx') ||
-        lowerBody.contains('credit card ending');
+        lowerBody.contains('credit card ending') ||
+        lowerBody.contains('hdfc bank card') ||
+        lowerBody.contains('block cc') ||
+        lowerBody.contains('dreamplug') ||
+        lowerBody.contains('tata neu') ||
+        RegExp(r'(?:card|cc)[\s#:]*(?:xx|no\.?|ending)?\s*\d{4}', caseSensitive: false).hasMatch(lowerBody) ||
+        (parsed.bankName?.toLowerCase() == 'hdfc');
 
     if (isCcSignal) {
       final card = await _resolveOrCreateCard(
@@ -906,10 +1002,11 @@ class LiveSmsService with WidgetsBindingObserver {
     // 2. Bank Account matching (Priority: Bank accounts must ALWAYS match if last4 or bankName is present)
     final accounts = await AccountRepo().getAll();
     BankAccount? matchedBank;
-    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+    final isHdfcCandidate = parsed.bankName?.toLowerCase() == 'hdfc';
+    if (!isHdfcCandidate && parsed.last4 != null && parsed.last4!.isNotEmpty) {
       matchedBank = accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
     }
-    if (matchedBank == null && parsed.bankName != null) {
+    if (!isHdfcCandidate && matchedBank == null && parsed.bankName != null) {
       final kw = parsed.bankName!.toLowerCase();
       final matching = accounts.where((a) =>
         a.bank.toLowerCase().contains(kw) ||
@@ -919,11 +1016,12 @@ class LiveSmsService with WidgetsBindingObserver {
     }
 
     // Fuzzy matching against bank keywords in sender or body
-    if (matchedBank == null) {
+    if (!isHdfcCandidate && matchedBank == null) {
       for (final a in accounts) {
         if (a.accountType == 'wallet') continue;
         final bName = a.bank.toLowerCase();
         final aName = a.name.toLowerCase();
+        if (bName == 'hdfc' || aName.contains('hdfc')) continue;
         if (bName.length >= 3 && (lowerSender.contains(bName) || lowerBody.contains(bName))) {
           matchedBank = a;
           break;
@@ -1069,6 +1167,22 @@ class LiveSmsService with WidgetsBindingObserver {
 
     // If explicit bank name or last4 was detected, auto-create bank account
     if (parsed.bankName != null || (parsed.last4 != null && parsed.last4!.isNotEmpty)) {
+      if (parsed.bankName?.toLowerCase() == 'hdfc') {
+        // User has an HDFC Credit Card, NOT an HDFC Bank Account.
+        final hdfcCard = cards.where((c) => c.bank.toLowerCase().contains('hdfc') || c.last4 == '6366' || c.last4 == parsed.last4).firstOrNull;
+        if (hdfcCard != null) {
+          return (
+            accountId: hdfcCard.id,
+            source: 'credit_card_purchase',
+            instrumentType: 'credit_card',
+          );
+        }
+        return (
+          accountId: null,
+          source: 'sms',
+          instrumentType: 'unknown',
+        );
+      }
       final bankTitle = parsed.bankName ?? 'Bank';
       final accName = '$bankTitle Account${parsed.last4 != null && parsed.last4!.isNotEmpty ? ' (..${parsed.last4})' : ''}';
       final newAcc = BankAccount(
@@ -1492,7 +1606,7 @@ class LiveSmsService with WidgetsBindingObserver {
       await CanonicalEventRepository().insertEvidence(ev);
 
       // Reconcile and update account balance in canonical repositories
-      if (hit.kind == BalanceKind.creditCard) {
+      if (hit.kind == BalanceKind.creditCard || hit.bankKeyword?.toLowerCase() == 'hdfc') {
         final cards = await CreditRepo().getAll();
         CreditCard? card;
         if (hit.last4 != null && hit.last4!.isNotEmpty) {
@@ -1594,15 +1708,51 @@ class LiveSmsService with WidgetsBindingObserver {
         // If statement bill or due date detected, update card metadata & schedule upcoming reminder!
         if (hit.isStatementBill || hit.dueDate != null) {
           final dueDay = hit.dueDate?.day ?? card.dueDay;
+          double remainingDue = hit.isStatementBill ? hit.amount : card.outstanding;
+
+          if (hit.isStatementBill) {
+            try {
+              final msgDate = hit.messageDate ?? DateTime.now();
+              final db = await AppDatabase.instance.database;
+              final paidRows = await db.rawQuery('''
+                SELECT COALESCE(SUM(amount), 0) as total_paid
+                FROM ${Tables.transactions}
+                WHERE related_entity_id = ?
+                  AND type = 'credit_payment'
+                  AND date >= ?
+              ''', [card.id, msgDate.toIso8601String()]);
+              final totalPaidAfter = (paidRows.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+              remainingDue = (hit.amount - totalPaidAfter).clamp(0.0, double.infinity);
+
+              // Canonical statement insertion
+              final stmtDateStr = msgDate.toIso8601String();
+              await db.rawInsert('''
+                INSERT OR REPLACE INTO ${Tables.cardStatements}
+                (id, card_id, statement_date, due_date, total_amount, min_amount, is_paid)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              ''', [
+                'stmt_${card.id}_${msgDate.millisecondsSinceEpoch}',
+                card.id,
+                stmtDateStr,
+                hit.dueDate?.toIso8601String() ?? card.nextDueDate.toIso8601String(),
+                hit.amount,
+                0.0,
+                remainingDue <= 0 ? 1 : 0,
+              ]);
+            } catch (e) {
+              AppLogger.w('[LiveSmsService] Statement repayment netting error: $e');
+            }
+          }
+
           final updated = card.copyWith(
-            lastStatementBalance: hit.isStatementBill ? hit.amount : card.lastStatementBalance,
+            lastStatementBalance: hit.isStatementBill ? remainingDue : card.lastStatementBalance,
             dueDay: dueDay,
           );
           await CreditRepo().update(updated);
 
           try {
             final dueDateTime = hit.dueDate ?? card.nextDueDate;
-            final reminderAmount = hit.isStatementBill ? hit.amount : card.outstanding;
+            final isFullyPaid = hit.isStatementBill && remainingDue <= 0;
             await ReminderRepo().insertGlobalReminder(
               Reminder(
                 id: 'credit_due_${card.id}',
@@ -1610,10 +1760,10 @@ class LiveSmsService with WidgetsBindingObserver {
                 title: 'Credit Card Due: ${card.name}',
                 linkedEntityId: card.id,
                 dueDate: dueDateTime,
-                amount: reminderAmount,
-                isActive: true,
-                status: ReminderStatus.upcoming,
-                recordStatus: ReminderRecordStatus.pending,
+                amount: remainingDue,
+                isActive: !isFullyPaid,
+                status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
+                recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
                 sourceType: ReminderSourceType.credit,
                 sourceId: card.id,
               ).toMap(),
@@ -1688,6 +1838,10 @@ class LiveSmsService with WidgetsBindingObserver {
 
         // Auto-create bank account if missing (STRICT: require valid digits, NEVER create 0000)
         if (account == null && (hit.bankKeyword != null || (hit.last4 != null && hit.last4!.isNotEmpty))) {
+          if (hit.bankKeyword?.toLowerCase() == 'hdfc') {
+            AppLogger.w('[LiveSmsService] Refusing to auto-create HDFC bank account; user holds HDFC Credit Card.');
+            return false;
+          }
           if (hit.last4 == null || hit.last4!.isEmpty || hit.last4 == '0000') {
             return false;
           }

@@ -121,6 +121,26 @@ void main() {
 
         expect(res.eventType, SmsEventType.failed);
       });
+
+      test('1g. HDFC Bank Card spend is classified as creditCardPurchase with card last4 6366', () {
+        const body = 'Spent Rs.31000 On HDFC Bank Card 6366 At DREAMPLUG TECHNOLOGIES on 01-OCT-26. Avl Lmt Rs 50000. SMS BLOCK CC 6366';
+        final res = importService.classifyMessage(body, 'JM-HDFCBK-S');
+
+        expect(res.transaction, isNotNull);
+        expect(res.transaction!.amount, 31000.0);
+        expect(res.eventType, SmsEventType.creditCardPurchase);
+        expect(res.transaction!.last4, '6366');
+      });
+
+      test('1h. HDFC Statement Generated is classified as bill notification and not bank debit', () {
+        const body = 'Statement Generated: For HDFC Bank Credit Card XX6366. Total Due: Rs 15420.50 Due Date: 20-OCT-2026';
+        final res = importService.classifyMessage(body, 'JM-HDFCBK-S');
+
+        expect(res.balance, isNotNull);
+        expect(res.balance!.amount, 15420.50);
+        expect(res.balance!.isStatementBill, isTrue);
+        expect(res.balance!.last4, '6366');
+      });
     });
 
     group('2. Double-Entry Accounting Invariants', () {

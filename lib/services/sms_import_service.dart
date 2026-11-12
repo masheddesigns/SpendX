@@ -1208,7 +1208,12 @@ class SmsImportService {
         lower.contains('onecard') ||
         lower.contains('bobcard') ||
         lower.contains('crd') ||
-        lower.contains('rupay');
+        lower.contains('rupay') ||
+        lower.contains('tataneu') ||
+        lower.contains('tneu') ||
+        lower.contains('tata neu') ||
+        lower.contains('statement generated') ||
+        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|card)\s+\d{4}\b', caseSensitive: false).hasMatch(lower);
     final hasBillSignal = _creditDueRe.hasMatch(lower) ||
         lower.contains('total due') ||
         lower.contains('amount due') ||
@@ -1217,7 +1222,9 @@ class SmsImportService {
         lower.contains('bill of rs') ||
         lower.contains('bill for rs') ||
         lower.contains('bill generated') ||
+        lower.contains('statement generated') ||
         lower.contains('statement has been generated') ||
+        lower.contains('due on') ||
         lower.contains('payable by');
     return hasCardSignal && hasBillSignal;
   }
@@ -1233,7 +1240,12 @@ class SmsImportService {
         lower.contains('cardmember') ||
         lower.contains('jtedge') ||
         lower.contains('crd') ||
-        lower.contains('rupay');
+        lower.contains('rupay') ||
+        lower.contains('block cc') ||
+        lower.contains('dreamplug') ||
+        lower.contains('tataneu') ||
+        lower.contains('tata neu') ||
+        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|card)\s+\d{4}\b', caseSensitive: false).hasMatch(lower);
     final hasSpendVerb = RegExp(
       r'\b(?:spent|paid|charged|debited|used\s+for|transaction\s+of)\b',
       caseSensitive: false,
