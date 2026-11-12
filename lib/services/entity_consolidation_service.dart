@@ -380,16 +380,26 @@ class EntityConsolidationService {
     if (lower.contains('hdfc') || lower.contains('tnbpay') || lower.contains('tneu') || lower.contains('swiggy')) return 'hdfc';
     if (lower.contains('sbi') || lower.contains('statebank')) return 'sbi';
     if (lower.contains('icici') || lower.contains('amzn') || lower.contains('amazon')) return 'icici';
-    if (lower.contains('axis') || lower.contains('fkart') || lower.contains('flipkart') || lower.contains('airtel')) return 'axis';
-    if (lower.contains('federal') || lower.contains('fed') || lower.contains('scapia')) return 'federal';
+    if (lower.contains('axis') || lower.contains('fkart') || lower.contains('flipkart') || lower.contains('airtel') || lower.contains('kiwi')) return 'axis';
+    if (lower.contains('federal') || lower.contains('fed') || lower.contains('scapia') || lower.contains('fimoney') || lower.contains('fi')) return 'federal';
     if (lower.contains('bob') || lower.contains('baroda')) return 'bob';
     if (lower.contains('kotak') || lower.contains('myntra')) return 'kotak';
     if (lower.contains('onecard') || lower.contains('onecrd')) return 'onecard';
     if (lower.contains('csb') || lower.contains('jupiter') || lower.contains('jtedge')) return 'csb';
     if (lower.contains('rbl') || lower.contains('zomato')) return 'rbl';
-    if (lower.contains('aubank') || lower.contains('aubnk') || lower.contains('ixigo')) return 'aubank';
-    if (lower.contains('idfc')) return 'idfc';
+    if (lower.contains('aubank') || lower.contains('aubnk') || lower.contains('ixigo') || lower.contains('fincare')) return 'aubank';
+    if (lower.contains('idfc') || lower.contains('fampay')) return 'idfc';
     if (lower.contains('indus')) return 'indusind';
+    if (lower.contains('scb') || lower.contains('standardchartered')) return 'scb';
+    if (lower.contains('hsbc')) return 'hsbc';
+    if (lower.contains('dbs') || lower.contains('digibank')) return 'dbs';
+    if (lower.contains('amex') || lower.contains('americanexpress')) return 'amex';
+    if (lower.contains('yes') || lower.contains('unicard') || lower.contains('unicrd')) return 'yes';
+    if (lower.contains('slice')) return 'slice';
+    if (lower.contains('pnb')) return 'pnb';
+    if (lower.contains('canara') || lower.contains('canbnk')) return 'canara';
+    if (lower.contains('boi') || lower.contains('bankofindia')) return 'boi';
+    if (lower.contains('union')) return 'union';
     return lower;
   }
 }

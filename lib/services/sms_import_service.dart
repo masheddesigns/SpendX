@@ -2333,6 +2333,14 @@ class SmsImportService {
         senderLower.contains('zomato') ||
         senderLower.contains('myntra') ||
         senderLower.contains('ixigo') ||
+        senderLower.contains('slice') ||
+        senderLower.contains('fi') ||
+        senderLower.contains('unicrd') ||
+        senderLower.contains('unicard') ||
+        senderLower.contains('kiwi') ||
+        senderLower.contains('supermoney') ||
+        senderLower.contains('bajaj') ||
+        senderLower.contains('fampay') ||
         senderLower.contains('cred') ||
         senderLower.contains('cheq');
 
@@ -2342,7 +2350,8 @@ class SmsImportService {
       for (final bank in [
         'hdfc', 'axis', 'icici', 'sbi', 'federal', 'fedmobile',
         'kotak', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind',
-        'canara', 'bank of baroda', 'bob', 'yes bank', 'rbl', 'csb'
+        'canara', 'bank of baroda', 'bob', 'yes bank', 'rbl', 'csb',
+        'scb', 'standard chartered', 'hsbc', 'dbs', 'amex', 'american express'
       ]) {
         if (lower.contains(bank)) {
           return bank.replaceAll(' ', '');
@@ -2365,6 +2374,9 @@ class SmsImportService {
       if (senderLower.contains('scapia')) {
         return 'fedbnk'; // Scapia card is issued by Federal Bank
       }
+      if (senderLower.contains('fi')) {
+        return 'fedbnk'; // Fi Money is partnered with Federal Bank
+      }
       if (senderLower.contains('zomato')) {
         return 'rbl'; // Zomato card is issued by RBL Bank
       }
@@ -2373,6 +2385,18 @@ class SmsImportService {
       }
       if (senderLower.contains('ixigo')) {
         return 'aubank'; // Ixigo card is issued by AU Small Finance Bank
+      }
+      if (senderLower.contains('kiwi')) {
+        return 'axisbk'; // Kiwi RuPay card is issued by Axis Bank
+      }
+      if (senderLower.contains('unicrd') || senderLower.contains('unicard')) {
+        return 'yesbk'; // Uni Card is partnered with Yes Bank / SBM
+      }
+      if (senderLower.contains('slice')) {
+        return 'axisbk'; // Slice credit card partner
+      }
+      if (senderLower.contains('fampay')) {
+        return 'idfcfb'; // FamPay is partnered with IDFC First Bank
       }
       if (senderLower.contains('onecrd') || senderLower.contains('onecard')) {
         return 'onecrd';
@@ -2453,6 +2477,46 @@ class SmsImportService {
     'kbl': 'Karnataka Bank',
     'tmb': 'Tamilnad Mercantile Bank',
     'bandhan': 'Bandhan Bank',
+    // International & Private Banks
+    'scb': 'Standard Chartered',
+    'scbl': 'Standard Chartered',
+    'scindia': 'Standard Chartered',
+    'hsbc': 'HSBC Bank',
+    'hsbcin': 'HSBC Bank',
+    'dbs': 'DBS Bank',
+    'dbsbnk': 'DBS Bank',
+    'digibk': 'DBS digibank',
+    'citi': 'Citi / Axis Bank',
+    'citibk': 'Citi / Axis Bank',
+    'amex': 'American Express',
+    'amxind': 'American Express',
+    'rbl': 'RBL Bank',
+    'rblbnk': 'RBL Bank',
+    'rblcrd': 'RBL MyCard',
+    'boi': 'Bank of India',
+    'boimb': 'Bank of India',
+    'bom': 'Bank of Maharashtra',
+    'mahabk': 'Bank of Maharashtra',
+    // Small Finance Banks
+    'equitas': 'Equitas Small Finance Bank',
+    'ujjivan': 'Ujjivan Small Finance Bank',
+    'utkarsh': 'Utkarsh Small Finance Bank',
+    'jana': 'Jana Small Finance Bank',
+    'suryoday': 'Suryoday Small Finance Bank',
+    'esaf': 'ESAF Small Finance Bank',
+    // Fintech, Co-brand & Digital Cards
+    'slice': 'Slice',
+    'fimoney': 'Fi Money (Federal Bank)',
+    'unicrd': 'Uni Card',
+    'kiwi': 'Kiwi (Axis Bank)',
+    'bajaj': 'Bajaj Finserv',
+    'bajajf': 'Bajaj Finserv',
+    'postpe': 'PostPe',
+    'fampay': 'FamPay',
+    'airtel': 'Airtel Payments Bank',
+    'paytm': 'Paytm Payments Bank',
+    'mobikwik': 'MobiKwik',
+    'freecharge': 'Freecharge',
     // Digital wallets
     'qcamzn': 'Amazon Pay',
     'juspay': 'Amazon Pay',
