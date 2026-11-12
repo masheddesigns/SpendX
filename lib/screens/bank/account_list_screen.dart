@@ -681,31 +681,41 @@ class AccountListScreen extends ConsumerWidget {
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 contentPadding: EdgeInsets.zero,
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  Navigator.push(
+                  final res = await Navigator.push(
                     context,
                     AppPageRoute(
                       builder: (_) => PayCreditCardScreen(
                         card: card,
-                        outstanding: card.outstanding,
+                        outstanding: ref.read(creditOutstandingProvider(card.id)).valueOrNull ?? card.outstanding,
                       ),
                     ),
                   );
+                  if (res == true) {
+                    ref.invalidate(creditCardsProvider);
+                    ref.invalidate(accountsProvider);
+                    ref.invalidate(liabilitiesSummaryProvider);
+                    app_data.invalidateAllFinancialProviders(ref);
+                  }
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.credit_card_rounded),
                 title: const Text('Card Details & Activity'),
                 contentPadding: EdgeInsets.zero,
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(ctx);
-                  Navigator.push(
+                  await Navigator.push(
                     context,
                     AppPageRoute(
                       builder: (_) => CreditCardScreen(initialCardId: card.id),
                     ),
                   );
+                  ref.invalidate(creditCardsProvider);
+                  ref.invalidate(accountsProvider);
+                  ref.invalidate(liabilitiesSummaryProvider);
+                  app_data.invalidateAllFinancialProviders(ref);
                 },
               ),
               ListTile(

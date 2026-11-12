@@ -251,6 +251,29 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return amount > 0; // Account is optional
   }
 
+  bool get _isSpecialNonCategorizedType {
+    if (widget.existingTransaction == null) return false;
+    final t = widget.existingTransaction!.type;
+    return t == 'credit_payment' ||
+        t == 'credit_card_payment' ||
+        t == 'transfer' ||
+        t == 'loan_repayment' ||
+        t == 'loan_disbursement' ||
+        t == 'loan_payment';
+  }
+
+  String get _appBarTitle {
+    if (widget.existingTransaction != null) {
+      final t = widget.existingTransaction!.type;
+      if (t == 'credit_payment' || t == 'credit_card_payment') return 'Edit Card Payment';
+      if (t == 'loan_repayment' || t == 'loan_payment') return 'Edit Loan Repayment';
+      if (t == 'loan_disbursement') return 'Edit Loan Disbursement';
+      if (t == 'transfer') return 'Edit Transfer';
+      return _selectedType == 'expense' ? 'Edit Expense' : 'Edit Income';
+    }
+    return _selectedType == 'expense' ? 'Add Expense' : 'Add Income';
+  }
+
   String get _normalizedType => _selectedType.trim().toLowerCase();
 
   Future<void> _saveTransaction() async {
@@ -546,15 +569,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final headerColor = _selectedType == 'expense'
-        ? modern_theme.AppTheme.semanticExpense
-        : modern_theme.AppTheme.semanticIncome;
+    final headerColor = _isSpecialNonCategorizedType
+        ? modern_theme.AppTheme.primaryBlue
+        : (_selectedType == 'expense'
+            ? modern_theme.AppTheme.semanticExpense
+            : modern_theme.AppTheme.semanticIncome);
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
-        title: widget.existingTransaction != null
-            ? 'Edit ${_selectedType == 'expense' ? 'Expense' : 'Income'}'
-            : 'Add ${_selectedType == 'expense' ? 'Expense' : 'Income'}',
+        title: _appBarTitle,
         actions: [
           if (widget.existingTransaction == null)
             IconButton(
@@ -591,8 +614,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildTypeToggle(),
-                  const SizedBox(height: 16),
+                  if (!_isSpecialNonCategorizedType) ...[
+                    _buildTypeToggle(),
+                    const SizedBox(height: 16),
+                  ],
                   Text(
                     'Amount',
                     style: TextStyle(
@@ -653,78 +678,79 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Category',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
-                        ),
-                      ),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () async {
-                          final newCat = await showModalBottomSheet<Category>(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => AddCategorySheet(initialType: _selectedType),
-                          );
-                          if (newCat != null) {
-                            await _loadInitialData();
-                            setState(() {
-                              _selectedCategoryId = newCat.id;
-                              _didExplicitCategorySelection = true;
-                            });
-                          }
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.add_circle_outline_rounded,
-                                size: 16,
-                                color: modern_theme.AppTheme.primaryBlue,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Add New',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: modern_theme.AppTheme.primaryBlue,
-                                ),
-                              ),
-                            ],
+                  if (!_isSpecialNonCategorizedType) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Category',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  AppCategoryPicker(
-                    availableCategories: _availableCategories,
-                    selectedCategoryId: _selectedCategoryId,
-                    activeColor: headerColor,
-                    onCategorySelected: (id) => setState(() {
-                      _selectedCategoryId = id;
-                      _didExplicitCategorySelection = true;
-                    }),
-                  ),
-
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 16),
-                    height: 0.5,
-                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-                  ),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () async {
+                            final newCat = await showModalBottomSheet<Category>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => AddCategorySheet(initialType: _selectedType),
+                            );
+                            if (newCat != null) {
+                              await _loadInitialData();
+                              setState(() {
+                                _selectedCategoryId = newCat.id;
+                                _didExplicitCategorySelection = true;
+                              });
+                            }
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.add_circle_outline_rounded,
+                                  size: 16,
+                                  color: modern_theme.AppTheme.primaryBlue,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Add New',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: modern_theme.AppTheme.primaryBlue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    AppCategoryPicker(
+                      availableCategories: _availableCategories,
+                      selectedCategoryId: _selectedCategoryId,
+                      activeColor: headerColor,
+                      onCategorySelected: (id) => setState(() {
+                        _selectedCategoryId = id;
+                        _didExplicitCategorySelection = true;
+                      }),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 16),
+                      height: 0.5,
+                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                    ),
+                  ],
 
                   Text(
-                    'Payment Source',
+                    _isSpecialNonCategorizedType ? 'Paid From Account' : 'Payment Source',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,

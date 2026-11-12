@@ -52,9 +52,13 @@ class _UnifiedTransactionDetailScreenState
   }
 
   Future<void> _loadCreditDetails() async {
-    if (_tx.source == 'credit_purchase' && _tx.relatedEntityId != null) {
+    final isCardTxn = _tx.type == 'credit_card_purchase' ||
+        _tx.source == 'credit_card_purchase' ||
+        _tx.source == 'credit_purchase';
+    if (isCardTxn) {
+      final targetId = _tx.relatedEntityId ?? _tx.id;
       final ctx = await ref.read(
-        creditTransactionByIdProvider(_tx.relatedEntityId!).future,
+        creditTransactionByIdProvider(targetId).future,
       );
       if (mounted) setState(() => _creditTxn = ctx);
     }

@@ -436,7 +436,7 @@ class SmsImportService {
 
     // 2.2. If this is a credit card bill statement / bill generation notice:
     // It announces total due / statement balance. It must NEVER create a purchase transaction!
-    if (isCcBillCandidate && !isCcPaymentCandidate && !isCcSpend) {
+    if (isCcBillCandidate && !isCcPaymentCandidate && !isCcSpend && !isRefund) {
       final balance = _detectBalance(body, sender);
       final upcomingObligation = detectUpcomingObligation(body, sender);
       return SmsClassification(
@@ -821,8 +821,9 @@ class SmsImportService {
                 smsDate.isAfter(existing.date!)) {
               walletMap[key] = (
                 date: smsDate,
-                name: _bankDisplayName(balanceHit.bankKeyword) ??
-                    balanceHit.sender,
+                name: balanceHit.bankKeyword != null
+                    ? _bankDisplayName(balanceHit.bankKeyword)
+                    : balanceHit.sender,
                 balance: balanceHit.amount,
                 sender: balanceHit.sender,
               );
@@ -1240,11 +1241,12 @@ class SmsImportService {
     return hasCardSignal && hasSpendVerb;
   }
 
-  // Digital wallet balance — Amazon Pay, Paytm Wallet, IRCTC RWallet, etc.
+  // Digital wallet balance — strictly explicit wallet balances (Amazon Pay, Paytm Wallet, UPI Lite, Mobikwik, RWallet).
+  // Generic "available balance" or "current balance" belongs to bank accounts, NEVER wallets.
   static final RegExp _walletBalanceRe = RegExp(
-    r'(?:updated\s*balance(?:\s*is)?|available\s*balance|'
-    r'wallet\s*balance|current\s*balance)'
-    r'[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    r'(?:(?:paytm\s+)?wallet\s*(?:avail(?:able)?\s*)?balance|amazon\s*pay\s*(?:wallet\s*)?balance|upi\s*lite\s*balance|rwallet\s*balance)\b'
+    r'.*?'
+    r'(?:(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)|(?:is|of|:)\s*([\d,]+(?:\.\d+)?))',
     caseSensitive: false,
   );
 
@@ -1355,10 +1357,10 @@ class SmsImportService {
   static bool _isWalletSender(String sender) {
     if (sender.isEmpty) return false;
     final lower = sender.toLowerCase();
+    // Strictly wallet shortcodes; NOT payment gateways (Juspay) or Indian Railways (IRSMSA) or Paytm UPI (IPAYTM)
     return lower.contains('qcamzn') ||
-        lower.contains('juspay') ||
-        lower.contains('ipaytm') ||
-        lower.contains('irsmsa');
+        lower.contains('mobikwik') ||
+        lower.contains('freecharge');
   }
 
   /// Returns true if the sender indicates a financial or payment app push notification.
@@ -1609,20 +1611,24 @@ class SmsImportService {
       }
     }
 
-    // Digital wallet balance — check BEFORE bank balance only if wallet signal is present
-    final hasWalletSignal = _isWalletSender(sender) ||
-        lower.contains('wallet') ||
-        lower.contains('amazon pay balance') ||
-        lower.contains('paytm balance');
+    // Digital wallet balance — check ONLY if NO bank account identifier is present in message
+    final hasExplicitAccount = _last4(body) != null || bankKeyword != null || _isBankSender(sender);
+    final hasWalletSignal = !hasExplicitAccount &&
+        (_isWalletSender(sender) ||
+            lower.contains('wallet balance') ||
+            lower.contains('amazon pay balance') ||
+            lower.contains('paytm wallet balance') ||
+            lower.contains('upi lite balance'));
     if (hasWalletSignal && _walletBalanceRe.hasMatch(lower)) {
       final m = _walletBalanceRe.firstMatch(body);
       if (m != null) {
-        final amount = _parseAmount(m.group(1)!);
+        final raw = m.group(1) ?? m.group(2) ?? '';
+        final amount = _parseAmount(raw);
         if (amount > 0) {
           return BalanceHit(
             kind: BalanceKind.wallet,
             amount: amount,
-            last4: _last4(body),
+            last4: null,
             bankKeyword: bankKeyword,
             sender: sender,
             body: body,

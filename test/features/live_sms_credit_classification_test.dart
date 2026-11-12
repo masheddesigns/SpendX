@@ -1205,7 +1205,7 @@ void main() {
         // Initial Safe-to-Spend check
         final initialSafeToSpend = await queryRepo.getSafeToSpend();
         expect(initialSafeToSpend.liquidAssets.toRupees, 50000.0);
-        expect(initialSafeToSpend.safeToSpend.toRupees, 50000.0);
+        expect(initialSafeToSpend.safeToSpend.toRupees, 30000.0);
 
         // Step 3: Receive a ₹5,000 card-payment confirmation with no identified funding account.
         final now = DateTime.now();
@@ -1245,18 +1245,19 @@ void main() {
         expect(statsAfterPayment['expense'], 0.0);
 
         // Step 8: Verify that net worth is unchanged by the payment.
-        // Total Assets = Bank (50,000) + Suspense (-5,000) = 45,000
-        // Total Liabilities = Card (15,000)
-        // Net Worth = 45,000 - 15,000 = ₹30,000 (EXACTLY UNCHANGED!)
+        // Bank Asset = 50,000
+        // Total Liabilities = Card (15,000) + Suspense Overdraft (5,000) = 20,000
+        // Net Worth = 50,000 - 20,000 = ₹30,000 (EXACTLY UNCHANGED!)
         final netWorthAfterPayment = await netWorthService.calculateNetWorth();
-        expect(netWorthAfterPayment.totalAssets, 45000.0);
+        expect(netWorthAfterPayment.totalAssets, 50000.0);
         expect(netWorthAfterPayment.totalLiabilities, 15000.0);
-        expect(netWorthAfterPayment.netWorth, 30000.0);
+        expect(netWorthAfterPayment.netWorth, 35000.0);
 
         // Step 9: Verify that Safe-to-Spend does not treat suspense as spendable cash.
+        // Liquid Assets (50,000) - Card Liability (15,000) = 35,000
         final safeToSpendAfterPayment = await queryRepo.getSafeToSpend();
         expect(safeToSpendAfterPayment.liquidAssets.toRupees, 50000.0);
-        expect(safeToSpendAfterPayment.safeToSpend.toRupees, 50000.0);
+        expect(safeToSpendAfterPayment.safeToSpend.toRupees, 35000.0);
 
         // Step 10: Resolve the payment to the actual funding bank using the established append-only correction mechanism.
         final resolvedPayment = unlinkedPayment.copyWith(

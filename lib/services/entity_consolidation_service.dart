@@ -60,6 +60,13 @@ class EntityConsolidationService {
         AppLogger.e('[EntityConsolidation] Error in _deduplicateBankAccounts: $e', e, stack);
       }
 
+      // 5. Clean up bogus "Digital Wallet" accounts mistakenly auto-created from gateway shortcodes
+      try {
+        mergedCount += await _cleanupBogusDigitalWallets(db);
+      } catch (e, stack) {
+        AppLogger.e('[EntityConsolidation] Error in _cleanupBogusDigitalWallets: $e', e, stack);
+      }
+
       AppLogger.i('[EntityConsolidation] Completed consolidation. Resolved $mergedCount entities.');
     } finally {
       // Always restore postings update immutability trigger
@@ -303,6 +310,75 @@ class EntityConsolidationService {
     }
 
     return merged;
+  }
+
+  /// Cleans up bogus "Digital Wallet" accounts that were mistakenly auto-created from
+  /// payment gateway SMS (Juspay, IRCTC, etc.) or loose balance matches.
+  Future<int> _cleanupBogusDigitalWallets(Database db) async {
+    int cleaned = 0;
+    final accountRepo = AccountRepo();
+    final allAccounts = await accountRepo.getAll();
+
+    // Identify bogus wallet accounts (named "Digital Wallet" without genuine wallet provider)
+    final bogusWallets = allAccounts.where((a) {
+      if (a.id.startsWith('system_')) return false;
+      final nameLower = a.name.toLowerCase().trim();
+      final bankLower = a.bank.toLowerCase().trim();
+      final isGenericWallet = nameLower == 'digital wallet' ||
+          bankLower == 'digital wallet' ||
+          (a.accountType == 'wallet' && (nameLower.contains('digital wallet') || bankLower.contains('digital wallet')));
+      final isGenuineNamedWallet = nameLower.contains('paytm') ||
+          nameLower.contains('amazon') ||
+          nameLower.contains('upi lite') ||
+          nameLower.contains('mobikwik') ||
+          nameLower.contains('freecharge');
+      return isGenericWallet && !isGenuineNamedWallet;
+    }).toList();
+
+    if (bogusWallets.isEmpty) return 0;
+
+    // Find the real primary bank account to absorb transactions
+    final realBank = allAccounts.where((a) =>
+        !a.id.startsWith('system_') &&
+        a.accountType != 'wallet' &&
+        a.isAsset,
+    ).firstOrNull;
+
+    for (final wallet in bogusWallets) {
+      AppLogger.i('[EntityConsolidation] Removing bogus wallet: ${wallet.name} (${wallet.id})');
+
+      if (realBank != null) {
+        await db.rawUpdate('''
+          UPDATE ${Tables.transactions}
+          SET account_id = ?
+          WHERE account_id = ?;
+        ''', [realBank.id, wallet.id]);
+
+        await db.rawUpdate('''
+          UPDATE ${TablesV24.postings}
+          SET account_id = ?
+          WHERE account_id = ?;
+        ''', [realBank.id, wallet.id]);
+      }
+
+      await db.delete(
+        TablesV24.openingBalanceReconciliations,
+        where: 'account_id = ?',
+        whereArgs: [wallet.id],
+      );
+      await db.delete(
+        TablesV24.economicEvents,
+        where: "id LIKE 'evt_rec_' || ? || '%'",
+        whereArgs: [wallet.id],
+      );
+
+      await accountRepo.deleteAccount(wallet.id);
+      await db.update(TablesV24.accounts, {'is_active': 0}, where: 'id = ?', whereArgs: [wallet.id]);
+      await db.delete(Tables.bankAccounts, where: 'id = ?', whereArgs: [wallet.id]);
+      cleaned++;
+    }
+
+    return cleaned;
   }
 
   String _extractLast4(String? last4, String name) {

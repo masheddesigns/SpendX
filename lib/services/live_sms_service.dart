@@ -17,7 +17,6 @@ import '../data/core/tables.dart';
 import '../data/core/tracked_database_task_queue.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
-import '../data/repositories/canonical/canonical_opening_balance_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/credit_repo.dart';
 import '../data/repositories/loan_repo.dart';
@@ -534,11 +533,11 @@ class LiveSmsService with WidgetsBindingObserver {
           'limit': limitToScan,
         });
         if (inboxMessages != null && inboxMessages.isNotEmpty) {
+          // 1. Ingest newly discovered historical transactions (skip individual balance mutations)
           for (final raw in inboxMessages) {
             if (raw is Map) {
               final sender = raw['address']?.toString() ?? '';
               final body = raw['body']?.toString() ?? '';
-              // Parse the native SMS timestamp so _applyBalance can reject stale updates.
               final rawDate = raw['date'];
               final DateTime? smsDate = rawDate != null
                   ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
@@ -548,13 +547,117 @@ class LiveSmsService with WidgetsBindingObserver {
                 final existing = await CanonicalEventRepository().getEvidenceByFingerprint(bodyFp);
                 if (existing == null && !await _isDurablyQuarantined(bodyFp)) {
                   final classification = SmsImportService.instance.classifyMessage(body, sender);
-                  if (classification.transaction != null || classification.balance != null) {
-                    await _processBody(body, sender: sender, skipBalance: false, messageDate: smsDate);
+                  if (classification.transaction != null) {
+                    await _processBody(body, sender: sender, skipBalance: true, messageDate: smsDate);
                   }
                 }
               }
             }
           }
+
+          // 2. Discover the LATEST balance statement for each bank account & credit card
+          // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
+          final latestBankBalances = <String, ({double amount, DateTime date})>{};
+          final latestCardBalances = <String, ({double amount, bool isAvailableLimit, double? creditLimit, DateTime date})>{};
+
+          for (final raw in inboxMessages) {
+            if (raw is Map) {
+              final sender = raw['address']?.toString() ?? '';
+              final body = raw['body']?.toString() ?? '';
+              final rawDate = raw['date'];
+              final DateTime? smsDate = rawDate != null
+                  ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
+                  : null;
+              if (body.trim().isEmpty) continue;
+
+              final classification = SmsImportService.instance.classifyMessage(body, sender);
+              final hit = classification.balance;
+              if (hit != null && hit.amount > 0) {
+                if (hit.kind == BalanceKind.bank) {
+                  final key = hit.last4 ?? hit.bankKeyword;
+                  if (key != null && key.isNotEmpty) {
+                    final existing = latestBankBalances[key];
+                    if (existing == null || smsDate == null || existing.date.isBefore(smsDate)) {
+                      latestBankBalances[key] = (
+                        amount: hit.amount,
+                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                      );
+                    }
+                  }
+                } else if (hit.kind == BalanceKind.creditCard) {
+                  final key = hit.last4 ?? hit.bankKeyword;
+                  if (key != null && key.isNotEmpty) {
+                    final existing = latestCardBalances[key];
+                    if (existing == null || smsDate == null || existing.date.isBefore(smsDate)) {
+                      latestCardBalances[key] = (
+                        amount: hit.amount,
+                        isAvailableLimit: hit.isAvailableLimit,
+                        creditLimit: hit.creditLimit,
+                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Apply latest detected bank balances to accounts
+          if (latestBankBalances.isNotEmpty) {
+            final accounts = await AccountRepo().getAll();
+            for (final acc in accounts) {
+              if (acc.id.startsWith('system_') || acc.accountType == 'wallet') continue;
+              final matchByLast4 = acc.last4 != null && acc.last4!.isNotEmpty ? latestBankBalances[acc.last4!] : null;
+              var bestHit = matchByLast4;
+              if (bestHit == null) {
+                for (final entry in latestBankBalances.entries) {
+                  if (acc.bank.toLowerCase().contains(entry.key.toLowerCase()) ||
+                      acc.name.toLowerCase().contains(entry.key.toLowerCase())) {
+                    bestHit = entry.value;
+                    break;
+                  }
+                }
+              }
+              if (bestHit != null) {
+                await AccountRepo().updateBalance(acc.id, bestHit.amount);
+                AppLogger.i('[LiveSmsService] Reconciled bank balance for ${acc.name} to ₹${bestHit.amount} from latest SMS dated ${bestHit.date}');
+              }
+            }
+          }
+
+          // Apply latest detected credit card balances
+          if (latestCardBalances.isNotEmpty) {
+            final cards = await CreditRepo().getAll();
+            for (final card in cards) {
+              final matchByLast4 = card.last4.isNotEmpty ? latestCardBalances[card.last4] : null;
+              var bestHit = matchByLast4;
+              if (bestHit == null) {
+                for (final entry in latestCardBalances.entries) {
+                  if (card.bank.toLowerCase().contains(entry.key.toLowerCase()) ||
+                      card.name.toLowerCase().contains(entry.key.toLowerCase())) {
+                    bestHit = entry.value;
+                    break;
+                  }
+                }
+              }
+              if (bestHit != null) {
+                if (bestHit.isAvailableLimit) {
+                  if (card.limitAmount > 0) {
+                    final derived = (card.limitAmount - bestHit.amount).clamp(0.0, double.infinity);
+                    await CreditRepo().updateBalance(card.id, derived);
+                  }
+                } else {
+                  await CreditRepo().updateBalance(card.id, bestHit.amount);
+                }
+                if (bestHit.creditLimit != null && bestHit.creditLimit! > 0 && card.limitAmount < bestHit.creditLimit!) {
+                  await CreditRepo().update(card.copyWith(limitAmount: bestHit.creditLimit!));
+                }
+                AppLogger.i('[LiveSmsService] Reconciled credit balance for ${card.name} to ₹${bestHit.amount} from latest SMS dated ${bestHit.date}');
+              }
+            }
+          }
+
+          DataChangeBus.instance.notify();
         }
       } catch (e) {
         AppLogger.d('[LiveSmsService] Inbox query catch-up error: $e');
@@ -800,81 +903,7 @@ class LiveSmsService with WidgetsBindingObserver {
       }
     }
 
-    // 2. Check for Digital Wallet & UPI Lite
-    final isUpiLite = lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
-    final isWalletSignal = balanceHit?.kind == BalanceKind.wallet ||
-        isUpiLite ||
-        lowerSender.contains('qcamzn') ||
-        lowerSender.contains('juspay') ||
-        lowerSender.contains('ipaytm') ||
-        lowerSender.contains('irsmsa') ||
-        lowerSender.contains('paytm') ||
-        lowerSender.contains('amazon pay') ||
-        lowerSender.contains('mobikwik') ||
-        lowerSender.contains('freecharge') ||
-        lowerBody.contains('wallet');
-
-    if (isWalletSignal) {
-      final accounts = await AccountRepo().getAll();
-      if (isUpiLite) {
-        final upiLiteAcc = accounts.where((a) =>
-          a.accountType == 'wallet' &&
-          (a.name.toLowerCase().contains('upi lite') || a.bank.toLowerCase().contains('upi lite')),
-        ).firstOrNull;
-        if (upiLiteAcc != null) {
-          return (
-            accountId: upiLiteAcc.id,
-            source: 'sms',
-            instrumentType: 'wallet',
-          );
-        }
-        // Auto-create UPI Lite wallet
-        final newWallet = BankAccount(
-          name: 'UPI Lite',
-          bank: 'UPI Lite',
-          accountType: 'wallet',
-          balance: 0,
-        );
-        final newId = await AccountRepo().insertAccount(newWallet);
-        return (
-          accountId: newId,
-          source: 'sms',
-          instrumentType: 'wallet',
-        );
-      }
-      final walletAcc = accounts.where((a) =>
-        a.accountType == 'wallet' ||
-        a.name.toLowerCase().contains('wallet') ||
-        a.bank.toLowerCase().contains('wallet') ||
-        a.name.toLowerCase().contains('paytm') ||
-        a.name.toLowerCase().contains('amazon pay'),
-      ).firstOrNull;
-      if (walletAcc != null) {
-        return (
-          accountId: walletAcc.id,
-          source: 'sms',
-          instrumentType: 'wallet',
-        );
-      }
-      // Auto-create wallet account
-      final walletName = lowerSender.contains('qcamzn') || lowerSender.contains('amazon')
-          ? 'Amazon Pay Wallet'
-          : (lowerSender.contains('paytm') ? 'Paytm Wallet' : 'Digital Wallet');
-      final newWallet = BankAccount(
-        name: walletName,
-        bank: walletName,
-        accountType: 'wallet',
-        balance: 0,
-      );
-      final newId = await AccountRepo().insertAccount(newWallet);
-      return (
-        accountId: newId,
-        source: 'sms',
-        instrumentType: 'wallet',
-      );
-    }
-
-    // 3. Bank Account matching
+    // 2. Bank Account matching (Priority: Bank accounts must ALWAYS match if last4 or bankName is present)
     final accounts = await AccountRepo().getAll();
     BankAccount? matchedBank;
     if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
@@ -892,6 +921,7 @@ class LiveSmsService with WidgetsBindingObserver {
     // Fuzzy matching against bank keywords in sender or body
     if (matchedBank == null) {
       for (final a in accounts) {
+        if (a.accountType == 'wallet') continue;
         final bName = a.bank.toLowerCase();
         final aName = a.name.toLowerCase();
         if (bName.length >= 3 && (lowerSender.contains(bName) || lowerBody.contains(bName))) {
@@ -922,6 +952,90 @@ class LiveSmsService with WidgetsBindingObserver {
         source: 'sms',
         instrumentType: matchedBank.accountType == 'wallet' ? 'wallet' : 'bank',
       );
+    }
+
+    // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account or wallet!
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      final existingCards = await CreditRepo().getAll();
+      final matchingCard = existingCards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      if (matchingCard != null) {
+        return (
+          accountId: matchingCard.id,
+          source: 'sms',
+          instrumentType: 'card',
+        );
+      }
+    }
+
+    // 3. Check for Digital Wallet & UPI Lite (ONLY if no bank account identifier exists)
+    final hasNoBankSignal = (parsed.last4 == null || parsed.last4!.isEmpty) && parsed.bankName == null;
+    final isUpiLite = lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
+    final isWalletSignal = hasNoBankSignal && (
+        balanceHit?.kind == BalanceKind.wallet ||
+        isUpiLite ||
+        lowerSender.contains('qcamzn') ||
+        lowerBody.contains('amazon pay balance') ||
+        lowerBody.contains('paytm wallet') ||
+        lowerBody.contains('wallet balance'));
+
+    if (isWalletSignal) {
+      if (isUpiLite) {
+        final upiLiteAcc = accounts.where((a) =>
+          a.accountType == 'wallet' &&
+          (a.name.toLowerCase().contains('upi lite') || a.bank.toLowerCase().contains('upi lite')),
+        ).firstOrNull;
+        if (upiLiteAcc != null) {
+          return (
+            accountId: upiLiteAcc.id,
+            source: 'sms',
+            instrumentType: 'wallet',
+          );
+        }
+        // Auto-create UPI Lite wallet
+        final newWallet = BankAccount(
+          name: 'UPI Lite',
+          bank: 'UPI Lite',
+          accountType: 'wallet',
+          balance: 0,
+        );
+        final newId = await AccountRepo().insertAccount(newWallet);
+        return (
+          accountId: newId,
+          source: 'sms',
+          instrumentType: 'wallet',
+        );
+      }
+      final walletAcc = accounts.where((a) =>
+        a.accountType == 'wallet' &&
+        (a.name.toLowerCase().contains('paytm') || a.name.toLowerCase().contains('amazon')),
+      ).firstOrNull;
+      if (walletAcc != null) {
+        return (
+          accountId: walletAcc.id,
+          source: 'sms',
+          instrumentType: 'wallet',
+        );
+      }
+      // Auto-create wallet account ONLY for explicit Amazon Pay / Paytm wallet
+      if (lowerSender.contains('qcamzn') || lowerBody.contains('amazon pay')) {
+        final newWallet = BankAccount(
+          name: 'Amazon Pay Wallet',
+          bank: 'Amazon Pay Wallet',
+          accountType: 'wallet',
+          balance: 0,
+        );
+        final newId = await AccountRepo().insertAccount(newWallet);
+        return (accountId: newId, source: 'sms', instrumentType: 'wallet');
+      } else if (lowerBody.contains('paytm wallet')) {
+        final newWallet = BankAccount(
+          name: 'Paytm Wallet',
+          bank: 'Paytm Wallet',
+          accountType: 'wallet',
+          balance: 0,
+        );
+        final newId = await AccountRepo().insertAccount(newWallet);
+        return (accountId: newId, source: 'sms', instrumentType: 'wallet');
+      }
     }
 
     // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account!
@@ -1350,21 +1464,6 @@ class LiveSmsService with WidgetsBindingObserver {
     );
   }
 
-  /// Returns true if [messageDate] (the SMS timestamp) is NOT older than the most recent
-  /// balance reconciliation stored for [accountId]. Skips the update if the SMS is stale.
-  Future<bool> _isFreshBalanceSms(String accountId, DateTime? messageDate) async {
-    if (messageDate == null) return true; // No date info — allow update.
-    try {
-      final lastRec = await CanonicalOpeningBalanceRepository()
-          .getReconciliationForAccount(accountId);
-      if (lastRec == null) return true; // No prior reconciliation — allow update.
-      // If the SMS is from before the last recorded reconciliation, it's stale.
-      return !messageDate.isBefore(lastRec.createdAt);
-    } catch (_) {
-      return true; // On error, be permissive.
-    }
-  }
-
   /// Records a detected balance statement and updates the canonical account/card balance.
   /// Guards against stale SMS overwrites: if [hit.messageDate] is provided and an existing
   /// reconciliation for the same account was recorded more recently, the update is skipped.
@@ -1475,27 +1574,21 @@ class LiveSmsService with WidgetsBindingObserver {
           card = updated;
         }
 
-        // Stale-SMS guard: only update if this SMS is as recent as or newer than the last reconciliation.
-        final cardFresh = await _isFreshBalanceSms(card.id, hit.messageDate);
-        if (cardFresh) {
-          if (hit.isAvailableLimit) {
-            // If card limit is known and > 0, derived outstanding = limit - available limit
-            if (card.limitAmount > 0) {
-              final derivedOutstanding = (card.limitAmount - hit.amount).clamp(0.0, double.infinity);
-              await CreditRepo().updateBalance(card.id, derivedOutstanding);
-            } else {
-              // Card limit is unknown: we know total limit must be at least available limit
-              final updated = card.copyWith(limitAmount: hit.amount);
-              await CreditRepo().update(updated);
-              card = updated;
-              await CreditRepo().updateBalance(card.id, 0.0);
-            }
+        if (hit.isAvailableLimit) {
+          // If card limit is known and > 0, derived outstanding = limit - available limit
+          if (card.limitAmount > 0) {
+            final derivedOutstanding = (card.limitAmount - hit.amount).clamp(0.0, double.infinity);
+            await CreditRepo().updateBalance(card.id, derivedOutstanding);
           } else {
-            // Direct outstanding dues / statement total due reported
-            await CreditRepo().updateBalance(card.id, hit.amount);
+            // Card limit is unknown: we know total limit must be at least available limit
+            final updated = card.copyWith(limitAmount: hit.amount);
+            await CreditRepo().update(updated);
+            card = updated;
+            await CreditRepo().updateBalance(card.id, 0.0);
           }
         } else {
-          AppLogger.d('[LiveSmsService] Skipping stale credit balance SMS for ${card.name} (SMS date: \${hit.messageDate})');
+          // Direct outstanding dues / statement total due reported
+          await CreditRepo().updateBalance(card.id, hit.amount);
         }
 
         // If statement bill or due date detected, update card metadata & schedule upcoming reminder!
@@ -1627,14 +1720,8 @@ class LiveSmsService with WidgetsBindingObserver {
             account = updatedAcc;
           }
 
-          // Stale-SMS guard: only update if this SMS is as recent as or newer than last reconciliation.
-          final bankFresh = await _isFreshBalanceSms(account.id, hit.messageDate);
-          if (bankFresh) {
-            await AccountRepo().updateBalance(account.id, hit.amount);
-            AppLogger.d('[LiveSmsService] Balance updated for \${account.name}: \${hit.amount}');
-          } else {
-            AppLogger.d('[LiveSmsService] Skipping stale bank balance SMS for \${account.name} (SMS date: \${hit.messageDate})');
-          }
+          await AccountRepo().updateBalance(account.id, hit.amount);
+          AppLogger.d('[LiveSmsService] Balance updated for ${account.name}: ${hit.amount}');
           return true;
         }
       }

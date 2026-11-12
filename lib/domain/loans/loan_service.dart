@@ -6,6 +6,7 @@ import '../../data/repositories/loan_repo.dart';
 import '../../data/repositories/ledger_repo.dart';
 import '../../data/repositories/reminder_repo.dart';
 import '../../models/ledger_transaction.dart';
+import '../../data/core/tables_v24.dart';
 import '../../services/financial_transaction_service.dart';
 import '../../services/notification_service_v2.dart';
 import 'dart:math';
@@ -193,6 +194,29 @@ class LoanService {
     await _completeLoanReminder(installmentId);
 
     if (!isManual) {
+      final assetAcc = accountId ?? TablesV24.sysSuspenseTransfer;
+      final desc = 'EMI Repayment: ${inst.id.substring(0, inst.id.length >= 8 ? 8 : inst.id.length)}';
+      try {
+        if (inst.interestComponent > 0) {
+          await _loanRepo.recordCombinedPayment(
+            loanId: inst.loanId,
+            assetAccountId: assetAcc,
+            principalAmount: inst.principalComponent,
+            interestAmount: inst.interestComponent,
+            timestamp: DateTime.now(),
+            description: desc,
+          );
+        } else {
+          await _loanRepo.recordRepayment(
+            loanId: inst.loanId,
+            assetAccountId: assetAcc,
+            principalAmount: inst.principalComponent > 0 ? inst.principalComponent : inst.amount,
+            timestamp: DateTime.now(),
+            description: desc,
+          );
+        }
+      } catch (_) {}
+
       // Ledger Record (Loan Side - Reduces Debt)
       await _svc.appendLedger(
         LedgerTransaction(
@@ -200,7 +224,7 @@ class LoanService {
           amount: inst.amount,
           date: DateTime.now(),
           loanId: inst.loanId,
-          note: 'EMI Repayment: ${inst.id.substring(0, 8)}',
+          note: desc,
           referenceId: inst.id,
         ),
       );
@@ -213,7 +237,7 @@ class LoanService {
             amount: inst.amount,
             date: DateTime.now(),
             accountId: accountId,
-            note: 'Loan EMI: ${inst.id.substring(0, 8)}',
+            note: desc,
             referenceId: inst.id,
           ),
         );

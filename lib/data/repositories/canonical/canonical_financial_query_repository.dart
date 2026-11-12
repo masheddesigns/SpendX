@@ -519,12 +519,16 @@ class CanonicalFinancialQueryRepository {
 
               try {
                 final v24Pay = await db.rawQuery('''
-                  SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
+                  SELECT COALESCE(SUM(
+                    CASE WHEN p.direction = 'debit' THEN p.amount_minor_units
+                         ELSE -p.amount_minor_units END
+                  ), 0) AS total_minor
                   FROM ${TablesV24.postings} p
                   JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
                   WHERE e.lifecycle_status = 'posted'
                     AND p.account_id = ?
-                    AND p.direction = 'debit'
+                    AND e.reversal_of_event_id IS NULL
+                    AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
                     AND e.timestamp >= ? AND e.timestamp <= ?;
                 ''', [
                   matchedCard.id,
@@ -683,12 +687,16 @@ class CanonicalFinancialQueryRepository {
             double totalPaid = 0.0;
             try {
               final v24Pay = await db.rawQuery('''
-                SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
+                SELECT COALESCE(SUM(
+                  CASE WHEN p.direction = 'debit' THEN p.amount_minor_units
+                       ELSE -p.amount_minor_units END
+                ), 0) AS total_minor
                 FROM ${TablesV24.postings} p
                 JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
                 WHERE e.lifecycle_status = 'posted'
                   AND p.account_id = ?
-                  AND p.direction = 'debit'
+                  AND e.reversal_of_event_id IS NULL
+                  AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
                   AND e.timestamp >= ? AND e.timestamp <= ?;
               ''', [
                 card.id,
