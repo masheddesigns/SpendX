@@ -1756,6 +1756,9 @@ class LiveSmsService with WidgetsBindingObserver {
       } catch (e) {
         AppLogger.w('[LiveSmsService] retroactive reminder settlement error: $e');
       }
+
+      // 5. Notify UI immediately so Safe-to-Spend & Reminders reflect refreshed obligations
+      DataChangeBus.instance.notify();
     } catch (e) {
       AppLogger.w('[LiveSmsService] syncUpcomingObligationsFromInbox error: $e');
     }

@@ -1591,7 +1591,10 @@ class SmsImportService {
         lower.contains('canceled') ||
         lower.contains('deactivated') ||
         lower.contains('stopped') ||
-        lower.contains('paused');
+        lower.contains('paused') ||
+        lower.contains('deleted') ||
+        lower.contains('terminated') ||
+        lower.contains('closed');
 
     if (!isRevoked && !isCancelled) return null;
 
@@ -1606,26 +1609,102 @@ class SmsImportService {
         lower.contains('sip') ||
         lower.contains('recurring') ||
         lower.contains('auto-debit') ||
-        lower.contains('autodebit');
+        lower.contains('autodebit') ||
+        lower.contains('e-nach') ||
+        lower.contains('enach') ||
+        lower.contains('nach');
 
     if (!isMandateContext) return null;
 
     final reason = isRevoked ? 'revoked' : 'cancelled';
 
-    // 0. SBI / NPCI Mandate revocation:
-    // e.g. "UPI-Mandate successfully Revoked  by Cursor for Rs649.00 -SBI"
-    // e.g. "UPI-Mandate successfully Revoked towards Netflix for Rs199.00"
-    // e.g. "Mandate successfully Revoked by Spotify for Rs179.00"
-    final sbiRevokeMatch = RegExp(
-      r'(?:upi-?)?mandate\s+(?:successfully\s+)?(?:revoked|cancelled|canceled)\s+(?:by|towards|for)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:for|of|\.|$))',
+    // 0a. Pan-Bank / NPCI / SBI / HDFC / ICICI / Axis / Kotak / Federal Mandate revocation or cancellation:
+    // e.g. "UPI-Mandate successfully Revoked by Cursor for Rs649.00 -SBI"
+    // e.g. "Mandate towards GROWW INVEST TECH PVT LTD of Rs 1000.00 has been cancelled/revoked. - ICICI Bank"
+    // e.g. "Mandate towards NETFLIX has been cancelled - HDFC Bank"
+    // e.g. "Your mandate with Kotak Bank towards Netflix for Rs 199.00 has been cancelled."
+    final panBankMandateMatch = RegExp(
+      r'(?:upi-?|e-?)?mandate\s+(?:with\s+[a-z0-9 ]+?\s+)?(?:successfully\s+)?(?:revoked|cancelled|canceled|deleted)\s+(?:by|towards|for|to)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:for|of|\.|$))',
       caseSensitive: false,
     ).firstMatch(body);
-    if (sbiRevokeMatch != null) {
-      final merchant = sbiRevokeMatch.group(1)!.trim();
+    if (panBankMandateMatch != null) {
+      final merchant = panBankMandateMatch.group(1)!.trim();
       if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
         final normalizedMerchant = _normalizeMerchantName(merchant);
         return ObligationCancellationHit(
           title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 0b. "Mandate towards <Merchant> ... has been cancelled/revoked"
+    final mandateTowardsMatch = RegExp(
+      r'(?:upi-?|e-?|nach\s+)?mandate\s+(?:towards|for|to)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:of\s+(?:rs\.?|inr|₹)?\s*[\d,.]+\s+)?(?:has\s+been\s+)?(?:cancelled|canceled|revoked|deleted|stopped))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (mandateTowardsMatch != null) {
+      final merchant = mandateTowardsMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant AutoPay',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 0c. SIP / Mutual Fund cancellation across Groww, Zerodha, AMC:
+    // e.g. "Your SIP in Groww Nifty 50 has been cancelled/stopped."
+    // e.g. "SIP order for Rs 1100 in Groww has been cancelled."
+    // e.g. "SIP of Rs. 1,100.00 has been cancelled"
+    final sipCancelMatch = RegExp(
+      r'(?:sip|mutual\s+fund)\s+(?:order\s+)?(?:of\s+(?:rs\.?|inr|₹)?\s*[\d,.]+\s+)?(?:in|for|towards|with)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:has\s+been\s+)?(?:cancelled|canceled|stopped|deleted|terminated))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (sipCancelMatch != null) {
+      final merchant = sipCancelMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: normalizedMerchant.toLowerCase().contains('sip') ? normalizedMerchant : '$normalizedMerchant SIP',
+          merchant: normalizedMerchant,
+          amount: _extractAmount(body),
+          last4: _last4(body),
+          reason: reason,
+          sender: sender,
+          body: body,
+          smsDate: smsDate,
+        );
+      }
+    }
+
+    // 0d. Card Standing Instruction cancellation across HDFC, ICICI, Axis, SBI Card, OneCard:
+    // e.g. "Standing Instruction for Rs. 500.00 towards NETFLIX has been cancelled on your HDFC Bank Card"
+    // e.g. "Standing Instruction on your ICICI Bank Credit Card for Rs 199.00 towards Netflix has been cancelled."
+    // e.g. "Standing instruction on card ending 1234 for Netflix is cancelled."
+    final cardSiMatch = RegExp(
+      r'standing\s+instruction\s+(?:on\s+.*?\s+)?(?:for\s+(?:rs\.?|inr|₹)?\s*[\d,.]+\s+)?(?:towards|for|at)\s+([A-Za-z0-9 .&_-]+?)(?:\s+(?:has\s+been\s+)?(?:cancelled|canceled|revoked|stopped|deleted))',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (cardSiMatch != null) {
+      final merchant = cardSiMatch.group(1)!.trim();
+      if (merchant.isNotEmpty && !merchant.toLowerCase().contains('user') && !merchant.toLowerCase().contains('rs')) {
+        final normalizedMerchant = _normalizeMerchantName(merchant);
+        return ObligationCancellationHit(
+          title: '$normalizedMerchant Subscription',
           merchant: normalizedMerchant,
           amount: _extractAmount(body),
           last4: _last4(body),

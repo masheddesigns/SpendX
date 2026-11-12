@@ -641,11 +641,10 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
       context: context,
       title: 'Scheduled Obligations (${commitments.length})',
       builder: (sheetContext) {
-        return SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               if (overdue.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 4, bottom: 8),
@@ -740,11 +739,10 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     )),
               ],
             ],
-          ),
-        );
-      },
-    );
-  }
+          );
+        },
+      );
+    }
 
   Widget _buildCommitmentTile(
     BuildContext rootContext,
