@@ -643,7 +643,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
       builder: (sheetContext) {
         return Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
               if (overdue.isNotEmpty) ...[
                 Padding(
@@ -836,8 +836,11 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
             children: [
               if (c.id != null) ...[
                 TextButton.icon(

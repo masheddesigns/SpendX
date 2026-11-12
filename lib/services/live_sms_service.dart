@@ -1520,6 +1520,25 @@ class LiveSmsService with WidgetsBindingObserver {
       // Stable ID for idempotency per due month/year
       final reminderId = 'sms_due_${slug}_${obligation.dueDate.year}_${obligation.dueDate.month}';
 
+      // 1. Guard against resurrecting settled or cancelled reminders
+      final existing = await reminderRepo.getById(reminderId);
+      if (existing != null) {
+        if (!existing.isActive ||
+            existing.recordStatus == ReminderRecordStatus.done) {
+          return; // Already paid, cancelled, or settled
+        }
+      }
+
+      // 2. Guard against resurrecting cancelled recurring subscriptions/mandates
+      final recRepo = RecurringRepo();
+      final allRec = await recRepo.getAll();
+      final isCancelledRec = allRec.any((t) =>
+          !t.isActive &&
+          ReminderRepo.areMerchantsEquivalent(t.name, cleanMerchant));
+      if (isCancelledRec) {
+        return; // Obligation was explicitly cancelled/revoked
+      }
+
       // Check if a credit card matches
       String? matchedCardId;
       if (obligation.last4 != null || obligation.bankKeyword != null) {
@@ -1618,6 +1637,7 @@ class LiveSmsService with WidgetsBindingObserver {
             rTitle.contains(cleanMerchant) ||
             cleanMerchant.contains(rTitle) ||
             rNotes.contains(cleanMerchant) ||
+            ReminderRepo.areMerchantsEquivalent(rTitle, cleanMerchant) ||
             merchantTokens.any((t) => rTitle.contains(t) || rNotes.contains(t));
 
         if (matches && r.isActive) {

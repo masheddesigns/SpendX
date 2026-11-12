@@ -103,24 +103,65 @@ class ReminderRepo {
     }
   }
 
-  DateTime _rollForward(DateTime date, ReminderRecurrence recurrence) {
-    switch (recurrence) {
-      case ReminderRecurrence.weekly:
-        return date.add(const Duration(days: 7));
-      case ReminderRecurrence.monthly:
-        final nextMonth = date.month == 12 ? 1 : date.month + 1;
-        final nextYear = date.month == 12 ? date.year + 1 : date.year;
-        final daysInNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
-        final day = date.day.clamp(1, daysInNextMonth);
-        return DateTime(nextYear, nextMonth, day, date.hour, date.minute);
-      case ReminderRecurrence.yearly:
-        final nextYear = date.year + 1;
-        final daysInMonth = DateTime(nextYear, date.month + 1, 0).day;
-        final day = date.day.clamp(1, daysInMonth);
-        return DateTime(nextYear, date.month, day, date.hour, date.minute);
-      case ReminderRecurrence.none:
-        return date;
+  static bool areMerchantsEquivalent(String a, String b) {
+    final lowerA = a.toLowerCase();
+    final lowerB = b.toLowerCase();
+    if (lowerA.contains(lowerB) || lowerB.contains(lowerA)) return true;
+
+    // Known ecosystem equivalence groups (India payment ecosystem)
+    const groups = [
+      {'youtube', 'google', 'googleplay', 'playstore', 'alphabet'},
+      {'groww', 'nextbillion', 'iccl', 'bse', 'nsdl', 'stocks'},
+      {'spotify', 'payu'},
+      {'cursor', 'anysphere', 'stripe'},
+      {'bobcard', 'bob', 'baroda', 'bankofbaroda'},
+      {'zerodha', 'coin', 'kite'},
+      {'netflix'},
+      {'prime', 'amazon', 'amzn'},
+      {'apple', 'itunes', 'icloud'},
+      {'onecard', 'fpl'},
+      {'sbi', 'sbicard'},
+      {'hdfc', 'hdfcbank'},
+      {'icici', 'icicibank'},
+      {'axis', 'axisbank'},
+      {'kotak', 'kotakbank'},
+    ];
+
+    for (final group in groups) {
+      final aMatches = group.any((token) => lowerA.contains(token));
+      final bMatches = group.any((token) => lowerB.contains(token));
+      if (aMatches && bMatches) return true;
     }
+    return false;
+  }
+
+  DateTime _rollForward(DateTime date, ReminderRecurrence recurrence) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime next = date;
+    do {
+      switch (recurrence) {
+        case ReminderRecurrence.weekly:
+          next = next.add(const Duration(days: 7));
+          break;
+        case ReminderRecurrence.monthly:
+          final nextMonth = next.month == 12 ? 1 : next.month + 1;
+          final nextYear = next.month == 12 ? next.year + 1 : next.year;
+          final daysInNextMonth = DateTime(nextYear, nextMonth + 1, 0).day;
+          final day = date.day.clamp(1, daysInNextMonth);
+          next = DateTime(nextYear, nextMonth, day, date.hour, date.minute);
+          break;
+        case ReminderRecurrence.yearly:
+          final nextYear = next.year + 1;
+          final daysInMonth = DateTime(nextYear, next.month + 1, 0).day;
+          final day = date.day.clamp(1, daysInMonth);
+          next = DateTime(nextYear, next.month, day, date.hour, date.minute);
+          break;
+        case ReminderRecurrence.none:
+          return date;
+      }
+    } while (next.isBefore(today));
+    return next;
   }
 
   /// Automatically marks as done or rolls forward reminders matching a financial expense,
@@ -184,17 +225,22 @@ class ReminderRepo {
       final rDate = reminder.dueDate ?? reminder.createdAt;
       final dateMatches = rDate.difference(date).inDays.abs() <= 30;
 
-      // 4. Token / merchant / title match
-      if (!matches && amountMatches && dateMatches && searchTokens.isNotEmpty) {
+      // 4. Token / merchant / title / ecosystem match
+      if (!matches && amountMatches && dateMatches) {
         final rTitle = reminder.title.toLowerCase();
         final rNotes = (reminder.notes ?? '').toLowerCase();
         final rTokens = '$rTitle $rNotes'.split(RegExp(r'[^a-z0-9]+')).toSet();
 
         final hasTokenMatch = searchTokens.any(
           (t) => rTokens.contains(t) || rTitle.contains(t) || rNotes.contains(t),
-        );
+        ) || areMerchantsEquivalent(rTitle, searchTexts.join(' '));
 
-        if (hasTokenMatch) {
+        // Exact paisa match on mandate/autopay transactions within 10 days
+        final exactAmountMatch = reminderAmt != null &&
+            (reminderAmt - amount).abs() <= 0.05 &&
+            rDate.difference(date).inDays.abs() <= 10;
+
+        if (hasTokenMatch || exactAmountMatch) {
           matches = true;
         }
       }
@@ -311,8 +357,9 @@ class ReminderRepo {
 
           for (final row in v24Rows) {
             final rowTimeStr = row['timestamp'] as String?;
+            DateTime? rowTime;
             if (rowTimeStr != null) {
-              final rowTime = DateTime.tryParse(rowTimeStr);
+              rowTime = DateTime.tryParse(rowTimeStr);
               if (rowTime != null && rowTime.difference(rDate).inDays.abs() > 30) {
                 continue;
               }
@@ -349,8 +396,12 @@ class ReminderRepo {
                   .split(RegExp(r'[^a-z0-9]+'))
                   .where((t) => t.length >= 3)
                   .toSet();
-              final hasToken = cleanTokens.any((t) => fullText.contains(t));
-              if (hasToken) {
+              final hasToken = cleanTokens.any((t) => fullText.contains(t)) ||
+                  areMerchantsEquivalent(rTitle, fullText);
+              final exactAmt = (rAmt - ((row['amount'] as num?)?.toDouble() ?? 0.0)).abs() <= 0.05 &&
+                  rowTime != null &&
+                  rowTime.difference(rDate).inDays.abs() <= 10;
+              if (hasToken || exactAmt) {
                 matched = true;
                 break;
               }
@@ -363,7 +414,7 @@ class ReminderRepo {
       if (!matched) {
         try {
           final rows = await db.rawQuery('''
-            SELECT id, amount, type, source, notes, related_entity_id, external_ref, date
+            SELECT id, amount, type, source, notes, note, related_entity_id, external_ref, date
             FROM ${Tables.transactions}
             WHERE is_deleted = 0
               AND amount BETWEEN ? AND ?;
@@ -371,15 +422,18 @@ class ReminderRepo {
 
           for (final tx in rows) {
             final txDateStr = tx['date'] as String?;
+            DateTime? txDate;
             if (txDateStr != null) {
-              final txDate = DateTime.tryParse(txDateStr);
+              txDate = DateTime.tryParse(txDateStr);
               if (txDate != null && txDate.difference(rDate).inDays.abs() > 30) {
                 continue;
               }
             }
             final txType = tx['type'] as String? ?? '';
             final txSource = tx['source'] as String? ?? '';
-            final notes = (tx['notes'] as String? ?? '').toLowerCase();
+            final notes = ((tx['notes'] as String?) ?? (tx['note'] as String?) ?? '').toLowerCase();
+            final extRef = (tx['external_ref'] as String? ?? '').toLowerCase();
+            final fullTxText = '$notes $extRef';
             final relatedId = tx['related_entity_id'] as String?;
 
             if (isCc) {
@@ -388,17 +442,18 @@ class ReminderRepo {
               final matchesEntity = reminder.linkedEntityId != null &&
                   reminder.linkedEntityId!.isNotEmpty &&
                   (relatedId == reminder.linkedEntityId ||
-                      notes.contains(reminder.linkedEntityId!));
+                      fullTxText.contains(reminder.linkedEntityId!));
               final rTitle = reminder.title.toLowerCase();
-              final matchesTitle = notes.contains('credit') ||
-                  notes.contains('card') ||
-                  notes.contains('pay') ||
-                  notes.contains('bill') ||
-                  (rTitle.contains('hdfc') && notes.contains('hdfc')) ||
-                  (rTitle.contains('sbi') && notes.contains('sbi')) ||
-                  (rTitle.contains('icici') && notes.contains('icici')) ||
-                  (rTitle.contains('axis') && notes.contains('axis')) ||
-                  (rTitle.contains('onecard') && notes.contains('onecard'));
+              final matchesTitle = fullTxText.contains('credit') ||
+                  fullTxText.contains('card') ||
+                  fullTxText.contains('pay') ||
+                  fullTxText.contains('bill') ||
+                  (rTitle.contains('hdfc') && fullTxText.contains('hdfc')) ||
+                  (rTitle.contains('sbi') && fullTxText.contains('sbi')) ||
+                  (rTitle.contains('icici') && fullTxText.contains('icici')) ||
+                  (rTitle.contains('axis') && fullTxText.contains('axis')) ||
+                  (rTitle.contains('bob') && fullTxText.contains('bob')) ||
+                  (rTitle.contains('onecard') && fullTxText.contains('onecard'));
 
               if (isPaymentType ||
                   matchesEntity ||
@@ -418,8 +473,12 @@ class ReminderRepo {
                   .split(RegExp(r'[^a-z0-9]+'))
                   .where((t) => t.length >= 3)
                   .toSet();
-              final hasToken = cleanTokens.any((t) => notes.contains(t));
-              if (hasToken) {
+              final hasToken = cleanTokens.any((t) => fullTxText.contains(t)) ||
+                  areMerchantsEquivalent(rTitle, fullTxText);
+              final exactAmt = (rAmt - (tx['amount'] as num).toDouble()).abs() <= 0.05 &&
+                  txDate != null &&
+                  txDate.difference(rDate).inDays.abs() <= 10;
+              if (hasToken || exactAmt) {
                 matched = true;
                 break;
               }
@@ -439,13 +498,17 @@ class ReminderRepo {
         reconciledCount++;
         if (reminder.recurrencePeriod == ReminderRecurrence.monthly) {
           final currentDue = reminder.dueDate ?? reminder.createdAt;
-          final nextDue = DateTime(
+          final today = DateTime(now.year, now.month, now.day);
+          var nextDue = DateTime(
             currentDue.year,
             currentDue.month + 1,
             currentDue.day,
             currentDue.hour,
             currentDue.minute,
           );
+          while (nextDue.isBefore(today)) {
+            nextDue = DateTime(nextDue.year, nextDue.month + 1, nextDue.day, nextDue.hour, nextDue.minute);
+          }
           await db.rawUpdate('''
             UPDATE ${Tables.reminders}
             SET date = ?, is_completed = 0, record_status = ?, last_triggered_at = ?

@@ -616,6 +616,18 @@ class CanonicalFinancialQueryRepository {
           final effectiveAmount = (isCreditReminder && matchedCard != null)
               ? (amount - totalPaid).clamp(0.0, amount)
               : amount;
+
+          final isDuplicate = items.any((it) =>
+              (it.title.toLowerCase().trim() == title.toLowerCase().trim() ||
+                  ReminderRepo.areMerchantsEquivalent(it.title, title)) &&
+              (it.amount.toRupees - effectiveAmount).abs() <= 1.0 &&
+              it.dueDate.year == dueDate.year &&
+              it.dueDate.month == dueDate.month &&
+              it.dueDate.day == dueDate.day);
+          if (isDuplicate) {
+            continue;
+          }
+
           total14d += effectiveAmount;
 
           final isPastDue = dueDate.isBefore(today);
@@ -646,6 +658,13 @@ class CanonicalFinancialQueryRepository {
                   (bankName.isNotEmpty && stripped.contains(bankName)));
         });
         if (alreadySeenTitle) continue;
+
+        final alreadyInItems = items.any((it) =>
+            (it.amount.toRupees - card.lastStatementBalance).abs() <= 1.0 &&
+            (it.title.toLowerCase().contains(cardName) ||
+                (bankName.isNotEmpty && it.title.toLowerCase().contains(bankName)) ||
+                ReminderRepo.areMerchantsEquivalent(it.title, cardName)));
+        if (alreadyInItems) continue;
 
         final nextDue = card.nextDueDate;
 
