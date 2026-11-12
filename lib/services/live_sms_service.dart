@@ -39,6 +39,7 @@ import 'notification_service_v2.dart';
 import 'smart_category_classifier.dart';
 import 'sms_import_service.dart';
 import 'data_change_bus.dart';
+import 'inbox_audit_service.dart';
 
 /// Live SMS detection: receives incoming bank/card/wallet SMS (via a native receiver),
 /// automatically classifies the transaction and instrument (credit card, bank, or wallet),
@@ -362,6 +363,10 @@ class LiveSmsService with WidgetsBindingObserver {
     TrackedDatabaseTaskQueue.instance.runTracked(
       'live_sms_resume_sync_upcoming',
       () => syncUpcomingObligationsFromInbox(),
+    );
+    TrackedDatabaseTaskQueue.instance.runTracked(
+      'inbox_gap_auto_audit',
+      () => InboxAuditService.instance.runAutoAuditIfDue(),
     );
   }
 

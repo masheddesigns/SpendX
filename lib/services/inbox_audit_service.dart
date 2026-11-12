@@ -140,6 +140,28 @@ class InboxAuditService {
   InboxAuditResult? _lastResult;
   InboxAuditResult? get lastResult => _lastResult;
 
+  /// Automatically runs a lightweight background audit if the cooldown interval (default 6 hours)
+  /// has elapsed. Safe to call on app launch, resume, or pull-to-refresh.
+  Future<InboxAuditResult?> runAutoAuditIfDue({
+    Duration interval = const Duration(hours: 6),
+    int daysBack = 14,
+    bool pushToReviewQueue = true,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastRunMs = prefs.getInt('spendx_inbox_audit_last_auto_run_ms') ?? 0;
+      final now = DateTime.now();
+      if (now.millisecondsSinceEpoch - lastRunMs < interval.inMilliseconds) {
+        return _lastResult ?? await loadCachedResult();
+      }
+      await prefs.setInt('spendx_inbox_audit_last_auto_run_ms', now.millisecondsSinceEpoch);
+      return await runAudit(daysBack: daysBack, pushToReviewQueue: pushToReviewQueue);
+    } catch (e) {
+      AppLogger.w('[InboxAuditService] Auto audit failed: $e');
+      return null;
+    }
+  }
+
   /// Loads the cached audit result from SharedPreferences.
   Future<InboxAuditResult?> loadCachedResult() async {
     if (_lastResult != null) return _lastResult;

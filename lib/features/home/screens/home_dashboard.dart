@@ -25,6 +25,7 @@ import '../widgets/quick_actions_row.dart';
 import '../widgets/safe_to_spend_card.dart';
 
 import '../../../services/entity_consolidation_service.dart';
+import '../../../services/inbox_audit_service.dart';
 
 /// Playful & Mindful Home Dashboard: Refined SpendX companion experience.
 ///
@@ -101,6 +102,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
           await EntityConsolidationService.instance.consolidate();
           await LiveSmsService.instance.drainPending();
           await LiveSmsService.instance.syncUpcomingObligationsFromInbox();
+          await InboxAuditService.instance.runAutoAuditIfDue();
         } catch (_) {}
         invalidateAllFinancialProviders(ref);
         ref.invalidate(evaluateStreakProvider);
