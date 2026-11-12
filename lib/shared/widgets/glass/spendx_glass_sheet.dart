@@ -161,10 +161,7 @@ class SpendXGlassSheet extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      Flexible(
-                        fit: FlexFit.loose,
-                        child: child,
-                      ),
+                      child,
                     ],
                   ),
                 ),

@@ -327,16 +327,22 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Outstanding',
+                    outstanding < 0 ? 'Credit Balance' : 'Outstanding',
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    AppFormat.currency(outstanding),
+                    outstanding < 0
+                        ? '+${AppFormat.currency(outstanding.abs())}'
+                        : AppFormat.currency(outstanding),
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: outstanding > 0 ? cs.error : cs.onSurface,
+                      color: outstanding > 0
+                          ? cs.error
+                          : (outstanding < 0
+                              ? const Color(0xFF10B981)
+                              : cs.onSurface),
                     ),
                   ),
                 ],

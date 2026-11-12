@@ -1750,9 +1750,11 @@ class _CreditCardInstrument extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'OUTSTANDING BALANCE',
-                                style: TextStyle(
+                              Text(
+                                card.usedAmount < 0
+                                    ? 'OVERPAID / CREDIT BALANCE'
+                                    : 'OUTSTANDING BALANCE',
+                                style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.8,
@@ -1761,13 +1763,17 @@ class _CreditCardInstrument extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                AppFormat.currency(card.usedAmount),
+                                card.usedAmount < 0
+                                    ? '+${AppFormat.currency(card.usedAmount.abs())}'
+                                    : AppFormat.currency(card.usedAmount),
                                 style: TextStyle(
                                   fontSize: 19,
                                   fontWeight: FontWeight.w700,
                                   color: card.usedAmount > 0
                                       ? const Color(0xFFFCA5A5)
-                                      : Colors.white,
+                                      : (card.usedAmount < 0
+                                          ? const Color(0xFF34D399)
+                                          : Colors.white),
                                   fontFeatures: const [FontFeature.tabularFigures()],
                                 ),
                               ),
@@ -1787,7 +1793,9 @@ class _CreditCardInstrument extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                AppFormat.currency(card.availableLimit),
+                                card.limitAmount > 0
+                                    ? AppFormat.currency(card.availableLimit)
+                                    : 'Not set',
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -1864,7 +1872,7 @@ class _CreditCardInstrument extends StatelessWidget {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              if (onPayTap != null) ...[
+                              if (onPayTap != null && card.usedAmount > 0) ...[
                                 const SizedBox(width: 8),
                                 GestureDetector(
                                   behavior: HitTestBehavior.opaque,

@@ -33,8 +33,9 @@ class CreditCard {
   }) : id = id ?? const Uuid().v4(),
        createdAt = createdAt ?? DateTime.now();
 
-  double get availableLimit =>
-      (limitAmount - usedAmount).clamp(0, double.infinity);
+  double get availableLimit => limitAmount > 0
+      ? (limitAmount - usedAmount).clamp(0, double.infinity)
+      : 0.0;
   double get utilizationPct =>
       limitAmount > 0 ? (usedAmount / limitAmount * 100).clamp(0, 100) : 0;
   double get creditLimit => limitAmount;

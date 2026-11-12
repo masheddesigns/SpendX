@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../data/providers.dart' show safeToSpendProvider;
+import '../../../data/repositories/recurring_repo.dart';
 import '../../../data/repositories/reminder_repo.dart';
 import '../../../domain/finance/safe_to_spend.dart';
 import '../../../screens/expense/add_expense_screen.dart';
@@ -838,7 +839,47 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              if (c.id != null)
+              if (c.id != null) ...[
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                  icon: const Icon(Icons.cancel_outlined, size: 14),
+                  label: const Text(
+                    'Cancelled',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: () async {
+                    HapticService.instance.tap();
+                    Navigator.of(sheetContext).pop();
+                    await ReminderRepo().deleteGlobalReminder(c.id!);
+                    try {
+                      final recRepo = RecurringRepo();
+                      final allRec = await recRepo.getAll();
+                      for (final rec in allRec) {
+                        if (rec.name.toLowerCase().contains(c.title.toLowerCase()) ||
+                            c.title.toLowerCase().contains(rec.name.toLowerCase())) {
+                          await recRepo.update(rec.copyWith(isActive: false));
+                        }
+                      }
+                    } catch (_) {}
+                    ref.invalidate(safeToSpendProvider);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${c.title} obligation cancelled & removed ✓'),
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(width: 4),
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
@@ -863,6 +904,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     }
                   },
                 ),
+              ],
               const SizedBox(width: 6),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(

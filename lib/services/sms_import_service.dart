@@ -1391,12 +1391,15 @@ class SmsImportService {
   static String _normalizeMerchantName(String raw) {
     final clean = raw.trim();
     final upper = clean.toUpperCase();
-    if (upper == 'NETFLIX') return 'Netflix';
-    if (upper == 'SPOTIFY') return 'Spotify';
-    if (upper == 'YOUTUBE') return 'YouTube';
+    if (upper.contains('NETFLIX')) return 'Netflix';
+    if (upper.contains('SPOTIFY')) return 'Spotify';
+    if (upper.contains('YOUTUBE')) return 'YouTube';
+    if (upper.contains('HOTSTAR') || upper.contains('DISNEY')) return 'Disney+ Hotstar';
+    if (upper.contains('APPLE')) return 'Apple';
+    if (upper.contains('DUOLINGO')) return 'Duolingo';
     if (upper.contains('GROWW')) return 'Groww Stocks SIP';
     if (upper.contains('ANOMALY')) return 'Anomaly';
-    if (upper == 'AMAZON' || upper.startsWith('AMAZON ')) return 'Amazon';
+    if (upper.contains('AMAZON')) return 'Amazon';
     if (upper.contains('JIOHOME') || upper.contains('JIOFIB')) return 'JioHome';
     if (upper.contains('NIVA BUPA')) return 'Niva Bupa Health Insurance';
     if (clean.length > 2 && clean == clean.toUpperCase()) {
