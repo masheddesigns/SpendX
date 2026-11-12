@@ -137,7 +137,7 @@ class AccountRepo {
   /// Posts a double-entry reconciliation event balancing against `sys_equity_opening`
   /// with explicit provenance in `opening_balance_reconciliations`.
   /// ZERO writes to `bank_accounts.balance`.
-  Future<void> updateBalance(String id, double balance) async {
+  Future<void> updateBalance(String id, double balance, {DateTime? messageDate}) async {
     final database = await _getExecutor();
     await CanonicalAccountAdapter.ensureSystemAccountsExist(database);
 
@@ -153,6 +153,8 @@ class AccountRepo {
     final currentBalance = await _canonicalAccountRepo.getDerivedBalance(id);
     final targetBalance = Money.fromRupees(balance);
 
+    if (currentBalance == targetBalance) return;
+
     final rec = CanonicalAccountAdapter.createReconciliationRecords(
       accountId: id,
       accountName: accountName,
@@ -160,6 +162,7 @@ class AccountRepo {
       targetBalance: targetBalance,
       reason: 'Balance update/reconciliation',
       provenance: 'sms_balance_update',
+      timestamp: messageDate,
     );
 
     if (rec != null) {

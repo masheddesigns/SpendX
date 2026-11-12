@@ -57,13 +57,19 @@ class CanonicalAccountAdapter {
     Money derivedBalance,
   ) {
     final subtype = (row['subtype'] as String?) ?? 'savings';
+    // Retail savings accounts and prepaid digital wallets cannot have negative balances without an overdraft facility.
+    // If historical debits exceeded imported credits, clamp to 0.0 to prevent illusory "OVERDRAWN" states.
+    final effectiveBalance = (subtype == 'savings' || subtype == 'wallet') && derivedBalance.toRupees < 0
+        ? 0.0
+        : derivedBalance.toRupees;
+
     return BankAccount(
       id: row['id'] as String,
       userId: 'offline_user',
       name: row['name'] as String,
       bank: (row['institution_name'] as String?) ?? '',
       accountType: subtype,
-      balance: derivedBalance.toRupees,
+      balance: effectiveBalance,
       color: (row['color_hex'] as String?) ?? BankAccount.colorForType(subtype),
       icon: (row['icon_name'] as String?) ?? BankAccount.iconForType(subtype),
       isAsset: (row['account_type'] as String) == 'asset',

@@ -398,17 +398,29 @@ class CanonicalEventRepository {
     );
   }
 
-  /// Lists posted events with optional pagination and date filters.
+  /// Lists posted events with optional pagination, date filters, reversal exclusion, and opening balance exclusion.
   Future<List<EconomicEvent>> listPostedEvents({
     DateTime? startDate,
     DateTime? endDate,
     int? limit,
     int? offset,
+    bool includeReversals = true,
+    bool includeOpeningBalances = true,
   }) async {
     final db = await _getExecutor();
 
     final whereClauses = <String>["lifecycle_status = 'posted'"];
     final whereArgs = <dynamic>[];
+
+    if (!includeOpeningBalances) {
+      whereClauses.add("event_type != 'opening_balance'");
+    }
+
+    if (!includeReversals) {
+      whereClauses.add("description NOT LIKE 'REVERSAL:%'");
+      whereClauses.add("reversal_of_event_id IS NULL");
+      whereClauses.add("id NOT IN (SELECT reversal_of_event_id FROM ${TablesV24.economicEvents} WHERE reversal_of_event_id IS NOT NULL)");
+    }
 
     if (startDate != null) {
       whereClauses.add('timestamp >= ?');

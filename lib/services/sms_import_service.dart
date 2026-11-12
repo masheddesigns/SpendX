@@ -334,10 +334,15 @@ class SmsImportService {
 
   /// Classifies a single incoming SMS message (transaction / balance).
   /// Used by the live SMS detector.
-  SmsClassification classifyMessage(String body, String sender) {
+  SmsClassification classifyMessage(String body, String sender, {DateTime? date}) {
     // 0. Hard reject OTPs and verification codes — NEVER return a transaction or balance!
     if (_isOtpOrAuth(body)) {
       return const SmsClassification();
+    }
+
+    BalanceHit? getBalance() {
+      final raw = _detectBalance(body, sender);
+      return (date != null && raw != null) ? raw.withMessageDate(date) : raw;
     }
 
     final lower = body.toLowerCase();
@@ -346,7 +351,7 @@ class SmsImportService {
     // 0.5. Detect obligation cancellations / revocations (AutoPay, mandate, or subscription cancelled)
     final cancellation = detectObligationCancellation(body, sender);
     if (cancellation != null) {
-      final balance = _detectBalance(body, sender);
+      final balance = getBalance();
       return SmsClassification(
         balance: balance,
         obligationCancellation: cancellation,
@@ -357,7 +362,7 @@ class SmsImportService {
     // 0.6. Detect AutoPay / Mandate / SIP payment failures (e.g. Groww Stocks SIP, Netflix autopay failed)
     final failedObligation = detectFailedObligation(body, sender);
     if (failedObligation != null) {
-      final balance = _detectBalance(body, sender);
+      final balance = getBalance();
       return SmsClassification(
         balance: balance,
         failedObligation: failedObligation,
@@ -368,14 +373,14 @@ class SmsImportService {
     // 1. Check for failed/declined/cancelled payments first so they are properly classified as failed
     // (except when the message is a confirmed reversal/refund credit).
     if (!isRefund && TransactionTextParser.isFailedPayment(body)) {
-      final balance = _detectBalance(body, sender);
+      final balance = getBalance();
       return SmsClassification(balance: balance, eventType: SmsEventType.failed);
     }
 
     // 1.5. Detect upcoming financial obligations (e-mandates, subscriptions, scheduled debits, bill dues)
-    final upcoming = detectUpcomingObligation(body, sender);
+    final upcoming = detectUpcomingObligation(body, sender, smsDate: date);
     if (upcoming != null) {
-      final balance = _detectBalance(body, sender);
+      final balance = getBalance();
       return SmsClassification(
         balance: balance,
         upcomingObligation: upcoming,
@@ -437,8 +442,8 @@ class SmsImportService {
     // 2.2. If this is a credit card bill statement / bill generation notice:
     // It announces total due / statement balance. It must NEVER create a purchase transaction!
     if (isCcBillCandidate && !isCcPaymentCandidate && !isCcSpend && !isRefund) {
-      final balance = _detectBalance(body, sender);
-      final upcomingObligation = detectUpcomingObligation(body, sender);
+      final balance = getBalance();
+      final upcomingObligation = detectUpcomingObligation(body, sender, smsDate: date);
       return SmsClassification(
         balance: balance,
         upcomingObligation: upcomingObligation,
@@ -455,8 +460,8 @@ class SmsImportService {
     ).hasMatch(lower);
     if (isMandateRegistration &&
         !RegExp(r'\b(?:has been debited|is debited|account.*debited with|card.*debited with)\b', caseSensitive: false).hasMatch(lower)) {
-      final balance = _detectBalance(body, sender);
-      final upcomingObligation = detectUpcomingObligation(body, sender);
+      final balance = getBalance();
+      final upcomingObligation = detectUpcomingObligation(body, sender, smsDate: date);
       return SmsClassification(
         balance: balance,
         upcomingObligation: upcomingObligation,
@@ -491,7 +496,7 @@ class SmsImportService {
       }
     }
 
-    final balance = _detectBalance(body, sender);
+    final balance = getBalance();
 
     final parsed = TransactionTextParser.parse(
       body,
@@ -627,7 +632,7 @@ class SmsImportService {
       amount: parsed.amount,
       isCredit: effectiveIsCredit,
       rawText: parsed.rawText,
-      date: parsed.date,
+      date: date ?? parsed.date,
       merchant: merchant,
       refId: parsed.refId,
       last4: parsed.last4 ?? _last4(body),
@@ -1257,8 +1262,8 @@ class SmsImportService {
   // Generic "available balance" or "current balance" belongs to bank accounts, NEVER wallets.
   static final RegExp _walletBalanceRe = RegExp(
     r'(?:(?:paytm\s+)?wallet\s*(?:avail(?:able)?\s*)?balance|amazon\s*pay\s*(?:wallet\s*)?balance|upi\s*lite\s*balance|rwallet\s*balance)\b'
-    r'.*?'
-    r'(?:(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)|(?:is|of|:)\s*([\d,]+(?:\.\d+)?))',
+    r'\s*(?:is|of|:|-)?\s*'
+    r'(?:(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?))',
     caseSensitive: false,
   );
 
@@ -1526,7 +1531,15 @@ class SmsImportService {
   /// Detects a balance statement in an SMS. Returns `null` when the message
   /// is (primarily) a transaction alert instead.
   BalanceHit? _detectBalance(String body, String sender) {
+    if (_isOtpOrAuth(body)) return null;
     final lower = body.toLowerCase();
+    if (_nonTransactionRe.hasMatch(lower) &&
+        !lower.contains('avail bal') &&
+        !lower.contains('available bal') &&
+        !lower.contains('available limit') &&
+        !lower.contains('total due')) {
+      return null;
+    }
     final bankKeyword = _bankKeyword(sender, lower);
     final isKnownBank = bankKeyword != null && bankNames.containsKey(bankKeyword);
 

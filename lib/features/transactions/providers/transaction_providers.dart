@@ -59,7 +59,7 @@ class PaginatedTransactionsState {
 class PaginatedTransactionsNotifier
     extends StateNotifier<PaginatedTransactionsState> {
   final TransactionRepo _repo;
-  static const _pageSize = 30;
+  static const _pageSize = 50;
   int _offset = 0;
   bool _loading = false;
   int _requestVersion = 0;
@@ -78,13 +78,13 @@ class PaginatedTransactionsNotifier
       final data = await _repo.getAll(limit: _pageSize, offset: 0);
       if (requestVersion != _requestVersion) return;
       final uniqueData = _dedupeTransactions(data);
-      _offset = data.length;
+      _offset = _pageSize;
       state = PaginatedTransactionsState(
         items: uniqueData,
-        hasMore: data.length >= _pageSize,
+        hasMore: data.isNotEmpty,
         isLoadingMore: false,
       );
-      debugPrint('📦 Transactions: loaded ${uniqueData.length} (paginated)');
+      debugPrint('📦 Transactions: loaded ${uniqueData.length} (paginated, hasMore: ${data.isNotEmpty})');
     } finally {
       if (requestVersion == _requestVersion) {
         _loading = false;
@@ -98,11 +98,11 @@ class PaginatedTransactionsNotifier
 
     try {
       final data = await _repo.getAll(limit: _pageSize, offset: _offset);
-      _offset += data.length;
+      _offset += _pageSize;
       final items = _mergeUniqueTransactions(state.items, data);
       state = state.copyWith(
         items: items,
-        hasMore: data.length >= _pageSize,
+        hasMore: data.isNotEmpty,
         isLoadingMore: false,
       );
     } catch (_) {

@@ -261,8 +261,8 @@ class CreditRepo {
   }
 
   /// Alias to [reconcileOutstanding] for API parity with AccountRepo.updateBalance.
-  Future<void> updateBalance(String cardId, double balance) async {
-    await reconcileOutstanding(cardId, balance);
+  Future<void> updateBalance(String cardId, double balance, {DateTime? messageDate}) async {
+    await reconcileOutstanding(cardId, balance, statementClosingDate: messageDate);
   }
 
   /// Deletes or soft-archives a credit card:

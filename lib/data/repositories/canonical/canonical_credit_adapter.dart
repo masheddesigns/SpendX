@@ -55,6 +55,14 @@ class CanonicalCreditAdapter {
     final billingDay = (row['billing_cycle_day'] as int?) ?? 1;
     final dueDay = (row['payment_due_day'] as int?) ?? 20;
 
+    final lastStatement =
+        ((transitionalCardRow?['last_statement_balance'] as num?)?.toDouble() ?? 0.0);
+    // If derived liability is negative (payments exceeded recorded purchases because past purchases were outside SMS window),
+    // fall back to the authentic statement due balance rather than projecting an illusory overpaid credit liability.
+    final effectiveUsed = derivedLiabilityBalance.toRupees < 0
+        ? lastStatement
+        : derivedLiabilityBalance.toRupees;
+
     return CreditCard(
       id: row['id'] as String,
       userId: 'offline_user',
@@ -66,9 +74,8 @@ class CanonicalCreditAdapter {
       dueDay: dueDay,
       cardType: (row['icon_name'] as String?) ?? 'visa',
       color: (row['color_hex'] as String?) ?? '#6366F1',
-      usedAmount: derivedLiabilityBalance.toRupees, // STRICTLY DERIVED FROM CANONICAL POSTINGS
-      lastStatementBalance:
-          ((transitionalCardRow?['last_statement_balance'] as num?)?.toDouble() ?? 0.0),
+      usedAmount: effectiveUsed,
+      lastStatementBalance: lastStatement,
       createdAt: DateTime.parse(row['created_at'] as String),
     );
   }

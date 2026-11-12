@@ -270,6 +270,8 @@ class TransactionRepo {
     final events = await repo.listPostedEvents(
       limit: limit,
       offset: offset,
+      includeReversals: false,
+      includeOpeningBalances: false,
     );
 
     // Collect all reversed original event IDs

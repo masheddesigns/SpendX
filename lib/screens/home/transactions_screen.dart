@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +8,7 @@ import '../../data/providers.dart' show cardsProvider;
 import '../../features/accounts/providers/account_providers.dart';
 import '../../features/transactions/providers/transaction_providers.dart';
 import '../../models/transaction.dart';
+import '../../services/data_change_bus.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
@@ -52,14 +55,22 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
   String _selectedFilter = 'all'; // 'all', 'spent', 'received', 'moved'
   String _searchQuery = '';
 
+  void _onDataChanged() {
+    if (mounted) {
+      ref.read(paginatedTransactionsProvider.notifier).refresh();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    DataChangeBus.instance.addListener(_onDataChanged);
   }
 
   @override
   void dispose() {
+    DataChangeBus.instance.removeListener(_onDataChanged);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _searchController.dispose();

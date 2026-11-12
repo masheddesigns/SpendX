@@ -16,6 +16,7 @@ import '../data/core/database_lifecycle_coordinator.dart';
 import '../data/core/tables.dart';
 import '../data/core/tracked_database_task_queue.dart';
 import '../data/repositories/account_repo.dart';
+import '../data/repositories/canonical/canonical_account_repository.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/credit_repo.dart';
@@ -527,14 +528,19 @@ class LiveSmsService with WidgetsBindingObserver {
       try {
         final now = DateTime.now();
         // Dynamic scan window: from the 1st of the previous calendar month up to today.
+        // If the database is fresh/cleared (or has fewer than 5 transactions), scan back 180 days (6 months)
+        // so all historical transactions are fully discovered and fetched!
         final startOfPreviousMonth = DateTime(
           now.month == 1 ? now.year - 1 : now.year,
           now.month == 1 ? 12 : now.month - 1,
           1,
         );
         final txCount = await TransactionRepo().getCount();
-        final sinceEpochMs = startOfPreviousMonth.millisecondsSinceEpoch;
-        final limitToScan = txCount == 0 ? 2000 : 800;
+        final scanCutoff = txCount < 5
+            ? now.subtract(const Duration(days: 180))
+            : startOfPreviousMonth;
+        final sinceEpochMs = scanCutoff.millisecondsSinceEpoch;
+        final limitToScan = txCount < 5 ? 3000 : 1000;
         final inboxMessages = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
           'sinceEpochMs': sinceEpochMs,
           'limit': limitToScan,
@@ -545,7 +551,9 @@ class LiveSmsService with WidgetsBindingObserver {
             subtitle: 'Scanning ${inboxMessages.length} inbox messages...',
           );
           // 1. Ingest newly discovered historical transactions (skip individual balance mutations)
-          for (final raw in inboxMessages) {
+          // Process messages chronologically (oldest first) so running ledger balances and synthetic refs are ordered
+          final chronologicalMessages = inboxMessages.reversed.toList();
+          for (final raw in chronologicalMessages) {
             if (raw is Map) {
               final sender = raw['address']?.toString() ?? '';
               final body = raw['body']?.toString() ?? '';
@@ -557,7 +565,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(body);
                 final existing = await CanonicalEventRepository().getEvidenceByFingerprint(bodyFp);
                 if (existing == null && !await _isDurablyQuarantined(bodyFp)) {
-                  final classification = SmsImportService.instance.classifyMessage(body, sender);
+                  final classification = SmsImportService.instance.classifyMessage(body, sender, date: smsDate);
                   if (classification.transaction != null) {
                     final res = await _processBody(body, sender: sender, skipBalance: true, messageDate: smsDate);
                     if (res.added) newlyIngested++;
@@ -587,7 +595,7 @@ class LiveSmsService with WidgetsBindingObserver {
                   : null;
               if (body.trim().isEmpty) continue;
 
-              final classification = SmsImportService.instance.classifyMessage(body, sender);
+              final classification = SmsImportService.instance.classifyMessage(body, sender, date: smsDate);
               final hit = classification.balance;
               if (hit != null && hit.amount > 0) {
                 if (hit.kind == BalanceKind.bank) {
@@ -650,7 +658,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 }
               }
               if (bestHit != null) {
-                await AccountRepo().updateBalance(acc.id, bestHit.amount);
+                await AccountRepo().updateBalance(acc.id, bestHit.amount, messageDate: bestHit.date);
                 AppLogger.i('[LiveSmsService] Reconciled bank balance for ${acc.name} to ₹${bestHit.amount} from latest SMS dated ${bestHit.date}');
               }
             }
@@ -675,10 +683,10 @@ class LiveSmsService with WidgetsBindingObserver {
                 if (bestHit.isAvailableLimit) {
                   if (card.limitAmount > 0) {
                     final derived = (card.limitAmount - bestHit.amount).clamp(0.0, double.infinity);
-                    await CreditRepo().updateBalance(card.id, derived);
+                    await CreditRepo().updateBalance(card.id, derived, messageDate: bestHit.date);
                   }
                 } else {
-                  await CreditRepo().updateBalance(card.id, bestHit.amount);
+                  await CreditRepo().updateBalance(card.id, bestHit.amount, messageDate: bestHit.date);
                 }
                 if (bestHit.creditLimit != null && bestHit.creditLimit! > 0 && card.limitAmount < bestHit.creditLimit!) {
                   await CreditRepo().update(card.copyWith(limitAmount: bestHit.creditLimit!));
@@ -889,6 +897,96 @@ class LiveSmsService with WidgetsBindingObserver {
   Future<void> _repairOscillatingReconciliationAdjustments() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // v7 Repair: Clear misdated transactions (from 12 Nov bug) and evidence so drainPending
+      // can cleanly re-import all historical SMS with authentic timestamps and no duplicate collisions.
+      if (prefs.getBool('repair_historical_sms_dates_v7') != true) {
+        final db = await AppDatabase.instance.database;
+        try {
+          await db.execute('PRAGMA foreign_keys = OFF;');
+          await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET reversal_of_event_id = NULL, corrected_by_event_id = NULL, lifecycle_status = 'draft'");
+          await db.delete(TablesV24.postings);
+          await db.delete(TablesV24.evidence);
+          await db.delete(TablesV24.openingBalanceReconciliations);
+          await db.delete(TablesV24.economicEvents);
+          await db.execute('PRAGMA foreign_keys = ON;');
+          AppLogger.i('[LiveSmsService] Cleared misdated transactions and evidence for clean historical re-scan');
+          await prefs.setBool('repair_historical_sms_dates_v7', true);
+        } catch (e) {
+          AppLogger.w('[LiveSmsService] Error clearing misdated events: $e');
+        }
+      }
+
+      if (prefs.getBool('repair_reconciliation_adjustments_v8') != true) {
+        final db = await AppDatabase.instance.database;
+        try {
+          await db.execute('PRAGMA foreign_keys = OFF;');
+          // 1. Purge all duplicate/spurious reconciliation opening balances
+          final recRows = await db.rawQuery('''
+            SELECT id FROM ${TablesV24.economicEvents}
+            WHERE event_type = 'opening_balance'
+              AND (description LIKE 'Reconciliation adjustment%' OR description LIKE 'Opening balance for%');
+          ''');
+          for (final r in recRows) {
+            final eid = r['id'] as String;
+            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
+            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
+            await db.delete(TablesV24.openingBalanceReconciliations, where: 'generated_event_id = ?', whereArgs: [eid]);
+            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+          }
+          await db.delete(TablesV24.evidence, where: "source_type = 'sms_balance'");
+
+          // 2. Normalize credit cards with negative liability (overpaid illusion from unbacked payments)
+          final cards = await CreditRepo().getAll();
+          for (final card in cards) {
+            final derived = await CanonicalAccountRepository(executor: db).getDerivedBalance(card.id);
+            if (derived.minorUnits < 0) {
+              // Post an equity-balancing opening balance to neutralize the unbacked historical payments
+              final offsetAmount = Money.fromMinorUnits(derived.minorUnits.abs());
+              final eventId = 'evt_ob_fix_${card.id}_${DateTime.now().millisecondsSinceEpoch}';
+              await db.insert(TablesV24.economicEvents, {
+                'id': eventId,
+                'event_type': 'opening_balance',
+                'description': 'Opening balance adjustment for ${card.name}',
+                'timestamp': DateTime.now().toUtc().toIso8601String(),
+                'lifecycle_status': 'posted',
+                'metadata': jsonEncode({'repair': 'v8_credit_normalize'}),
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+              });
+              await db.insert(TablesV24.postings, {
+                'id': 'pst_${eventId}_cr',
+                'economic_event_id': eventId,
+                'account_id': card.id,
+                'direction': 'credit',
+                'amount_minor_units': offsetAmount.minorUnits,
+                'currency': 'INR',
+                'sequence_num': 1,
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+              });
+              await db.insert(TablesV24.postings, {
+                'id': 'pst_${eventId}_dr',
+                'economic_event_id': eventId,
+                'account_id': TablesV24.sysEquityOpening,
+                'direction': 'debit',
+                'amount_minor_units': offsetAmount.minorUnits,
+                'currency': 'INR',
+                'sequence_num': 2,
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+              });
+            }
+          }
+
+          // 3. Purge any bogus 22k digital wallet accounts
+          await db.delete(TablesV24.accounts, where: "account_type = 'wallet' AND (name LIKE '%22%' OR icon_name = 'wallet_22k')");
+
+          await db.execute('PRAGMA foreign_keys = ON;');
+          AppLogger.i('[LiveSmsService] v8 Repair: Cleaned spurious reconciliations and normalized card liabilities');
+          await prefs.setBool('repair_reconciliation_adjustments_v8', true);
+        } catch (e) {
+          AppLogger.w('[LiveSmsService] Error in v8 repair: $e');
+        }
+      }
+
       if (prefs.getBool('repair_oscillating_reconciliation_v5') == true) {
         return;
       }
@@ -1277,13 +1375,15 @@ class LiveSmsService with WidgetsBindingObserver {
       return (added: false, balanceNote: null, transaction: null);
     }
 
-    final result = SmsImportService.instance.classifyMessage(body, sender);
+    final result = SmsImportService.instance.classifyMessage(body, sender, date: messageDate);
     Transaction? createdTx;
     String? balanceNote;
 
     // 1. Transaction processing
     if (result.transaction != null && result.eventType != SmsEventType.failed) {
-      final parsed = result.transaction!;
+      final parsed = messageDate != null
+          ? result.transaction!.copyWith(date: messageDate)
+          : result.transaction!;
 
       if (result.eventType == SmsEventType.creditCardPayment) {
         // --- CREDIT CARD BILL PAYMENT ---

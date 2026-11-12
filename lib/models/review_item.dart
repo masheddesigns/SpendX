@@ -98,6 +98,38 @@ class ParsedTransaction {
     this.hasDirectionSignal = false,
   });
 
+  ParsedTransaction copyWith({
+    double? amount,
+    bool? isCredit,
+    String? rawText,
+    DateTime? date,
+    String? merchant,
+    String? refId,
+    String? last4,
+    String? bankName,
+    String? method,
+    String? source,
+    double? confidence,
+    String? merchantSource,
+    bool? hasDirectionSignal,
+  }) {
+    return ParsedTransaction(
+      amount: amount ?? this.amount,
+      isCredit: isCredit ?? this.isCredit,
+      rawText: rawText ?? this.rawText,
+      date: date ?? this.date,
+      merchant: merchant ?? this.merchant,
+      refId: refId ?? this.refId,
+      last4: last4 ?? this.last4,
+      bankName: bankName ?? this.bankName,
+      method: method ?? this.method,
+      source: source ?? this.source,
+      confidence: confidence ?? this.confidence,
+      merchantSource: merchantSource ?? this.merchantSource,
+      hasDirectionSignal: hasDirectionSignal ?? this.hasDirectionSignal,
+    );
+  }
+
   String get transactionType => isCredit ? 'income' : 'expense';
   bool get isHighConfidence => confidence >= 0.70;
 
