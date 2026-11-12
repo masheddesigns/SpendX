@@ -13,6 +13,8 @@ import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 import '../credit_card/add_credit_card_screen.dart';
+import '../credit_card/pay_credit_card_screen.dart';
+import '../credit_card_screen.dart';
 import '../lending/lending_screen.dart';
 import '../loans/loans_screen.dart';
 import '../net_worth_screen.dart';
@@ -248,7 +250,27 @@ class AccountListScreen extends ConsumerWidget {
                       child: _CreditCardInstrument(
                         card: card,
                         isDark: isDark,
-                        onTap: () => _openEditCreditCard(context, ref, card),
+                        onTap: () {
+                          HapticService.instance.tap();
+                          Navigator.push(
+                            context,
+                            AppPageRoute(
+                              builder: (_) => const CreditCardScreen(),
+                            ),
+                          );
+                        },
+                        onPayTap: () {
+                          HapticService.instance.tap();
+                          Navigator.push(
+                            context,
+                            AppPageRoute(
+                              builder: (_) => PayCreditCardScreen(
+                                card: card,
+                                outstanding: card.outstanding,
+                              ),
+                            ),
+                          );
+                        },
                         onOptionsTap: () => _showCardOptionsSheet(context, ref, card),
                       ),
                     );
@@ -621,6 +643,43 @@ class AccountListScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(
+                  Icons.payment_rounded,
+                  color: Color(0xFF10B981),
+                ),
+                title: const Text(
+                  'Pay Card / Record Repayment',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                contentPadding: EdgeInsets.zero,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    AppPageRoute(
+                      builder: (_) => PayCreditCardScreen(
+                        card: card,
+                        outstanding: card.outstanding,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.credit_card_rounded),
+                title: const Text('Card Details & Activity'),
+                contentPadding: EdgeInsets.zero,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    AppPageRoute(
+                      builder: (_) => const CreditCardScreen(),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Edit Card'),
@@ -1520,12 +1579,14 @@ class _CreditCardInstrument extends StatelessWidget {
   final CreditCard card;
   final bool isDark;
   final VoidCallback onTap;
+  final VoidCallback? onPayTap;
   final VoidCallback onOptionsTap;
 
   const _CreditCardInstrument({
     required this.card,
     required this.isDark,
     required this.onTap,
+    this.onPayTap,
     required this.onOptionsTap,
   });
 
@@ -1803,6 +1864,48 @@ class _CreditCardInstrument extends StatelessWidget {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                              if (onPayTap != null) ...[
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: onPayTap,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981)
+                                          .withValues(alpha: 0.25),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: const Color(0xFF10B981)
+                                            .withValues(alpha: 0.6),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.payment_rounded,
+                                          size: 11,
+                                          color: Color(0xFF34D399),
+                                        ),
+                                        SizedBox(width: 3),
+                                        Text(
+                                          'Pay',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF34D399),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ],
