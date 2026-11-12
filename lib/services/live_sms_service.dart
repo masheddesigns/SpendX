@@ -41,6 +41,7 @@ import 'smart_category_classifier.dart';
 import 'sms_import_service.dart';
 import 'data_change_bus.dart';
 import 'inbox_audit_service.dart';
+import 'sync_activity_service.dart';
 
 /// Live SMS detection: receives incoming bank/card/wallet SMS (via a native receiver),
 /// automatically classifies the transaction and instrument (credit card, bank, or wallet),
@@ -330,6 +331,10 @@ class LiveSmsService with WidgetsBindingObserver {
         }
         AppLogger.i('[LiveSmsService] onSmsReceived: sender="$sender", body="$body"');
         if (body.isNotEmpty) {
+          SyncActivityService.instance.startSync(
+            title: 'Incoming Bank SMS',
+            subtitle: 'Analyzing transaction alert...',
+          );
           _liveBuffer.add((sender: sender, body: body));
           _flushTimer?.cancel();
           _flushTimer = Timer(const Duration(seconds: 3), () {
@@ -509,6 +514,7 @@ class LiveSmsService with WidgetsBindingObserver {
   Future<void> drainPending() async {
     if (!await enabled) return;
     await DatabaseLifecycleCoordinator.instance.waitUntilWritable();
+    int newlyIngested = 0;
     try {
       await _repairOscillatingReconciliationAdjustments();
 
@@ -534,6 +540,10 @@ class LiveSmsService with WidgetsBindingObserver {
           'limit': limitToScan,
         });
         if (inboxMessages != null && inboxMessages.isNotEmpty) {
+          SyncActivityService.instance.startSync(
+            title: 'Syncing SMS Messages',
+            subtitle: 'Scanning ${inboxMessages.length} inbox messages...',
+          );
           // 1. Ingest newly discovered historical transactions (skip individual balance mutations)
           for (final raw in inboxMessages) {
             if (raw is Map) {
@@ -549,14 +559,19 @@ class LiveSmsService with WidgetsBindingObserver {
                 if (existing == null && !await _isDurablyQuarantined(bodyFp)) {
                   final classification = SmsImportService.instance.classifyMessage(body, sender);
                   if (classification.transaction != null) {
-                    await _processBody(body, sender: sender, skipBalance: true, messageDate: smsDate);
+                    final res = await _processBody(body, sender: sender, skipBalance: true, messageDate: smsDate);
+                    if (res.added) newlyIngested++;
                   }
                 }
               }
             }
           }
 
-          // 2. Discover the LATEST balance statement for each bank account & credit card
+          SyncActivityService.instance.updateProgress(
+            title: 'Reconciling Accounts',
+            subtitle: 'Updating bank balances and card statements...',
+            count: newlyIngested,
+          );
           // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
           final latestBankBalances = <String, ({double amount, DateTime date})>{};
           final latestCardBalances = <String, ({double amount, bool isAvailableLimit, double? creditLimit, DateTime date})>{};
@@ -855,6 +870,15 @@ class LiveSmsService with WidgetsBindingObserver {
           payload: jsonEncode({'source_type': 'activity'}),
         );
       }
+
+      final totalNew = newlyIngested + added;
+      SyncActivityService.instance.complete(
+        title: 'All Caught Up',
+        subtitle: totalNew > 0
+            ? 'Imported $totalNew transaction(s) & updated balances'
+            : 'Accounts and cards are in sync',
+        count: totalNew,
+      );
     } catch (_) {
       // Channel may be unavailable (e.g. tests / desktop) — ignore.
     }

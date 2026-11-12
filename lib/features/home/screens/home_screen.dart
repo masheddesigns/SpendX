@@ -15,6 +15,7 @@ import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
+import '../../../widgets/top_notch_activity_bar.dart';
 import 'home_dashboard.dart';
 
 /// SpendX 2.0 Primary Navigation Shell with Liquid Glass Navigation Bar.
@@ -162,9 +163,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                 ],
               ),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _tabs,
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: _currentIndex,
+              children: _tabs,
+            ),
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: TopNotchActivityBar(),
+              ),
+            ),
+          ],
         ),
         bottomNavigationBar: SpendXGlassNavigation(
           selectedIndex: _currentIndex,

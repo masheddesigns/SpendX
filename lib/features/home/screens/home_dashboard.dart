@@ -26,6 +26,7 @@ import '../widgets/safe_to_spend_card.dart';
 
 import '../../../services/entity_consolidation_service.dart';
 import '../../../services/inbox_audit_service.dart';
+import '../../../services/sync_activity_service.dart';
 
 /// Playful & Mindful Home Dashboard: Refined SpendX companion experience.
 ///
@@ -98,6 +99,10 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     return RefreshIndicator(
       color: const Color(0xFF4F46E5),
       onRefresh: () async {
+        SyncActivityService.instance.startSync(
+          title: 'Refreshing Financial Ledger',
+          subtitle: 'Syncing SMS, statements & bank balances...',
+        );
         try {
           await EntityConsolidationService.instance.consolidate();
           await LiveSmsService.instance.drainPending();
@@ -108,6 +113,10 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
         ref.invalidate(evaluateStreakProvider);
         ref.invalidate(transactionCategoryMapProvider);
         await ref.read(paginatedTransactionsProvider.notifier).refresh();
+        SyncActivityService.instance.complete(
+          title: 'Ledger Refreshed',
+          subtitle: 'All accounts, cards and balances are up to date',
+        );
       },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),

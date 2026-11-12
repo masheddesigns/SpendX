@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spend_x/services/settings_service.dart';
 import 'package:spend_x/services/notification_service_v2.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
+import 'package:spend_x/screens/onboarding_sms_sync_screen.dart';
 import 'package:spend_x/widgets/app_button.dart';
 import '../shared/widgets/app_page_route.dart';
 
@@ -63,9 +64,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(
-      AppPageRoute(builder: (_) => const HomeScreen()),
-    );
+    if (_smsImportOptIn) {
+      Navigator.of(context).pushReplacement(
+        AppPageRoute(builder: (_) => const OnboardingSmsSyncScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        AppPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
   }
 
   Widget _buildStepIndicator() {
