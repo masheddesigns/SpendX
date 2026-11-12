@@ -73,33 +73,9 @@ class CanonicalAccountAdapter {
     );
   }
 
-  /// Verifies that system accounts (specifically [TablesV24.sysEquityOpening])
-  /// exist in `accounts` table, provisioning them if missing.
+  /// Verifies that system accounts exist in `accounts` table, provisioning them if missing.
   static Future<void> ensureSystemAccountsExist(DatabaseExecutor db) async {
-    final existing = await db.query(
-      TablesV24.accounts,
-      where: 'id = ?',
-      whereArgs: [TablesV24.sysEquityOpening],
-      limit: 1,
-    );
-    if (existing.isEmpty) {
-      final now = DateTime.now().toIso8601String();
-      await db.insert(
-        TablesV24.accounts,
-        {
-          'id': TablesV24.sysEquityOpening,
-          'account_type': 'equity',
-          'subtype': 'opening_balance',
-          'name': 'Equity:OpeningBalance',
-          'currency': 'INR',
-          'is_active': 1,
-          'is_system': 1,
-          'created_at': now,
-          'updated_at': now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-    }
+    await TablesV24.seedSystemAccounts(db);
   }
 
   /// Generates canonical opening balance records for account creation.

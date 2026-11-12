@@ -140,50 +140,7 @@ class CanonicalLoanAdapter {
 
   /// Ensures core system accounts exist in `TablesV24.accounts`.
   static Future<void> ensureSystemAccountsExist(DatabaseExecutor db) async {
-    final now = DateTime.now().toIso8601String();
-    final systemAccounts = <Map<String, dynamic>>[
-      {
-        'id': TablesV24.sysEquityOpening,
-        'account_type': 'equity',
-        'subtype': 'opening_balance',
-        'name': 'Equity:OpeningBalance',
-        'currency': 'INR',
-        'is_active': 1,
-        'is_system': 1,
-        'created_at': now,
-        'updated_at': now,
-      },
-      {
-        'id': TablesV24.sysExpInterest,
-        'account_type': 'expense',
-        'subtype': 'financial_interest',
-        'name': 'Expense:Financial:Interest',
-        'currency': 'INR',
-        'is_active': 1,
-        'is_system': 1,
-        'created_at': now,
-        'updated_at': now,
-      },
-      {
-        'id': TablesV24.sysSuspenseLoan,
-        'account_type': 'liability',
-        'subtype': 'suspense_loan',
-        'name': 'Suspense:Loan',
-        'currency': 'INR',
-        'is_active': 1,
-        'is_system': 1,
-        'created_at': now,
-        'updated_at': now,
-      },
-    ];
-
-    for (final acc in systemAccounts) {
-      await db.insert(
-        TablesV24.accounts,
-        acc,
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-    }
+    await TablesV24.seedSystemAccounts(db);
   }
 
   /// Generates canonical opening balance records when a loan is created

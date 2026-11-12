@@ -75,58 +75,7 @@ class CanonicalCreditAdapter {
 
   /// Ensures core system accounts exist in `TablesV24.accounts`.
   static Future<void> ensureSystemAccountsExist(DatabaseExecutor db) async {
-    final now = DateTime.now().toIso8601String();
-    final systemAccounts = <Map<String, dynamic>>[
-      {
-        'id': TablesV24.sysEquityOpening,
-        'account_type': 'equity',
-        'subtype': 'opening_balance',
-        'name': 'Equity:OpeningBalance',
-        'currency': 'INR',
-        'is_active': 1,
-        'is_system': 1,
-        'created_at': now,
-        'updated_at': now,
-      },
-      {
-        'id': TablesV24.sysExpRefunds,
-        'account_type': 'expense',
-        'subtype': 'contra_expense',
-        'name': 'Expense:General:Refunds',
-        'currency': 'INR',
-        'is_active': 1,
-        'is_system': 1,
-        'created_at': now,
-        'updated_at': now,
-      },
-      {
-        'id': TablesV24.sysExpMisc,
-        'account_type': 'expense',
-        'subtype': 'general',
-        'name': 'Expense:General:Miscellaneous',
-        'currency': 'INR',
-        'is_active': 1,
-        'is_system': 1,
-        'created_at': now,
-        'updated_at': now,
-      },
-    ];
-
-    for (final sa in systemAccounts) {
-      final existing = await db.query(
-        TablesV24.accounts,
-        where: 'id = ?',
-        whereArgs: [sa['id']],
-        limit: 1,
-      );
-      if (existing.isEmpty) {
-        await db.insert(
-          TablesV24.accounts,
-          sa,
-          conflictAlgorithm: ConflictAlgorithm.ignore,
-        );
-      }
-    }
+    await TablesV24.seedSystemAccounts(db);
   }
 
   /// Ensures referenced accounts exist in `accounts` table prior to posting creation.

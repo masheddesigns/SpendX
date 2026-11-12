@@ -278,9 +278,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     final selectedMethod = _availablePaymentMethods.where((m) => m.id == _selectedPaymentMethodId).firstOrNull;
     final isCreditCard = selectedMethod?.type == 'credit_card';
-    final effectiveType = (isCreditCard && _selectedType == 'expense')
-        ? 'credit_card_purchase'
-        : _selectedType;
+    String effectiveType;
+    if (widget.existingTransaction != null &&
+        (widget.existingTransaction!.type == 'credit_payment' ||
+            widget.existingTransaction!.type == 'credit_card_payment' ||
+            widget.existingTransaction!.type == 'transfer' ||
+            widget.existingTransaction!.type == 'loan_repayment' ||
+            widget.existingTransaction!.type == 'loan_disbursement' ||
+            widget.existingTransaction!.type == 'loan_payment')) {
+      effectiveType = widget.existingTransaction!.type;
+    } else {
+      effectiveType = (isCreditCard && _selectedType == 'expense')
+          ? 'credit_card_purchase'
+          : _selectedType;
+    }
 
     final newTransaction = Transaction(
       id: widget.existingTransaction?.id,
@@ -291,10 +302,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       amount: amount,
       date: _selectedDate,
       notes: TextFormatter.normalizeName(_notesController.text),
-      tags: const [],
-      source: isCreditCard ? 'credit_card_purchase' : (widget.existingTransaction?.source ?? 'manual'),
-      relatedEntityId: null,
-      location: null,
+      tags: widget.existingTransaction?.tags ?? const [],
+      source: isCreditCard
+          ? 'credit_card_purchase'
+          : (widget.existingTransaction?.source ?? 'manual'),
+      relatedEntityId: widget.existingTransaction?.relatedEntityId,
+      location: widget.existingTransaction?.location,
       createdAt: widget.existingTransaction?.createdAt,
     );
 

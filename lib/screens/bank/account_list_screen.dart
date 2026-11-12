@@ -9,6 +9,7 @@ import '../../models/credit_card.dart';
 import '../../models/loan.dart';
 import '../../services/haptic_service.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/app_tap_scale.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
@@ -258,7 +259,7 @@ class AccountListScreen extends ConsumerWidget {
                           Navigator.push(
                             context,
                             AppPageRoute(
-                              builder: (_) => const CreditCardScreen(),
+                              builder: (_) => CreditCardScreen(initialCardId: card.id),
                             ),
                           );
                         },
@@ -702,7 +703,7 @@ class AccountListScreen extends ConsumerWidget {
                   Navigator.push(
                     context,
                     AppPageRoute(
-                      builder: (_) => const CreditCardScreen(),
+                      builder: (_) => CreditCardScreen(initialCardId: card.id),
                     ),
                   );
                 },
@@ -1861,93 +1862,105 @@ class _CreditCardInstrument extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      const SizedBox(height: 8),
-
-                      // Track Metadata & Milestone Due Diamond
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            card.limitAmount > 0
-                                ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
-                                : 'No limit set',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: utilizationColor,
-                              fontWeight: FontWeight.w600,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text(
-                                '◇',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFFFBBF24),
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                dueText,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFFCBD5E1),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              if (onPayTap != null && card.usedAmount > 0) ...[
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: onPayTap,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981)
-                                          .withValues(alpha: 0.25),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: const Color(0xFF10B981)
-                                            .withValues(alpha: 0.6),
-                                        width: 0.8,
-                                      ),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.payment_rounded,
-                                          size: 11,
-                                          color: Color(0xFF34D399),
-                                        ),
-                                        SizedBox(width: 3),
-                                        Text(
-                                          'Pay',
-                                          style: TextStyle(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF34D399),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 8),
+
+              // Track Metadata & Milestone Due Diamond & Direct Pay Action
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onTap,
+                    child: Text(
+                      card.limitAmount > 0
+                          ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
+                          : 'No limit set',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: utilizationColor,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onTap,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              '◇',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFFBBF24),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              dueText,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFCBD5E1),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (onPayTap != null && card.usedAmount > 0) ...[
+                        const SizedBox(width: 8),
+                        AppTapScale(
+                          onTap: onPayTap,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFF10B981)
+                                    .withValues(alpha: 0.6),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.payment_rounded,
+                                  size: 11,
+                                  color: Color(0xFF34D399),
+                                ),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Pay',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF34D399),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ],
           ),

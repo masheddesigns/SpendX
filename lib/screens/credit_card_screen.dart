@@ -28,7 +28,9 @@ import '../shared/widgets/glass/spendx_scaffold.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
 
 class CreditCardScreen extends ConsumerStatefulWidget {
-  const CreditCardScreen({super.key});
+  final String? initialCardId;
+
+  const CreditCardScreen({super.key, this.initialCardId});
 
   @override
   ConsumerState<CreditCardScreen> createState() => _CreditCardScreenState();
@@ -36,6 +38,7 @@ class CreditCardScreen extends ConsumerStatefulWidget {
 
 class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   int _selectedCardIndex = 0;
+  bool _initializedCardSelection = false;
 
   void _invalidateAll() {
     ref.invalidate(creditCardsProvider);
@@ -72,6 +75,14 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
               ctaLabel: 'Add Credit Card',
               onCtaTap: _navigateToAddCard,
             );
+          }
+
+          if (!_initializedCardSelection && widget.initialCardId != null) {
+            final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
+            if (targetIndex != -1) {
+              _selectedCardIndex = targetIndex;
+            }
+            _initializedCardSelection = true;
           }
 
           if (_selectedCardIndex >= cards.length) {

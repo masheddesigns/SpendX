@@ -77,6 +77,9 @@ class CanonicalTransactionAdapter {
     DatabaseExecutor db,
     Transaction tx,
   ) async {
+    // 0. Ensure all system suspense, equity, and contra accounts exist
+    await TablesV24.seedSystemAccounts(db);
+
     final nowStr = DateTime.now().toIso8601String();
 
     Future<void> ensureAccount(

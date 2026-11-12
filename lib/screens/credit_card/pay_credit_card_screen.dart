@@ -53,12 +53,16 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     if (amount <= 0) return;
 
+    final accounts = ref.read(bankAccountsProvider).valueOrNull ?? [];
+    final fallbackAccount = accounts.where((a) => a.isAsset).firstOrNull?.id;
+    final payingAccountId = _selectedAccountId ?? fallbackAccount;
+
     final service = CreditCardService();
     await service.processPayment(
       cardId: widget.card.id,
       paymentAmount: amount,
       date: _selectedDate,
-      accountId: _selectedAccountId,
+      accountId: payingAccountId,
       note: 'Payment to ${widget.card.bank}',
     );
 
