@@ -21,6 +21,7 @@ import 'backup_file_service.dart';
 import 'backup_service.dart';
 import 'reminder_service.dart';
 import 'salary_service.dart';
+import 'entity_consolidation_service.dart';
 
 class ExportService {
   ExportService._({
@@ -601,6 +602,11 @@ class ExportService {
       } catch (e) {
         AppLogger.d('Row import error: $e');
       }
+    }
+    if (importedCount > 0) {
+      try {
+        await EntityConsolidationService.instance.consolidate();
+      } catch (_) {}
     }
     return importedCount;
   }

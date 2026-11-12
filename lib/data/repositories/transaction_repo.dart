@@ -34,6 +34,12 @@ class TransactionRepo {
   CanonicalEventRepository _eventRepo(DatabaseExecutor executor) =>
       CanonicalEventRepository(executor: executor);
 
+  Future<int> getCount() async {
+    final db = await _db;
+    final res = await db.rawQuery('SELECT COUNT(*) as count FROM ${TablesV24.economicEvents}');
+    return (res.first['count'] as num?)?.toInt() ?? 0;
+  }
+
   // ---------------------------------------------------------------------------
   // CREATE
   // ---------------------------------------------------------------------------

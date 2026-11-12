@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/smart_importer.dart';
+import '../services/entity_consolidation_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_format.dart';
 
@@ -82,6 +83,11 @@ class _SmartImportScreenState extends State<SmartImportScreen> {
 
     final summary = await SmartImporter.instance
         .importSmart(_result!, defaultType: _defaultType);
+
+    // Run entity consolidation to merge co-branded cards or deduplicate imported accounts
+    try {
+      await EntityConsolidationService.instance.consolidate();
+    } catch (_) {}
 
     if (mounted) {
       String msg;

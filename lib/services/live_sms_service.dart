@@ -514,10 +514,15 @@ class LiveSmsService with WidgetsBindingObserver {
 
       try {
         final nowMs = DateTime.now().millisecondsSinceEpoch;
-        final sinceEpochMs = nowMs - const Duration(days: 30).inMilliseconds;
+        final txCount = await TransactionRepo().getCount();
+        // On first install / empty ledger, scan past 90 days (1000 messages) to establish full financial position.
+        // On ongoing syncs, scan past 30 days (200 messages) for fast, lightweight background sync.
+        final daysToScan = txCount == 0 ? 90 : 30;
+        final limitToScan = txCount == 0 ? 1000 : 200;
+        final sinceEpochMs = nowMs - Duration(days: daysToScan).inMilliseconds;
         final inboxMessages = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
           'sinceEpochMs': sinceEpochMs,
-          'limit': 200,
+          'limit': limitToScan,
         });
         if (inboxMessages != null && inboxMessages.isNotEmpty) {
           for (final raw in inboxMessages) {
