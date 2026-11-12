@@ -17,6 +17,7 @@ import '../data/core/tables.dart';
 import '../data/core/tracked_database_task_queue.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
+import '../data/repositories/canonical/canonical_opening_balance_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/credit_repo.dart';
 import '../data/repositories/loan_repo.dart';
@@ -537,13 +538,18 @@ class LiveSmsService with WidgetsBindingObserver {
             if (raw is Map) {
               final sender = raw['address']?.toString() ?? '';
               final body = raw['body']?.toString() ?? '';
+              // Parse the native SMS timestamp so _applyBalance can reject stale updates.
+              final rawDate = raw['date'];
+              final DateTime? smsDate = rawDate != null
+                  ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
+                  : null;
               if (body.trim().isNotEmpty) {
                 final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(body);
                 final existing = await CanonicalEventRepository().getEvidenceByFingerprint(bodyFp);
                 if (existing == null && !await _isDurablyQuarantined(bodyFp)) {
                   final classification = SmsImportService.instance.classifyMessage(body, sender);
                   if (classification.transaction != null || classification.balance != null) {
-                    await _processBody(body, sender: sender, skipBalance: false);
+                    await _processBody(body, sender: sender, skipBalance: false, messageDate: smsDate);
                   }
                 }
               }
@@ -1014,7 +1020,7 @@ class LiveSmsService with WidgetsBindingObserver {
       Transaction? transaction,
     })
   >
-  _processBody(String body, {String sender = '', bool skipBalance = false}) async {
+  _processBody(String body, {String sender = '', bool skipBalance = false, DateTime? messageDate}) async {
     if (body.trim().isEmpty) {
       return (added: false, balanceNote: null, transaction: null);
     }
@@ -1320,7 +1326,10 @@ class LiveSmsService with WidgetsBindingObserver {
 
     // 2. Balance update from message itself
     if (result.balance != null && !skipBalance) {
-      final hit = result.balance!;
+      // Stamp messageDate on the hit so _applyBalance can reject stale SMS balance updates.
+      final hit = messageDate != null
+          ? result.balance!.withMessageDate(messageDate)
+          : result.balance!;
       final applied = await _applyBalance(hit);
       if (applied) {
         final kind = hit.kind == BalanceKind.bank
@@ -1341,7 +1350,24 @@ class LiveSmsService with WidgetsBindingObserver {
     );
   }
 
+  /// Returns true if [messageDate] (the SMS timestamp) is NOT older than the most recent
+  /// balance reconciliation stored for [accountId]. Skips the update if the SMS is stale.
+  Future<bool> _isFreshBalanceSms(String accountId, DateTime? messageDate) async {
+    if (messageDate == null) return true; // No date info — allow update.
+    try {
+      final lastRec = await CanonicalOpeningBalanceRepository()
+          .getReconciliationForAccount(accountId);
+      if (lastRec == null) return true; // No prior reconciliation — allow update.
+      // If the SMS is from before the last recorded reconciliation, it's stale.
+      return !messageDate.isBefore(lastRec.createdAt);
+    } catch (_) {
+      return true; // On error, be permissive.
+    }
+  }
+
   /// Records a detected balance statement and updates the canonical account/card balance.
+  /// Guards against stale SMS overwrites: if [hit.messageDate] is provided and an existing
+  /// reconciliation for the same account was recorded more recently, the update is skipped.
   Future<bool> _applyBalance(BalanceHit hit) async {
     try {
       final fingerprint = CanonicalTransactionAdapter.computeSha256('balance|${hit.body}');
@@ -1449,21 +1475,27 @@ class LiveSmsService with WidgetsBindingObserver {
           card = updated;
         }
 
-        if (hit.isAvailableLimit) {
-          // If card limit is known and > 0, derived outstanding = limit - available limit
-          if (card.limitAmount > 0) {
-            final derivedOutstanding = (card.limitAmount - hit.amount).clamp(0.0, double.infinity);
-            await CreditRepo().updateBalance(card.id, derivedOutstanding);
+        // Stale-SMS guard: only update if this SMS is as recent as or newer than the last reconciliation.
+        final cardFresh = await _isFreshBalanceSms(card.id, hit.messageDate);
+        if (cardFresh) {
+          if (hit.isAvailableLimit) {
+            // If card limit is known and > 0, derived outstanding = limit - available limit
+            if (card.limitAmount > 0) {
+              final derivedOutstanding = (card.limitAmount - hit.amount).clamp(0.0, double.infinity);
+              await CreditRepo().updateBalance(card.id, derivedOutstanding);
+            } else {
+              // Card limit is unknown: we know total limit must be at least available limit
+              final updated = card.copyWith(limitAmount: hit.amount);
+              await CreditRepo().update(updated);
+              card = updated;
+              await CreditRepo().updateBalance(card.id, 0.0);
+            }
           } else {
-            // Card limit is unknown: we know total limit must be at least available limit
-            final updated = card.copyWith(limitAmount: hit.amount);
-            await CreditRepo().update(updated);
-            card = updated;
-            await CreditRepo().updateBalance(card.id, 0.0);
+            // Direct outstanding dues / statement total due reported
+            await CreditRepo().updateBalance(card.id, hit.amount);
           }
         } else {
-          // Direct outstanding dues / statement total due reported
-          await CreditRepo().updateBalance(card.id, hit.amount);
+          AppLogger.d('[LiveSmsService] Skipping stale credit balance SMS for ${card.name} (SMS date: \${hit.messageDate})');
         }
 
         // If statement bill or due date detected, update card metadata & schedule upcoming reminder!
@@ -1595,7 +1627,14 @@ class LiveSmsService with WidgetsBindingObserver {
             account = updatedAcc;
           }
 
-          await AccountRepo().updateBalance(account.id, hit.amount);
+          // Stale-SMS guard: only update if this SMS is as recent as or newer than last reconciliation.
+          final bankFresh = await _isFreshBalanceSms(account.id, hit.messageDate);
+          if (bankFresh) {
+            await AccountRepo().updateBalance(account.id, hit.amount);
+            AppLogger.d('[LiveSmsService] Balance updated for \${account.name}: \${hit.amount}');
+          } else {
+            AppLogger.d('[LiveSmsService] Skipping stale bank balance SMS for \${account.name} (SMS date: \${hit.messageDate})');
+          }
           return true;
         }
       }

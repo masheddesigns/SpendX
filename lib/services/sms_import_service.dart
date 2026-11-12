@@ -25,6 +25,9 @@ class BalanceHit {
   final double? minDue;
   final double? creditLimit;
   final bool isStatementBill;
+  /// The date/time of the SMS message this balance was extracted from.
+  /// Used to ensure only the most-recent SMS balance overwrites a stored balance.
+  final DateTime? messageDate;
 
   const BalanceHit({
     required this.kind,
@@ -38,7 +41,24 @@ class BalanceHit {
     this.minDue,
     this.creditLimit,
     this.isStatementBill = false,
+    this.messageDate,
   });
+
+  /// Returns a copy of this [BalanceHit] with [messageDate] stamped on it.
+  BalanceHit withMessageDate(DateTime? date) => BalanceHit(
+        kind: kind,
+        amount: amount,
+        last4: last4,
+        bankKeyword: bankKeyword,
+        sender: sender,
+        body: body,
+        isAvailableLimit: isAvailableLimit,
+        dueDate: dueDate,
+        minDue: minDue,
+        creditLimit: creditLimit,
+        isStatementBill: isStatementBill,
+        messageDate: date,
+      );
 }
 
 /// A transaction parsed from an SMS message, with the raw message kept.
@@ -693,6 +713,8 @@ class SmsImportService {
         })>{};
     final loanMap =
         <String, ({DateTime? date, String bank, double outstanding, String sender})>{};
+    final walletMap =
+        <String, ({DateTime? date, String name, double balance, String sender})>{};
 
     for (final sms in messages) {
       final body = sms.body ?? '';
@@ -719,7 +741,9 @@ class SmsImportService {
       // 1. Balance statements (bank / credit card / loan) — detect BEFORE
       //    the non-transaction filter because credit card statements contain
       //    "statement"/"bill.*due" which would otherwise skip the balance.
-      final balanceHit = _detectBalance(body, senderAddr);
+      final rawBalanceHit = _detectBalance(body, senderAddr);
+      // Stamp the SMS date so _applyBalance can guard against stale balance overwrites.
+      final balanceHit = rawBalanceHit?.withMessageDate(smsDate);
       if (balanceHit != null) {
         AppLogger.d(
           '[SmsScan] balance hit detected (type: ${balanceHit.kind.name})',
@@ -782,6 +806,24 @@ class SmsImportService {
                 date: smsDate,
                 bank: _bankDisplayName(balanceHit.bankKeyword),
                 outstanding: balanceHit.amount,
+                sender: balanceHit.sender,
+              );
+            }
+          }
+        } else if (balanceHit.kind == BalanceKind.wallet) {
+          // Track latest wallet balance by name/keyword so stale SMS don't overwrite fresh ones.
+          final key = balanceHit.bankKeyword ?? balanceHit.sender;
+          if (key.isNotEmpty) {
+            final existing = walletMap[key];
+            if (existing == null ||
+                smsDate == null ||
+                existing.date == null ||
+                smsDate.isAfter(existing.date!)) {
+              walletMap[key] = (
+                date: smsDate,
+                name: _bankDisplayName(balanceHit.bankKeyword) ??
+                    balanceHit.sender,
+                balance: balanceHit.amount,
                 sender: balanceHit.sender,
               );
             }
@@ -895,8 +937,8 @@ class SmsImportService {
       );
     }
 
-    // Filter balances to keep only the latest per account/card.
-    // accountMap/cardMap already track the most recent by date — use them
+    // Filter balances to keep only the latest per account/card/wallet.
+    // accountMap/cardMap/walletMap already track the most recent by date — use them
     // to discard older balance hits so catchUpHistorical applies the right one.
     final latestByAccount = <String, double>{};
     for (final entry in accountMap.entries) {
@@ -905,12 +947,17 @@ class SmsImportService {
     for (final entry in cardMap.entries) {
       latestByAccount['card|${entry.key}'] = entry.value.outstanding;
     }
+    for (final entry in walletMap.entries) {
+      latestByAccount['wallet|${entry.key}'] = entry.value.balance;
+    }
     final dedupedBalances = balances.where((hit) {
       final key = hit.kind == BalanceKind.bank
           ? 'bank|${hit.last4 ?? hit.bankKeyword ?? ''}'
           : hit.kind == BalanceKind.creditCard
               ? 'card|${hit.last4 ?? hit.bankKeyword ?? ''}'
-              : null;
+              : hit.kind == BalanceKind.wallet
+                  ? 'wallet|${hit.bankKeyword ?? hit.sender}'
+                  : null;
       if (key == null) return true; // keep loan/unknown balances
       final latestAmount = latestByAccount[key];
       if (latestAmount == null) return true;
