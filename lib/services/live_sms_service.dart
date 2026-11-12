@@ -905,6 +905,35 @@ class LiveSmsService with WidgetsBindingObserver {
       );
     }
 
+    // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account!
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      final existingCards = await CreditRepo().getAll();
+      final matchingCard = existingCards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      if (matchingCard != null) {
+        return (
+          accountId: matchingCard.id,
+          source: 'sms',
+          instrumentType: 'card',
+        );
+      }
+    }
+
+    // Check if an existing bank account has this last4 before creating
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      final existingAcc = accounts.where((a) =>
+          a.last4 == parsed.last4 &&
+          (parsed.bankName == null ||
+              a.bank.toLowerCase().contains(parsed.bankName!.toLowerCase()) ||
+              parsed.bankName!.toLowerCase().contains(a.bank.toLowerCase()))).firstOrNull;
+      if (existingAcc != null) {
+        return (
+          accountId: existingAcc.id,
+          source: 'sms',
+          instrumentType: existingAcc.accountType == 'wallet' ? 'wallet' : 'bank',
+        );
+      }
+    }
+
     // If explicit bank name or last4 was detected, auto-create bank account
     if (parsed.bankName != null || (parsed.last4 != null && parsed.last4!.isNotEmpty)) {
       final bankTitle = parsed.bankName ?? 'Bank';
@@ -1350,28 +1379,53 @@ class LiveSmsService with WidgetsBindingObserver {
           }).firstOrNull;
         }
 
+        // If card not found and last4 was omitted, check if user has a card for this bank
+        if (card == null && (hit.last4 == null || hit.last4!.isEmpty) && hit.bankKeyword != null) {
+          final bankCards = cards.where((c) =>
+              c.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) ||
+              hit.bankKeyword!.toLowerCase().contains(c.bank.toLowerCase())).toList();
+          if (bankCards.isNotEmpty) {
+            card = bankCards.first;
+          }
+        }
+
         // If card not found and user has only 1 credit card, safely match that card
         if (card == null && cards.length == 1) {
           card = cards.first;
         }
 
-        // Auto-create card if not found yet
+        // Auto-create card if not found yet (STRICT: require valid 4 digits; NEVER create 0000 ghost cards)
         if (card == null) {
-          final bankTitle = hit.bankKeyword != null
-              ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
-              : (hit.sender.isNotEmpty ? hit.sender : 'Credit');
-          final cardTitle = '$bankTitle Card${hit.last4 != null && hit.last4!.isNotEmpty ? ' (..${hit.last4})' : ''}';
-          final newCard = CreditCard(
-            name: cardTitle,
-            bank: bankTitle,
-            last4: hit.last4 ?? '0000',
-            limitAmount: hit.creditLimit ?? (hit.isAvailableLimit ? hit.amount : 0.0),
-            usedAmount: hit.isAvailableLimit ? 0.0 : hit.amount,
-            lastStatementBalance: hit.isStatementBill ? hit.amount : 0.0,
-            dueDay: hit.dueDate?.day ?? 20,
-          );
-          final newId = await CreditRepo().insert(newCard);
-          card = newCard.copyWith(id: newId);
+          if (hit.last4 == null || hit.last4!.isEmpty || hit.last4 == '0000') {
+            AppLogger.w('[LiveSmsService] Refusing to auto-create ghost credit card without last4 digits.');
+            return false;
+          }
+
+          // Invariant check: Check if an active card already has this (bank, last4)
+          final existingSameLast4 = cards.where((c) =>
+              c.last4 == hit.last4 &&
+              (hit.bankKeyword == null ||
+                  c.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) ||
+                  hit.bankKeyword!.toLowerCase().contains(c.bank.toLowerCase()))).firstOrNull;
+          if (existingSameLast4 != null) {
+            card = existingSameLast4;
+          } else {
+            final bankTitle = hit.bankKeyword != null
+                ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
+                : (hit.sender.isNotEmpty ? hit.sender : 'Credit');
+            final cardTitle = '$bankTitle Card (..${hit.last4})';
+            final newCard = CreditCard(
+              name: cardTitle,
+              bank: bankTitle,
+              last4: hit.last4!,
+              limitAmount: hit.creditLimit ?? (hit.isAvailableLimit ? hit.amount : 0.0),
+              usedAmount: hit.isAvailableLimit ? 0.0 : hit.amount,
+              lastStatementBalance: hit.isStatementBill ? hit.amount : 0.0,
+              dueDay: hit.dueDate?.day ?? 20,
+            );
+            final newId = await CreditRepo().insert(newCard);
+            card = newCard.copyWith(id: newId);
+          }
         }
 
         // If total credit limit was reported and card has no limit or smaller limit, update it
@@ -1468,16 +1522,45 @@ class LiveSmsService with WidgetsBindingObserver {
           }
         }
 
-        // Auto-create bank account if missing
+        // Cross-Type Anti-Collision: Check if a CreditCard already exists with this last4
+        if (hit.last4 != null && hit.last4!.isNotEmpty) {
+          final existingCards = await CreditRepo().getAll();
+          final matchingCard = existingCards.where((c) =>
+              c.last4 == hit.last4 ||
+              (hit.bankKeyword != null &&
+                  c.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) &&
+                  c.last4 == hit.last4)).firstOrNull;
+          if (matchingCard != null) {
+            AppLogger.w('[LiveSmsService] Anti-collision: Refusing to create bank account for card ${hit.last4}. Attributing to existing card ${matchingCard.name}');
+            if (hit.amount != 0) {
+              await CreditRepo().updateBalance(matchingCard.id, hit.amount.abs());
+            }
+            return true;
+          }
+        }
+
+        // Invariant check: Check if an existing bank account has this (bank, last4)
+        if (account == null && hit.last4 != null && hit.last4!.isNotEmpty) {
+          account = accounts.where((a) =>
+              a.last4 == hit.last4 &&
+              (hit.bankKeyword == null ||
+                  a.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) ||
+                  hit.bankKeyword!.toLowerCase().contains(a.bank.toLowerCase()))).firstOrNull;
+        }
+
+        // Auto-create bank account if missing (STRICT: require valid digits, NEVER create 0000)
         if (account == null && (hit.bankKeyword != null || (hit.last4 != null && hit.last4!.isNotEmpty))) {
+          if (hit.last4 == null || hit.last4!.isEmpty || hit.last4 == '0000') {
+            return false;
+          }
           final bankTitle = hit.bankKeyword != null
               ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
               : 'Bank';
-          final accName = '$bankTitle Account${hit.last4 != null && hit.last4!.isNotEmpty ? ' (..${hit.last4})' : ''}';
+          final accName = '$bankTitle Account (..${hit.last4})';
           final newAcc = BankAccount(
             name: accName,
             bank: bankTitle,
-            last4: hit.last4 ?? '',
+            last4: hit.last4!,
             accountType: 'savings',
             balance: hit.amount,
           );

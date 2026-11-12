@@ -2315,12 +2315,64 @@ class SmsImportService {
       if (appRef.contains('aubank')) return 'aubank';
     }
 
+    // 0. Co-branded fintech / aggregator sender mapping with body priority:
+    final senderLower = sender.toLowerCase();
+    final isFintechSender = senderLower.contains('tnbpay') ||
+        senderLower.contains('tneu') ||
+        senderLower.contains('tatanew') ||
+        senderLower.contains('amznpy') ||
+        senderLower.contains('amazon') ||
+        senderLower.contains('fkart') ||
+        senderLower.contains('flipkart') ||
+        senderLower.contains('swiggy') ||
+        senderLower.contains('jtedge') ||
+        senderLower.contains('jupiter') ||
+        senderLower.contains('onecrd') ||
+        senderLower.contains('onecard') ||
+        senderLower.contains('cred') ||
+        senderLower.contains('cheq');
+
+    if (isFintechSender) {
+      // If body mentions a bank (e.g. "Your HDFC Credit Card bill..."),
+      // body bank MUST ALWAYS override the third-party / fintech sender!
+      for (final bank in [
+        'hdfc', 'axis', 'icici', 'sbi', 'federal', 'fedmobile',
+        'kotak', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind',
+        'canara', 'bank of baroda', 'bob', 'yes bank', 'rbl', 'csb'
+      ]) {
+        if (lower.contains(bank)) {
+          return bank.replaceAll(' ', '');
+        }
+      }
+
+      // Default co-branded card issuer banks when body doesn't name the bank explicitly:
+      if (senderLower.contains('tnbpay') || senderLower.contains('tneu') || senderLower.contains('swiggy')) {
+        return 'hdfc'; // Tata Neu / Swiggy cards are issued by HDFC Bank
+      }
+      if (senderLower.contains('amznpy') || senderLower.contains('amazon')) {
+        return 'icici'; // Amazon Pay card is issued by ICICI Bank
+      }
+      if (senderLower.contains('fkart') || senderLower.contains('flipkart') || senderLower.contains('airtel')) {
+        return 'axisbk'; // Flipkart / Airtel cards are issued by Axis Bank
+      }
+      if (senderLower.contains('jtedge') || senderLower.contains('jupiter')) {
+        return 'csb'; // Jupiter Edge card is issued by CSB Bank
+      }
+      if (senderLower.contains('onecrd') || senderLower.contains('onecard')) {
+        return 'onecrd';
+      }
+    }
+
     // Sender format is usually `<3rdParty>-<BANKCODE>-<Type>`; the middle
     // segment is the bank code (e.g. "VA-FEDBNK-T" -> "fedbnk").
     final parts = sender.split('-');
     if (parts.length >= 3 && parts[1].isNotEmpty) {
       final code = parts[1].toLowerCase();
-      if (RegExp(r'^[a-z0-9]+$').hasMatch(code)) return code;
+      if (bankNames.containsKey(code)) return code;
+      for (final k in bankNames.keys) {
+        if (code == k || code.startsWith(k) || k.startsWith(code)) return k;
+      }
+      if (RegExp(r'^(?:[a-z]{2,5}(?:bk|bnk|crd|card))$').hasMatch(code)) return code;
     }
     final letters = RegExp(r'[a-z]+').allMatches(sender.toLowerCase()).map(
       (m) => m.group(0)!,
@@ -2328,10 +2380,6 @@ class SmsImportService {
     for (final l in letters) {
       if (l == 'app' || l == 'com' || l == 'in' || l == 'org' || l == 'net') continue;
       if (bankNames.containsKey(l)) return l;
-    }
-    // Fall back to a bank name like "hdfc", "axis", "sbi", "icici", "federal" in body.
-    for (final bank in ['hdfc', 'axis', 'icici', 'sbi', 'federal', 'fedmobile', 'kotak', 'yes bank', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind', 'canara', 'bob', 'bank of baroda']) {
-      if (lower.contains(bank)) return bank.replaceAll(' ', '');
     }
     return null;
   }

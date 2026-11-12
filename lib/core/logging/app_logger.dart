@@ -17,6 +17,7 @@ class AppLogger {
     // In production, we might send this to Crashlytics/Sentry
     if (kDebugMode) {
       final fullMessage = '[$time] [$label] $message';
+      debugPrint('[SpendX] $fullMessage');
       dev.log(fullMessage, name: 'SpendX', error: error, stackTrace: stackTrace);
       
       if (level == LogLevel.error) {

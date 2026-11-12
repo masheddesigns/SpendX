@@ -24,6 +24,8 @@ import '../widgets/monthly_pulse_card.dart';
 import '../widgets/quick_actions_row.dart';
 import '../widgets/safe_to_spend_card.dart';
 
+import '../../../services/entity_consolidation_service.dart';
+
 /// Playful & Mindful Home Dashboard: Refined SpendX companion experience.
 ///
 /// Implements clear financial language, vector-based visual identity,
@@ -37,6 +39,23 @@ class HomeDashboard extends ConsumerStatefulWidget {
 }
 
 class _HomeDashboardState extends ConsumerState<HomeDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runStartupConsolidation();
+    });
+  }
+
+  Future<void> _runStartupConsolidation() async {
+    try {
+      final consolidated = await EntityConsolidationService.instance.consolidate();
+      if (consolidated > 0 && mounted) {
+        invalidateAllFinancialProviders(ref);
+      }
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -79,6 +98,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
       color: const Color(0xFF4F46E5),
       onRefresh: () async {
         try {
+          await EntityConsolidationService.instance.consolidate();
           await LiveSmsService.instance.drainPending();
           await LiveSmsService.instance.syncUpcomingObligationsFromInbox();
         } catch (_) {}

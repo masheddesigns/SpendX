@@ -19,6 +19,7 @@ import '../lending/lending_screen.dart';
 import '../loans/loans_screen.dart';
 import '../net_worth_screen.dart';
 import 'add_bank_account_screen.dart';
+import '../../services/entity_consolidation_service.dart';
 
 /// Cleanly maps raw database keys or prefix artifacts (e.g. `Asset acc_bank_default`)
 /// to clear, user-facing account labels without mutating underlying database rows
@@ -99,10 +100,12 @@ class AccountListScreen extends ConsumerWidget {
 
     Widget content = RefreshIndicator(
       onRefresh: () async {
+        await EntityConsolidationService.instance.consolidate();
         ref.invalidate(accountsProvider);
         ref.invalidate(creditCardsProvider);
         ref.invalidate(loansProvider);
         ref.invalidate(app_data.netWorthSummaryProvider);
+        app_data.invalidateAllFinancialProviders(ref);
       },
       color: AppTheme.primaryBlue,
       child: CustomScrollView(
@@ -421,7 +424,31 @@ class AccountListScreen extends ConsumerWidget {
           ),
           actions: [
             IconButton(
+              icon: const Icon(Icons.auto_fix_high_rounded),
+              tooltip: 'Consolidate & Deduplicate',
+              onPressed: () async {
+                HapticService.instance.medium();
+                final count = await EntityConsolidationService.instance.consolidate();
+                ref.invalidate(accountsProvider);
+                ref.invalidate(creditCardsProvider);
+                ref.invalidate(loansProvider);
+                ref.invalidate(app_data.netWorthSummaryProvider);
+                app_data.invalidateAllFinancialProviders(ref);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(count > 0
+                          ? 'Cleaned & consolidated $count duplicate items.'
+                          : 'All accounts and cards are clean and synced.'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.add_rounded),
+              tooltip: 'Add Account',
               onPressed: () => _openAddAccount(context, ref),
             ),
           ],
