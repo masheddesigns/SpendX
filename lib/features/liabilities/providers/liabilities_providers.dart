@@ -1,4 +1,6 @@
 import '../../../data/core/undoable_delete.dart';
+import '../../../data/core/app_database.dart';
+import '../../../data/core/tables.dart';
 import '../../../data/providers.dart';
 import '../../../data/providers.dart' as app_data;
 import '../../../models/credit_card.dart';
@@ -45,6 +47,91 @@ final creditRecentTransactionsProvider =
       final txns = await ref.watch(creditRepoProvider).getTransactions(cardId);
       return txns.take(50).toList();
     });
+
+typedef CreditStatementSummary = ({
+  double statementAmount,
+  double repaidAmount,
+  double remainingDue,
+  double minimumDue,
+  DateTime? dueDate,
+  bool isPaid,
+});
+
+/// Provider for a specific credit card's statement bill & repayment status
+final creditStatementSummaryProvider =
+    FutureProvider.family<CreditStatementSummary?, String>((ref, cardId) async {
+  final card = await ref.watch(creditRepoProvider).getCard(cardId);
+  if (card == null) return null;
+  final statements = await ref.watch(creditRepoProvider).getStatements(cardId);
+  final latestStmt = statements.firstOrNull;
+
+  final stmtAmount = (latestStmt != null && latestStmt.statementAmount > 0)
+      ? latestStmt.statementAmount
+      : card.lastStatementBalance;
+  if (stmtAmount <= 0) return null;
+
+  final minDue = latestStmt?.minimumDue ?? (stmtAmount * 0.05);
+  final dueDate = card.nextDueDate;
+
+  final stmtGenDate = latestStmt?.generatedDate ??
+      DateTime(DateTime.now().year, DateTime.now().month, card.billingDay);
+  final windowStart = stmtGenDate.subtract(const Duration(days: 10));
+
+  double totalRepaid = 0.0;
+  final seenTxIds = <String>{};
+
+  // 1. Check canonical transactions
+  final cardTxns = await ref.watch(creditRepoProvider).getTransactions(cardId);
+  for (final t in cardTxns) {
+    if (t.type == 'payment' || t.type == 'credit_payment') {
+      if (t.date.isAfter(windowStart) || t.date.isAtSameMomentAs(windowStart)) {
+        totalRepaid += t.amount;
+        seenTxIds.add(t.id);
+      }
+    }
+  }
+
+  // 2. Check legacy database transactions if not already counted
+  final db = await AppDatabase.instance.database;
+  final cardKw = card.bank.toLowerCase().contains('icici')
+      ? 'icici'
+      : (card.bank.toLowerCase().contains('csb')
+          ? 'csb'
+          : (card.bank.toLowerCase().contains('hdfc') ? 'hdfc' : ''));
+  try {
+    final allPayments = await db.rawQuery('''
+      SELECT id, amount, date
+      FROM ${Tables.transactions}
+      WHERE (related_entity_id = ? OR (type = 'credit_payment' AND ? != '' AND LOWER(COALESCE(notes, '')) LIKE '%' || ? || '%'))
+        AND type = 'credit_payment'
+        AND is_deleted = 0;
+    ''', [card.id, cardKw, cardKw]);
+
+    for (final row in allPayments) {
+      final txId = row['id'] as String?;
+      if (txId != null && seenTxIds.contains(txId)) continue;
+      final rawDate = row['date'] as String?;
+      if (rawDate != null) {
+        final txDate = DateTime.tryParse(rawDate);
+        if (txDate != null &&
+            (txDate.isAfter(windowStart) || txDate.isAtSameMomentAs(windowStart))) {
+          totalRepaid += (row['amount'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+    }
+  } catch (_) {}
+
+  final remainingDue = (stmtAmount - totalRepaid).clamp(0.0, stmtAmount);
+
+  return (
+    statementAmount: stmtAmount,
+    repaidAmount: totalRepaid,
+    remainingDue: remainingDue,
+    minimumDue: minDue,
+    dueDate: dueDate,
+    isPaid: remainingDue <= 0.01,
+  );
+});
 
 final creditPurchaseMutationProvider =
     StateNotifierProvider<CreditPurchaseMutationNotifier, AsyncValue<void>>((

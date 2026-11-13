@@ -131,6 +131,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           final outstandingAsync = ref.watch(
             creditOutstandingProvider(selectedCard.id),
           );
+          final stmtSummaryAsync = ref.watch(
+            creditStatementSummaryProvider(selectedCard.id),
+          );
           final recentTxnsAsync = ref.watch(
             creditRecentTransactionsProvider(selectedCard.id),
           );
@@ -161,6 +164,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             selectedCard,
                             outstanding,
                             intelligenceAsync.valueOrNull,
+                            stmtSummaryAsync.valueOrNull,
                           ),
                           loading: () => const SkeletonLoader.summary(),
                           error: (err, _) => Text('$err'),
@@ -359,6 +363,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     CreditCard card,
     double outstanding,
     CreditIntelligenceData? intel,
+    CreditStatementSummary? stmtSummary,
   ) {
     final cs = Theme.of(context).colorScheme;
     final hasLimit = card.creditLimit > 0;
@@ -372,6 +377,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
       borderRadius: BorderRadius.circular(20),
       padding: AppSpacing.cardPadding,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -380,8 +386,12 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    outstanding < 0 ? 'Credit Balance' : 'Outstanding',
-                    style: TextStyle(color: cs.onSurfaceVariant),
+                    outstanding < 0 ? 'Credit Balance' : 'Current Outstanding',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -405,7 +415,11 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 children: [
                   Text(
                     hasLimit ? 'Usage' : 'Limit',
-                    style: TextStyle(color: cs.onSurfaceVariant),
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   hasLimit
@@ -438,7 +452,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             ],
           ),
           if (hasLimit) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
@@ -489,7 +503,150 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
               ),
             ),
           ],
-          if (intel != null && intel.upcomingDueDays != null) ...[
+          if (stmtSummary != null && stmtSummary.statementAmount > 0) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: stmtSummary.isPaid
+                    ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                    : cs.surfaceContainerHigh.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: stmtSummary.isPaid
+                      ? const Color(0xFF10B981).withValues(alpha: 0.25)
+                      : cs.outlineVariant.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            stmtSummary.isPaid
+                                ? Icons.check_circle_rounded
+                                : Icons.receipt_long_rounded,
+                            size: 16,
+                            color: stmtSummary.isPaid
+                                ? const Color(0xFF10B981)
+                                : cs.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            stmtSummary.isPaid
+                                ? 'Statement Bill Paid'
+                                : 'Statement Bill',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: stmtSummary.isPaid
+                                  ? const Color(0xFF10B981)
+                                  : cs.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (stmtSummary.dueDate != null)
+                        Text(
+                          'Due ${AppFormat.date(stmtSummary.dueDate!)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: stmtSummary.isPaid
+                                ? const Color(0xFF10B981)
+                                : cs.error,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Bill Generated',
+                              style: TextStyle(
+                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                          const SizedBox(height: 2),
+                          Text(
+                            AppFormat.currency(stmtSummary.statementAmount),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text('Repaid',
+                              style: TextStyle(
+                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                          const SizedBox(height: 2),
+                          Text(
+                            AppFormat.currency(stmtSummary.repaidAmount),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: Color(0xFF10B981),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('Bill Due',
+                              style: TextStyle(
+                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                          const SizedBox(height: 2),
+                          Text(
+                            AppFormat.currency(stmtSummary.remainingDue),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: stmtSummary.remainingDue > 0
+                                  ? cs.error
+                                  : const Color(0xFF10B981),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (!stmtSummary.isPaid && stmtSummary.minimumDue > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Min Due: ${AppFormat.currency(stmtSummary.minimumDue)}',
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant),
+                        ),
+                        GestureDetector(
+                          onTap: () => _navigateToPayments(card),
+                          child: Text(
+                            'Pay Bill \u2192',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: cs.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ] else if (intel != null && intel.upcomingDueDays != null) ...[
             const Divider(height: 32),
             Row(
               children: [

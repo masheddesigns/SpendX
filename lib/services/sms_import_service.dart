@@ -2676,9 +2676,23 @@ class SmsImportService {
     return digits.length > 4 ? digits.substring(digits.length - 4) : digits;
   }
 
+  static final _limitOrBalancePrefixRe = RegExp(
+    r'(?:avl(?:ailable)?\s*(?:crd\s*)?limit|available\s*credit|credit\s*limit|crd\s*lmt|limit|bal(?:ance)?|avl\s*bal|total\s*due|min(?:imum)?\s*due|due\s*by)\s*[:.\-]?\s*$',
+    caseSensitive: false,
+  );
+
   static double? _extractAmount(String body) {
-    final m = RegExp(r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)', caseSensitive: false).firstMatch(body);
-    if (m != null) {
+    final matches = RegExp(
+      r'(?:rs\.?|inr|₹|usd|eur|gbp|aed|sgd|cad|aud)\s*([\d,]+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).allMatches(body);
+
+    for (final m in matches) {
+      final prefixStart = (m.start - 40).clamp(0, body.length);
+      final prefix = body.substring(prefixStart, m.start).trim();
+      if (_limitOrBalancePrefixRe.hasMatch(prefix)) {
+        continue;
+      }
       final amt = _parseAmount(m.group(1)!);
       if (amt > 0) return amt;
     }

@@ -515,6 +515,10 @@ class CreditRepo {
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
       WHERE p.account_id = ? 
         AND e.lifecycle_status = 'posted'
+        AND e.event_type != 'opening_balance'
+        AND NOT (LOWER(e.description) LIKE '%adjustment%')
+        AND NOT (LOWER(e.description) LIKE '%reconciliation%')
+        AND NOT (LOWER(e.description) LIKE '%opening balance%')
         AND e.reversal_of_event_id IS NULL
         AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
         AND NOT EXISTS (

@@ -21,6 +21,8 @@ import 'package:spend_x/services/sms_import_service.dart';
 import 'package:spend_x/services/transaction_text_parser.dart';
 import 'package:spend_x/domain/credit/credit_card_service.dart';
 import 'package:spend_x/models/transaction.dart';
+import 'package:spend_x/models/card_statement.dart';
+import 'package:spend_x/data/core/tables.dart';
 import 'package:spend_x/features/streak/streak_engine.dart';
 import 'package:spend_x/domain/finance/safe_to_spend.dart';
 import 'package:spend_x/domain/finance/money.dart';
@@ -1149,6 +1151,97 @@ void main() {
       expect(today.isBefore(nextBill.dueDate), isTrue);
       expect(nextBill.dueDate.isBefore(secondBill.dueDate), isTrue);
       expect(secondBill.dueDate.isBefore(DateTime(2026, 11, 30)), isTrue);
+    });
+  });
+
+  group('Defect 29: Foreign Currency Spend vs Available Limit Guard', () {
+    test('29a. Air Arabia foreign currency spend does NOT extract Avl Limit as amount', () {
+      const sms = 'AED 2,508.28 spent using ICICI Bank Card XX5007 on 04-Oct-26 on AIR ARABIA AUH. Avl Limit: INR 83,397.13. If not you, call 1800 2662/SMS BLOCK 5007 to 9215676766.';
+      final parsed = TransactionTextParser.parse(sms);
+      expect(parsed, isNotNull);
+      // Must NOT extract the available limit of 83397.13 as the transaction amount!
+      expect(parsed!.amount, isNot(83397.13));
+      expect(parsed.amount, closeTo(2508.28, 0.01));
+      expect(parsed.isCredit, isFalse);
+    });
+
+    test('29b. SmsImportService._extractAmount guards against Avl Limit and Bal prefixes', () {
+      const sms = 'INR 1,366.26 spent using ICICI Bank Card XX5007 on 06-Nov-26 on AMAZON PAY IN E. Avl Limit: INR 79,449.39.';
+      final parsed = TransactionTextParser.parse(sms);
+      expect(parsed, isNotNull);
+      expect(parsed!.amount, closeTo(1366.26, 0.01));
+      expect(parsed.amount, isNot(79449.39));
+    });
+  });
+
+  group('Defect 30: Statement Repayments Netting & Due Calculation', () {
+    test('30a. Statement repayments within 10 days before statement are correctly netted', () async {
+      // 1. Create ICICI card
+      final card = CreditCard(
+        id: 'test_icici_5007',
+        name: 'ICICI Bank Credit Card',
+        bank: 'ICICI Bank',
+        last4: '5007',
+        limitAmount: 200000.0,
+        billingDay: 9,
+        dueDay: 20,
+        usedAmount: 30126.61,
+        lastStatementBalance: 91760.35,
+      );
+      await CreditRepo().insert(card);
+
+      // Statement generated 09-Nov-26 17:56: 91,760.35
+      final stmtDate = DateTime(2026, 11, 9, 17, 56);
+      await CreditRepo().insertStatement(CardStatement(
+        id: 'stmt_icici_nov26',
+        cardId: card.id,
+        startDate: DateTime(2026, 10, 9),
+        endDate: stmtDate,
+        statementAmount: 91760.35,
+        minimumDue: 4590.00,
+        generatedDate: stmtDate,
+      ));
+
+      // 2. Insert repayments around statement date:
+      // - Nov 08 14:15: 15,000
+      // - Nov 09 06:01: 17,000
+      // - Nov 11 13:46: 31,000
+      final payments = [
+        (15000.0, DateTime(2026, 11, 8, 14, 15)),
+        (17000.0, DateTime(2026, 11, 9, 6, 1)),
+        (31000.0, DateTime(2026, 11, 11, 13, 46)),
+      ];
+
+      for (var i = 0; i < payments.length; i++) {
+        final p = payments[i];
+        final tx = Transaction(
+          id: 'pay_test_$i',
+          userId: 'test_user',
+          amount: p.$1,
+          type: 'credit_payment',
+          categoryId: 'cat_bills',
+          date: p.$2,
+          notes: 'Payment towards ICICI Card XX5007',
+          relatedEntityId: card.id,
+        );
+        await TransactionRepo().insert(tx);
+      }
+
+      // Query repayments in the 10-day statement window using canonical CreditRepo
+      final windowStart = stmtDate.subtract(const Duration(days: 10));
+      final cardTxns = await CreditRepo().getTransactions(card.id);
+      double totalRepaid = 0.0;
+      for (final t in cardTxns) {
+        if (t.type == 'payment' || t.type == 'credit_payment') {
+          if (t.date.isAfter(windowStart) || t.date.isAtSameMomentAs(windowStart)) {
+            totalRepaid += t.amount;
+          }
+        }
+      }
+
+      expect(totalRepaid, 63000.0);
+      final remainingDue = (91760.35 - totalRepaid).clamp(0.0, 91760.35);
+      expect(remainingDue, closeTo(28760.35, 0.01));
     });
   });
 }

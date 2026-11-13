@@ -318,10 +318,22 @@ class TransactionTextParser {
       r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited|invested|invest)',
       caseSensitive: false,
     ),
+    // Foreign currency with action: "AED 2,508.28 spent", "USD 50 paid"
+    RegExp(
+      r'(?:USD|EUR|GBP|AED|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)\s*'
+      r'(?:has\s+been\s+|was\s+|is\s+)?'
+      r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited)',
+      caseSensitive: false,
+    ),
     // "debited Rs 500", "paid Rs.500", "received ₹500"
     RegExp(
       r'(?:debited|credited|paid|received|sent|spent|charged|deducted|deposited|invested|invest)'
       r'[^0-9]{0,30}?(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.\d{1,2})?)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'(?:debited|credited|paid|received|sent|spent|charged|deducted)'
+      r'[^0-9]{0,30}?(?:USD|EUR|GBP|AED|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
       caseSensitive: false,
     ),
     // "of Rs 500", "for Rs.500"
@@ -341,10 +353,19 @@ class TransactionTextParser {
     ),
   ];
 
+  static final _limitOrBalancePrefixRe = RegExp(
+    r'(?:avl(?:ailable)?\s*(?:crd\s*)?limit|available\s*credit|credit\s*limit|crd\s*lmt|limit|bal(?:ance)?|avl\s*bal|total\s*due|min(?:imum)?\s*due|due\s*by)\s*[:.\-]?\s*$',
+    caseSensitive: false,
+  );
+
   static double? _extractAmount(String text) {
     for (final p in _amountPatterns) {
-      final m = p.firstMatch(text);
-      if (m != null) {
+      for (final m in p.allMatches(text)) {
+        final prefixStart = (m.start - 40).clamp(0, text.length);
+        final prefix = text.substring(prefixStart, m.start).trim();
+        if (_limitOrBalancePrefixRe.hasMatch(prefix)) {
+          continue;
+        }
         final raw = m.group(1)!.replaceAll(',', '');
         final value = double.tryParse(raw);
         if (value != null && value > 0) return value;
