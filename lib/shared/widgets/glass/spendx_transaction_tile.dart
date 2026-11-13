@@ -72,7 +72,7 @@ class SpendXTransactionTile extends StatelessWidget {
       iconColor = AppTheme.semanticTransfer;
     }
 
-    final dateStr = DateFormat('dd MMM').format(transaction.date);
+    final dateStr = DateFormat('dd MMM, hh:mm a').format(transaction.date);
     final title = transaction.notes.isNotEmpty
         ? transaction.notes
         : (isCcPayment

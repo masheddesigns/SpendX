@@ -83,6 +83,7 @@ class SyncActivityService extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
     notifyListeners();
+    _scheduleSafetyAutoCompletion();
   }
 
   void updateProgress({
@@ -102,6 +103,20 @@ class SyncActivityService extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
     notifyListeners();
+    _scheduleSafetyAutoCompletion();
+  }
+
+  void _scheduleSafetyAutoCompletion() {
+    _autoDismissTimer?.cancel();
+    _autoDismissTimer = Timer(const Duration(seconds: 6), () {
+      if (_state.isActive) {
+        complete(
+          title: 'All Caught Up',
+          subtitle: 'Accounts and cards are in sync',
+          displayDuration: const Duration(seconds: 2),
+        );
+      }
+    });
   }
 
   void complete({

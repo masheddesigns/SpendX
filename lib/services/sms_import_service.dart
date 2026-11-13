@@ -1074,7 +1074,8 @@ class SmsImportService {
     r'received\s+on\s+your\s+(?:[A-Za-z0-9]+\s+)?credit\s+card|'
     r'payment\s+towards\s+credit\s+card\s+is\s+successful|'
     r'bill\s+payment\s+of\s+.*?(?:received|successful|completed|credited\s+to\s+.*?(?:card|cc))|'
-    r'(?:debited|paid)\s+(?:from\s+[a-z0-9 ._-]*?(?:a/c|account)\s+.*?)?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending)'
+    r'debited\s+from\s+[a-z0-9 ._-]*?(?:a/c|account|bank)\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment)|'
+    r'paid\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending)'
     r')',
     caseSensitive: false,
   );
@@ -1098,6 +1099,13 @@ class SmsImportService {
     if (RegExp(r'\b(?:paid|spent|charged)\s+from\s+(?:your\s+)?[a-z0-9 ._-]*?credit\s*card\s+to\b', caseSensitive: false).hasMatch(lower) ||
         lower.contains('from your edge csb bank rupay credit card to') ||
         lower.contains('from your credit card to')) {
+      return false;
+    }
+
+    // If debited to or from a credit card, this is an outbound card spend, NOT a bill repayment!
+    if (RegExp(r'\bdebited\s+(?:to|from)\s+(?:your\s+)?[a-z0-9 ._-]*?credit\s*card\b', caseSensitive: false).hasMatch(lower) ||
+        lower.contains('debited to your edge') ||
+        lower.contains('debited from your edge')) {
       return false;
     }
 

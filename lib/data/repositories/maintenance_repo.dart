@@ -73,19 +73,24 @@ class MaintenanceRepo {
       TablesV24.economicEvents,
     ];
 
-    await database.transaction((txn) async {
-      for (final table in tables) {
+    await TablesV24.dropTriggers(database);
+    try {
+      await database.transaction((txn) async {
+        for (final table in tables) {
+          try {
+            await txn.delete(table);
+          } catch (_) {}
+        }
         try {
-          await txn.delete(table);
+          await txn.delete(
+            TablesV24.accounts,
+            where: 'is_system = 0',
+          );
         } catch (_) {}
-      }
-      try {
-        await txn.delete(
-          TablesV24.accounts,
-          where: 'is_system = 0',
-        );
-      } catch (_) {}
-    });
+      });
+    } finally {
+      await TablesV24.installTriggers(database);
+    }
   }
 
   Future<void> clearExpenses() async {
