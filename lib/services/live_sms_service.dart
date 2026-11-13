@@ -948,7 +948,9 @@ class LiveSmsService with WidgetsBindingObserver {
                 'description': 'Opening balance adjustment for ${card.name}',
                 'timestamp': DateTime.now().toUtc().toIso8601String(),
                 'lifecycle_status': 'draft',
+                'currency': 'INR',
                 'created_at': DateTime.now().toUtc().toIso8601String(),
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
               });
               await db.insert(TablesV24.postings, {
                 'id': 'pst_${eventId}_cr',
@@ -1109,15 +1111,18 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
-      if (prefs.getBool('repair_restore_federal_bank_v17') != true) {
+      if (prefs.getBool('repair_restore_federal_bank_v23') != true) {
         try {
           await db.execute('PRAGMA foreign_keys = OFF;');
+          await db.execute('DROP TRIGGER IF EXISTS trg_postings_prevent_delete_on_posted;');
+          await db.execute('DROP TRIGGER IF EXISTS trg_postings_prevent_update_on_posted;');
 
           // 1. Ensure Federal Bank Account exists in accounts and bank_accounts
           const federalBankId = 'ae7b92a1-580c-468f-8478-71cee7c66a06';
           await db.insert(TablesV24.accounts, {
             'id': federalBankId,
-            'account_type': 'savings',
+            'account_type': 'asset',
+            'subtype': 'savings',
             'name': 'Federal Account (..8434)',
             'currency': 'INR',
             'is_active': 1,
@@ -1126,23 +1131,25 @@ class LiveSmsService with WidgetsBindingObserver {
             'account_number_last4': '8434',
             'color_hex': '#014C8F',
             'icon_name': 'bank',
-            'balance_minor_units': 1759025,
             'created_at': DateTime.now().toUtc().toIso8601String(),
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+          await db.rawUpdate("UPDATE ${TablesV24.accounts} SET account_type = 'asset', subtype = 'savings', is_active = 1 WHERE id = ? OR account_number_last4 = '8434'", [federalBankId]);
 
           await db.insert(Tables.bankAccounts, {
             'id': federalBankId,
             'user_id': 'offline_user',
             'name': 'Federal Account (..8434)',
             'bank': 'Federal Bank',
-            'account_number': '8434',
             'account_type': 'savings',
             'balance': 17590.25,
+            'color': '#014C8F',
+            'icon': 'bank',
+            'is_asset': 1,
             'last4': '8434',
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
-            'is_active': 1,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
 
           // 2. Discover and purge bogus Federal Card(s), re-linking all postings & txns to federalBankId
@@ -1164,7 +1171,7 @@ class LiveSmsService with WidgetsBindingObserver {
             await db.delete(TablesV24.accounts, where: 'id = ?', whereArgs: [fId]);
           }
 
-          // 3. Fix Cred 31,000 payment: Federal Bank Account -> ICICI Card
+          // 3. Fix Cred 31,000 payment: keep exactly ONE canonical payment from Federal Bank Account to ICICI Card
           final iciciRow = await db.rawQuery('''
             SELECT id FROM ${TablesV24.accounts}
             WHERE account_type = 'credit_card'
@@ -1178,18 +1185,20 @@ class LiveSmsService with WidgetsBindingObserver {
               JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
               WHERE p.amount_minor_units = 3100000;
             ''');
-            for (final ce in credEvtRows) {
-              final eId = ce['id'] as String;
-              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET description = 'Payment towards ICICI Card' WHERE id = ?", [eId]);
+            if (credEvtRows.isNotEmpty) {
+              final keepId = credEvtRows.first['id'] as String;
+              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET description = 'Payment towards ICICI Card', notes = 'Payment towards ICICI Card' WHERE id = ?", [keepId]);
               await db.rawUpdate('''
                 UPDATE ${Tables.transactions}
-                SET description = 'Payment towards ICICI Card',
+                SET note = 'Payment towards ICICI Card',
+                    notes = 'Payment towards ICICI Card',
                     type = 'credit_card_payment',
                     account_id = ?,
                     related_entity_id = ?
                 WHERE id = ?;
-              ''', [federalBankId, iciciCardId, eId]);
-              final pRows = await db.rawQuery('SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;', [eId]);
+              ''', [federalBankId, iciciCardId, keepId]);
+
+              final pRows = await db.rawQuery('SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;', [keepId]);
               for (final p in pRows) {
                 final pId = p['id'] as String;
                 final dir = p['direction'] as String;
@@ -1199,8 +1208,30 @@ class LiveSmsService with WidgetsBindingObserver {
                   await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;', [iciciCardId, pId]);
                 }
               }
+
+              // Purge duplicate 31,000 events if more than 1 exist
+              for (int i = 1; i < credEvtRows.length; i++) {
+                final dupId = credEvtRows[i]['id'] as String;
+                await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [dupId]);
+                await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [dupId]);
+                await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [dupId]);
+                await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [dupId]);
+                await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [dupId]);
+              }
             }
           }
+
+          // Clean any leftover transactions or economic events mentioning "Federal Card"
+          final fedCardEvts = await db.rawQuery("SELECT id FROM ${TablesV24.economicEvents} WHERE LOWER(description) LIKE '%federal card%' OR LOWER(notes) LIKE '%federal card%';");
+          for (final fe in fedCardEvts) {
+            final feId = fe['id'] as String;
+            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [feId]);
+            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [feId]);
+            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [feId]);
+            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [feId]);
+            await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [feId]);
+          }
+          await db.delete(Tables.transactions, where: "LOWER(COALESCE(notes, note, '')) LIKE '%federal card%'");
 
           // 4. Unify 43,000 transfer between Jio and Federal
           final jioRow = await db.rawQuery('''
@@ -1236,7 +1267,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 'currency': 'INR',
                 'created_at': DateTime.now().toUtc().toIso8601String(),
                 'updated_at': DateTime.now().toUtc().toIso8601String(),
-              });
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
               await db.insert(TablesV24.postings, {
                 'id': 'pst_${unifiedId}_dr',
                 'economic_event_id': unifiedId,
@@ -1246,7 +1277,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 'currency': 'INR',
                 'sequence_number': 1,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
-              });
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
               await db.insert(TablesV24.postings, {
                 'id': 'pst_${unifiedId}_cr',
                 'economic_event_id': unifiedId,
@@ -1256,7 +1287,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 'currency': 'INR',
                 'sequence_number': 2,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
-              });
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
               await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [unifiedId]);
 
               await db.insert(Tables.transactions, {
@@ -1267,7 +1298,6 @@ class LiveSmsService with WidgetsBindingObserver {
                 'category_id': 'cat_transfer',
                 'amount': 43000.0,
                 'type': 'transfer',
-                'description': 'Transfer: Jio → Federal',
                 'note': 'Transfer: Jio → Federal',
                 'notes': 'Transfer: Jio → Federal',
                 'date': ts,
@@ -1275,19 +1305,27 @@ class LiveSmsService with WidgetsBindingObserver {
                 'updated_at': DateTime.now().toIso8601String(),
                 'source': 'sms',
                 'is_deleted': 0,
-              });
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
             }
           }
+
+          // Purge any orphan transaction records for 43,000
+          await db.delete(Tables.transactions, where: "amount = 43000.0 AND id != 'evt_transfer_43000_jio_to_fed'");
+          await db.delete(Tables.transactions, where: "LOWER(COALESCE(notes, note, '')) LIKE '%43000 credited%'");
+          await db.delete(TablesV24.economicEvents, where: "LOWER(description) LIKE '%43000 credited%' AND id != 'evt_transfer_43000_jio_to_fed'");
 
           // 5. Restore authentic account balances
           await AccountRepo().updateBalance(federalBankId, 17590.25);
 
           await db.execute('PRAGMA foreign_keys = ON;');
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v17 Repair: Restored Federal Bank account and unified transfers');
-          await prefs.setBool('repair_restore_federal_bank_v17', true);
+          AppLogger.i('[LiveSmsService] v23 Repair: Restored Federal Bank account and unified transfers');
+          await prefs.setBool('repair_restore_federal_bank_v23', true);
         } catch (e, st) {
-          AppLogger.w('[LiveSmsService] Error in v17 repair: $e\n$st');
+          AppLogger.w('[LiveSmsService] Error in v23 repair: $e\n$st');
+        } finally {
+          await db.execute(TablesV24.trgPostingsPreventUpdateOnPosted);
+          await db.execute(TablesV24.trgPostingsPreventDeleteOnPosted);
         }
       }
 
