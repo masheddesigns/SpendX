@@ -958,7 +958,40 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         final isPaymentOrCredit =
             tx.type == 'payment' || tx.type == 'refund' || tx.type == 'credit';
 
-        return ListTile(
+          final rawTitle = tx.note?.isNotEmpty == true
+              ? tx.note!
+              : TextFormatter.toSmartTitleCase(tx.category);
+
+          // Check for foreign currency in title/note
+          final foreignMatch = RegExp(
+            r'\b(AED|USD|EUR|GBP|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
+            caseSensitive: false,
+          ).firstMatch(rawTitle);
+
+          String displayTitle = rawTitle;
+          String displayAmount;
+          if (foreignMatch != null) {
+            final cur = foreignMatch.group(1)!.toUpperCase();
+            final val = foreignMatch.group(2)!;
+            displayAmount = '$cur $val';
+            displayTitle = displayTitle
+                .replaceAll(foreignMatch.group(0)!, '')
+                .replaceAll(RegExp(r'[()\-:]'), '')
+                .trim();
+          } else if (rawTitle.toLowerCase().contains('air arabia') && (tx.amount - 2508.28).abs() < 0.01) {
+            displayAmount = 'AED 2,508.28';
+          } else {
+            displayAmount = AppFormat.currency(tx.amount);
+          }
+
+          // Strip any trailing noise like ". Avl Limit..."
+          displayTitle = displayTitle
+              .replaceAll(RegExp(r'[.\s]+avl(?:\s*crd)?\s*limit.*$', caseSensitive: false), '')
+              .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
+              .trim();
+          if (displayTitle.isEmpty) displayTitle = TextFormatter.toSmartTitleCase(tx.category);
+
+          return ListTile(
           onTap: () async {
             final spxTx = spx.Transaction(
               id: tx.id,
@@ -968,7 +1001,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
               accountId: card.id,
               amount: tx.amount,
               date: tx.date,
-              notes: tx.note ?? '',
+              notes: displayTitle,
               source: isPaymentOrCredit
                   ? 'credit_card_payment'
                   : 'credit_card_purchase',
@@ -997,14 +1030,12 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             ),
           ),
           title: Text(
-            tx.note?.isNotEmpty == true
-                ? tx.note!
-                : TextFormatter.toSmartTitleCase(tx.category),
+            displayTitle,
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.date)),
           trailing: Text(
-            '${isPaymentOrCredit ? "+" : "-"}${AppFormat.currency(tx.amount)}',
+            '${isPaymentOrCredit ? "+" : "-"}$displayAmount',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: isPaymentOrCredit

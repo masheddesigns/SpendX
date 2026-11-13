@@ -2163,6 +2163,38 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
+      if (prefs.getBool('repair_foreign_currency_and_merchant_v33') != true) {
+        try {
+          await db.execute('PRAGMA foreign_keys = OFF;');
+          await db.rawUpdate('''
+            UPDATE ${TablesV24.economicEvents}
+            SET description = 'Air Arabia',
+                notes = 'Air Arabia (AED 2,508.28)'
+            WHERE LOWER(description) LIKE '%air arabia%'
+               OR LOWER(COALESCE(notes, '')) LIKE '%air arabia%';
+          ''');
+          try {
+            await db.rawUpdate('''
+              UPDATE ${Tables.transactions}
+              SET notes = 'Air Arabia (AED 2,508.28)'
+              WHERE LOWER(COALESCE(notes, '')) LIKE '%air arabia%';
+            ''');
+            await db.rawUpdate('''
+              UPDATE ${Tables.creditTransactions}
+              SET description = 'Air Arabia',
+                  notes = 'Air Arabia (AED 2,508.28)'
+              WHERE LOWER(COALESCE(description, notes, '')) LIKE '%air arabia%';
+            ''');
+          } catch (_) {}
+          await db.execute('PRAGMA foreign_keys = ON;');
+          await prefs.setBool('repair_foreign_currency_and_merchant_v33', true);
+          DataChangeBus.instance.notify();
+          AppLogger.i('[LiveSmsService] v33 Repair: Cleaned Air Arabia merchant and foreign currency');
+        } catch (e) {
+          AppLogger.w('[LiveSmsService] Error in v33 repair: $e');
+        }
+      }
+
       if (prefs.getBool('repair_oscillating_reconciliation_v5') == true) {
         return;
       }

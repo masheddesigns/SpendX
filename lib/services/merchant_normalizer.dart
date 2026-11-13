@@ -67,7 +67,11 @@ class MerchantNormalizer {
     MerchantPattern(canonical: 'Ajio', aliases: ['ajio']),
     MerchantPattern(canonical: 'Nykaa', aliases: ['nykaa']),
 
-    // Travel
+    // Travel & Airlines
+    MerchantPattern(canonical: 'Air Arabia', aliases: ['air arabia', 'air arabia auh', 'airarabia']),
+    MerchantPattern(canonical: 'IndiGo', aliases: ['indigo', 'indigo airlines']),
+    MerchantPattern(canonical: 'Air India', aliases: ['air india', 'airindia']),
+    MerchantPattern(canonical: 'Emirates', aliases: ['emirates']),
     MerchantPattern(canonical: 'Uber', aliases: ['uber']),
     MerchantPattern(canonical: 'Ola', aliases: ['ola']),
     MerchantPattern(canonical: 'Rapido', aliases: ['rapido']),

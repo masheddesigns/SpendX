@@ -718,11 +718,12 @@ class TransactionTextParser {
       var merchant = m.group(1)!.trim();
       merchant = merchant
           .replaceAll(
-            RegExp(r'\s+(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank|bal|not\s+you|call|has\s+been|debited|credited).*$',
+            RegExp(r'(?:[.\s]+|\s+)(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank|bal(?:ance)?|avl(?:ailable)?(?:\s*(?:crd\s*)?limit)?|limit|crd|total\s*due|not\s+you|call|has\s+been|debited|credited).*$',
                 caseSensitive: false),
             '',
           )
           .replaceAll(RegExp(r'@[a-zA-Z0-9.-]+$'), '')
+          .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
           .trim();
       if (merchant.isEmpty || merchant.length < 2) continue;
       final firstWord = merchant.split(' ').first.toLowerCase();
