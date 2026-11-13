@@ -47,13 +47,15 @@ object FinancialSmsFilter {
     private val FINANCIAL_SENDER_KEYWORDS = listOf(
         "HDFC", "SBI", "ICICI", "AXIS", "KOTAK", "FEDBNK", "JTEDGE", "ONECRD",
         "BOBCRD", "BOBONE", "BOB", "CSB", "JIOPBS", "PAYTM", "QCAMZN", "AMZPAY", "JUSPAY",
-        "CANBNK", "PNBSMS", "IDFC", "INDUS", "YESBK", "YESBNK", "UNIONB",
+        "CANBNK", "PNBSMS", "IDFC", "INDUS", "YESBK", "YESBNK", "YESBANK", "UNIONB",
         "INDIANB", "CENTBK", "UCOBNK", "IOB", "KVB", "CUB", "SIBLTD",
         "KBL", "TMB", "BNDHAN", "RBL", "SCISMS", "CITIBK", "HSBC", "STANBK",
         "AUBANK", "AUCCB", "EQUITAS", "UJJIVAN", "PAYU", "RAZORP", "EPFO",
         "CRED", "GROWW", "JIOFINANCE", "TATANEU", "BHIM", "ONECARD", "SLICE",
         "FIMONEY", "JUPITER", "NAVI", "SUPER", "GOOGLE", "GPAY", "PHONEPE",
-        "PAYZAPP", "FEDMOBILE", "YONO", "AMAZON"
+        "PAYZAPP", "FEDMOBILE", "YONO", "AMAZON", "IDBI", "BOM", "MAHABK",
+        "PSB", "ESAF", "JANA", "SURYODAY", "UTKARSH", "IPPB", "LAZYPAY",
+        "SIMPL", "UNI", "SCAPIA", "JAR", "GULLAK", "SAMSUNG", "WHATSAPP", "APP:"
     )
 
     // 5. Monetary amount required: ₹ 500, Rs. 500.00, INR 1,500, 500.00 INR, etc.

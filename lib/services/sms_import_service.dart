@@ -1403,6 +1403,7 @@ class SmsImportService {
       'jiofinance', 'tataneu', 'tata neu', 'jupiter', 'bhim', 'slice', 'fimmoney', 'fi money',
       'super.money', 'supermoney', 'navi', 'payzapp', 'fedmobile', 'imobile',
       'yono', 'amazon pay', 'mobikwik', 'freecharge', 'popclub', 'kiwi', 'cheq',
+      'kotak', 'yesbank', 'idbi', 'lazypay', 'simpl', 'uni card', 'scapia', 'jar', 'samsung', 'whatsapp',
       'wallet', 'upi', 'com.google.android.apps.nbu.paisa.user', 'com.phonepe.app',
       'net.one97.paytm', 'com.dreamplug.androidapp', 'com.creditcard.onecard',
       'com.nextbillion.groww', 'in.jfs.jiofinance', 'com.tatadigital.tcp',
@@ -2425,7 +2426,9 @@ class SmsImportService {
       if (appRef.contains('hdfc') || appRef.contains('payzapp')) return 'hdfc';
       if (appRef.contains('icici') || appRef.contains('imobile') || appRef.contains('pockets')) return 'icici';
       if (appRef.contains('axis')) return 'axisbk';
-      if (appRef.contains('kotak')) return 'kotak';
+      if (appRef.contains('kotak') || appRef.contains('kbank')) return 'kotak';
+      if (appRef.contains('yesbank') || appRef.contains('yes bank')) return 'yesbk';
+      if (appRef.contains('idbi')) return 'idbib';
       if (appRef.contains('bobcard')) return 'bobcrd';
       if (appRef.contains('bankofbaroda') || appRef.contains('bobworld') || appRef.contains('bob')) return 'bob';
       if (appRef.contains('canara')) return 'canbnk';

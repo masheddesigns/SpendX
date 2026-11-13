@@ -82,6 +82,24 @@ class BankNotificationListener : NotificationListenerService() {
             "com.paytmbank.mobile",                  // Paytm Payments Bank
             "com.bajajfinserv.direct",               // Bajaj Finserv
             "com.vivo.unionpay",                     // Vivo Pay / UnionPay
+            "com.samsung.android.spay",              // Samsung Wallet India
+            "com.samsung.android.spaymini",          // Samsung Pay Mini
+            "com.mipay.in.wallet",                   // Mi Pay India
+            "com.payu.lazypay",                      // LazyPay BNPL & UPI
+            "com.onefi.simpl",                       // Simpl BNPL
+            "club.uni.cards",                        // Uni Card
+            "com.scapia.cards",                      // Scapia Federal Credit Card
+            "com.myjar.app",                         // Jar Daily Savings
+            "com.gullak.money",                      // Gullak
+            "com.paytm.money",                       // Paytm Money
+            "com.google.android.apps.nbu.paisa.merchant", // Google Pay for Business
+            "com.phonepe.app.business",              // PhonePe Business
+            "com.paytm.business",                    // Paytm for Business
+            "com.khatabook",                         // Khatabook
+            "com.whatsapp",                          // WhatsApp (WhatsApp Pay)
+            "com.whatsapp.w4b",                      // WhatsApp Business (WhatsApp Pay)
+            "com.airtel.bank",                       // Airtel Payments Bank
+            "com.fss.ippb",                          // India Post Payments Bank (IPPB)
             "com.zerodha.kite3",                     // Zerodha Kite
             "com.zerodha.coin",                      // Zerodha Coin
             "com.indmoney",                          // INDmoney
@@ -92,7 +110,7 @@ class BankNotificationListener : NotificationListenerService() {
             "in.dhan.app",                           // Dhan
             "com.myairtelapp",                       // Airtel Thanks / Airtel Payments Bank
 
-            // Major Indian Banks
+            // Major Indian Banks & Credit Card Issuers
             "com.sbi.lotusintouch",                  // SBI YONO
             "com.sbi.SBIFreedomPlus",                // SBI FreedomPlus / YONO Lite
             "com.sbi.upi",                           // BHIM SBI Pay
@@ -101,8 +119,10 @@ class BankNotificationListener : NotificationListenerService() {
             "com.snapwork.hdfc",                     // HDFC MobileBanking
             "com.hdfcbank.payzapp",                  // HDFC PayZapp
             "com.axis.mobile",                       // Axis Mobile
-            "com.msf.kbank.mobile",                  // Kotak Mobile
+            "com.msf.kbank.mobile",                  // Kotak Mobile & Kotak 811
             "com.kotak.invest",                      // Kotak Cherry
+            "com.kotak.finkotak",                    // Kotak Securities / Stock Trading
+            "com.kotak.biz",                         // Kotak Biz
             "com.bankofbaroda.mconnect",             // BOB World
             "in.co.bankofbaroda.bobworld",           // BOB World alternate
             "com.idfcfirstbank.optimus",             // IDFC First Bank
@@ -112,6 +132,20 @@ class BankNotificationListener : NotificationListenerService() {
             "com.unionbank.mbanking",                // Union Bank Vyom
             "com.aubank.aubank",                     // AU Small Finance Bank
             "com.indusind.indusmobile",              // IndusInd Mobile
+            "com.yesbank",                           // iris by YES BANK
+            "com.yesbank.yesrobot",                  // YES Robot
+            "com.idbi.go_mobile",                    // IDBI Bank GO Mobile+
+            "com.idbi.mpassbook",                    // IDBI mPassbook
+            "com.fss.iob",                           // Indian Overseas Bank Mobile
+            "com.infrasoft.iob",                     // Indian Overseas Bank Pay
+            "com.psb.mobile",                        // Punjab & Sind Bank PSB UnIC
+            "com.bom.mbank",                         // Bank of Maharashtra MahaMobile
+            "com.equitasbank.mobilebanking",         // Equitas Small Finance Bank
+            "com.ujjivan.mobilebanking",             // Ujjivan Small Finance Bank
+            "com.janabank.mobile",                   // Jana Small Finance Bank
+            "com.suryoday.mobile",                   // Suryoday Small Finance Bank
+            "com.esaf.mbank",                        // ESAF Small Finance Bank
+            "com.utkarsh.mobile",                    // Utkarsh Small Finance Bank
             "com.rblbank.mobank",                    // RBL MoBank
             "com.bandhan.mBandhan",                  // Bandhan Bank
             "com.sc.breeze.in",                      // Standard Chartered India
@@ -221,7 +255,16 @@ class BankNotificationListener : NotificationListenerService() {
         }
         PROCESSED_KEYS.add(dedupKey)
 
-        val isFromPaymentPackage = PAYMENT_PACKAGES.contains(pkg)
+        val lowerPkg = pkg.lowercase()
+        val isFromPaymentPackage = PAYMENT_PACKAGES.contains(pkg) ||
+            lowerPkg.contains(".bank") ||
+            lowerPkg.contains("banking") ||
+            lowerPkg.contains("wallet") ||
+            lowerPkg.contains(".upi") ||
+            lowerPkg.contains(".pay") ||
+            lowerPkg.contains("creditcard") ||
+            lowerPkg.contains("cards") ||
+            lowerPkg.contains("finance")
 
         // Clean sender / title display
         val displaySender = if (title.isNotBlank() && title != fullBody) title else pkg
