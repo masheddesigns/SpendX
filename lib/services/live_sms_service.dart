@@ -2213,8 +2213,33 @@ class LiveSmsService with WidgetsBindingObserver {
       }
     }
 
-    // For payment app notifications where bank is omitted, link to primary bank account
-    if (matchedBank == null &&
+    // Check for UPI Lite signal first
+    final isUpiLite = lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
+    if (isUpiLite) {
+      final upiLiteAcc = accounts.where((a) =>
+        a.accountType == 'wallet' &&
+        (a.name.toLowerCase().contains('upi lite') || a.bank.toLowerCase().contains('upi lite')),
+      ).firstOrNull;
+      if (upiLiteAcc != null) {
+        return (
+          accountId: upiLiteAcc.id,
+          source: 'sms',
+          instrumentType: 'wallet',
+        );
+      }
+    }
+
+    // Check for Digital Wallet signals
+    final hasNoBankSignal = (parsed.last4 == null || parsed.last4!.isEmpty) && parsed.bankName == null;
+    final isWalletSignal = hasNoBankSignal && (
+        balanceHit?.kind == BalanceKind.wallet ||
+        lowerSender.contains('qcamzn') ||
+        lowerBody.contains('amazon pay balance') ||
+        lowerBody.contains('paytm wallet') ||
+        lowerBody.contains('wallet balance'));
+
+    // For payment app notifications where bank is omitted, link to primary bank account (unless paying with wallet/UPI Lite)
+    if (!isWalletSignal && matchedBank == null &&
         (sender.startsWith('APP:') ||
          lowerSender.contains('paisa') ||
          lowerSender.contains('phonepe') ||
@@ -2246,16 +2271,6 @@ class LiveSmsService with WidgetsBindingObserver {
     }
 
     // 3. Check for Digital Wallet & UPI Lite (ONLY if no bank account identifier exists)
-    final hasNoBankSignal = (parsed.last4 == null || parsed.last4!.isEmpty) && parsed.bankName == null;
-    final isUpiLite = lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
-    final isWalletSignal = hasNoBankSignal && (
-        balanceHit?.kind == BalanceKind.wallet ||
-        isUpiLite ||
-        lowerSender.contains('qcamzn') ||
-        lowerBody.contains('amazon pay balance') ||
-        lowerBody.contains('paytm wallet') ||
-        lowerBody.contains('wallet balance'));
-
     if (isWalletSignal) {
       if (isUpiLite) {
         final upiLiteAcc = accounts.where((a) =>
