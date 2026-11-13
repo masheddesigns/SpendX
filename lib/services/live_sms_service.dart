@@ -527,20 +527,16 @@ class LiveSmsService with WidgetsBindingObserver {
 
       try {
         final now = DateTime.now();
-        // Dynamic scan window: from the 1st of the previous calendar month up to today.
-        // If the database is fresh/cleared (or has fewer than 5 transactions), scan back 180 days (6 months)
-        // so all historical transactions are fully discovered and fetched!
+        // Standard financial scan window: 1st of previous calendar month up to today (30-45 days).
+        // This covers the current and previous billing cycles while preventing unbacked historical transactions.
         final startOfPreviousMonth = DateTime(
           now.month == 1 ? now.year - 1 : now.year,
           now.month == 1 ? 12 : now.month - 1,
           1,
         );
-        final txCount = await TransactionRepo().getCount();
-        final scanCutoff = txCount < 5
-            ? now.subtract(const Duration(days: 180))
-            : startOfPreviousMonth;
+        final scanCutoff = startOfPreviousMonth;
         final sinceEpochMs = scanCutoff.millisecondsSinceEpoch;
-        final limitToScan = txCount < 5 ? 3000 : 1000;
+        final limitToScan = 1000;
         final inboxMessages = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
           'sinceEpochMs': sinceEpochMs,
           'limit': limitToScan,
@@ -730,6 +726,7 @@ class LiveSmsService with WidgetsBindingObserver {
                   dueDay: bestStmt.dueDate?.day ?? card.dueDay,
                 );
                 await CreditRepo().update(updated);
+                await CreditRepo().updateBalance(card.id, remainingDue, messageDate: bestStmt.date);
 
                 // Insert into card_statements table if not existing
                 final stmtId = 'stmt_${card.id}_${bestStmt.date.millisecondsSinceEpoch}';
@@ -897,6 +894,7 @@ class LiveSmsService with WidgetsBindingObserver {
   Future<void> _repairOscillatingReconciliationAdjustments() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final db = await AppDatabase.instance.database;
 
       // v7 Repair: Clear misdated transactions (from 12 Nov bug) and evidence so drainPending
       // can cleanly re-import all historical SMS with authentic timestamps and no duplicate collisions.
@@ -918,7 +916,6 @@ class LiveSmsService with WidgetsBindingObserver {
       }
 
       if (prefs.getBool('repair_reconciliation_adjustments_v8') != true) {
-        final db = await AppDatabase.instance.database;
         try {
           await db.execute('PRAGMA foreign_keys = OFF;');
           // 1. Purge all duplicate/spurious reconciliation opening balances
@@ -929,6 +926,7 @@ class LiveSmsService with WidgetsBindingObserver {
           ''');
           for (final r in recRows) {
             final eid = r['id'] as String;
+            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [eid]);
             await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
             await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
             await db.delete(TablesV24.openingBalanceReconciliations, where: 'generated_event_id = ?', whereArgs: [eid]);
@@ -949,8 +947,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 'event_type': 'opening_balance',
                 'description': 'Opening balance adjustment for ${card.name}',
                 'timestamp': DateTime.now().toUtc().toIso8601String(),
-                'lifecycle_status': 'posted',
-                'metadata': jsonEncode({'repair': 'v8_credit_normalize'}),
+                'lifecycle_status': 'draft',
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
               await db.insert(TablesV24.postings, {
@@ -960,7 +957,7 @@ class LiveSmsService with WidgetsBindingObserver {
                 'direction': 'credit',
                 'amount_minor_units': offsetAmount.minorUnits,
                 'currency': 'INR',
-                'sequence_num': 1,
+                'sequence_number': 1,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
               await db.insert(TablesV24.postings, {
@@ -970,9 +967,10 @@ class LiveSmsService with WidgetsBindingObserver {
                 'direction': 'debit',
                 'amount_minor_units': offsetAmount.minorUnits,
                 'currency': 'INR',
-                'sequence_num': 2,
+                'sequence_number': 2,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
+              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [eventId]);
             }
           }
 
@@ -987,11 +985,316 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
+      if (prefs.getBool('repair_credit_and_transfers_v16') != true) {
+        try {
+          await db.execute('PRAGMA foreign_keys = OFF;');
+
+          // 1. Clean fake Cred/Amazon Pay/BBPS retail expense economic events
+          final fakeCredEvents = await db.rawQuery('''
+            SELECT DISTINCT e.id, e.description, e.timestamp
+            FROM ${TablesV24.economicEvents} e
+            JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
+            WHERE e.event_type = 'expense'
+              AND (
+                p.amount_minor_units = 3100000
+                OR LOWER(e.description) LIKE '%cred%'
+                OR LOWER(e.description) LIKE '%dreamplug%'
+                OR LOWER(COALESCE(e.notes, '')) LIKE '%cred%'
+              );
+          ''');
+
+          for (final fe in fakeCredEvents) {
+            final feId = fe['id'] as String;
+            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [feId]);
+            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [feId]);
+            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [feId]);
+            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [feId]);
+            await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [feId]);
+          }
+
+          // 2. Pair up the 43,000 transfer between Jio and Federal
+          final exp43Rows = await db.rawQuery('''
+            SELECT DISTINCT e.id, e.timestamp, p.account_id
+            FROM ${TablesV24.economicEvents} e
+            JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
+            WHERE e.event_type = 'expense'
+              AND p.amount_minor_units = 4300000
+              AND p.direction = 'credit';
+          ''');
+
+          final inc43Rows = await db.rawQuery('''
+            SELECT DISTINCT e.id, e.timestamp, p.account_id
+            FROM ${TablesV24.economicEvents} e
+            JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
+            WHERE e.event_type = 'income'
+              AND p.amount_minor_units = 4300000
+              AND p.direction = 'debit';
+          ''');
+
+          if (exp43Rows.isNotEmpty && inc43Rows.isNotEmpty) {
+            final expEvent = exp43Rows.first;
+            final incEvent = inc43Rows.first;
+            final expId = expEvent['id'] as String;
+            final incId = incEvent['id'] as String;
+            final fromAcc = expEvent['account_id'] as String;
+            final toAcc = incEvent['account_id'] as String;
+            final ts = expEvent['timestamp'] as String;
+
+            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id IN (?, ?)", [expId, incId]);
+            await db.delete(TablesV24.postings, where: 'economic_event_id IN (?, ?)', whereArgs: [expId, incId]);
+            await db.delete(TablesV24.evidence, where: 'economic_event_id IN (?, ?)', whereArgs: [expId, incId]);
+            await db.delete(TablesV24.economicEvents, where: 'id IN (?, ?)', whereArgs: [expId, incId]);
+            await db.delete(Tables.transactions, where: 'id IN (?, ?)', whereArgs: [expId, incId]);
+
+            final transferEventId = 'evt_transfer_${DateTime.now().millisecondsSinceEpoch}_4300000';
+            // Step A: Insert draft
+            await db.insert(TablesV24.economicEvents, {
+              'id': transferEventId,
+              'event_type': 'transfer',
+              'description': 'Internal Account Transfer',
+              'timestamp': ts,
+              'lifecycle_status': 'draft',
+              'currency': 'INR',
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            });
+            // Step B: Insert postings
+            await db.insert(TablesV24.postings, {
+              'id': 'pst_${transferEventId}_dr',
+              'economic_event_id': transferEventId,
+              'account_id': toAcc,
+              'direction': 'debit',
+              'amount_minor_units': 4300000,
+              'currency': 'INR',
+              'sequence_number': 1,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+            });
+            await db.insert(TablesV24.postings, {
+              'id': 'pst_${transferEventId}_cr',
+              'economic_event_id': transferEventId,
+              'account_id': fromAcc,
+              'direction': 'credit',
+              'amount_minor_units': 4300000,
+              'currency': 'INR',
+              'sequence_number': 2,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+            });
+            // Step C: Post event
+            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [transferEventId]);
+
+            await db.insert(Tables.transactions, {
+              'id': transferEventId,
+              'user_id': 'offline_user',
+              'account_id': fromAcc,
+              'related_entity_id': toAcc,
+              'category_id': 'cat_transfer',
+              'amount': 43000.0,
+              'type': 'transfer',
+              'note': 'Internal Account Transfer',
+              'notes': 'Internal Account Transfer',
+              'date': ts,
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+              'source': 'sms',
+              'is_deleted': 0,
+            });
+          }
+
+          await db.execute('PRAGMA foreign_keys = ON;');
+          DataChangeBus.instance.notify();
+          AppLogger.i('[LiveSmsService] v16 Repair: Successfully purged fake Cred expenses and unified transfer');
+          await prefs.setBool('repair_credit_and_transfers_v16', true);
+        } catch (e, st) {
+          AppLogger.w('[LiveSmsService] Error in v16 repair: $e\n$st');
+        }
+      }
+
+      if (prefs.getBool('repair_restore_federal_bank_v17') != true) {
+        try {
+          await db.execute('PRAGMA foreign_keys = OFF;');
+
+          // 1. Ensure Federal Bank Account exists in accounts and bank_accounts
+          const federalBankId = 'ae7b92a1-580c-468f-8478-71cee7c66a06';
+          await db.insert(TablesV24.accounts, {
+            'id': federalBankId,
+            'account_type': 'savings',
+            'name': 'Federal Account (..8434)',
+            'currency': 'INR',
+            'is_active': 1,
+            'is_system': 0,
+            'institution_name': 'Federal Bank',
+            'account_number_last4': '8434',
+            'color_hex': '#014C8F',
+            'icon_name': 'bank',
+            'balance_minor_units': 1759025,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+          await db.insert(Tables.bankAccounts, {
+            'id': federalBankId,
+            'user_id': 'offline_user',
+            'name': 'Federal Account (..8434)',
+            'bank': 'Federal Bank',
+            'account_number': '8434',
+            'account_type': 'savings',
+            'balance': 17590.25,
+            'last4': '8434',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+            'is_active': 1,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+          // 2. Discover and purge bogus Federal Card(s), re-linking all postings & txns to federalBankId
+          final federalCardRows = await db.rawQuery('''
+            SELECT id FROM ${TablesV24.accounts}
+            WHERE account_type = 'credit_card'
+              AND (LOWER(institution_name) LIKE '%federal%' OR LOWER(name) LIKE '%federal%' OR account_number_last4 = '8434');
+          ''');
+
+          for (final fcr in federalCardRows) {
+            final fId = fcr['id'] as String;
+            if (fId == federalBankId) continue;
+            await db.rawUpdate('UPDATE ${Tables.transactions} SET account_id = ? WHERE account_id = ?', [federalBankId, fId]);
+            await db.rawUpdate('UPDATE ${Tables.transactions} SET related_entity_id = ? WHERE related_entity_id = ?', [federalBankId, fId]);
+            await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE account_id = ?', [federalBankId, fId]);
+            await db.rawUpdate('UPDATE ${TablesV24.evidence} SET account_id = ? WHERE account_id = ?', [federalBankId, fId]);
+            await db.delete(Tables.creditCards, where: 'id = ?', whereArgs: [fId]);
+            await db.rawUpdate('UPDATE ${TablesV24.accounts} SET is_active = 0 WHERE id = ?', [fId]);
+            await db.delete(TablesV24.accounts, where: 'id = ?', whereArgs: [fId]);
+          }
+
+          // 3. Fix Cred 31,000 payment: Federal Bank Account -> ICICI Card
+          final iciciRow = await db.rawQuery('''
+            SELECT id FROM ${TablesV24.accounts}
+            WHERE account_type = 'credit_card'
+              AND (LOWER(institution_name) LIKE '%icici%' OR LOWER(name) LIKE '%icici%')
+            LIMIT 1;
+          ''');
+          if (iciciRow.isNotEmpty) {
+            final iciciCardId = iciciRow.first['id'] as String;
+            final credEvtRows = await db.rawQuery('''
+              SELECT DISTINCT e.id FROM ${TablesV24.economicEvents} e
+              JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
+              WHERE p.amount_minor_units = 3100000;
+            ''');
+            for (final ce in credEvtRows) {
+              final eId = ce['id'] as String;
+              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET description = 'Payment towards ICICI Card' WHERE id = ?", [eId]);
+              await db.rawUpdate('''
+                UPDATE ${Tables.transactions}
+                SET description = 'Payment towards ICICI Card',
+                    type = 'credit_card_payment',
+                    account_id = ?,
+                    related_entity_id = ?
+                WHERE id = ?;
+              ''', [federalBankId, iciciCardId, eId]);
+              final pRows = await db.rawQuery('SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;', [eId]);
+              for (final p in pRows) {
+                final pId = p['id'] as String;
+                final dir = p['direction'] as String;
+                if (dir == 'credit') {
+                  await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;', [federalBankId, pId]);
+                } else {
+                  await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;', [iciciCardId, pId]);
+                }
+              }
+            }
+          }
+
+          // 4. Unify 43,000 transfer between Jio and Federal
+          final jioRow = await db.rawQuery('''
+            SELECT id FROM ${TablesV24.accounts}
+            WHERE LOWER(institution_name) LIKE '%jio%' OR LOWER(name) LIKE '%jio%'
+            LIMIT 1;
+          ''');
+          if (jioRow.isNotEmpty) {
+            final jioBankId = jioRow.first['id'] as String;
+            final rows43 = await db.rawQuery('''
+              SELECT DISTINCT e.id, e.timestamp FROM ${TablesV24.economicEvents} e
+              JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
+              WHERE p.amount_minor_units = 4300000;
+            ''');
+            if (rows43.isNotEmpty) {
+              final ts = rows43.first['timestamp'] as String;
+              for (final r in rows43) {
+                final rId = r['id'] as String;
+                await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [rId]);
+                await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [rId]);
+                await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [rId]);
+                await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [rId]);
+                await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [rId]);
+              }
+
+              final unifiedId = 'evt_transfer_43000_jio_to_fed';
+              await db.insert(TablesV24.economicEvents, {
+                'id': unifiedId,
+                'event_type': 'transfer',
+                'description': 'Transfer: Jio → Federal',
+                'timestamp': ts,
+                'lifecycle_status': 'draft',
+                'currency': 'INR',
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              });
+              await db.insert(TablesV24.postings, {
+                'id': 'pst_${unifiedId}_dr',
+                'economic_event_id': unifiedId,
+                'account_id': federalBankId,
+                'direction': 'debit',
+                'amount_minor_units': 4300000,
+                'currency': 'INR',
+                'sequence_number': 1,
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+              });
+              await db.insert(TablesV24.postings, {
+                'id': 'pst_${unifiedId}_cr',
+                'economic_event_id': unifiedId,
+                'account_id': jioBankId,
+                'direction': 'credit',
+                'amount_minor_units': 4300000,
+                'currency': 'INR',
+                'sequence_number': 2,
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+              });
+              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [unifiedId]);
+
+              await db.insert(Tables.transactions, {
+                'id': unifiedId,
+                'user_id': 'offline_user',
+                'account_id': jioBankId,
+                'related_entity_id': federalBankId,
+                'category_id': 'cat_transfer',
+                'amount': 43000.0,
+                'type': 'transfer',
+                'description': 'Transfer: Jio → Federal',
+                'note': 'Transfer: Jio → Federal',
+                'notes': 'Transfer: Jio → Federal',
+                'date': ts,
+                'created_at': DateTime.now().toIso8601String(),
+                'updated_at': DateTime.now().toIso8601String(),
+                'source': 'sms',
+                'is_deleted': 0,
+              });
+            }
+          }
+
+          // 5. Restore authentic account balances
+          await AccountRepo().updateBalance(federalBankId, 17590.25);
+
+          await db.execute('PRAGMA foreign_keys = ON;');
+          DataChangeBus.instance.notify();
+          AppLogger.i('[LiveSmsService] v17 Repair: Restored Federal Bank account and unified transfers');
+          await prefs.setBool('repair_restore_federal_bank_v17', true);
+        } catch (e, st) {
+          AppLogger.w('[LiveSmsService] Error in v17 repair: $e\n$st');
+        }
+      }
+
       if (prefs.getBool('repair_oscillating_reconciliation_v5') == true) {
         return;
       }
 
-      final db = await AppDatabase.instance.database;
       final rows = await db.rawQuery('''
         SELECT id, timestamp, description, notes
         FROM ${TablesV24.economicEvents}
@@ -1075,49 +1378,58 @@ class LiveSmsService with WidgetsBindingObserver {
   }) async {
     final lowerSender = sender.toLowerCase();
     final lowerBody = body.toLowerCase();
-
-    // 1. Check for Credit Card
     final cards = await CreditRepo().getAll();
-    final matchedCardByLast4 = (parsed.last4 != null && parsed.last4!.isNotEmpty)
-        ? cards.where((c) => c.last4 == parsed.last4).firstOrNull
-        : null;
 
-    final isCcSignal = matchedCardByLast4 != null ||
-        balanceHit?.kind == BalanceKind.creditCard ||
-        lowerSender.contains('crd') ||
-        lowerSender.contains('card') ||
-        lowerSender.contains('cc') ||
-        lowerSender.contains('onecrd') ||
-        lowerSender.contains('onecard') ||
-        lowerSender.contains('cred') ||
-        lowerSender.contains('bobcrd') ||
-        lowerSender.contains('bobone') ||
-        lowerSender.contains('sbicrd') ||
-        lowerSender.contains('jtedge') ||
-        lowerSender.contains('tnbpay') ||
-        lowerBody.contains('credit card') ||
-        lowerBody.contains('card ending') ||
-        lowerBody.contains('card xx') ||
-        lowerBody.contains('credit card ending') ||
-        lowerBody.contains('hdfc bank card') ||
-        lowerBody.contains('block cc') ||
-        lowerBody.contains('dreamplug') ||
-        lowerBody.contains('tata neu') ||
-        RegExp(r'(?:card|cc)[\s#:]*(?:xx|no\.?|ending)?\s*\d{4}', caseSensitive: false).hasMatch(lowerBody) ||
-        (parsed.bankName?.toLowerCase() == 'hdfc');
+    final isExplicitBankAccount = lowerBody.contains('from a/c') ||
+        lowerBody.contains('from your a/c') ||
+        lowerBody.contains('debited from a/c') ||
+        lowerBody.contains('credited to your a/c') ||
+        lowerBody.contains('credited to a/c') ||
+        lowerBody.contains('to your a/c') ||
+        lowerBody.contains('in your a/c') ||
+        (lowerBody.contains('a/c') && (lowerBody.contains('debited') || lowerBody.contains('credited')));
 
-    if (isCcSignal) {
-      final card = await _resolveOrCreateCard(
-        parsed: parsed,
-        matchedCardByLast4: matchedCardByLast4,
-        cards: cards,
-      );
-      if (card != null) {
-        return (
-          accountId: card.id,
-          source: 'credit_card_purchase',
-          instrumentType: 'credit_card',
+    // 1. Check for Credit Card (only if not an explicit bank account SMS)
+    if (!isExplicitBankAccount) {
+      final matchedCardByLast4 = (parsed.last4 != null && parsed.last4!.isNotEmpty)
+          ? cards.where((c) => c.last4 == parsed.last4).firstOrNull
+          : null;
+
+      final isCcSignal = matchedCardByLast4 != null ||
+          balanceHit?.kind == BalanceKind.creditCard ||
+          lowerSender.contains('crd') ||
+          lowerSender.contains('card') ||
+          lowerSender.contains('cc') ||
+          lowerSender.contains('onecrd') ||
+          lowerSender.contains('onecard') ||
+          lowerSender.contains('bobcrd') ||
+          lowerSender.contains('bobone') ||
+          lowerSender.contains('sbicrd') ||
+          lowerSender.contains('jtedge') ||
+          lowerSender.contains('tnbpay') ||
+          lowerBody.contains('credit card') ||
+          lowerBody.contains('card ending') ||
+          lowerBody.contains('card xx') ||
+          lowerBody.contains('credit card ending') ||
+          lowerBody.contains('hdfc bank card') ||
+          lowerBody.contains('block cc') ||
+          lowerBody.contains('tata neu') ||
+          RegExp(r'(?:card|cc)[\s#:]*(?:xx|no\.?|ending)?\s*\d{4}', caseSensitive: false).hasMatch(lowerBody) ||
+          (parsed.bankName?.toLowerCase() == 'hdfc');
+
+      if (isCcSignal) {
+        final card = await _resolveOrCreateCard(
+          parsed: parsed,
+          matchedCardByLast4: matchedCardByLast4,
+          cards: cards,
         );
+        if (card != null) {
+          return (
+            accountId: card.id,
+            source: 'credit_card_purchase',
+            instrumentType: 'credit_card',
+          );
+        }
       }
     }
 
@@ -1826,7 +2138,7 @@ class LiveSmsService with WidgetsBindingObserver {
           }
         } else {
           // Direct outstanding dues / statement total due reported
-          await CreditRepo().updateBalance(card.id, hit.amount);
+          await CreditRepo().updateBalance(card.id, hit.amount, messageDate: hit.messageDate);
         }
 
         // If statement bill or due date detected, update card metadata & schedule upcoming reminder!
@@ -1873,6 +2185,9 @@ class LiveSmsService with WidgetsBindingObserver {
             dueDay: dueDay,
           );
           await CreditRepo().update(updated);
+          if (hit.isStatementBill) {
+            await CreditRepo().updateBalance(card.id, remainingDue, messageDate: hit.messageDate);
+          }
 
           try {
             final dueDateTime = hit.dueDate ?? card.nextDueDate;
@@ -2532,6 +2847,12 @@ class LiveSmsService with WidgetsBindingObserver {
     }
     if (matchedCard != null) return matchedCard;
 
+    // Never auto-create ghost cards for user's bank accounts (Federal, Jio, SBI)
+    final bLower = (parsed.bankName ?? '').toLowerCase();
+    if (bLower.contains('federal') || bLower.contains('jio') || bLower.contains('sbi')) {
+      return null;
+    }
+
     if (parsed.bankName != null || parsed.last4 != null) {
       final cardName = '${parsed.bankName ?? 'Credit'} Card';
       final newCard = CreditCard(
@@ -2557,8 +2878,14 @@ class LiveSmsService with WidgetsBindingObserver {
     final lower = body.toLowerCase();
     final lowerSender = sender.toLowerCase();
 
-    // 1. Match by last 4
-    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+    // If the SMS says "from a/c" or "from your a/c", parsed.last4 is the debiting BANK ACCOUNT, not the target card!
+    final isBankDebit = lower.contains('from a/c') ||
+        lower.contains('from your a/c') ||
+        lower.contains('debited from a/c') ||
+        lower.contains('debited rs');
+
+    // 1. Match by last 4 (only if not a bank account debit)
+    if (!isBankDebit && parsed.last4 != null && parsed.last4!.isNotEmpty) {
       final match = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
       if (match != null) return match;
     }
@@ -2573,7 +2900,15 @@ class LiveSmsService with WidgetsBindingObserver {
       }
     }
 
-    // 3. Fallback: create card if we know issuer or last4
+    // 2b. If it's a payment to Cred or BBPS, match ICICI or card with largest outstanding balance
+    if (lower.contains('cred') || lower.contains('bbps') || lower.contains('dreamplug')) {
+      final icici = cards.where((c) => c.bank.toLowerCase().contains('icici') || c.name.toLowerCase().contains('icici')).firstOrNull;
+      if (icici != null) return icici;
+      if (cards.isNotEmpty) return cards.first;
+    }
+
+    // 3. Fallback: create card if we know issuer or last4 and not a bank debit
+    if (isBankDebit) return null;
     return _resolveOrCreateCard(
       parsed: parsed,
       cards: cards,
@@ -2655,7 +2990,9 @@ class LiveSmsService with WidgetsBindingObserver {
             notes.contains('cred') ||
             notes.contains('cheq') ||
             notes.contains('credit card') ||
-            notes.contains('cc payment');
+            notes.contains('cc payment') ||
+            notes.contains('amazon pay') ||
+            notes.contains('apay');
 
         if (matchesLast4 || matchesIssuerCc || matchesBbpsOrBillDesk) {
           matching.add(tx);

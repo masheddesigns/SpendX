@@ -211,6 +211,17 @@ class EntityConsolidationService {
       final accLast4 = _extractLast4(acc.last4, acc.name);
       final accBankNorm = _normalizeBank(_extractBank(acc.bank, acc.name));
 
+      // Bank accounts for Federal, SBI, and Jio are authentic savings/checking accounts
+      // and must NEVER be deleted or treated as colliding credit cards!
+      if (accBankNorm == 'federal' ||
+          accBankNorm == 'sbi' ||
+          accBankNorm == 'jio' ||
+          acc.name.toLowerCase().contains('federal') ||
+          acc.name.toLowerCase().contains('sbi') ||
+          acc.name.toLowerCase().contains('jio')) {
+        continue;
+      }
+
       // Check if a credit card with the same last4 or compatible bank exists
       CreditCard? matchingCard;
       if (accLast4.isNotEmpty && accLast4 != '0000') {

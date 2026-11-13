@@ -57,9 +57,10 @@ class CanonicalCreditAdapter {
 
     final lastStatement =
         ((transitionalCardRow?['last_statement_balance'] as num?)?.toDouble() ?? 0.0);
-    // If derived liability is negative (payments exceeded recorded purchases because past purchases were outside SMS window),
-    // fall back to the authentic statement due balance rather than projecting an illusory overpaid credit liability.
-    final effectiveUsed = derivedLiabilityBalance.toRupees < 0
+    // If derived liability is smaller than the authentic statement balance (because historical swiped
+    // purchases occurred outside the SMS scan window), reflect the authentic statement due balance
+    // so card liability matches reality rather than unanchored partial swipes.
+    final effectiveUsed = (lastStatement > 0 && derivedLiabilityBalance.toRupees < lastStatement)
         ? lastStatement
         : derivedLiabilityBalance.toRupees;
 

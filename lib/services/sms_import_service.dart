@@ -591,10 +591,15 @@ class SmsImportService {
       caseSensitive: false,
     ).hasMatch(lower);
 
+    final isBankDebitToCcService = !isCardSpend && !parsed.isCredit && RegExp(
+      r'\b(?:cred\s*club|via\s+upi\s+to\s+cred|to\s+cred|pz\s*hdfc\s*cc|billdesk\s*cc|bbps\s*cc)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
     final SmsEventType eventType;
     final bool effectiveIsCredit;
 
-    if (isCcPayment) {
+    if (isCcPayment || isBankDebitToCcService) {
       eventType = SmsEventType.creditCardPayment;
       effectiveIsCredit = false; // Zero income / liability reduction
     } else if (isRefund) {
@@ -1506,7 +1511,7 @@ class SmsImportService {
   }
 
   static final RegExp _minDueRe = RegExp(
-    r'(?:minimum\s*(?:amount\s*)?due|min\s*due)[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
+    r'(?:minimum\s*(?:amount\s*)?due|min\s*due|minimum\s+of)[^\d₹]*?(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)',
     caseSensitive: false,
   );
 
@@ -1533,7 +1538,18 @@ class SmsImportService {
   BalanceHit? _detectBalance(String body, String sender) {
     if (_isOtpOrAuth(body)) return null;
     final lower = body.toLowerCase();
-    if (_nonTransactionRe.hasMatch(lower) &&
+    final isCcCandidate = _isCreditCardBillText(lower) ||
+        _creditDueRe.hasMatch(lower) ||
+        _ccAvailableLimitRe.hasMatch(lower) ||
+        lower.contains('credit card') ||
+        lower.contains('card ending') ||
+        lower.contains('card xx') ||
+        lower.contains('rupay credit') ||
+        sender.toLowerCase().contains('crd') ||
+        sender.toLowerCase().contains('jtedge');
+
+    if (!isCcCandidate &&
+        _nonTransactionRe.hasMatch(lower) &&
         !lower.contains('avail bal') &&
         !lower.contains('available bal') &&
         !lower.contains('available limit') &&

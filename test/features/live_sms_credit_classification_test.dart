@@ -1498,6 +1498,27 @@ void main() {
         expect(matchForR1.length, 1);
         expect(matchForR1.first.id, 'tx_debit_r1');
       });
+
+      test('2s. ICICI statement SMS detects 91760.35 total due and 4590 min due', () {
+        const body = 'ICICI Bank Credit Card XX5007 Statement is sent to sk****ek@gmail.com. Total of Rs 91,760.35 or minimum of Rs 4,590.00 is due by 20-NOV-26.';
+        final res = importService.classifyMessage(body, 'BP-ICICIT-S');
+
+        expect(res.balance, isNotNull);
+        expect(res.balance!.amount, 91760.35);
+        expect(res.balance!.isStatementBill, isTrue);
+        expect(res.balance!.minDue, 4590.0);
+        expect(res.balance!.dueDate, DateTime(2026, 11, 20));
+      });
+
+      test('2t. Bank debit via UPI to CRED Club is classified as creditCardPayment with zero expense', () {
+        const body = 'Debited Rs 31000.00 from a/c X8434 on 11Nov26 13:16 via UPI to CRED Club. Ref 668115651984.Bal Rs 18612.25. Not you?Call 18004251199 -Federal Bank';
+        final res = importService.classifyMessage(body, 'JK-FEDBNK-T');
+
+        expect(res.eventType, SmsEventType.creditCardPayment);
+        expect(res.transaction, isNotNull);
+        expect(res.transaction!.amount, 31000.0);
+        expect(res.transaction!.isCredit, isFalse);
+      });
     });
   });
 }

@@ -571,13 +571,27 @@ class RestoreRecoveryService {
             ? (integrityRows.first.values.first as String? ?? '')
             : '';
         if (integrity.toLowerCase() != 'ok') {
+          AppLogger.e('[RECOVERY] integrity_check failed: $integrity');
           return false;
         }
 
         // 2. Referential integrity
         final fkRows = await candidateDb.rawQuery('PRAGMA foreign_key_check;');
         if (fkRows.isNotEmpty) {
-          return false;
+          AppLogger.e('[RECOVERY] foreign_key_check failed: $fkRows');
+          // Clean up dangling foreign keys rather than throwing away entire DB
+          for (final row in fkRows) {
+            final table = row['table'] as String?;
+            final rowid = row['rowid'];
+            final parent = row['parent'] as String?;
+            if (table == 'economic_events' && parent == 'economic_events') {
+              await candidateDb.rawUpdate('UPDATE economic_events SET reversal_of_event_id = NULL WHERE rowid = ?;', [rowid]);
+            } else if (table != null && rowid != null) {
+              await candidateDb.execute('PRAGMA foreign_keys = OFF;');
+              await candidateDb.rawDelete('DELETE FROM $table WHERE rowid = ?;', [rowid]);
+              await candidateDb.execute('PRAGMA foreign_keys = ON;');
+            }
+          }
         }
 
         // 3. Version == 24
