@@ -39,11 +39,46 @@ class CreditCardScreen extends ConsumerStatefulWidget {
 class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   int _selectedCardIndex = 0;
   bool _initializedCardSelection = false;
+  final ScrollController _cardsScrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _cardsScrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCard(int index) {
+    if (!_cardsScrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(index));
+      return;
+    }
+    const itemExtent = 296.0; // 280 width + 16 right margin
+    final maxScroll = _cardsScrollController.position.maxScrollExtent;
+    final targetOffset = (index * itemExtent).clamp(0.0, maxScroll);
+    _cardsScrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   void _invalidateAll() {
     ref.invalidate(creditCardsProvider);
     ref.invalidate(liabilitiesSummaryProvider);
     // Families will be invalidated by key or automatically if they depend on creditCardsProvider
+  }
+
+  @override
+  void didUpdateWidget(covariant CreditCardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialCardId != null && widget.initialCardId != oldWidget.initialCardId) {
+      final cards = ref.read(creditCardsProvider).valueOrNull ?? [];
+      final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
+      if (targetIndex != -1) {
+        setState(() => _selectedCardIndex = targetIndex);
+        _scrollToCard(targetIndex);
+      }
+    }
   }
 
   @override
@@ -81,6 +116,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
             if (targetIndex != -1) {
               _selectedCardIndex = targetIndex;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollToCard(targetIndex);
+              });
             }
             _initializedCardSelection = true;
           }
@@ -171,6 +209,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     return SizedBox(
       height: 160,
       child: ListView.builder(
+        controller: _cardsScrollController,
         scrollDirection: Axis.horizontal,
         itemCount: cards.length + 1,
         itemBuilder: (context, index) {
@@ -182,7 +221,10 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           final isSelected = _selectedCardIndex == index;
 
           return AppTapScale(
-            onTap: () => setState(() => _selectedCardIndex = index),
+            onTap: () {
+              setState(() => _selectedCardIndex = index);
+              _scrollToCard(index);
+            },
             child: Container(
               width: 280,
               margin: const EdgeInsets.only(right: AppSpacing.md),
@@ -516,23 +558,29 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   ) {
     return AppTapScale(
       onTap: onTap,
-      child: SpendXGlassSurface(
-        level: SpendXGlassLevel.interactive,
-        borderRadius: BorderRadius.circular(16),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: color,
+      child: SizedBox(
+        width: double.infinity,
+        child: SpendXGlassSurface(
+          level: SpendXGlassLevel.interactive,
+          width: double.infinity,
+          borderRadius: BorderRadius.circular(16),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
+                  letterSpacing: 0.2,
+                  color: color,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
