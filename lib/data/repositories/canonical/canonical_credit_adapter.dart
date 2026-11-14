@@ -57,12 +57,9 @@ class CanonicalCreditAdapter {
 
     final lastStatement =
         ((transitionalCardRow?['last_statement_balance'] as num?)?.toDouble() ?? 0.0);
-    // If derived liability is smaller than the authentic statement balance (because historical swiped
-    // purchases occurred outside the SMS scan window), reflect the authentic statement due balance
-    // so card liability matches reality rather than unanchored partial swipes.
-    final effectiveUsed = (lastStatement > 0 && derivedLiabilityBalance.toRupees < lastStatement)
-        ? lastStatement
-        : derivedLiabilityBalance.toRupees;
+    // Derived liability from canonical double-entry postings (credits - debits) is the single
+    // source of accounting truth. Repayments debit liability; purchases credit liability.
+    final effectiveUsed = derivedLiabilityBalance.toRupees;
 
     return CreditCard(
       id: row['id'] as String,

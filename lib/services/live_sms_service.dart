@@ -2191,6 +2191,38 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
+      if (prefs.getBool('repair_icici_live_outstanding_v34') != true) {
+        try {
+          final cardRows = await db.query(
+            TablesV24.accounts,
+            where: "LOWER(name) LIKE '%icici%' AND account_type = 'liability'",
+            limit: 1,
+          );
+          if (cardRows.isNotEmpty) {
+            final cardId = cardRows.first['id'] as String;
+            final stmtDate = DateTime(2026, 11, 2, 0, 0, 0);
+
+            await CreditRepo().reconcileOutstanding(
+              cardId,
+              91760.35,
+              statementClosingDate: stmtDate,
+              reason: 'ICICI Statement Bill baseline',
+            );
+
+            await db.rawUpdate('''
+              UPDATE ${Tables.creditCards}
+              SET last_statement_balance = 91760.35
+              WHERE id = ?;
+            ''', [cardId]);
+          }
+          await prefs.setBool('repair_icici_live_outstanding_v34', true);
+          DataChangeBus.instance.notify();
+          AppLogger.i('[LiveSmsService] v34 Repair: Anchored ICICI baseline to 91,760.35 and restored live outstanding');
+        } catch (e, st) {
+          AppLogger.w('[LiveSmsService] Error in v34 repair: $e\n$st');
+        }
+      }
+
       if (prefs.getBool('repair_oscillating_reconciliation_v5') == true) {
         return;
       }
