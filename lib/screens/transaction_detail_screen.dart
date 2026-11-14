@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../models/category.dart';
 import '../models/credit_transaction.dart';
+import '../models/lending.dart';
+import '../data/repositories/lending_repo.dart';
 import '../utils/app_format.dart';
 import '../widgets/spendx_app_bar.dart';
 import '../widgets/custom_dialog.dart';
@@ -42,6 +44,9 @@ class _UnifiedTransactionDetailScreenState
   bool _isLoading = false;
   CreditTransaction? _creditTxn;
   final _creditService = CreditCardService();
+  final _lendingRepo = LendingRepo();
+  Lending? _matchingOpenLoan;
+  bool _dismissedLoanPrompt = false;
 
   @override
   void initState() {
@@ -49,6 +54,154 @@ class _UnifiedTransactionDetailScreenState
     _tx = widget.transaction;
     _cat = widget.category;
     _loadCreditDetails();
+    _checkLendingMatch();
+  }
+
+  Future<void> _checkLendingMatch() async {
+    try {
+      final openLoans = await _lendingRepo.getAll(settledFilter: false);
+      if (openLoans.isEmpty) return;
+
+      final note = _tx.notes.toLowerCase();
+      for (final loan in openLoans) {
+        final pName = loan.personName.trim().toLowerCase();
+        if (pName.isNotEmpty && (note.contains(pName) || pName.split(' ').any((part) => part.length >= 3 && note.contains(part)))) {
+          if (mounted) {
+            setState(() {
+              _matchingOpenLoan = loan;
+            });
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
+  String _extractPeerName(String text) {
+    var clean = text
+        .replaceAll(RegExp(r'^(?:paid to|sent to|transfer to|to|from|received from)\s+', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+(?:via\s+upi|on\s+upi|upi|ref|ref\s*no|rrn|vpa).*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'@[a-zA-Z0-9.-]+'), '')
+        .replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '')
+        .replaceAll(RegExp(r'[0-9]{4,}'), '')
+        .trim();
+    if (clean.length > 25) clean = clean.substring(0, 25).trim();
+    return clean.isNotEmpty ? TextFormatter.toSmartTitleCase(clean) : 'Contact';
+  }
+
+  bool _hasLoanKeywords(String text) {
+    return RegExp(
+      r'\b(?:loan|udhar|udhaari|borrow|borrowed|debt|repay|repayment|return|lent|lending)\b',
+      caseSensitive: false,
+    ).hasMatch(text);
+  }
+
+  Future<void> _markLoanSettled() async {
+    if (_matchingOpenLoan == null) return;
+    final loan = _matchingOpenLoan!;
+    final newPaid = loan.paidAmount + _tx.amount.abs();
+    final isFullySettled = newPaid >= loan.originalAmount;
+    final updated = loan.copyWith(
+      paidAmount: newPaid,
+      isSettled: isFullySettled,
+      updatedAt: DateTime.now(),
+    );
+    await _lendingRepo.update(updated);
+    if (mounted) {
+      setState(() => _matchingOpenLoan = null);
+      CustomSnackBar.show(
+        context,
+        message: isFullySettled
+            ? 'Loan with ${loan.personName} marked as fully repaid! ✓'
+            : 'Recorded repayment of ${AppFormat.currency(_tx.amount.abs())} from ${loan.personName} ✓',
+      );
+    }
+  }
+
+  Future<void> _createLendingRecord(String type, String defaultPersonName) async {
+    final nameCtrl = TextEditingController(text: defaultPersonName);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final verb = type == 'lent' ? 'Lent to' : 'Borrowed from';
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SpendXGlassSheet(
+        title: '$verb Contact',
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            left: 16,
+            right: 16,
+            top: 8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Amount: ${AppFormat.currency(_tx.amount.abs())}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Person Name',
+                  hintText: 'Enter contact name',
+                  filled: true,
+                  fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x0A000000),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 18),
+              SpendXGlassButton(
+                variant: SpendXGlassButtonVariant.primary,
+                onPressed: () {
+                  if (nameCtrl.text.trim().isNotEmpty) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: Text('Track as $verb ${nameCtrl.text.trim()}'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true && nameCtrl.text.trim().isNotEmpty) {
+      final person = nameCtrl.text.trim();
+      final newLending = Lending(
+        personName: person,
+        type: type,
+        originalAmount: _tx.amount.abs(),
+        paidAmount: 0.0,
+        date: _tx.date,
+        notes: _tx.notes.isNotEmpty ? _tx.notes : '$verb $person',
+      );
+      await _lendingRepo.insert(newLending);
+
+      final updatedTx = _tx.copyWith(
+        notes: _tx.notes.isNotEmpty ? '${_tx.notes} ($verb $person)' : '$verb $person',
+      );
+      await ref.read(transactionsProvider.notifier).replace(updatedTx);
+      if (mounted) {
+        setState(() {
+          _tx = updatedTx;
+        });
+        CustomSnackBar.show(
+          context,
+          message: 'Saved under Lending & Borrowing with $person ✓',
+        );
+      }
+    }
   }
 
   Future<void> _loadCreditDetails() async {
@@ -630,9 +783,224 @@ class _UnifiedTransactionDetailScreenState
                       ),
                     ),
                   ],
+
+                  if (_matchingOpenLoan != null && isIncome) ...[
+                    _buildSettlementBanner(context, isDark),
+                  ],
+
+                  if (!_tx.isTransferType &&
+                      _creditTxn == null &&
+                      _tx.source != 'credit_purchase' &&
+                      _tx.source != 'credit_card_payment') ...[
+                    const SizedBox(height: 16),
+                    _buildPeerLendingSection(context, isDark),
+                  ],
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildSettlementBanner(BuildContext context, bool isDark) {
+    final loan = _matchingOpenLoan!;
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0x1F10B981) : const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(AppRadius.l),
+        border: Border.all(
+          color: isDark ? const Color(0x4034D399) : const Color(0xFFA7F3D0),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? const Color(0x3010B981) : const Color(0xFFD1FAE5),
+                ),
+                child: const Icon(
+                  Icons.handshake_rounded,
+                  size: 18,
+                  color: Color(0xFF059669),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Matching Loan from ${loan.personName}',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF065F46),
+                      ),
+                    ),
+                    Text(
+                      'Outstanding loan: ${AppFormat.currency(loan.remainingAmount)} remaining',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SpendXGlassButton(
+                  variant: SpendXGlassButtonVariant.tonal,
+                  onPressed: _markLoanSettled,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text('Mark Loan Repaid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => setState(() => _matchingOpenLoan = null),
+                child: Text(
+                  'Dismiss',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPeerLendingSection(BuildContext context, bool isDark) {
+    final peerName = _extractPeerName(_tx.notes);
+    final hasKeywords = _hasLoanKeywords(_tx.notes);
+
+    return SpendXGlassSurface(
+      level: SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(AppRadius.m),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.handshake_outlined,
+                size: 16,
+                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Lending & Borrowing',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                ),
+              ),
+            ],
+          ),
+          if (hasKeywords && !_dismissedLoanPrompt) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0x1F6366F1) : const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Payment note mentions a loan keyword. Track under Friends & Family?',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark ? const Color(0xFFE0E7FF) : const Color(0xFF3730A3),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _dismissedLoanPrompt = true),
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6366F1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SpendXGlassButton(
+                  variant: SpendXGlassButtonVariant.tonal,
+                  onPressed: () => _createLendingRecord('lent', peerName),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.arrow_upward_rounded, size: 14, color: Color(0xFFE11D48)),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '🤝 Lent to $peerName',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SpendXGlassButton(
+                  variant: SpendXGlassButtonVariant.tonal,
+                  onPressed: () => _createLendingRecord('borrowed', peerName),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.arrow_downward_rounded, size: 14, color: Color(0xFF16A34A)),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '🤝 Borrowed from $peerName',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

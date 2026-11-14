@@ -42,6 +42,20 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   final ScrollController _cardsScrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.initialCardId != null) {
+      final cards = ref.read(creditCardsProvider).valueOrNull ?? [];
+      final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
+      if (targetIndex != -1) {
+        _selectedCardIndex = targetIndex;
+        _initializedCardSelection = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(targetIndex));
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _cardsScrollController.dispose();
     super.dispose();
@@ -54,6 +68,12 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     }
     const itemExtent = 296.0; // 280 width + 16 right margin
     final maxScroll = _cardsScrollController.position.maxScrollExtent;
+    if (maxScroll <= 0 && index > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToCard(index);
+      });
+      return;
+    }
     final targetOffset = (index * itemExtent).clamp(0.0, maxScroll);
     _cardsScrollController.animateTo(
       targetOffset,

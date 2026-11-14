@@ -581,6 +581,14 @@ class SmsImportService {
           sender.toLowerCase().contains('jtedge');
     }
 
+    final isDepositBooking = RegExp(
+      r'\b(?:fixed\s+deposit|term\s+deposit|recurring\s+deposit|fd\s+a/c|rd\s+a/c|'
+      r'fd\s+no\.?|rd\s+no\.?|fd\s+created|fd\s+booked|deposit\s+created|'
+      r'deposit\s+booked|towards\s+fd|towards\s+rd|booked\s+(?:a\s+)?(?:fixed|term)\s+deposit|'
+      r'invested\s+in\s+fd|credited\s+to\s+fd|opened\s+fd)\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+
     final isTransferOrTopup = RegExp(
       r'\b(?:loading\s+of\s+upi\s*lite|upi\s*lite\s*(?:top-?up|loading|balance)|'
       r'towards\s+upi\s*lite|to\s+upi\s*lite|added\s+to\s+upi\s*lite|'
@@ -605,6 +613,14 @@ class SmsImportService {
     } else if (isRefund) {
       eventType = SmsEventType.refund;
       effectiveIsCredit = true; // Refund credit
+    } else if (isDepositBooking) {
+      eventType = SmsEventType.transfer;
+      effectiveIsCredit = false; // Internal transfer to asset FD/RD
+      if (lower.contains('recurring') || lower.contains('rd')) {
+        merchant = 'Recurring Deposit';
+      } else {
+        merchant = 'Fixed Deposit';
+      }
     } else if (isTransferOrTopup) {
       eventType = SmsEventType.transfer;
       effectiveIsCredit = false; // Internal transfer

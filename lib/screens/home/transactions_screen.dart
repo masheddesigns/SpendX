@@ -53,7 +53,28 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
   final _scrollController = ScrollController();
   final _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'spent', 'received', 'moved'
+  String _movedSubFilter = 'all'; // 'all', 'repayment', 'self', 'deposits'
   String _searchQuery = '';
+
+  bool _matchesMovedSubFilter(Transaction t, String subFilter) {
+    if (subFilter == 'all') return true;
+    final isCc = t.type == 'credit_payment' ||
+        t.source.contains('credit') ||
+        t.notes.toLowerCase().contains('credit card') ||
+        t.notes.toLowerCase().contains('card payment');
+    if (subFilter == 'repayment') return isCc;
+
+    final isDep = t.notes.toLowerCase().contains('fd') ||
+        t.notes.toLowerCase().contains('deposit') ||
+        t.notes.toLowerCase().contains('rd') ||
+        t.notes.toLowerCase().contains('groww') ||
+        t.notes.toLowerCase().contains('mutual fund') ||
+        t.notes.toLowerCase().contains('investment');
+    if (subFilter == 'deposits') return isDep;
+
+    if (subFilter == 'self') return !isCc && !isDep;
+    return true;
+  }
 
   void _onDataChanged() {
     if (mounted) {
@@ -143,7 +164,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
           final matchesType = switch (_selectedFilter) {
             'spent' => t.isExpenseType,
             'received' => t.isIncomeType,
-            'moved' => t.isTransferType,
+            'moved' => t.isTransferType && _matchesMovedSubFilter(t, _movedSubFilter),
             _ => true,
           };
           if (!matchesType) return false;
@@ -373,10 +394,111 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                           ],
                         ),
                       ),
+                      if (_selectedFilter == 'moved') ...[
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              _buildSubFilterChip(
+                                label: 'All Moved',
+                                isSelected: _movedSubFilter == 'all',
+                                onTap: () => setState(() => _movedSubFilter = 'all'),
+                                isDark: isDark,
+                              ),
+                              const SizedBox(width: 6),
+                              _buildSubFilterChip(
+                                label: '💳 Card Repayments',
+                                isSelected: _movedSubFilter == 'repayment',
+                                onTap: () => setState(() => _movedSubFilter = 'repayment'),
+                                isDark: isDark,
+                                activeColor: const Color(0xFF10B981),
+                              ),
+                              const SizedBox(width: 6),
+                              _buildSubFilterChip(
+                                label: '🏦 Self-Transfers',
+                                isSelected: _movedSubFilter == 'self',
+                                onTap: () => setState(() => _movedSubFilter = 'self'),
+                                isDark: isDark,
+                                activeColor: const Color(0xFF6366F1),
+                              ),
+                              const SizedBox(width: 6),
+                              _buildSubFilterChip(
+                                label: '📈 Deposits & Investments',
+                                isSelected: _movedSubFilter == 'deposits',
+                                onTap: () => setState(() => _movedSubFilter = 'deposits'),
+                                isDark: isDark,
+                                activeColor: const Color(0xFFF59E0B),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
+
+              // ── Moved Net-Worth Reassurance Banner ────────
+              if (_selectedFilter == 'moved' && !isInitialLoading)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0x1F6366F1) : const Color(0xFFEEF2FF),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark ? const Color(0x35818CF8) : const Color(0xFFC7D2FE),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDark ? const Color(0x306366F1) : const Color(0xFFE0E7FF),
+                            ),
+                            child: const Icon(
+                              Icons.sync_alt_rounded,
+                              size: 16,
+                              color: Color(0xFF4F46E5),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Total Moved: ${AppFormat.currency(sourceTxns.where((t) => t.isTransferType).fold<double>(0.0, (sum, t) => sum + t.amount))} • 0 Net Worth Impact',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? const Color(0xFFE0E7FF) : const Color(0xFF312E81),
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  'Funds moved between your accounts or settled towards cards. Net worth is unchanged.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
 
               // ── Loading Skeleton ───────────────────────────
               if (isInitialLoading)
@@ -572,6 +694,50 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
             color: isSelected
                 ? effectiveActiveText
                 : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubFilterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required bool isDark,
+    Color? activeColor,
+  }) {
+    final effectiveActiveBg = activeColor != null
+        ? activeColor.withValues(alpha: isDark ? 0.28 : 0.16)
+        : (isDark ? const Color(0xFF334155) : const Color(0xFF0F172A));
+    final effectiveActiveText = activeColor ?? (isDark ? Colors.white : Colors.white);
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? effectiveActiveBg
+              : (isDark ? const Color(0x1AFFFFFF) : const Color(0x0A000000)),
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: isSelected
+                ? (activeColor ?? (isDark ? Colors.white.withValues(alpha: 0.3) : const Color(0xFF0F172A)))
+                : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0)),
+            width: isSelected ? 1.0 : 0.6,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected
+                ? effectiveActiveText
+                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
           ),
         ),
       ),

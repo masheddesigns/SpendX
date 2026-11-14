@@ -40,6 +40,7 @@ import 'financial_transaction_service.dart';
 import 'notification_service_v2.dart';
 import 'smart_category_classifier.dart';
 import 'sms_import_service.dart';
+import 'transaction_text_parser.dart';
 import 'data_change_bus.dart';
 import 'inbox_audit_service.dart';
 import 'sync_activity_service.dart';
@@ -1882,14 +1883,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
           // 4. Link SBI transactions to SBI account ID
           final accounts = await AccountRepo().getAll();
-          final cards = await CreditRepo().getAll();
 
           final jioBank = accounts.where((a) => a.last4 == '3284' || a.name.toLowerCase().contains('jio') || a.bank.toLowerCase().contains('jio')).firstOrNull;
           final sbiBank = accounts.where((a) => a.last4 == '9331' || a.name.toLowerCase().contains('sbi') || a.bank.toLowerCase().contains('sbi')).firstOrNull;
-          final federalBank = accounts.where((a) => a.last4 == '8434' || a.name.toLowerCase().contains('federal') || a.bank.toLowerCase().contains('federal')).firstOrNull;
-
-          final iciciCard = cards.where((c) => c.last4 == '5007' || c.name.toLowerCase().contains('icici') || c.bank.toLowerCase().contains('icici')).firstOrNull;
-          final csbCard = cards.where((c) => c.last4 == '2834' || c.name.toLowerCase().contains('csb') || c.bank.toLowerCase().contains('csb') || c.name.toLowerCase().contains('edge')).firstOrNull;
 
           if (sbiBank != null) {
             await db.rawUpdate('''
@@ -2591,6 +2587,50 @@ class LiveSmsService with WidgetsBindingObserver {
     return await AccountRepo().insertAccount(newWallet);
   }
 
+  /// Resolves or automatically creates a target term deposit account (e.g. Fixed Deposit, Recurring Deposit)
+  /// for transfer transactions.
+  Future<String?> _resolveTargetDeposit(String body, String sender, {double initialBalance = 0}) async {
+    final lower = body.toLowerCase();
+    final isRd = lower.contains('recurring') || lower.contains('rd');
+    final depType = isRd ? 'Recurring Deposit' : 'Fixed Deposit';
+
+    // Parse bank name from body or sender
+    final parsed = TransactionTextParser.parse(body, source: sender);
+    final bankName = parsed.bankName ?? 'Bank';
+
+    // Extract deposit account last4 if present
+    final numMatch = RegExp(
+      r'(?:fd|rd|deposit|a/c|acc|no\.?)\s*(?:no\.?)?\s*[:\-]?\s*(?:[xX*]*(\d{3,6}))\b',
+      caseSensitive: false,
+    ).firstMatch(body);
+    final last4 = numMatch?.group(1) ?? '';
+
+    final accounts = await AccountRepo().getAll();
+    final matched = accounts.where((a) {
+      if (a.accountType != 'fd') return false;
+      if (last4.isNotEmpty && a.last4 != null && a.last4!.contains(last4)) return true;
+      if (a.name.toLowerCase().contains(bankName.toLowerCase()) && a.name.toLowerCase().contains(depType.toLowerCase())) return true;
+      return false;
+    }).firstOrNull;
+
+    if (matched != null) return matched.id;
+
+    final name = last4.isNotEmpty
+        ? '$bankName $depType (..$last4)'
+        : '$bankName $depType';
+
+    final newDeposit = BankAccount(
+      name: name,
+      bank: bankName,
+      last4: last4.isNotEmpty ? last4 : null,
+      accountType: 'fd',
+      balance: 0,
+    );
+    final id = await AccountRepo().insertAccount(newDeposit);
+    AppLogger.i('[LiveSmsService] Auto-created term deposit asset account: $name ($id)');
+    return id;
+  }
+
   /// Processes a single SMS body.
   /// Automatically creates canonical transaction, applies balance update,
   /// learns merchant category associations, and returns the result.
@@ -2722,7 +2762,18 @@ class LiveSmsService with WidgetsBindingObserver {
           if (isTransfer) {
             type = 'transfer';
             source = 'sms';
-            relatedEntityId = await _resolveTargetWallet(body);
+            final isDeposit = RegExp(
+              r'\b(?:fixed\s+deposit|term\s+deposit|recurring\s+deposit|fd\s+a/c|rd\s+a/c|'
+              r'fd\s+no\.?|rd\s+no\.?|fd\s+created|fd\s+booked|deposit\s+created|'
+              r'deposit\s+booked|towards\s+fd|towards\s+rd|booked\s+(?:a\s+)?(?:fixed|term)\s+deposit|'
+              r'invested\s+in\s+fd|credited\s+to\s+fd|opened\s+fd)\b',
+              caseSensitive: false,
+            ).hasMatch(body.toLowerCase());
+            if (isDeposit) {
+              relatedEntityId = await _resolveTargetDeposit(body, sender, initialBalance: parsed.amount);
+            } else {
+              relatedEntityId = await _resolveTargetWallet(body);
+            }
           } else if (isCcRefund) {
             type = 'refund';
             source = 'credit_card_purchase';
