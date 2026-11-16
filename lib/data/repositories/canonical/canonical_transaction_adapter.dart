@@ -770,7 +770,7 @@ class CanonicalTransactionAdapter {
       categoryId: categoryId,
       accountId: accountId,
       amount: amountRupees,
-      date: event.occurredAt,
+      date: event.occurredAt.toLocal(),
       notes: meta['notes'] as String? ?? event.description,
       tags: tags,
       source: meta['source'] as String? ??

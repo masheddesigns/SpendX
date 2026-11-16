@@ -17,11 +17,19 @@ class AppFormat {
   }
 
   static String date(DateTime date) {
-    return DateFormat('dd MMM yyyy').format(date);
+    return DateFormat('dd MMM yyyy').format(date.toLocal());
   }
 
   static String dateTime(DateTime date) {
-    return DateFormat('dd MMM yyyy, HH:mm').format(date);
+    return DateFormat('dd MMM yyyy, HH:mm').format(date.toLocal());
+  }
+
+  static String time(DateTime date) {
+    return DateFormat('hh:mm a').format(date.toLocal());
+  }
+
+  static String shortDateTime(DateTime date) {
+    return DateFormat('dd MMM, hh:mm a').format(date.toLocal());
   }
 
   static String ledgerTypeLabel(String type) {

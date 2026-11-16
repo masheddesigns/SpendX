@@ -34,7 +34,7 @@ class CreditCard {
        createdAt = createdAt ?? DateTime.now();
 
   double get availableLimit => limitAmount > 0
-      ? (limitAmount - usedAmount).clamp(0, double.infinity)
+      ? (limitAmount - (usedAmount > 0 ? usedAmount : 0.0)).clamp(0.0, limitAmount)
       : 0.0;
   double get utilizationPct =>
       limitAmount > 0 ? (usedAmount / limitAmount * 100).clamp(0, 100) : 0;

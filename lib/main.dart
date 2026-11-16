@@ -113,6 +113,13 @@ Future<void> _deferredInitialization() async {
     AppLogger.e('ReminderService init failed', e, st);
   }
 
+  // Run database ledger balance repairs unconditionally
+  try {
+    await LiveSmsService.instance.runRepairsNow();
+  } catch (e, st) {
+    AppLogger.e('runRepairsNow failed', e, st);
+  }
+
   // Live SMS detection — listen for incoming bank SMS and drain anything
   // captured while the app was closed.
   try {

@@ -21,6 +21,7 @@ import '../loans/loans_screen.dart';
 import '../net_worth_screen.dart';
 import 'add_bank_account_screen.dart';
 import '../../services/entity_consolidation_service.dart';
+import '../../services/data_change_bus.dart';
 
 /// Cleanly maps raw database keys or prefix artifacts (e.g. `Asset acc_bank_default`)
 /// to clear, user-facing account labels without mutating underlying database rows
@@ -52,13 +53,43 @@ String resolveAccountDisplayName(String rawName) {
 /// - What You Owe: Visual Credit Card instruments with utilization runway & payment countdown
 /// - Obligations: Consolidated Peer Lending & Bank Loan amortization progress tracks
 /// - Preserves 100% canonical double-entry accounting invariants & providers
-class AccountListScreen extends ConsumerWidget {
+class AccountListScreen extends ConsumerStatefulWidget {
   final bool isEmbedded;
 
   const AccountListScreen({super.key, this.isEmbedded = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountListScreen> createState() => _AccountListScreenState();
+}
+
+class _AccountListScreenState extends ConsumerState<AccountListScreen> {
+  VoidCallback? _busListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _busListener = () {
+      if (mounted) {
+        ref.invalidate(accountsProvider);
+        ref.invalidate(creditCardsProvider);
+        ref.invalidate(loansProvider);
+        ref.invalidate(app_data.cardsProvider);
+        ref.invalidate(app_data.netWorthSummaryProvider);
+      }
+    };
+    DataChangeBus.instance.addListener(_busListener!);
+  }
+
+  @override
+  void dispose() {
+    if (_busListener != null) {
+      DataChangeBus.instance.removeListener(_busListener!);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
     final cardsAsync = ref.watch(creditCardsProvider);
     final loansAsync = ref.watch(loansProvider);
@@ -412,7 +443,7 @@ class AccountListScreen extends ConsumerWidget {
       ),
     );
 
-    if (!isEmbedded) {
+    if (!widget.isEmbedded) {
       return SpendXScaffold(
         extendBody: true,
         appBar: AppBar(
@@ -1789,7 +1820,7 @@ class _CreditCardInstrument extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                card.usedAmount < 0
+                                card.usedAmount < -0.05
                                     ? 'OVERPAID / CREDIT BALANCE'
                                     : 'OUTSTANDING BALANCE',
                                 style: const TextStyle(
@@ -1801,15 +1832,15 @@ class _CreditCardInstrument extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                card.usedAmount < 0
+                                card.usedAmount < -0.05
                                     ? '+${AppFormat.currency(card.usedAmount.abs())}'
-                                    : AppFormat.currency(card.usedAmount),
+                                    : AppFormat.currency(card.usedAmount.clamp(0.0, double.infinity)),
                                 style: TextStyle(
                                   fontSize: 19,
                                   fontWeight: FontWeight.w700,
-                                  color: card.usedAmount > 0
+                                  color: card.usedAmount > 0.05
                                       ? const Color(0xFFFCA5A5)
-                                      : (card.usedAmount < 0
+                                      : (card.usedAmount < -0.05
                                           ? const Color(0xFF34D399)
                                           : Colors.white),
                                   fontFeatures: const [FontFeature.tabularFigures()],

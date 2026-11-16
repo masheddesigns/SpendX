@@ -9,6 +9,8 @@ import '../../../models/category.dart';
 import '../../../models/credit_transaction.dart';
 import '../../../models/transaction.dart';
 import '../../../services/data_audit_service.dart';
+import '../../../services/data_change_bus.dart';
+import '../../liabilities/providers/liabilities_providers.dart';
 import '../../accounts/providers/account_providers.dart';
 import '../../categories/providers/category_providers.dart';
 
@@ -217,12 +219,26 @@ final deleteTransactionProvider = Provider((ref) {
     final tx = await txRepo.getById(transactionId);
     await svc.deleteTransaction(transactionId, oldTransaction: tx);
 
+    try {
+      await ref.read(app_data.creditRepoProvider).deleteTransaction(transactionId);
+    } catch (_) {}
+
     ref.invalidate(transactionsProvider);
     ref.invalidate(accountsProvider);
+    ref.invalidate(app_data.cardsProvider);
     ref.invalidate(app_data.safeToSpendProvider);
     ref.invalidate(app_data.netWorthSummaryProvider);
+    ref.invalidate(app_data.creditTransactionsProvider(null));
+    final cards = ref.read(app_data.cardsProvider).valueOrNull ?? [];
+    for (final c in cards) {
+      ref.invalidate(creditRecentTransactionsProvider(c.id));
+      ref.invalidate(creditOutstandingProvider(c.id));
+      ref.invalidate(creditStatementSummaryProvider(c.id));
+      ref.invalidate(app_data.creditTransactionsProvider(c.id));
+    }
     await ref.read(paginatedTransactionsProvider.notifier).refresh();
     DataAuditService.instance.invalidateCache();
+    DataChangeBus.instance.notify();
   };
 });
 

@@ -6,6 +6,7 @@ import '../core/app_database.dart';
 import '../core/tables.dart';
 import 'canonical/canonical_event_repository.dart';
 import 'canonical/canonical_transaction_adapter.dart';
+import '../../services/data_change_bus.dart';
 
 /// Legacy-compatible transaction repository backed exclusively by
 /// canonical v24 double-entry persistence ([TablesV24.economicEvents],
@@ -656,14 +657,36 @@ class TransactionRepo {
         whereArgs: [reversal.event.id],
       );
 
+      // 5. Update legacy / projection tables to reflect deletion immediately
+      try {
+        await txn.update(
+          Tables.transactions,
+          {'is_deleted': 1},
+          where: 'id = ? OR economic_event_id = ?',
+          whereArgs: [id, id],
+        );
+      } catch (_) {}
+      try {
+        await txn.delete(
+          Tables.creditTransactions,
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      } catch (_) {}
+
       return 1;
     }
 
+    final int result;
     if (database is Database) {
-      return await database.transaction((txn) => executeDelete(txn));
+      result = await database.transaction((txn) => executeDelete(txn));
     } else {
-      return await executeDelete(database);
+      result = await executeDelete(database);
     }
+    if (result > 0) {
+      DataChangeBus.instance.notify();
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------------------

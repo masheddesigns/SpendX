@@ -388,21 +388,29 @@ class TransactionsNotifier extends CachedAsyncNotifier<List<Transaction>> {
 
   Future<void> remove(String id) async {
     final snapshot = List<Transaction>.from(state.value ?? []);
-    final txn = snapshot.firstWhere((t) => t.id == id);
+    final txn = snapshot.where((t) => t.id == id).firstOrNull;
 
-    setData(snapshot.where((t) => t.id != id).toList());
+    if (txn != null) {
+      setData(snapshot.where((t) => t.id != id).toList());
+    }
 
     try {
-      await performUndoableDelete<Transaction>(
-        ref: ref,
-        label: 'Transaction deleted',
-        payload: txn,
-        undo: (item) => add(item, emitHaptic: false),
-        rollback: () => setData(snapshot),
-        repositoryDelete: () => ref.read(writeQueueProvider).enqueue(() async {
+      if (txn != null) {
+        await performUndoableDelete<Transaction>(
+          ref: ref,
+          label: 'Transaction deleted',
+          payload: txn,
+          undo: (item) => add(item, emitHaptic: false),
+          rollback: () => setData(snapshot),
+          repositoryDelete: () => ref.read(writeQueueProvider).enqueue(() async {
+            await ref.read(transactionRepoProvider).delete(id);
+          }),
+        );
+      } else {
+        await ref.read(writeQueueProvider).enqueue(() async {
           await ref.read(transactionRepoProvider).delete(id);
-        }),
-      );
+        });
+      }
     } catch (e, st) {
       debugPrint('Transaction delete failed: $e');
       setError(e, st);

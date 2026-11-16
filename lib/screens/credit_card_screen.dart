@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/data_change_bus.dart';
 import '../data/providers.dart' as app_data;
 import '../models/credit_card.dart';
 import '../models/credit_transaction.dart';
@@ -40,10 +41,15 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   int _selectedCardIndex = 0;
   bool _initializedCardSelection = false;
   final ScrollController _cardsScrollController = ScrollController();
+  VoidCallback? _busListener;
 
   @override
   void initState() {
     super.initState();
+    _busListener = () {
+      if (mounted) _invalidateAll();
+    };
+    DataChangeBus.instance.addListener(_busListener!);
     if (widget.initialCardId != null) {
       final cards = ref.read(creditCardsProvider).valueOrNull ?? [];
       final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
@@ -57,6 +63,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
 
   @override
   void dispose() {
+    if (_busListener != null) {
+      DataChangeBus.instance.removeListener(_busListener!);
+    }
     _cardsScrollController.dispose();
     super.dispose();
   }
@@ -84,8 +93,19 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
 
   void _invalidateAll() {
     ref.invalidate(creditCardsProvider);
+    ref.invalidate(app_data.cardsProvider);
     ref.invalidate(liabilitiesSummaryProvider);
-    // Families will be invalidated by key or automatically if they depend on creditCardsProvider
+    final cards = ref.read(creditCardsProvider).valueOrNull ?? [];
+    for (final c in cards) {
+      ref.invalidate(creditRecentTransactionsProvider(c.id));
+      ref.invalidate(creditOutstandingProvider(c.id));
+      ref.invalidate(creditStatementSummaryProvider(c.id));
+      ref.invalidate(creditActiveEmisProvider(c.id));
+      ref.invalidate(creditIntelligenceProvider(c));
+      ref.invalidate(app_data.creditTransactionsProvider(c.id));
+    }
+    ref.invalidate(app_data.creditTransactionsProvider(null));
+    if (mounted) setState(() {});
   }
 
   @override
@@ -406,7 +426,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    outstanding < 0 ? 'Credit Balance' : 'Current Outstanding',
+                    outstanding < -0.05 ? 'Credit Balance' : 'Current Outstanding',
                     style: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 13,
@@ -415,15 +435,15 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    outstanding < 0
+                    outstanding < -0.05
                         ? '+${AppFormat.currency(outstanding.abs())}'
-                        : AppFormat.currency(outstanding),
+                        : AppFormat.currency(outstanding.clamp(0.0, double.infinity)),
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: outstanding > 0
+                      color: outstanding > 0.05
                           ? cs.error
-                          : (outstanding < 0
+                          : (outstanding < -0.05
                               ? const Color(0xFF10B981)
                               : cs.onSurface),
                     ),
@@ -1053,7 +1073,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             displayTitle,
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
-          subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.date)),
+          subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.date.toLocal())),
           trailing: Text(
             '${isPaymentOrCredit ? "+" : "-"}$displayAmount',
             style: TextStyle(

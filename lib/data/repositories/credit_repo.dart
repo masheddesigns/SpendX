@@ -14,6 +14,7 @@ import 'canonical/canonical_account_repository.dart';
 import 'canonical/canonical_credit_adapter.dart';
 import 'canonical/canonical_event_repository.dart';
 import 'canonical/canonical_opening_balance_repository.dart';
+import '../../services/data_change_bus.dart';
 
 /// Credit Card Repository for SpendX.
 ///
@@ -534,12 +535,16 @@ class CreditRepo {
       ORDER BY e.timestamp DESC, p.sequence_number ASC
     ''';
     final rows = await database.rawQuery(query, [cardId]);
-    return rows.map((r) {
+    final List<CreditTransaction> list = [];
+    final seenPayments = <int, DateTime>{};
+    final seenPurchases = <int, ({DateTime date, String alphaDesc})>{};
+
+    for (final r in rows) {
       final eventType = r['event_type'] as String? ?? 'credit_purchase';
       final direction = r['direction'] as String? ?? 'credit';
       final amountMinor = r['amount_minor'] as int? ?? 0;
       final amount = amountMinor / 100.0;
-      final date = DateTime.parse(r['event_time'] as String);
+      final date = DateTime.parse(r['event_time'] as String).toLocal();
       final desc = (r['description'] as String?) ?? '';
       final rawNotes = r['notes'] as String?;
 
@@ -566,7 +571,36 @@ class CreditRepo {
         type = 'purchase';
       }
 
-      return CreditTransaction(
+      // Defensive in-memory deduplication for duplicate payment postings (24h window)
+      if (type == 'payment' && amountMinor > 0) {
+        if (seenPayments.containsKey(amountMinor)) {
+          final prevDate = seenPayments[amountMinor]!;
+          if (date.difference(prevDate).inHours.abs() <= 24) {
+            continue;
+          }
+        }
+        seenPayments[amountMinor] = date;
+      }
+
+      // Defensive in-memory deduplication for duplicate purchase postings (60m window, matching alphanumeric description)
+      if (type == 'purchase' && amountMinor > 0) {
+        final alphaDesc = desc.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        if (seenPurchases.containsKey(amountMinor)) {
+          final prev = seenPurchases[amountMinor]!;
+          if (date.difference(prev.date).inMinutes.abs() <= 60) {
+            if (prev.alphaDesc.isEmpty || alphaDesc.isEmpty ||
+                prev.alphaDesc == alphaDesc ||
+                prev.alphaDesc.contains(alphaDesc) ||
+                alphaDesc.contains(prev.alphaDesc) ||
+                (prev.alphaDesc.contains('district') && alphaDesc.contains('district'))) {
+              continue;
+            }
+          }
+        }
+        seenPurchases[amountMinor] = (date: date, alphaDesc: alphaDesc);
+      }
+
+      list.add(CreditTransaction(
         id: r['event_id'] as String,
         cardId: cardId,
         amount: amount,
@@ -576,8 +610,9 @@ class CreditRepo {
         type: type,
         status: 'active',
         relatedEntityId: relatedEntityId,
-      );
-    }).toList();
+      ));
+    }
+    return list;
   }
 
   Future<CreditTransaction?> getTransactionById(String id) async {
@@ -690,6 +725,12 @@ class CreditRepo {
           reversal.event,
           postings: reversal.postings,
         );
+        await txn.update(
+          TablesV24.economicEvents,
+          {'reversal_of_event_id': event.id},
+          where: 'id = ?',
+          whereArgs: [reversal.event.id],
+        );
       }
 
       await txn.delete(
@@ -697,7 +738,16 @@ class CreditRepo {
         where: 'id = ?',
         whereArgs: [id],
       );
+      try {
+        await txn.update(
+          Tables.transactions,
+          {'is_deleted': 1},
+          where: 'id = ? OR economic_event_id = ?',
+          whereArgs: [id, id],
+        );
+      } catch (_) {}
     });
+    DataChangeBus.instance.notify();
   }
 
   // --- Operational EMI / Installment metadata methods (transitional tables) ---
@@ -791,7 +841,11 @@ class CreditRepo {
 
   Future<void> insertStatement(CardStatement statement) async {
     final database = await _db;
-    await database.insert(Tables.cardStatements, statement.toMap());
+    await database.insert(
+      Tables.cardStatements,
+      statement.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> assignTransactionsToStatement({

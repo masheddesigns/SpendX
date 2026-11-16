@@ -72,7 +72,7 @@ class SpendXTransactionTile extends StatelessWidget {
       iconColor = AppTheme.semanticTransfer;
     }
 
-    final dateStr = DateFormat('dd MMM, hh:mm a').format(transaction.date);
+    final dateStr = DateFormat('dd MMM, hh:mm a').format(transaction.date.toLocal());
 
     // Check foreign currency in notes
     final foreignMatch = RegExp(

@@ -21,6 +21,7 @@ import '../shared/widgets/glass/spendx_glass_surface.dart';
 import '../shared/widgets/glass/spendx_glass_button.dart';
 import '../shared/widgets/glass/spendx_glass_sheet.dart';
 import '../theme/app_theme.dart';
+import '../features/transactions/providers/transaction_providers.dart' show deleteTransactionProvider;
 
 class UnifiedTransactionDetailScreen extends ConsumerStatefulWidget {
   final Transaction transaction;
@@ -230,10 +231,11 @@ class _UnifiedTransactionDetailScreenState
     if (confirm == true) {
       if (!mounted) return;
       setState(() => _isLoading = true);
-      await ProviderScope.containerOf(
-        context,
-        listen: false,
-      ).read(transactionsProvider.notifier).remove(_tx.id);
+      try {
+        await ref.read(deleteTransactionProvider)(_tx.id);
+      } catch (e) {
+        debugPrint('[UnifiedTransactionDetailScreen] Delete error: $e');
+      }
       if (mounted) {
         Navigator.pop(context, true);
         CustomSnackBar.show(context, message: 'Transaction deleted');

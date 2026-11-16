@@ -17,7 +17,7 @@ class ReminderService extends ChangeNotifier {
   static final instance = ReminderService(reminderRepo: ReminderRepo());
 
   static const Duration _backgroundCheckInterval = Duration(minutes: 15);
-  static const Duration _popupCooldown = Duration(minutes: 30);
+  static const Duration _popupCooldown = Duration(hours: 12);
 
   final NotificationServiceV2 _notificationService = NotificationServiceV2();
   Timer? _periodicTimer;
@@ -66,6 +66,11 @@ class ReminderService extends ChangeNotifier {
   }
 
   Future<void> checkAndDispatchAlerts({BuildContext? context}) async {
+    // In-app alert dispatcher: Only show interactive popups when an active BuildContext is present.
+    // Background periodic timer must NEVER spam repeated push notifications to the notification shade;
+    // system push notifications are already managed by native exact alarms via syncNotificationsFromDB().
+    if (context == null) return;
+
     final reminders = await refreshDueReminders();
     for (final reminder in reminders) {
       if (!_shouldAlert(reminder)) continue;
@@ -126,7 +131,13 @@ class ReminderService extends ChangeNotifier {
   }
 
   bool _shouldAlert(Reminder reminder) {
-    if (reminder.status == ReminderStatus.inactive || reminder.isSnoozed) {
+    if (reminder.status == ReminderStatus.inactive ||
+        reminder.isSnoozed ||
+        reminder.recordStatus == ReminderRecordStatus.done) {
+      return false;
+    }
+    // Never popup for upcoming reminders that are not yet due
+    if (reminder.status == ReminderStatus.upcoming) {
       return false;
     }
     if (reminder.lastTriggeredAt == null) return true;

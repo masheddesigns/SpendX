@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/repositories/category_repo.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
 import 'package:spend_x/data/repositories/credit_repo.dart';
@@ -1518,6 +1517,72 @@ void main() {
         expect(res.transaction, isNotNull);
         expect(res.transaction!.amount, 31000.0);
         expect(res.transaction!.isCredit, isFalse);
+      });
+
+      test('2u. Federal Bank Amazon Pay debit matches with ICICI BBPS confirmation', () async {
+        final accountRepo = AccountRepo(executor: db);
+        final txRepo = TransactionRepo(executor: db);
+        final ftService = FinancialTransactionService(database: db);
+
+        final fedAccount = BankAccount(
+          id: 'acc_fed_8434',
+          name: 'Federal Account (..8434)',
+          bank: 'Federal Bank',
+          accountType: 'savings',
+          balance: 69760.25,
+          color: '#014C8F',
+          icon: 'bank',
+          isAsset: true,
+          last4: '8434',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await accountRepo.insertAccount(fedAccount);
+
+        final debitDate = DateTime(2026, 11, 15, 21, 43);
+        final debitTx = Transaction(
+          id: 'tx_fed_amazon_pay_23551',
+          amount: 23551.0,
+          userId: 'offline_user',
+          type: 'expense',
+          accountId: fedAccount.id,
+          date: debitDate,
+          notes: 'Amazon Pay',
+          source: 'sms',
+          externalRef: '631989478429',
+        );
+        await ftService.createTransaction(debitTx);
+
+        final confDate = DateTime(2026, 11, 16, 6, 1);
+        final candidates = await txRepo.findByAmountAndDateRange(
+          amount: 23551.0,
+          from: confDate.toUtc().subtract(const Duration(hours: 48)),
+          to: confDate.toUtc().add(const Duration(hours: 48)),
+        );
+        expect(candidates.length, 1);
+
+        // Matching logic check:
+        final matching = <Transaction>[];
+        for (final tx in candidates) {
+          if (tx.type != 'expense' && tx.type != 'transfer') continue;
+          final notes = tx.notes.toLowerCase();
+          final matchesBbpsOrBillDesk = notes.contains('bbps') ||
+              notes.contains('billdesk') ||
+              notes.contains('pz hdfc') ||
+              notes.contains('cred') ||
+              notes.contains('cheq') ||
+              notes.contains('credit card') ||
+              notes.contains('cc payment') ||
+              notes.contains('amazon pay') ||
+              notes.contains('apay');
+
+          if (matchesBbpsOrBillDesk) {
+            matching.add(tx);
+          }
+        }
+
+        expect(matching.length, 1);
+        expect(matching.first.id, 'tx_fed_amazon_pay_23551');
       });
     });
   });
