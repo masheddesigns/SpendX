@@ -181,7 +181,8 @@ object FinancialSmsFilter {
         val m = AMOUNT_REGEX.matcher(body)
         if (!m.find()) return null
         val raw = m.group(0) ?: return null
-        val clean = raw.replace(Regex("""(?i)[rs\.inr₹\s]"""), "").trim()
+        val numMatch = Regex("""[\d,]+(?:\.\d+)?""").find(raw)
+        val clean = numMatch?.value ?: raw
         val lower = body.lowercase()
         val isIncome = lower.contains("credited") || lower.contains("received") || lower.contains("deposited") || lower.contains("refund")
         return Pair(clean, !isIncome)
