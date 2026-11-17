@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -24,22 +25,43 @@ import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 
 /**
- * Native Android Dynamic Island Notch HUD for SpendX.
+ * Native Android Dynamic Island / Origin Island Notch HUD for SpendX.
  *
- * Renders an animated OLED notch pill around the front camera cutout
- * when an expense, income, or bank transaction is captured.
+ * Supports:
+ * 1. Native Vivo / iQOO Origin Island capsule (adapts status bar icons left and right).
+ * 2. System-wide WindowManager floating notch HUD overlay for other Android devices.
  */
 object DynamicIslandOverlayService {
 
+    private const val ORIGIN_ISLAND_NOTIFICATION_ID = 7771
     private var activeView: View? = null
     private var dismissRunnable: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun isVivoOriginDevice(): Boolean {
+        val brand = Build.BRAND.lowercase()
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        return brand.contains("vivo") || brand.contains("iqoo") ||
+                manufacturer.contains("vivo") || manufacturer.contains("iqoo")
+    }
+
+    private fun ensureOngoingAppSetting(context: Context) {
+        try {
+            val cr = context.contentResolver
+            val currentList = Settings.Secure.getString(cr, "key_ongoing_app_list") ?: ""
+            if (!currentList.contains(context.packageName)) {
+                val updated = if (currentList.isBlank()) context.packageName else "$currentList,${context.packageName}"
+                Settings.Secure.putString(cr, "key_ongoing_app_list", updated)
+            }
+            val key = "superx_notification_${context.packageName.replace('.', '_')}"
+            Settings.Secure.putInt(cr, key, 1)
+        } catch (_: Exception) {}
+    }
 
     fun hasPermission(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -70,12 +92,19 @@ object DynamicIslandOverlayService {
         subtitle: String = "SpendX"
     ) {
         val appContext = context.applicationContext
-        android.util.Log.d("DynamicIsland", "show() called: amount=$amount, isExpense=$isExpense, hasOverlayPermission=${hasPermission(appContext)}")
+        val isVivo = isVivoOriginDevice()
+        android.util.Log.d("DynamicIsland", "show() called: amount=$amount, isExpense=$isExpense, isVivo=$isVivo, hasOverlayPermission=${hasPermission(appContext)}")
 
-        // 1. Trigger native Vivo Origin Island / Atomic Island notification capsule
+        // 1. Always trigger native Vivo Origin Island notification capsule
         showVivoOriginIslandNotification(appContext, title, amount, isExpense, subtitle)
 
-        // 2. Trigger system WindowManager notch overlay (floats over ALL apps, launcher & desktop)
+        // 2. For non-Vivo devices (or if overlay explicitly desired), trigger system WindowManager notch HUD
+        if (isVivo) {
+            // Vivo Origin Island natively adapts the status bar (moves left icons left, battery right).
+            // Do not paint a floating overlay on top of the native Origin Island.
+            return
+        }
+
         if (!hasPermission(appContext)) {
             android.util.Log.w("DynamicIsland", "Overlay permission NOT granted, skipping WindowManager overlay")
             return
@@ -299,16 +328,17 @@ object DynamicIslandOverlayService {
     ) {
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channelId = "spendx_origin_island_v2"
+            val channelId = "spendx_live_updates_v3"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
                     notificationManager.deleteNotificationChannel("spendx_origin_island")
+                    notificationManager.deleteNotificationChannel("spendx_origin_island_v2")
                 } catch (_: Exception) {}
 
                 val channel = NotificationChannel(
                     channelId,
-                    "Origin Island Alerts",
-                    NotificationManager.IMPORTANCE_LOW
+                    "SpendX Live Updates",
+                    NotificationManager.IMPORTANCE_DEFAULT
                 ).apply {
                     description = "SpendX Origin Island & Dynamic Island Live Updates"
                     setShowBadge(false)
@@ -318,32 +348,108 @@ object DynamicIslandOverlayService {
                 notificationManager.createNotificationChannel(channel)
             }
 
+            ensureOngoingAppSetting(context)
+
             val dirSymbol = if (isExpense) "-" else "+"
-            val displayAmount = "$dirSymbol₹$amount"
-            val fullTitle = if (isExpense) "Spent $displayAmount" else "Received $displayAmount"
+            val cleanAmount = if (amount.startsWith("₹")) amount else "₹$amount"
+            val displayAmount = "$dirSymbol$cleanAmount"
+            val fullTitle = if (isExpense) "Spent $cleanAmount" else "Received $cleanAmount"
             val sub = if (subtitle.isNotBlank() && subtitle != "SpendX") subtitle else (if (isExpense) "Expense Recorded" else "Income Recorded")
+
+            val icon = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Icon.createWithResource(context, R.drawable.ic_notification)
+            } else null
 
             val builder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(fullTitle)
                 .setContentText(sub)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setSubText(displayAmount)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setAutoCancel(true)
-                .setTimeoutAfter(4000)
+                .setOngoing(true)
+                .setProgress(100, 100, false)
+                .setColor(Color.parseColor(if (isExpense) "#F43F5E" else "#10B981"))
+                .setShowWhen(true)
 
-            // Vivo Origin Island / Atomic Island specific extras
+            // Vivo Origin Island / SuperX extras (Reverse-engineered from SystemUIPlugin.apk)
             val extras = Bundle().apply {
                 putInt("notification.superx.operation", 0) // 0 = create/show capsule
-                putString("notification.superx.template", "capsule")
+                putInt("notification.superx.template", 1)  // template 1 (int!)
+                putInt("notification.superx.newNode", 1)
+                putInt("notification.superx.displays", 0x00111111) // All target locations
+                putInt("progress_style_business_type", 1)
+                putBoolean("notification.superx.islandNotify", true)
                 putString("notification.superx.scene", "finance")
                 putString("notification.superx.title", fullTitle)
                 putString("notification.superx.content", sub)
                 putString("notification.superx.capsule.text", displayAmount)
                 putString("vivo.summary.text", displayAmount)
+                putString("android.shortCriticalText", displayAmount)
                 putBoolean("is_live_activity", true)
                 putString("android.substName", "SpendX")
+
+                // ShortInfos bundle (required by validSuperXShortInfoData in SuperXNotificationDataUtils)
+                val shortInfos = Bundle().apply {
+                    putString("notification.superx.shortInfos.coreInfoShort", displayAmount)
+                    putString("notification.superx.shortInfos.describeShort", if (isExpense) "Spent" else "Received")
+                    if (icon != null) {
+                        putParcelable("notification.superx.shortInfos.image", icon)
+                    }
+                }
+                putBundle("notification.superx.shortInfos", shortInfos)
+
+                // Island specific sub-bundle "notification.superx.island" (Required by isUniqueIslandSuperXMessage & SuperXCapsuleDataController)
+                val leftInfoBundle = Bundle().apply {
+                    putString("island.superx.leftInfo.content", if (isExpense) "Spent" else "Received")
+                    if (icon != null) {
+                        putParcelable("island.superx.leftInfo.icon", icon)
+                    }
+                }
+                val rightInfoBundle = Bundle().apply {
+                    putString("island.superx.rightInfo.content", displayAmount)
+                    putString("island.superx.rightInfo.capsuleContent", displayAmount)
+                }
+
+                val islandSubBundle = Bundle().apply {
+                    putBoolean("island.superx.forceShow", true)
+                    putBoolean("island.superx.forceShowCard", true)
+                    putInt("island.superx.template", 1)
+                    putInt("island.superx.leftTemplate", 1)
+                    putInt("island.superx.rightTemplate", 1)
+                    putBundle("island.superx.leftInfo", leftInfoBundle)
+                    putBundle("island.superx.rightInfo", rightInfoBundle)
+                }
+                putBundle("notification.superx.island", islandSubBundle)
+
+                // Root-level island keys for compatibility
+                putBoolean("island.superx.forceShow", true)
+                putBoolean("island.superx.forceShowCard", true)
+                putInt("island.superx.template", 1)
+                putInt("island.superx.leftTemplate", 1)
+                putInt("island.superx.rightTemplate", 1)
+                putBundle("island.superx.leftInfo", leftInfoBundle)
+                putBundle("island.superx.rightInfo", rightInfoBundle)
+
+                // Capsule specific bundle
+                val capsule = Bundle().apply {
+                    putString("notification.superx.capsule.content", displayAmount)
+                    if (icon != null) {
+                        putParcelable("notification.superx.capsule.icon", icon)
+                    }
+                }
+                putBundle("notification.superx.capsule", capsule)
+
+                // BaseInfos bundle
+                val baseInfos = Bundle().apply {
+                    putString("notification.superx.baseInfos.title", fullTitle)
+                    putString("notification.superx.baseInfos.content", sub)
+                    if (icon != null) {
+                        putParcelable("notification.superx.baseInfos.icon", icon)
+                    }
+                }
+                putBundle("notification.superx.baseInfos", baseInfos)
             }
             builder.addExtras(extras)
 
@@ -360,7 +466,14 @@ object DynamicIslandOverlayService {
                 builder.setContentIntent(pi)
             }
 
-            notificationManager.notify(7771, builder.build())
+            notificationManager.notify(ORIGIN_ISLAND_NOTIFICATION_ID, builder.build())
+
+            // Auto-dismiss after 6.0 seconds
+            mainHandler.postDelayed({
+                try {
+                    notificationManager.cancel(ORIGIN_ISLAND_NOTIFICATION_ID)
+                } catch (_: Exception) {}
+            }, 6000)
         } catch (e: Exception) {
             android.util.Log.w("OriginIsland", "Failed to show Vivo Origin Island notification: $e")
         }
