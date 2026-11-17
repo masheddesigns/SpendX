@@ -18,13 +18,33 @@ class DynamicIslandEvent {
 }
 
 class DynamicIslandService {
-  DynamicIslandService._();
+  DynamicIslandService._() {
+    _initNativeBridge();
+  }
   static final DynamicIslandService instance = DynamicIslandService._();
 
   static const _channel = MethodChannel('spendx/sms_live');
 
   final _controller = StreamController<DynamicIslandEvent>.broadcast();
   Stream<DynamicIslandEvent> get events => _controller.stream;
+
+  void _initNativeBridge() {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onDynamicIslandEvent') {
+        final args = call.arguments as Map<dynamic, dynamic>?;
+        if (args != null) {
+          final event = DynamicIslandEvent(
+            amount: args['amount']?.toString() ?? '',
+            isExpense: (args['isExpense'] as bool?) ?? true,
+            title: args['title']?.toString() ?? 'SpendX',
+            subtitle: args['subtitle']?.toString() ?? '',
+            timestamp: DateTime.now(),
+          );
+          _controller.add(event);
+        }
+      }
+    });
+  }
 
   Future<bool> hasOverlayPermission() async {
     try {

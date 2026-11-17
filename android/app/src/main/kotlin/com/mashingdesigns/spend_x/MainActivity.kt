@@ -3,6 +3,7 @@ package com.mashingdesigns.spend_x
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Telephony
@@ -34,6 +35,33 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ensureSecureStorageAlgorithmMarkers()
+        handleTestIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleTestIntent(intent)
+    }
+
+    private fun handleTestIntent(intent: Intent?) {
+        if (intent?.action == "com.mashingdesigns.spend_x.TEST_ISLAND") {
+            val amount = intent.getStringExtra("amount") ?: "371.52"
+            val isExpense = intent.getBooleanExtra("isExpense", true)
+            val subtitle = intent.getStringExtra("subtitle") ?: "District • CSB Card"
+            DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, subtitle)
+
+            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                MethodChannel(messenger, CHANNEL).invokeMethod(
+                    "onDynamicIslandEvent",
+                    mapOf(
+                        "amount" to amount,
+                        "isExpense" to isExpense,
+                        "subtitle" to subtitle,
+                        "title" to "SpendX"
+                    )
+                )
+            }
+        }
     }
 
     private fun ensureSecureStorageAlgorithmMarkers() {

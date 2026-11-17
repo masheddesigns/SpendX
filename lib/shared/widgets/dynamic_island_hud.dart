@@ -79,7 +79,9 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
-    final topOffset = topPadding > 0 ? (topPadding * 0.16).clamp(4.0, 10.0) : 8.0;
+    const topOffset = 4.0;
+    final targetHeight = (topPadding > 0 ? topPadding + 46.0 : 76.0);
+    final contentTopPadding = topPadding > 0 ? topPadding * 0.65 : 22.0;
 
     return Stack(
       children: [
@@ -95,11 +97,14 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                 final prog = _expandAnimation.value;
                 if (prog <= 0.01) return const SizedBox.shrink();
 
-                final width = lerpDouble(60.0, 310.0, prog)!;
-                final height = lerpDouble(24.0, 50.0, prog)!;
+                final width = lerpDouble(60.0, 336.0, prog)!;
+                final height = lerpDouble(28.0, targetHeight, prog)!;
                 final isExpense = _currentEvent!.isExpense;
                 final accentColor = isExpense ? const Color(0xFFF43F5E) : const Color(0xFF10B981);
                 final amountColor = isExpense ? const Color(0xFFFCA5A5) : const Color(0xFF34D399);
+
+                final rawAmount = _currentEvent!.amount;
+                final displayAmount = rawAmount.startsWith('₹') ? rawAmount : '₹$rawAmount';
 
                 return Center(
                   child: GestureDetector(
@@ -119,24 +124,29 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                       child: Container(
                         width: width,
                         height: height,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: EdgeInsets.only(
+                          left: 14,
+                          right: 14,
+                          top: lerpDouble(4.0, contentTopPadding, prog)!,
+                          bottom: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0D0D12),
-                          borderRadius: BorderRadius.circular(26),
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(30),
                           border: Border.all(
                             color: accentColor.withValues(alpha: 0.35 * prog),
                             width: 1.2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.6 * prog),
-                              blurRadius: 18,
-                              spreadRadius: 1,
+                              color: Colors.black.withValues(alpha: 0.75 * prog),
+                              blurRadius: 22,
+                              spreadRadius: 2,
                               offset: const Offset(0, 4),
                             ),
                             BoxShadow(
-                              color: accentColor.withValues(alpha: 0.18 * prog),
-                              blurRadius: 12,
+                              color: accentColor.withValues(alpha: 0.22 * prog),
+                              blurRadius: 14,
                               spreadRadius: 0,
                               offset: const Offset(0, 1),
                             ),
@@ -148,18 +158,18 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  // SpendX Micro Flame / Gem
+                                  // SpendX Icon Gem
                                   Container(
-                                    width: 28,
-                                    height: 28,
+                                    width: 30,
+                                    height: 30,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: accentColor.withValues(alpha: 0.15),
+                                      color: accentColor.withValues(alpha: 0.16),
                                     ),
                                     alignment: Alignment.center,
                                     child: Icon(
                                       isExpense ? Icons.arrow_outward_rounded : Icons.south_west_rounded,
-                                      size: 16,
+                                      size: 17,
                                       color: accentColor,
                                     ),
                                   ),
@@ -171,7 +181,7 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '${isExpense ? "-" : "+"} ${_currentEvent!.amount}',
+                                          '${isExpense ? "-" : "+"} $displayAmount',
                                           maxLines: 1,
                                           style: TextStyle(
                                             color: amountColor,

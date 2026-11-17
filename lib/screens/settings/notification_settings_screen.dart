@@ -5,6 +5,7 @@ import '../../models/notification_settings.dart';
 import '../../widgets/spendx_app_bar.dart';
 import '../../services/notification_service_v2.dart';
 import '../../services/reminder_service.dart';
+import '../../services/dynamic_island_service.dart';
 import '../../widgets/custom_snackbar.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
@@ -120,6 +121,100 @@ class _NotificationSettingsScreenState
               ),
             ),
           ],
+          _sectionLabel('DYNAMIC ISLAND & ORIGIN ISLAND'),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: Color(0xFF818CF8),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Dynamic Island HUD',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Animates live expense & income notch pill around camera hole',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF43F5E),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          DynamicIslandService.instance.show(
+                            amount: '371.52',
+                            isExpense: true,
+                            subtitle: 'District • CSB Card',
+                          );
+                        },
+                        icon: const Icon(Icons.arrow_outward_rounded, size: 16),
+                        label: const Text('Test Expense', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          DynamicIslandService.instance.show(
+                            amount: '25,000.00',
+                            isExpense: false,
+                            subtitle: 'Salary • Federal Bank',
+                          );
+                        },
+                        icon: const Icon(Icons.south_west_rounded, size: 16),
+                        label: const Text('Test Income', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           _sectionLabel('GLOBAL'),
           _card([
             ListTile(

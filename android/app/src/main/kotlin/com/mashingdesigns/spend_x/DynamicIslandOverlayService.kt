@@ -4,6 +4,9 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -11,6 +14,7 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -23,6 +27,7 @@ import android.view.animation.OvershootInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.app.NotificationCompat
 
 /**
  * Native Android Dynamic Island Notch HUD for SpendX.
@@ -64,18 +69,25 @@ object DynamicIslandOverlayService {
         isExpense: Boolean,
         subtitle: String = "SpendX"
     ) {
-        if (!hasPermission(context)) {
+        val appContext = context.applicationContext
+
+        // If app is currently in foreground, Flutter's in-app DynamicIslandHUD handles the animation cleanly.
+        // We do NOT show system overlay or system notification to avoid heads-up popups over the app!
+        if (MainActivity.isAppInForeground) {
             return
         }
 
-        // When user is actively inside SpendX, the in-app Flutter DynamicIslandHUD displays it cleanly
-        if (MainActivity.isAppInForeground) {
+        // When user is outside the app (e.g. on Home screen, WhatsApp, etc.):
+        // 1. Show Vivo Origin Island notification capsule (LOW importance so NO heads-up popup banner!)
+        showVivoOriginIslandNotification(appContext, title, amount, isExpense, subtitle)
+
+        // 2. If overlay permission is granted, also show floating WindowManager notch HUD
+        if (!hasPermission(appContext)) {
             return
         }
 
         mainHandler.post {
             try {
-                val appContext = context.applicationContext
                 val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
                 // Dismiss existing if already visible
@@ -272,6 +284,82 @@ object DynamicIslandOverlayService {
                 }
                 collapseAnim.start()
             } catch (_: Exception) {}
+        }
+    }
+
+    fun showVivoOriginIslandNotification(
+        context: Context,
+        title: String,
+        amount: String,
+        isExpense: Boolean,
+        subtitle: String
+    ) {
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "spendx_origin_island_v2"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    notificationManager.deleteNotificationChannel("spendx_origin_island")
+                } catch (_: Exception) {}
+
+                val channel = NotificationChannel(
+                    channelId,
+                    "Origin Island Alerts",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "SpendX Origin Island & Dynamic Island Live Updates"
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val dirSymbol = if (isExpense) "-" else "+"
+            val displayAmount = "$dirSymbol₹$amount"
+            val fullTitle = if (isExpense) "Spent $displayAmount" else "Received $displayAmount"
+            val sub = if (subtitle.isNotBlank() && subtitle != "SpendX") subtitle else (if (isExpense) "Expense Recorded" else "Income Recorded")
+
+            val builder = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(fullTitle)
+                .setContentText(sub)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setAutoCancel(true)
+                .setTimeoutAfter(4000)
+
+            // Vivo Origin Island / Atomic Island specific extras
+            val extras = Bundle().apply {
+                putInt("notification.superx.operation", 0) // 0 = create/show capsule
+                putString("notification.superx.template", "capsule")
+                putString("notification.superx.scene", "finance")
+                putString("notification.superx.title", fullTitle)
+                putString("notification.superx.content", sub)
+                putString("notification.superx.capsule.text", displayAmount)
+                putString("vivo.summary.text", displayAmount)
+                putBoolean("is_live_activity", true)
+                putString("android.substName", "SpendX")
+            }
+            builder.addExtras(extras)
+
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            if (launchIntent != null) {
+                val pi = PendingIntent.getActivity(
+                    context,
+                    1005,
+                    launchIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.setContentIntent(pi)
+            }
+
+            notificationManager.notify(7771, builder.build())
+        } catch (e: Exception) {
+            android.util.Log.w("OriginIsland", "Failed to show Vivo Origin Island notification: $e")
         }
     }
 }
