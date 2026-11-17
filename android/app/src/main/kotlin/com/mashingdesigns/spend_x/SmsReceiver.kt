@@ -46,9 +46,14 @@ class SmsReceiver : BroadcastReceiver() {
                 ).invokeMethod("onSmsReceived", listOf(sender, fullBody))
             }
         } else {
-            // App is killed / engine not cached: queue and notify user
+            // App is killed / engine not cached: queue and notify user via Dynamic Island
             SmsStore.queue(context, sender, fullBody)
-            showNotification(context, fullBody)
+            val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
+            if (parsed != null) {
+                DynamicIslandOverlayService.show(context, "SpendX", parsed.first, parsed.second, sender)
+            } else {
+                DynamicIslandOverlayService.show(context, "SpendX", fullBody.take(24), true, sender)
+            }
         }
     }
 

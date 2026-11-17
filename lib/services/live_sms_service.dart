@@ -463,12 +463,25 @@ class LiveSmsService with WidgetsBindingObserver {
           isExpense: singleTransaction.type != 'income',
           subtitle: singleTransaction.notes.isNotEmpty ? singleTransaction.notes : dir,
         );
-        await NotificationServiceV2().showNotification(
-          title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
-          body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
-          category: 'generalUpdates',
-          payload: jsonEncode({'source_type': 'activity'}),
-        );
+
+        final hasOverlay = await DynamicIslandService.instance.hasOverlayPermission();
+        if (hasOverlay) {
+          // On supported devices with dynamic island, keep history silently without popup banner
+          await NotificationServiceV2().showSilentNotification(
+            title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
+            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            category: 'generalUpdates',
+            payload: jsonEncode({'source_type': 'activity'}),
+          );
+        } else {
+          // Fallback to standard heads-up popup on devices without dynamic island
+          await NotificationServiceV2().showNotification(
+            title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
+            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            category: 'generalUpdates',
+            payload: jsonEncode({'source_type': 'activity'}),
+          );
+        }
       } else if (added > 1) {
         await NotificationServiceV2().showNotification(
           title: '$added transactions recorded',
@@ -1014,12 +1027,25 @@ class LiveSmsService with WidgetsBindingObserver {
           isExpense: singleTransaction.type != 'income',
           subtitle: singleTransaction.notes.isNotEmpty ? singleTransaction.notes : dir,
         );
-        await NotificationServiceV2().showNotification(
-          title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
-          body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
-          category: 'generalUpdates',
-          payload: jsonEncode({'source_type': 'activity'}),
-        );
+
+        final hasOverlay = await DynamicIslandService.instance.hasOverlayPermission();
+        if (hasOverlay) {
+          // On supported devices with dynamic island, keep history silently without popup banner
+          await NotificationServiceV2().showSilentNotification(
+            title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
+            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            category: 'generalUpdates',
+            payload: jsonEncode({'source_type': 'activity'}),
+          );
+        } else {
+          // Fallback to standard heads-up popup on devices without dynamic island
+          await NotificationServiceV2().showNotification(
+            title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
+            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            category: 'generalUpdates',
+            payload: jsonEncode({'source_type': 'activity'}),
+          );
+        }
       } else if (added > 1) {
         await NotificationServiceV2().showNotification(
           title: '$added transactions recorded',

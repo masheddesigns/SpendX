@@ -291,6 +291,10 @@ class BankNotificationListener : NotificationListenerService() {
             }
         } else {
             SmsStore.queue(this, senderTitle, fullBody)
+            val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
+            if (parsed != null) {
+                DynamicIslandOverlayService.show(this, "SpendX", parsed.first, parsed.second, displaySender)
+            }
         }
     }
 }

@@ -212,6 +212,31 @@ class _NotificationSettingsScreenState
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      CustomSnackBar.show(
+                        context,
+                        message: '⏳ Press Home! Dynamic Island will trigger over your screen in 3s...',
+                      );
+                      Future.delayed(const Duration(seconds: 3), () {
+                        DynamicIslandService.instance.show(
+                          amount: '371.52',
+                          isExpense: true,
+                          subtitle: 'District • CSB Card',
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: const Text('Test Outside App (Press Home in 3s)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                ),
               ],
             ),
           ),

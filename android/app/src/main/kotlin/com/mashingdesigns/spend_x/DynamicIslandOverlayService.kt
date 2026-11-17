@@ -70,19 +70,14 @@ object DynamicIslandOverlayService {
         subtitle: String = "SpendX"
     ) {
         val appContext = context.applicationContext
+        android.util.Log.d("DynamicIsland", "show() called: amount=$amount, isExpense=$isExpense, hasOverlayPermission=${hasPermission(appContext)}")
 
-        // If app is currently in foreground, Flutter's in-app DynamicIslandHUD handles the animation cleanly.
-        // We do NOT show system overlay or system notification to avoid heads-up popups over the app!
-        if (MainActivity.isAppInForeground) {
-            return
-        }
-
-        // When user is outside the app (e.g. on Home screen, WhatsApp, etc.):
-        // 1. Show Vivo Origin Island notification capsule (LOW importance so NO heads-up popup banner!)
+        // 1. Trigger native Vivo Origin Island / Atomic Island notification capsule
         showVivoOriginIslandNotification(appContext, title, amount, isExpense, subtitle)
 
-        // 2. If overlay permission is granted, also show floating WindowManager notch HUD
+        // 2. Trigger system WindowManager notch overlay (floats over ALL apps, launcher & desktop)
         if (!hasPermission(appContext)) {
+            android.util.Log.w("DynamicIsland", "Overlay permission NOT granted, skipping WindowManager overlay")
             return
         }
 
@@ -99,11 +94,11 @@ object DynamicIslandOverlayService {
 
                 val dp = appContext.resources.displayMetrics.density
 
-                val collapsedWidth = (80 * dp).toInt()
-                val expandedWidth = (310 * dp).toInt()
-                val targetHeight = (48 * dp).toInt()
+                val collapsedWidth = (60 * dp).toInt()
+                val expandedWidth = (340 * dp).toInt()
+                val targetHeight = (64 * dp).toInt()
 
-                var notchY = (8 * dp).toInt()
+                var notchY = 0
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     try {
                         val insets = windowManager.currentWindowMetrics.windowInsets
@@ -111,7 +106,7 @@ object DynamicIslandOverlayService {
                         if (cutout != null) {
                             val top = cutout.safeInsetTop
                             if (top > 0) {
-                                notchY = maxOf(4, (top * 0.16).toInt())
+                                notchY = maxOf(0, (top * 0.08).toInt())
                             }
                         }
                     } catch (_: Exception) {}
@@ -141,69 +136,76 @@ object DynamicIslandOverlayService {
                 val rootPill = LinearLayout(appContext).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding((12 * dp).toInt(), (6 * dp).toInt(), (14 * dp).toInt(), (6 * dp).toInt())
+                    setPadding((16 * dp).toInt(), (18 * dp).toInt(), (16 * dp).toInt(), (6 * dp).toInt())
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.RECTANGLE
-                        cornerRadius = 24 * dp
-                        setColor(Color.parseColor("#0F0F14"))
-                        setStroke((1 * dp).toInt(), Color.parseColor(if (isExpense) "#33F43F5E" else "#3310B981"))
+                        cornerRadius = 32 * dp
+                        setColor(Color.BLACK)
+                        setStroke((1.2 * dp).toInt(), Color.parseColor(if (isExpense) "#4DF43F5E" else "#4D10B981"))
                     }
-                    elevation = 16 * dp
+                    elevation = 24 * dp
                     alpha = 0f
                 }
 
-                // SpendX Icon / Logo
-                val iconView = ImageView(appContext).apply {
-                    setImageResource(R.mipmap.launcher_icon)
+                // Micro Direction Icon Gem
+                val iconView = TextView(appContext).apply {
+                    text = if (isExpense) "↗" else "↙"
+                    setTextColor(Color.parseColor(if (isExpense) "#F43F5E" else "#10B981"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                    gravity = Gravity.CENTER
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
-                        setColor(Color.parseColor(if (isExpense) "#2A1820" else "#13271E"))
+                        setColor(Color.parseColor(if (isExpense) "#2BF43F5E" else "#2B10B981"))
                     }
-                    setPadding((3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt(), (3 * dp).toInt())
                 }
 
-                // Content Column (Direction + Subtitle)
+                // Content Column (Amount + Subtitle)
                 val textColumn = LinearLayout(appContext).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_VERTICAL
                 }
 
-                val titleView = TextView(appContext).apply {
-                    text = if (subtitle.isNotBlank() && subtitle != "SpendX") subtitle else (if (isExpense) "Spent" else "Received")
-                    setTextColor(Color.parseColor("#9CA3AF"))
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                val cleanAmount = if (amount.startsWith("₹")) amount else "₹$amount"
+                val prefix = if (isExpense) "- " else "+ "
+                val amountView = TextView(appContext).apply {
+                    text = "$prefix$cleanAmount"
+                    setTextColor(Color.parseColor(if (isExpense) "#FCA5A5" else "#34D399"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                    typeface = Typeface.create("sans-serif", Typeface.BOLD)
                     maxLines = 1
                 }
 
-                val amountView = TextView(appContext).apply {
-                    val prefix = if (isExpense) "- " else "+ "
-                    text = "$prefix$amount"
-                    setTextColor(Color.parseColor(if (isExpense) "#FCA5A5" else "#34D399"))
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                val titleView = TextView(appContext).apply {
+                    text = if (subtitle.isNotBlank() && subtitle != "SpendX") subtitle else (if (isExpense) "Spent" else "Received")
+                    setTextColor(Color.parseColor("#9CA3AF"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                     maxLines = 1
                 }
 
                 textColumn.addView(amountView)
                 textColumn.addView(titleView)
 
-                // Direction Badge Icon on Right
+                // Direction Badge Pill on Right (EXPENSE / INCOME)
                 val badgeView = TextView(appContext).apply {
-                    text = if (isExpense) "↑" else "↓"
-                    setTextColor(Color.parseColor(if (isExpense) "#EF4444" else "#10B981"))
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    text = if (isExpense) "EXPENSE" else "INCOME"
+                    setTextColor(Color.parseColor(if (isExpense) "#F43F5E" else "#10B981"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
                     typeface = Typeface.create("sans-serif", Typeface.BOLD)
+                    letterSpacing = 0.05f
+                    setPadding((7 * dp).toInt(), (3 * dp).toInt(), (7 * dp).toInt(), (3 * dp).toInt())
                     background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(Color.parseColor(if (isExpense) "#33EF4444" else "#3310B981"))
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = 12 * dp
+                        setColor(Color.parseColor(if (isExpense) "#33F43F5E" else "#3310B981"))
                     }
                     gravity = Gravity.CENTER
                 }
 
                 rootPill.addView(
                     iconView,
-                    LinearLayout.LayoutParams((28 * dp).toInt(), (28 * dp).toInt()).apply {
+                    LinearLayout.LayoutParams((30 * dp).toInt(), (30 * dp).toInt()).apply {
                         rightMargin = (10 * dp).toInt()
                     }
                 )
@@ -213,7 +215,7 @@ object DynamicIslandOverlayService {
                 )
                 rootPill.addView(
                     badgeView,
-                    LinearLayout.LayoutParams((24 * dp).toInt(), (24 * dp).toInt())
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                 )
 
                 // Tap to open app
@@ -230,6 +232,7 @@ object DynamicIslandOverlayService {
 
                 windowManager.addView(rootPill, layoutParams)
                 activeView = rootPill
+                android.util.Log.d("DynamicIsland", "WindowManager.addView succeeded! width=$expandedWidth, height=$targetHeight, y=$notchY")
 
                 // Spring expansion animation
                 val anim = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -246,11 +249,11 @@ object DynamicIslandOverlayService {
                 }
                 anim.start()
 
-                // Auto-collapse after 3.8 seconds
+                // Auto-collapse after 4.2 seconds
                 dismissRunnable = Runnable {
                     dismissIsland(windowManager, rootPill)
                 }
-                mainHandler.postDelayed(dismissRunnable!!, 3800)
+                mainHandler.postDelayed(dismissRunnable!!, 4200)
 
             } catch (e: Exception) {
                 android.util.Log.w("DynamicIsland", "Failed to display dynamic island: $e")

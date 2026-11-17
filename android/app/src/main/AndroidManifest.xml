@@ -96,6 +96,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Broadcast receiver for Dynamic Island system overlay triggers -->
+        <receiver
+            android:name=".DynamicIslandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.mashingdesigns.spend_x.TEST_ISLAND" />
+                <action android:name="com.mashingdesigns.spend_x.SHOW_DYNAMIC_ISLAND" />
+            </intent-filter>
+        </receiver>
+
         <!-- Listens to bank and UPI push notifications when banks don't send SMS -->
         <service
             android:name=".BankNotificationListener"

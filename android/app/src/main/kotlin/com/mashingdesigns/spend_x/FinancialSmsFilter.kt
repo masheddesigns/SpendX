@@ -176,4 +176,14 @@ object FinancialSmsFilter {
         // Must have (transaction verb OR balance keyword) AND an explicit account/card/UPI identifier
         return (hasTxVerb || hasBalance) && hasAccount
     }
+
+    fun extractAmountAndDirection(body: String): Pair<String, Boolean>? {
+        val m = AMOUNT_REGEX.matcher(body)
+        if (!m.find()) return null
+        val raw = m.group(0) ?: return null
+        val clean = raw.replace(Regex("""(?i)[rs\.inr₹\s]"""), "").trim()
+        val lower = body.lowercase()
+        val isIncome = lower.contains("credited") || lower.contains("received") || lower.contains("deposited") || lower.contains("refund")
+        return Pair(clean, !isIncome)
+    }
 }

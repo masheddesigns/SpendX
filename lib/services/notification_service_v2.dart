@@ -203,6 +203,44 @@ class NotificationServiceV2 {
     );
   }
 
+  /// Posts a silent status bar notification (history record only) without
+  /// triggering intrusive heads-up dropdown popups over the user's screen.
+  Future<void> showSilentNotification({
+    required String title,
+    required String body,
+    String? category,
+    int? id,
+    String? payload,
+  }) async {
+    if (!_initialized) await init();
+    if (category != null) {
+      final settings = await _settingsService.load();
+      final map = settings.toMap();
+      if (map[category] == false) return;
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      'spendx_silent_channel',
+      'SpendX History',
+      channelDescription: 'Silent transaction history for Dynamic Island alerts',
+      icon: '@drawable/ic_notification',
+      importance: Importance.low,
+      priority: Priority.low,
+      enableVibration: false,
+      playSound: false,
+      showWhen: true,
+    );
+
+    const details = NotificationDetails(android: androidDetails);
+    await _plugin.show(
+      id: id ?? _allocateEphemeralId(),
+      title: title,
+      body: body,
+      notificationDetails: details,
+      payload: payload,
+    );
+  }
+
   Future<void> scheduleNotification({
     required int id,
     required String title,
