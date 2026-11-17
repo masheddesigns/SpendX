@@ -338,7 +338,7 @@ object DynamicIslandOverlayService {
                 val channel = NotificationChannel(
                     channelId,
                     "SpendX Live Updates",
-                    NotificationManager.IMPORTANCE_DEFAULT
+                    NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "SpendX Origin Island & Dynamic Island Live Updates"
                     setShowBadge(false)
@@ -365,18 +365,26 @@ object DynamicIslandOverlayService {
                 .setContentTitle(fullTitle)
                 .setContentText(sub)
                 .setSubText(displayAmount)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOngoing(true)
-                .setProgress(100, 100, false)
+                .setOnlyAlertOnce(true)
+                .setColorized(false)
                 .setColor(Color.parseColor(if (isExpense) "#F43F5E" else "#10B981"))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(sub))
                 .setShowWhen(true)
 
-            // Vivo Origin Island / SuperX extras (Reverse-engineered from SystemUIPlugin.apk)
+            // Vivo Origin Island & Android 15 Promotable Ongoing extras
             val extras = Bundle().apply {
+                // Android 15 standard promotable ongoing flags (hasPromotableCharacteristics)
+                putBoolean("android.requestPromotedOngoing", true)
+                putString("android.shortCriticalText", displayAmount)
+                putString("android.substName", "SpendX")
+
+                // Vivo SuperX / Origin Island core flags
                 putInt("notification.superx.operation", 0) // 0 = create/show capsule
-                putInt("notification.superx.template", 1)  // template 1 (int!)
+                putInt("notification.superx.template", 1)  // template 1
                 putInt("notification.superx.newNode", 1)
                 putInt("notification.superx.displays", 0x00111111) // All target locations
                 putInt("progress_style_business_type", 1)
@@ -386,9 +394,7 @@ object DynamicIslandOverlayService {
                 putString("notification.superx.content", sub)
                 putString("notification.superx.capsule.text", displayAmount)
                 putString("vivo.summary.text", displayAmount)
-                putString("android.shortCriticalText", displayAmount)
                 putBoolean("is_live_activity", true)
-                putString("android.substName", "SpendX")
 
                 // ShortInfos bundle (required by validSuperXShortInfoData in SuperXNotificationDataUtils)
                 val shortInfos = Bundle().apply {

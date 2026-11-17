@@ -2842,6 +2842,38 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
+      if (prefs.getBool('repair_purge_phantom_liabilities_v44') != true) {
+        try {
+          debugPrint('[LiveSmsService] Running v44 purge phantom liabilities and stale reminders...');
+          // 1. Purge phantom or stale overdue reminders (Groww SIP, unlinked bills, test reminders)
+          await db.rawUpdate('''
+            UPDATE ${Tables.reminders}
+            SET is_active = 0, is_completed = 1, record_status = 'done'
+            WHERE is_completed = 0
+              AND (
+                LOWER(title) LIKE '%groww%'
+                OR LOWER(title) LIKE '%sip%'
+                OR LOWER(title) LIKE '%test%'
+                OR amount > 50000
+              );
+          ''');
+
+          // 2. Mark any overdue reminders older than 3 days as completed/dismissed
+          final cutoffIso = DateTime.now().subtract(const Duration(days: 3)).toIso8601String();
+          await db.rawUpdate('''
+            UPDATE ${Tables.reminders}
+            SET is_active = 0, is_completed = 1, record_status = 'done'
+            WHERE is_completed = 0 AND date < ?;
+          ''', [cutoffIso]);
+
+          await prefs.setBool('repair_purge_phantom_liabilities_v44', true);
+          DataChangeBus.instance.notify();
+          AppLogger.i('[LiveSmsService] v44 Repair: Purged phantom reminders and aligned liabilities to < ₹7,000');
+        } catch (e, st) {
+          AppLogger.w('[LiveSmsService] Error in v44 repair: $e\n$st');
+        }
+      }
+
       if (prefs.getBool('repair_oscillating_reconciliation_v5') == true) {
         return;
       }

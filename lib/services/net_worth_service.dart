@@ -22,18 +22,8 @@ class NetWorthService {
     final rawLiabilities = liabilitiesMoney.toRupees;
     final netWorth = netWorthMoney.toRupees;
 
-    // Financial invariant: Gross Assets cannot be negative in accounting presentation.
-    // If net asset balance is negative (e.g. overdrawn checking or unbacked expenses),
-    // the negative portion is classified as an overdraft liability.
-    final double displayAssets;
-    final double displayLiabilities;
-    if (rawAssets < 0) {
-      displayAssets = 0.0;
-      displayLiabilities = rawLiabilities + rawAssets.abs();
-    } else {
-      displayAssets = rawAssets;
-      displayLiabilities = rawLiabilities;
-    }
+    final double displayAssets = rawAssets;
+    final double displayLiabilities = rawLiabilities;
 
     return (
       assets: displayAssets,

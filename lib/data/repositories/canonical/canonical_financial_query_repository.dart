@@ -70,62 +70,33 @@ class CanonicalFinancialQueryRepository {
   }
 
   /// Calculates total liabilities across all active non-system liability accounts
-  /// plus any bank account overdrafts (asset accounts with negative balance).
+  /// (credit cards, loans, borrowings).
   Future<Money> getTotalLiabilities({Transaction? txn, String currency = 'INR'}) async {
     final db = await _getExecutor(txn);
     final result = await db.rawQuery('''
-      SELECT (
-        (
-          SELECT COALESCE(
-            SUM(
-              CASE WHEN account_liability > 0 THEN account_liability ELSE 0 END
-            ), 0
-          )
-          FROM (
-            SELECT p.account_id,
-              SUM(
-                CASE
-                  WHEN p.direction = 'credit' THEN p.amount_minor_units
-                  ELSE -p.amount_minor_units
-                END
-              ) AS account_liability
-            FROM ${TablesV24.postings} p
-            JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-            JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-            WHERE a.account_type = 'liability'
-              AND a.is_system = 0
-              AND a.is_active = 1
-              AND e.lifecycle_status = 'posted'
-            GROUP BY p.account_id
-          )
-        )
-        +
-        (
-          SELECT COALESCE(
-            SUM(
-              CASE WHEN account_balance < 0 THEN -account_balance ELSE 0 END
-            ), 0
-          )
-          FROM (
-            SELECT p.account_id,
-              SUM(
-                CASE
-                  WHEN p.direction = 'debit' THEN p.amount_minor_units
-                  ELSE -p.amount_minor_units
-                END
-              ) AS account_balance
-            FROM ${TablesV24.postings} p
-            JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-            JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-            WHERE a.account_type = 'asset'
-              AND a.is_system = 0
-              AND a.is_active = 1
-              AND e.lifecycle_status = 'posted'
-            GROUP BY p.account_id
-          )
-        )
-      ) AS total_liabilities;
-    ''',);
+      SELECT COALESCE(
+        SUM(
+          CASE WHEN account_liability > 0 THEN account_liability ELSE 0 END
+        ), 0
+      ) AS total_liabilities
+      FROM (
+        SELECT p.account_id,
+          SUM(
+            CASE
+              WHEN p.direction = 'credit' THEN p.amount_minor_units
+              ELSE -p.amount_minor_units
+            END
+          ) AS account_liability
+        FROM ${TablesV24.postings} p
+        JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+        JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+        WHERE a.account_type = 'liability'
+          AND a.is_system = 0
+          AND a.is_active = 1
+          AND e.lifecycle_status = 'posted'
+        GROUP BY p.account_id
+      );
+    ''');
 
     final amount = (result.first['total_liabilities'] as num?)?.toInt() ?? 0;
     return Money.fromMinorUnits(amount, currency: currency);

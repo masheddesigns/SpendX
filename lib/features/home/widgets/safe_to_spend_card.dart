@@ -140,9 +140,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
       final suffix = remainingCount > 0 ? " (+$remainingCount more)" : "";
       statusLine =
           "${primary.title} is $overdueDays ${overdueDays == 1 ? 'day' : 'days'} overdue$suffix";
-      displayAmount = shortfallAmount.abs() > 0
-          ? shortfallAmount.abs()
-          : primary.amount.toRupees;
+      final overdueTotal = overdueItems.fold<double>(0.0, (sum, i) => sum + i.amount.toRupees);
+      displayAmount = overdueTotal > 0 ? overdueTotal : primary.amount.toRupees;
       amountCaption = "unpaid obligations need coverage";
     } else if (hasDueToday) {
       final primary = dueTodayItems.first;
