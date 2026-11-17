@@ -92,6 +92,21 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "hasOverlayPermission" -> {
+                    result.success(DynamicIslandOverlayService.hasPermission(this))
+                }
+                "requestOverlayPermission" -> {
+                    DynamicIslandOverlayService.requestPermission(this)
+                    result.success(true)
+                }
+                "showDynamicIsland" -> {
+                    val title = call.argument<String>("title") ?: "SpendX"
+                    val amount = call.argument<String>("amount") ?: ""
+                    val isExpense = call.argument<Boolean>("isExpense") ?: true
+                    val subtitle = call.argument<String>("subtitle") ?: ""
+                    DynamicIslandOverlayService.show(this, title, amount, isExpense, subtitle)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

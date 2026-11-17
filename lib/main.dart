@@ -17,6 +17,7 @@ import 'data/core/tracked_database_task_queue.dart';
 import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
 import 'core/config/app_env.dart';
+import 'shared/widgets/dynamic_island_hud.dart';
 
 Future<void>? appInitFuture;
 
@@ -169,6 +170,9 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: settings.themeMode,
       home: const SplashScreen(),
+      builder: (context, child) => DynamicIslandHUD(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

@@ -38,6 +38,9 @@ class BankNotificationListener : NotificationListenerService() {
 
         // Known banking, UPI, and financial payment app packages in India
         private val PAYMENT_PACKAGES = setOf(
+            // Email & Bank Alerts
+            "com.google.android.gm",                 // Gmail (Bank alerts & statements)
+
             // Top UPI & Payment Apps
             "com.google.android.apps.nbu.paisa.user", // Google Pay
             "com.phonepe.app",                       // PhonePe

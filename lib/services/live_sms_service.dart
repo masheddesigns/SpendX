@@ -28,6 +28,7 @@ import '../domain/finance/finance.dart';
 import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/card_statement.dart';
+import 'dynamic_island_service.dart';
 import '../models/credit_card.dart';
 import '../models/loan.dart';
 import '../models/recurring_template.dart';
@@ -457,6 +458,11 @@ class LiveSmsService with WidgetsBindingObserver {
       if (added == 1 && singleTransaction != null) {
         final dir = singleTransaction.type == 'income' ? 'Received' : 'Spent';
         final merchant = singleTransaction.notes.isNotEmpty ? ' at ${singleTransaction.notes}' : '';
+        await DynamicIslandService.instance.show(
+          amount: AppFormat.currency(singleTransaction.amount),
+          isExpense: singleTransaction.type != 'income',
+          subtitle: singleTransaction.notes.isNotEmpty ? singleTransaction.notes : dir,
+        );
         await NotificationServiceV2().showNotification(
           title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
           body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
@@ -1003,6 +1009,11 @@ class LiveSmsService with WidgetsBindingObserver {
       if (added == 1 && singleTransaction != null) {
         final dir = singleTransaction.type == 'income' ? 'Received' : 'Spent';
         final merchant = singleTransaction.notes.isNotEmpty ? ' at ${singleTransaction.notes}' : '';
+        await DynamicIslandService.instance.show(
+          amount: AppFormat.currency(singleTransaction.amount),
+          isExpense: singleTransaction.type != 'income',
+          subtitle: singleTransaction.notes.isNotEmpty ? singleTransaction.notes : dir,
+        );
         await NotificationServiceV2().showNotification(
           title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
           body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
@@ -2684,9 +2695,9 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
-      if (prefs.getBool('repair_card_outstandings_v42') != true) {
+      if (prefs.getBool('repair_card_outstandings_v43') != true) {
         try {
-          debugPrint('[LiveSmsService] Running v42 card outstandings repair...');
+          debugPrint('[LiveSmsService] Running v43 card outstandings repair...');
           await TablesV24.dropTriggers(db);
           await db.execute('PRAGMA foreign_keys = OFF;');
 
@@ -2730,13 +2741,13 @@ class LiveSmsService with WidgetsBindingObserver {
             }
 
             final curBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(cardId);
-            debugPrint('[v42_DEBUG] card: name=${cRow['name']}, last4=$last4, isCsb=$isCsb, isIcici=$isIcici, isHdfc=$isHdfc, curBal=${curBal.minorUnits}, targetUsed=$targetUsed');
+            debugPrint('[v43_DEBUG] card: name=${cRow['name']}, last4=$last4, isCsb=$isCsb, isIcici=$isIcici, isHdfc=$isHdfc, curBal=${curBal.minorUnits}, targetUsed=$targetUsed');
 
             if (targetUsed != null) {
               final deltaPaise = (targetUsed * 100.0).round() - curBal.minorUnits;
               if (deltaPaise != 0) {
                 final absPaise = deltaPaise.abs();
-                final eventId = 'evt_anchor_v42_$cardId';
+                final eventId = 'evt_anchor_v43_$cardId';
                 final now = DateTime.now().toIso8601String();
                 await db.insert(TablesV24.economicEvents, {
                   'id': eventId,
@@ -2788,7 +2799,7 @@ class LiveSmsService with WidgetsBindingObserver {
           // Silence reminders for paid cards
           await db.rawUpdate('''
             UPDATE ${Tables.reminders}
-            SET is_active = 0, record_status = 'done', status = 'inactive', amount = 0.0
+            SET is_active = 0, record_status = 'done', is_completed = 1, amount = 0.0
             WHERE id LIKE 'credit_due_%'
               AND (linked_entity_id IN (SELECT id FROM ${Tables.creditCards} WHERE last4 IN ('5007', '6366'))
                    OR id LIKE '%5007%' OR id LIKE '%6366%' OR id LIKE '%icici%' OR id LIKE '%hdfc%');
@@ -2797,11 +2808,11 @@ class LiveSmsService with WidgetsBindingObserver {
           await db.execute('PRAGMA foreign_keys = ON;');
           await TablesV24.installTriggers(db);
 
-          await prefs.setBool('repair_card_outstandings_v42', true);
+          await prefs.setBool('repair_card_outstandings_v43', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v42 Repair: Corrected card outstandings to authentic values (CSB: 3012.28, ICICI: 0.00, HDFC: 0.00) and silenced resolved reminders');
+          AppLogger.i('[LiveSmsService] v43 Repair: Corrected card outstandings to authentic values (CSB: 3012.28, ICICI: 0.00, HDFC: 0.00) and silenced resolved reminders');
         } catch (e, st) {
-          AppLogger.w('[LiveSmsService] Error in v42 repair: $e\n$st');
+          AppLogger.w('[LiveSmsService] Error in v43 repair: $e\n$st');
         }
       }
 
