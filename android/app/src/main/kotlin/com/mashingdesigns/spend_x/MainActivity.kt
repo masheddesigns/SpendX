@@ -25,6 +25,8 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         isAppInForeground = true
+        rebindNotificationListener()
+        BankNotificationListener.instance?.syncActiveNotifications()
     }
 
     override fun onPause() {
@@ -36,6 +38,19 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         ensureSecureStorageAlgorithmMarkers()
         handleTestIntent(intent)
+        rebindNotificationListener()
+    }
+
+    private fun rebindNotificationListener() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                val component = ComponentName(this, BankNotificationListener::class.java)
+                NotificationListenerService.requestRebind(component)
+                android.util.Log.i("MainActivity", "Requested rebind for BankNotificationListener")
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "requestRebind failed: $e")
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

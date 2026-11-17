@@ -7,7 +7,7 @@ import android.util.Log
 
 class DynamicIslandReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d("DynamicIslandReceiver", "onReceive called with action: ${intent.action}")
+        Log.i("DynamicIslandReceiver", "onReceive called with action: ${intent.action}")
         val amount = intent.getStringExtra("amount") ?: "371.52"
         val isExpense = intent.getBooleanExtra("isExpense", true)
         val subtitle = intent.getStringExtra("subtitle") ?: "District • CSB Card"

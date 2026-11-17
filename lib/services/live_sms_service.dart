@@ -340,7 +340,7 @@ class LiveSmsService with WidgetsBindingObserver {
           );
           _liveBuffer.add((sender: sender, body: body));
           _flushTimer?.cancel();
-          _flushTimer = Timer(const Duration(seconds: 3), () {
+          _flushTimer = Timer(const Duration(milliseconds: 100), () {
             TrackedDatabaseTaskQueue.instance.runTracked(
               'live_sms_flush_buffer',
               () => _flushLiveBuffer(),

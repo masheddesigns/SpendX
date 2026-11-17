@@ -170,7 +170,7 @@ class BankNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = this
-        Log.d("SpendX_Notif", "BankNotificationListener connected")
+        Log.i("SpendX_Notif", "BankNotificationListener connected")
         syncActiveNotifications()
     }
 
@@ -179,7 +179,7 @@ class BankNotificationListener : NotificationListenerService() {
         if (instance == this) {
             instance = null
         }
-        Log.d("SpendX_Notif", "BankNotificationListener disconnected")
+        Log.i("SpendX_Notif", "BankNotificationListener disconnected")
     }
 
     override fun onDestroy() {
@@ -196,7 +196,7 @@ class BankNotificationListener : NotificationListenerService() {
     fun syncActiveNotifications() {
         try {
             val active = activeNotifications ?: return
-            Log.d("SpendX_Notif", "syncActiveNotifications: processing ${active.size} active notifications")
+            Log.i("SpendX_Notif", "syncActiveNotifications: processing ${active.size} active notifications")
             for (sbn in active) {
                 processNotification(sbn)
             }
@@ -225,7 +225,7 @@ class BankNotificationListener : NotificationListenerService() {
             tag.contains("offer") || tag.contains("reward") || tag.contains("promo") ||
             tag.contains("marketing") || tag.contains("deal") || tag.contains("campaign") ||
             category == Notification.CATEGORY_PROMO || category == Notification.CATEGORY_RECOMMENDATION) {
-            Log.d("SpendX_Notif", "Dropped promotional/offer notification: pkg=$pkg, tag=$tag, channel=$channelId")
+            Log.i("SpendX_Notif", "Dropped promotional/offer notification: pkg=$pkg, tag=$tag, channel=$channelId")
             return
         }
 
@@ -253,7 +253,7 @@ class BankNotificationListener : NotificationListenerService() {
         val sbnKey = sbn.key ?: "${pkg}_${sbn.id}_${sbn.postTime}"
         val dedupKey = "$sbnKey|${fullBody.hashCode()}"
         if (PROCESSED_KEYS.contains(dedupKey)) {
-            Log.d("SpendX_Notif", "Skipping already processed active notification: $dedupKey")
+            Log.i("SpendX_Notif", "Skipping already processed active notification: $dedupKey")
             return
         }
         PROCESSED_KEYS.add(dedupKey)
@@ -277,10 +277,17 @@ class BankNotificationListener : NotificationListenerService() {
         // Even notifications from known payment packages (e.g. Google Pay, PhonePe) frequently
         // include ads, cashbacks, scratch cards, or loan offers that must NEVER become expense transactions.
         val isFinancial = FinancialSmsFilter.isFinancial(senderTitle, fullBody)
-        Log.d("SpendX_Notif", "onNotificationPosted: pkg=$pkg, sender=$senderTitle, isFinancial=$isFinancial, body=$fullBody")
+        Log.i("SpendX_Notif", "onNotificationPosted: pkg=$pkg, sender=$senderTitle, isFinancial=$isFinancial, body=$fullBody")
         if (!isFinancial) return
 
-        // Deliver to Flutter live on UI thread or queue for later
+        // 1. Trigger the Dynamic Island capsule IMMEDIATELY in native Kotlin!
+        val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
+        val amount = parsed?.first ?: ""
+        val isExpense = parsed?.second ?: true
+        Log.i("SpendX_Notif", "Financial transaction verified! Showing Dynamic Island: amount=$amount, isExpense=$isExpense, sender=$displaySender")
+        DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
+
+        // 2. Deliver to Flutter live on UI thread or queue for later
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -291,10 +298,6 @@ class BankNotificationListener : NotificationListenerService() {
             }
         } else {
             SmsStore.queue(this, senderTitle, fullBody)
-            val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
-            if (parsed != null) {
-                DynamicIslandOverlayService.show(this, "SpendX", parsed.first, parsed.second, displaySender)
-            }
         }
     }
 }

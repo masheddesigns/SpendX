@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <application
         android:label="SpendX"
         android:name="${applicationName}"
@@ -105,6 +108,15 @@
                 <action android:name="com.mashingdesigns.spend_x.SHOW_DYNAMIC_ISLAND" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".IslandForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Live financial transaction island notification" />
+        </service>
 
         <!-- Listens to bank and UPI push notifications when banks don't send SMS -->
         <service
