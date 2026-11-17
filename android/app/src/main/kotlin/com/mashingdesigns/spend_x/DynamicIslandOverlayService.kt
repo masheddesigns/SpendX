@@ -68,9 +68,15 @@ object DynamicIslandOverlayService {
             return
         }
 
+        // When user is actively inside SpendX, the in-app Flutter DynamicIslandHUD displays it cleanly
+        if (MainActivity.isAppInForeground) {
+            return
+        }
+
         mainHandler.post {
             try {
-                val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                val appContext = context.applicationContext
+                val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
                 // Dismiss existing if already visible
                 activeView?.let { existing ->
@@ -79,11 +85,25 @@ object DynamicIslandOverlayService {
                     activeView = null
                 }
 
-                val dp = context.resources.displayMetrics.density
+                val dp = appContext.resources.displayMetrics.density
 
                 val collapsedWidth = (80 * dp).toInt()
                 val expandedWidth = (310 * dp).toInt()
                 val targetHeight = (48 * dp).toInt()
+
+                var notchY = (8 * dp).toInt()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        val insets = windowManager.currentWindowMetrics.windowInsets
+                        val cutout = insets.displayCutout
+                        if (cutout != null) {
+                            val top = cutout.safeInsetTop
+                            if (top > 0) {
+                                notchY = maxOf(4, (top * 0.16).toInt())
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
 
                 val layoutParams = WindowManager.LayoutParams(
                     collapsedWidth,
@@ -99,14 +119,14 @@ object DynamicIslandOverlayService {
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                    y = (10 * dp).toInt()
+                    y = notchY
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
                     }
                 }
 
                 // Root pill container
-                val rootPill = LinearLayout(context).apply {
+                val rootPill = LinearLayout(appContext).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding((12 * dp).toInt(), (6 * dp).toInt(), (14 * dp).toInt(), (6 * dp).toInt())
@@ -121,7 +141,7 @@ object DynamicIslandOverlayService {
                 }
 
                 // SpendX Icon / Logo
-                val iconView = ImageView(context).apply {
+                val iconView = ImageView(appContext).apply {
                     setImageResource(R.mipmap.launcher_icon)
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
@@ -131,12 +151,12 @@ object DynamicIslandOverlayService {
                 }
 
                 // Content Column (Direction + Subtitle)
-                val textColumn = LinearLayout(context).apply {
+                val textColumn = LinearLayout(appContext).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_VERTICAL
                 }
 
-                val titleView = TextView(context).apply {
+                val titleView = TextView(appContext).apply {
                     text = if (subtitle.isNotBlank() && subtitle != "SpendX") subtitle else (if (isExpense) "Spent" else "Received")
                     setTextColor(Color.parseColor("#9CA3AF"))
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
@@ -144,7 +164,7 @@ object DynamicIslandOverlayService {
                     maxLines = 1
                 }
 
-                val amountView = TextView(context).apply {
+                val amountView = TextView(appContext).apply {
                     val prefix = if (isExpense) "- " else "+ "
                     text = "$prefix$amount"
                     setTextColor(Color.parseColor(if (isExpense) "#FCA5A5" else "#34D399"))
@@ -157,7 +177,7 @@ object DynamicIslandOverlayService {
                 textColumn.addView(titleView)
 
                 // Direction Badge Icon on Right
-                val badgeView = TextView(context).apply {
+                val badgeView = TextView(appContext).apply {
                     text = if (isExpense) "↑" else "↓"
                     setTextColor(Color.parseColor(if (isExpense) "#EF4444" else "#10B981"))
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -187,10 +207,10 @@ object DynamicIslandOverlayService {
                 // Tap to open app
                 rootPill.setOnClickListener {
                     try {
-                        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
                         if (launchIntent != null) {
                             launchIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            context.startActivity(launchIntent)
+                            appContext.startActivity(launchIntent)
                         }
                     } catch (_: Exception) {}
                     dismissIsland(windowManager, rootPill)

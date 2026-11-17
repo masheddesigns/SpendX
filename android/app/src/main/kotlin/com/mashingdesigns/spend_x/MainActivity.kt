@@ -18,6 +18,17 @@ class MainActivity : FlutterActivity() {
         const val CHANNEL = "spendx/sms_live"
         const val ENGINE_ID = "spendx_engine"
         private const val RECEIVE_SMS_REQUEST_CODE = 5001
+        @Volatile var isAppInForeground: Boolean = false
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isAppInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isAppInForeground = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

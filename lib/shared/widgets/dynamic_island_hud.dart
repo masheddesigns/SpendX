@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../services/dynamic_island_service.dart';
+import '../../services/notification_service_v2.dart';
 
 class DynamicIslandHUD extends StatefulWidget {
   final Widget child;
@@ -78,7 +79,7 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
-    final topOffset = topPadding > 0 ? topPadding - 2 : 12.0;
+    final topOffset = topPadding > 0 ? (topPadding * 0.16).clamp(4.0, 10.0) : 8.0;
 
     return Stack(
       children: [
@@ -102,6 +103,11 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
 
                 return Center(
                   child: GestureDetector(
+                    onTap: () {
+                      _dismissTimer?.cancel();
+                      _controller.reverse();
+                      NotificationServiceV2().handleNotificationNavigation('activity', '');
+                    },
                     onVerticalDragEnd: (details) {
                       if (details.primaryVelocity != null && details.primaryVelocity! < 0) {
                         _dismissTimer?.cancel();

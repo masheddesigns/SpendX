@@ -21,7 +21,7 @@ class DynamicIslandService {
   DynamicIslandService._();
   static final DynamicIslandService instance = DynamicIslandService._();
 
-  static const _channel = MethodChannel('com.mashingdesigns.spend_x/sms');
+  static const _channel = MethodChannel('spendx/sms_live');
 
   final _controller = StreamController<DynamicIslandEvent>.broadcast();
   Stream<DynamicIslandEvent> get events => _controller.stream;
