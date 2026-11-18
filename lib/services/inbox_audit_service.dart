@@ -223,10 +223,37 @@ class InboxAuditService {
         cutoffDate = DateTime(year, month, 1);
       }
       final sinceEpochMs = cutoffDate.millisecondsSinceEpoch;
-      final rawInbox = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
-        'sinceEpochMs': sinceEpochMs,
-        'limit': limit,
-      });
+      // Native pagination: bounded pages avoid a single oversized Binder reply.
+      final rawInbox = <dynamic>[];
+      {
+        final pageLimit = limit < 300 ? (limit < 1 ? 1 : limit) : 300;
+        int? beforeDate;
+        int? beforeId;
+        var pages = 0;
+        var hasMore = true;
+        while (hasMore && rawInbox.length < limit && pages < 200) {
+          final args = <String, dynamic>{
+            'sinceEpochMs': sinceEpochMs,
+            'limit': pageLimit,
+          };
+          if (beforeDate != null) args['beforeDate'] = beforeDate;
+          if (beforeId != null) args['beforeId'] = beforeId;
+          final page = await _channel
+              .invokeMapMethod<dynamic, dynamic>('queryInboxPage', args)
+              .timeout(const Duration(seconds: 15));
+          final batch = page?['messages'];
+          if (batch is List) rawInbox.addAll(batch);
+          hasMore = page?['hasMore'] == true;
+          final next = page?['nextCursor'];
+          if (next is Map) {
+            beforeDate = (next['date'] as num?)?.toInt();
+            beforeId = (next['id'] as num?)?.toInt();
+          } else {
+            break;
+          }
+          pages++;
+        }
+      }
 
       // 3. Query any queued SMS/notifications from native SmsStore
       List<dynamic>? rawPending;
@@ -235,10 +262,8 @@ class InboxAuditService {
       } catch (_) {}
 
       final combinedMessages = <Map<String, dynamic>>[];
-      if (rawInbox != null) {
-        for (final m in rawInbox) {
-          if (m is Map) combinedMessages.add(Map<String, dynamic>.from(m));
-        }
+      for (final m in rawInbox) {
+        if (m is Map) combinedMessages.add(Map<String, dynamic>.from(m));
       }
       if (rawPending != null) {
         for (final m in rawPending) {

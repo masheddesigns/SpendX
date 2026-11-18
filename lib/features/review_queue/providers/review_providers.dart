@@ -77,6 +77,16 @@ Future<void> approveReviewItem({
   final fallbackNote = parsed.rawText.length > 100
       ? parsed.rawText.substring(0, 100)
       : parsed.rawText;
+
+  // Balance-attribution candidates are informational: they exist because an
+  // SMS balance statement could not be matched to an instrument. Approving
+  // must not create a transaction (that would corrupt the ledger), so mark the
+  // candidate resolved and stop.
+  if (parsed.source == 'sms_balance' || parsed.method == 'balance') {
+    await rRepo.approve(item.id);
+    return;
+  }
+
   final type = typeOverride ?? (parsed.isCredit ? 'income' : 'expense');
 
   // Idempotency: if this item's transaction already exists (e.g. a prior

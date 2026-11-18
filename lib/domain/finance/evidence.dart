@@ -28,6 +28,9 @@ class Evidence {
   /// Unique identifier of the evidence record.
   final String id;
 
+  /// Durable source record identifier (e.g. `SRC:TELEPHONY_SMS:<id>` or `SRC:ANDROID_NOTIF:<pkg>:<id>:<tag>:<postTime>`).
+  final String? sourceRecordId;
+
   /// External evidence origin ('sms', 'ocr', 'csv_import', 'manual', 'bank_api').
   final String sourceType;
 
@@ -69,6 +72,7 @@ class Evidence {
 
   const Evidence({
     required this.id,
+    this.sourceRecordId,
     required this.sourceType,
     this.sourceIdentifier,
     required this.sourceTimestamp,
@@ -89,6 +93,7 @@ class Evidence {
   Evidence purgeRawPayload() {
     return Evidence(
       id: id,
+      sourceRecordId: sourceRecordId,
       sourceType: sourceType,
       sourceIdentifier: sourceIdentifier,
       sourceTimestamp: sourceTimestamp,
@@ -109,6 +114,7 @@ class Evidence {
   Evidence linkToEvent(String eventId) {
     return Evidence(
       id: id,
+      sourceRecordId: sourceRecordId,
       sourceType: sourceType,
       sourceIdentifier: sourceIdentifier,
       sourceTimestamp: sourceTimestamp,
@@ -131,6 +137,7 @@ class Evidence {
       other is Evidence &&
           runtimeType == other.runtimeType &&
           id == other.id &&
+          sourceRecordId == other.sourceRecordId &&
           sourceType == other.sourceType &&
           sourceIdentifier == other.sourceIdentifier &&
           sourceTimestamp == other.sourceTimestamp &&
@@ -143,6 +150,7 @@ class Evidence {
   @override
   int get hashCode => Object.hash(
         id,
+        sourceRecordId,
         sourceType,
         sourceIdentifier,
         sourceTimestamp,
@@ -155,5 +163,5 @@ class Evidence {
 
   @override
   String toString() =>
-      'Evidence(id: $id, src: $sourceType, ref: $externalReference, ctx: $accountContext, purged: $isPayloadPurged)';
+      'Evidence(id: $id, srcRecord: $sourceRecordId, src: $sourceType, ref: $externalReference, ctx: $accountContext, purged: $isPayloadPurged)';
 }

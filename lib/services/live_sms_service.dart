@@ -45,6 +45,49 @@ import 'transaction_text_parser.dart';
 import 'data_change_bus.dart';
 import 'inbox_audit_service.dart';
 import 'sync_activity_service.dart';
+import 'balance_attribution.dart';
+import 'legacy_repair_registry.dart';
+import 'sms_inbox_watermark.dart';
+import 'cross_channel_deduplication_service.dart';
+import '../data/repositories/review_repo.dart';
+
+/// Result of one `drainPending()` pass.
+///
+/// Every counter is derived from actual work performed in this pass; none are
+/// placeholders. `completed == false` means at least one page or message could
+/// not be processed and the caller should offer a retry instead of marking
+/// onboarding complete.
+class SmsDrainResult {
+  final int messagesScanned;
+  final int transactionsIngested;
+  final int balancesApplied;
+  final int quarantined;
+  final int rejected;
+  final bool completed;
+  final bool hasTransientFailure;
+  final String? error;
+
+  const SmsDrainResult({
+    required this.messagesScanned,
+    required this.transactionsIngested,
+    required this.balancesApplied,
+    required this.quarantined,
+    required this.rejected,
+    required this.completed,
+    required this.hasTransientFailure,
+    this.error,
+  });
+
+  const SmsDrainResult.empty()
+    : messagesScanned = 0,
+      transactionsIngested = 0,
+      balancesApplied = 0,
+      quarantined = 0,
+      rejected = 0,
+      completed = true,
+      hasTransientFailure = false,
+      error = null;
+}
 
 /// Live SMS detection: receives incoming bank/card/wallet SMS (via a native receiver),
 /// automatically classifies the transaction and instrument (credit card, bank, or wallet),
@@ -58,15 +101,30 @@ class LiveSmsService with WidgetsBindingObserver {
   static const String _enabledKey = 'live_sms_detection';
 
   bool _initialized = false;
-  final List<({String sender, String body})> _liveBuffer = [];
+  bool _legacyRepairAuditRecorded = false;
+  final List<({String sender, String body, String? sourceRecordId})> _liveBuffer = [];
   Timer? _flushTimer;
+
+  /// Durable `(date, _id)` watermark for the paginated inbox scan.
+  final SmsInboxScanRunner _inboxScanRunner = SmsInboxScanRunner();
 
   static const int _maxTransientRetries = 3;
   static const String _quarantineKey = 'spendx_sms_durable_quarantine_v1';
   static const String _failureCountsKey = 'spendx_sms_failure_counts_v1';
 
   final Map<String, int> _failureCounts = {};
-  final Map<String, ({String sender, String body, String error, String exceptionType, DateTime quarantinedAt, int failureCount})> _quarantined = {};
+  final Map<
+    String,
+    ({
+      String sender,
+      String body,
+      String error,
+      String exceptionType,
+      DateTime quarantinedAt,
+      int failureCount,
+    })
+  >
+  _quarantined = {};
 
   Future<void> _durableStateLock = Future.value();
 
@@ -96,9 +154,18 @@ class LiveSmsService with WidgetsBindingObserver {
   static bool testSimulateFailureClearSetFalse = false;
 
   @visibleForTesting
-  static Future<bool> Function(SharedPreferences prefs, String key, String value)? testSetStringInterceptor;
+  static Future<bool> Function(
+    SharedPreferences prefs,
+    String key,
+    String value,
+  )?
+  testSetStringInterceptor;
 
-  Future<bool> _saveString(SharedPreferences prefs, String key, String value) async {
+  Future<bool> _saveString(
+    SharedPreferences prefs,
+    String key,
+    String value,
+  ) async {
     if (testSetStringInterceptor != null) {
       return await testSetStringInterceptor!(prefs, key, value);
     }
@@ -115,20 +182,34 @@ class LiveSmsService with WidgetsBindingObserver {
   }
 
   @visibleForTesting
-  static Future<void> Function(String sender, String body)? testProcessBodyInterceptor;
+  static Future<void> Function(String sender, String body)?
+  testProcessBodyInterceptor;
 
   int get bufferCountForTesting => _liveBuffer.length;
-  void addLiveBufferForTesting(String sender, String body) {
-    _liveBuffer.add((sender: sender, body: body));
+  void addLiveBufferForTesting(String sender, String body, [String? sourceRecordId]) {
+    _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId));
   }
+
   Future<void> flushLiveBufferForTesting() => _flushLiveBuffer();
   void clearLiveBufferForTesting() => _liveBuffer.clear();
 
   int get quarantinedCountForTesting => _quarantined.length;
-  Map<String, ({String sender, String body, String error, String exceptionType, DateTime quarantinedAt, int failureCount})> get quarantinedForTesting => Map.unmodifiable(_quarantined);
+  Map<
+    String,
+    ({
+      String sender,
+      String body,
+      String error,
+      String exceptionType,
+      DateTime quarantinedAt,
+      int failureCount,
+    })
+  >
+  get quarantinedForTesting => Map.unmodifiable(_quarantined);
 
   @visibleForTesting
-  int? getFailureCountForTesting(String fingerprint) => _failureCounts[fingerprint];
+  int? getFailureCountForTesting(String fingerprint) =>
+      _failureCounts[fingerprint];
 
   @visibleForTesting
   void setFailureCountForTesting(String fingerprint, int count) {
@@ -142,14 +223,13 @@ class LiveSmsService with WidgetsBindingObserver {
     required String body,
     required Object error,
     required int failureCount,
-  }) =>
-      _durableQuarantineMessage(
-        fingerprint,
-        sender: sender,
-        body: body,
-        error: error,
-        failureCount: failureCount,
-      );
+  }) => _durableQuarantineMessage(
+    fingerprint,
+    sender: sender,
+    body: body,
+    error: error,
+    failureCount: failureCount,
+  );
 
   Future<void> reloadDurableStateForTesting() => _synchronizedDurable(() async {
     _quarantined.clear();
@@ -157,33 +237,43 @@ class LiveSmsService with WidgetsBindingObserver {
     await _loadDurableStateIfNeededLocked();
   });
 
-  Future<void> clearDurableQuarantineForTesting() => _synchronizedDurable(() async {
-    _failureCounts.clear();
-    _quarantined.clear();
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_quarantineKey);
-      await prefs.remove(_failureCountsKey);
-    } catch (_) {}
-  });
+  Future<void> clearDurableQuarantineForTesting() =>
+      _synchronizedDurable(() async {
+        _failureCounts.clear();
+        _quarantined.clear();
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_quarantineKey);
+          await prefs.remove(_failureCountsKey);
+        } catch (_) {}
+      });
 
-  Future<void> clearQuarantineForTesting() => clearDurableQuarantineForTesting();
+  Future<void> clearQuarantineForTesting() =>
+      clearDurableQuarantineForTesting();
 
   Future<bool> testAlreadyInApp(
     ParsedTransaction parsed, {
     bool isCcPayment = false,
     String? candidateAccountId,
-  }) =>
-      _alreadyInApp(
-        parsed,
-        isCcPayment: isCcPayment,
-        candidateAccountId: candidateAccountId,
-      );
+  }) => _alreadyInApp(
+    parsed,
+    isCcPayment: isCcPayment,
+    candidateAccountId: candidateAccountId,
+  );
 
-  Future<({bool added, String? balanceNote, Transaction? transaction})>
-      testProcessBody(String body, {String sender = '', bool skipBalance = false}) =>
-          _processBody(body, sender: sender, skipBalance: skipBalance);
-
+  Future<
+    ({
+      bool added,
+      String? balanceNote,
+      Transaction? transaction,
+      bool balanceApplied,
+    })
+  >
+  testProcessBody(
+    String body, {
+    String sender = '',
+    bool skipBalance = false,
+  }) => _processBody(body, sender: sender, skipBalance: skipBalance);
   static bool _isTransientError(Object error) {
     if (error is DatabaseException) {
       final msg = error.toString().toLowerCase();
@@ -194,7 +284,9 @@ class LiveSmsService with WidgetsBindingObserver {
         return true;
       }
     }
-    if (error is TimeoutException || error is SocketException || error is FileSystemException) {
+    if (error is TimeoutException ||
+        error is SocketException ||
+        error is FileSystemException) {
       return true;
     }
     return false;
@@ -202,7 +294,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
   Future<void> _loadDurableStateIfNeededLocked() async {
     if (testSimulateSharedPreferencesFailure) {
-      throw const FileSystemException('Simulated SharedPreferences persistence error');
+      throw const FileSystemException(
+        'Simulated SharedPreferences persistence error',
+      );
     }
     final prefs = await SharedPreferences.getInstance();
     if (_quarantined.isEmpty) {
@@ -239,39 +333,62 @@ class LiveSmsService with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> _isDurablyQuarantined(String fingerprint) => _synchronizedDurable(() async {
-    await _loadDurableStateIfNeededLocked();
-    return _quarantined.containsKey(fingerprint);
-  });
+  Future<bool> _isDurablyQuarantined(String fingerprint) =>
+      _synchronizedDurable(() async {
+        await _loadDurableStateIfNeededLocked();
+        return _quarantined.containsKey(fingerprint);
+      });
 
-  Future<int> _incrementFailureCount(String fingerprint) => _synchronizedDurable(() async {
+  Future<int> _incrementFailureCount(
+    String fingerprint,
+  ) => _synchronizedDurable(() async {
     await _loadDurableStateIfNeededLocked();
     final count = (_failureCounts[fingerprint] ?? 0) + 1;
-    final candidateCounts = Map<String, int>.from(_failureCounts)..[fingerprint] = count;
+    final candidateCounts = Map<String, int>.from(_failureCounts)
+      ..[fingerprint] = count;
 
     if (testSimulateSharedPreferencesFailure) {
-      throw const FileSystemException('Simulated SharedPreferences persistence error');
+      throw const FileSystemException(
+        'Simulated SharedPreferences persistence error',
+      );
     }
     final prefs = await SharedPreferences.getInstance();
-    final success = await _saveString(prefs, _failureCountsKey, jsonEncode(candidateCounts));
+    final success = await _saveString(
+      prefs,
+      _failureCountsKey,
+      jsonEncode(candidateCounts),
+    );
     if (!success) {
-      throw const FileSystemException('Failed to persist failure counter to SharedPreferences (setString returned false)');
+      throw const FileSystemException(
+        'Failed to persist failure counter to SharedPreferences (setString returned false)',
+      );
     }
     _failureCounts[fingerprint] = count;
     return count;
   });
 
-  Future<void> _clearFailureCount(String fingerprint) => _synchronizedDurable(() async {
+  Future<void> _clearFailureCount(
+    String fingerprint,
+  ) => _synchronizedDurable(() async {
     await _loadDurableStateIfNeededLocked();
     if (_failureCounts.containsKey(fingerprint)) {
-      final candidateCounts = Map<String, int>.from(_failureCounts)..remove(fingerprint);
+      final candidateCounts = Map<String, int>.from(_failureCounts)
+        ..remove(fingerprint);
       if (testSimulateSharedPreferencesFailure) {
-        throw const FileSystemException('Simulated SharedPreferences persistence error');
+        throw const FileSystemException(
+          'Simulated SharedPreferences persistence error',
+        );
       }
       final prefs = await SharedPreferences.getInstance();
-      final success = await _saveString(prefs, _failureCountsKey, jsonEncode(candidateCounts));
+      final success = await _saveString(
+        prefs,
+        _failureCountsKey,
+        jsonEncode(candidateCounts),
+      );
       if (!success) {
-        throw const FileSystemException('Failed to persist cleared failure counter to SharedPreferences (setString returned false)');
+        throw const FileSystemException(
+          'Failed to persist cleared failure counter to SharedPreferences (setString returned false)',
+        );
       }
       _failureCounts.remove(fingerprint);
     }
@@ -295,11 +412,15 @@ class LiveSmsService with WidgetsBindingObserver {
     );
 
     if (testSimulateSharedPreferencesFailure) {
-      throw const FileSystemException('Simulated SharedPreferences persistence error');
+      throw const FileSystemException(
+        'Simulated SharedPreferences persistence error',
+      );
     }
     final prefs = await SharedPreferences.getInstance();
     final rawQ = prefs.getString(_quarantineKey);
-    final current = rawQ != null ? (jsonDecode(rawQ) as Map<String, dynamic>) : <String, dynamic>{};
+    final current = rawQ != null
+        ? (jsonDecode(rawQ) as Map<String, dynamic>)
+        : <String, dynamic>{};
     current[fingerprint] = {
       'fingerprint': fingerprint,
       'sender': sender,
@@ -309,9 +430,15 @@ class LiveSmsService with WidgetsBindingObserver {
       'quarantined_at': now.toIso8601String(),
       'failure_count': failureCount,
     };
-    final success = await _saveString(prefs, _quarantineKey, jsonEncode(current));
+    final success = await _saveString(
+      prefs,
+      _quarantineKey,
+      jsonEncode(current),
+    );
     if (!success) {
-      throw const FileSystemException('Failed to persist quarantine record to SharedPreferences (setString returned false)');
+      throw const FileSystemException(
+        'Failed to persist quarantine record to SharedPreferences (setString returned false)',
+      );
     }
     _quarantined[fingerprint] = quarantineRecord;
   });
@@ -326,19 +453,25 @@ class LiveSmsService with WidgetsBindingObserver {
         final args = call.arguments as List?;
         String sender = '';
         String body = '';
+        String? sourceRecordId;
         if (args != null && args.length >= 2) {
           sender = args[0]?.toString() ?? '';
           body = args[1]?.toString() ?? '';
+          if (args.length >= 4) {
+            sourceRecordId = args[3]?.toString();
+          }
         } else if (args != null && args.isNotEmpty) {
           body = args.cast<String>().join('\n');
         }
-        AppLogger.i('[LiveSmsService] onSmsReceived: sender="$sender", body="$body"');
+        AppLogger.i(
+          '[LiveSmsService] onSmsReceived: sender="$sender", body="$body", sourceRecordId="$sourceRecordId"',
+        );
         if (body.isNotEmpty) {
           SyncActivityService.instance.startSync(
             title: 'Incoming Bank SMS',
             subtitle: 'Analyzing transaction alert...',
           );
-          _liveBuffer.add((sender: sender, body: body));
+          _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId));
           _flushTimer?.cancel();
           _flushTimer = Timer(const Duration(milliseconds: 100), () {
             TrackedDatabaseTaskQueue.instance.runTracked(
@@ -351,9 +484,6 @@ class LiveSmsService with WidgetsBindingObserver {
     });
 
     WidgetsBinding.instance.addObserver(this);
-
-    // Run database integrity and ledger balance repairs unconditionally
-    await runRepairsNow();
 
     // Drain any pending messages received while the app was closed.
     await drainPending();
@@ -388,14 +518,15 @@ class LiveSmsService with WidgetsBindingObserver {
     final batch = List.of(_liveBuffer);
     _liveBuffer.clear();
 
-    final unhandledTransient = <({String sender, String body})>[];
+    final unhandledTransient = <({String sender, String body, String? sourceRecordId})>[];
     var added = 0;
     String? balanceNote;
     Transaction? singleTransaction;
 
     for (final entry in batch) {
-      final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(entry.body);
-      if (await _isDurablyQuarantined(bodyFp)) {
+      final dedupKey = entry.sourceRecordId ??
+          CanonicalTransactionAdapter.computeBodyFingerprint(entry.body);
+      if (await _isDurablyQuarantined(dedupKey)) {
         continue;
       }
 
@@ -403,47 +534,59 @@ class LiveSmsService with WidgetsBindingObserver {
         if (testProcessBodyInterceptor != null) {
           await testProcessBodyInterceptor!(entry.sender, entry.body);
         }
-        final outcome = await _processBody(entry.body, sender: entry.sender);
+        final outcome = await _processBody(
+          entry.body,
+          sender: entry.sender,
+          sourceRecordId: entry.sourceRecordId,
+        );
         if (outcome.added) {
           added++;
           singleTransaction = outcome.transaction;
         }
         if (outcome.balanceNote != null) balanceNote = outcome.balanceNote;
         try {
-          await _clearFailureCount(bodyFp);
+          await _clearFailureCount(dedupKey);
         } catch (persistErr) {
-          AppLogger.w('[LiveSmsService] Failed to clear failure count in live buffer for $bodyFp: $persistErr');
+          AppLogger.w(
+            '[LiveSmsService] Failed to clear failure count in live buffer for $dedupKey: $persistErr',
+          );
         }
       } catch (e, st) {
         final isTransient = _isTransientError(e);
         int count = 1;
         try {
-          count = await _incrementFailureCount(bodyFp);
+          count = await _incrementFailureCount(dedupKey);
         } catch (persistErr) {
-          AppLogger.e('[LiveSmsService] Failed to persist failure counter in live buffer for $bodyFp: $persistErr');
+          AppLogger.e(
+            '[LiveSmsService] Failed to persist failure counter in live buffer for $dedupKey: $persistErr',
+          );
           unhandledTransient.add(entry);
           continue;
         }
 
         if (isTransient && count < _maxTransientRetries) {
-          AppLogger.w('[LiveSmsService] Transient failure processing live buffer SMS ($bodyFp), failureCount: $count: $e');
+          AppLogger.w(
+            '[LiveSmsService] Transient failure processing live buffer SMS ($dedupKey), failureCount: $count: $e',
+          );
           unhandledTransient.add(entry);
         } else {
           AppLogger.e(
-            '[LiveSmsService] Quarantined live buffer SMS. Fingerprint: $bodyFp, failureCount: $count, exception: ${e.runtimeType}: $e',
+            '[LiveSmsService] Quarantined live buffer SMS. Key: $dedupKey, failureCount: $count, exception: ${e.runtimeType}: $e',
             e,
             st,
           );
           try {
             await _durableQuarantineMessage(
-              bodyFp,
+              dedupKey,
               sender: entry.sender,
               body: entry.body,
               error: e,
               failureCount: count,
             );
           } catch (quarantineErr) {
-            AppLogger.e('[LiveSmsService] Failed to persist quarantine in live buffer for $bodyFp: $quarantineErr');
+            AppLogger.e(
+              '[LiveSmsService] Failed to persist quarantine in live buffer for $dedupKey: $quarantineErr',
+            );
             unhandledTransient.add(entry);
           }
         }
@@ -457,19 +600,25 @@ class LiveSmsService with WidgetsBindingObserver {
     try {
       if (added == 1 && singleTransaction != null) {
         final dir = singleTransaction.type == 'income' ? 'Received' : 'Spent';
-        final merchant = singleTransaction.notes.isNotEmpty ? ' at ${singleTransaction.notes}' : '';
+        final merchant = singleTransaction.notes.isNotEmpty
+            ? ' at ${singleTransaction.notes}'
+            : '';
         await DynamicIslandService.instance.show(
           amount: AppFormat.currency(singleTransaction.amount),
           isExpense: singleTransaction.type != 'income',
-          subtitle: singleTransaction.notes.isNotEmpty ? singleTransaction.notes : dir,
+          subtitle: singleTransaction.notes.isNotEmpty
+              ? singleTransaction.notes
+              : dir,
         );
 
-        final hasOverlay = await DynamicIslandService.instance.hasOverlayPermission();
+        final hasOverlay = await DynamicIslandService.instance
+            .hasOverlayPermission();
         if (hasOverlay) {
           // On supported devices with dynamic island, keep history silently without popup banner
           await NotificationServiceV2().showSilentNotification(
             title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
-            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            body:
+                '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
             category: 'generalUpdates',
             payload: jsonEncode({'source_type': 'activity'}),
           );
@@ -477,7 +626,8 @@ class LiveSmsService with WidgetsBindingObserver {
           // Fallback to standard heads-up popup on devices without dynamic island
           await NotificationServiceV2().showNotification(
             title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
-            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            body:
+                '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
             category: 'generalUpdates',
             payload: jsonEncode({'source_type': 'activity'}),
           );
@@ -485,7 +635,8 @@ class LiveSmsService with WidgetsBindingObserver {
       } else if (added > 1) {
         await NotificationServiceV2().showNotification(
           title: '$added transactions recorded',
-          body: '$added new transactions added from SMS — tap to view in Activity.',
+          body:
+              '$added new transactions added from SMS — tap to view in Activity.',
           category: 'generalUpdates',
           payload: jsonEncode({'source_type': 'activity'}),
         );
@@ -503,7 +654,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
     SyncActivityService.instance.complete(
       title: 'All Caught Up',
-      subtitle: added > 0 ? '$added new transactions recorded' : 'Accounts and cards are in sync',
+      subtitle: added > 0
+          ? '$added new transactions recorded'
+          : 'Accounts and cards are in sync',
       count: added,
     );
   }
@@ -527,7 +680,9 @@ class LiveSmsService with WidgetsBindingObserver {
   /// Checks whether Android Notification Access is granted to SpendX.
   Future<bool> isNotificationListenerEnabled() async {
     try {
-      final res = await _channel.invokeMethod<bool>('isNotificationListenerEnabled');
+      final res = await _channel.invokeMethod<bool>(
+        'isNotificationListenerEnabled',
+      );
       return res ?? false;
     } catch (_) {
       return false;
@@ -541,22 +696,79 @@ class LiveSmsService with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  /// Phase 0 safety gate.
+  ///
+  /// The 16 legacy self-healing routines are retained in
+  /// `_repairOscillatingReconciliationAdjustments` for manual qualification, but
+  /// they no longer execute automatically. They rewrote hardcoded balances and
+  /// deleted postings/evidence, and they were gated only by SharedPreferences,
+  /// so clearing app data re-ran all of them.
+  ///
+  /// This entry point now performs a read-only audit: it records the observed
+  /// SharedPreferences flags and the `blocked` decision in the durable
+  /// `ledger_backfill_flags` ledger. No financial table is touched.
   Future<void> runRepairsNow() async {
+    if (_legacyRepairAuditRecorded) return;
+    _legacyRepairAuditRecorded = true;
     try {
-      await _repairOscillatingReconciliationAdjustments();
+      final prefs = await SharedPreferences.getInstance();
+      for (final repair in LegacyRepairRegistry.repairs) {
+        final observed = prefs.getBool(repair.prefFlag) == true;
+        try {
+          await AppDatabase.instance.recordLegacyRepairPrefObservation(
+            repair.prefFlag,
+            wasSet: observed,
+          );
+          await AppDatabase.instance.recordLegacyRepairState(
+            repair.prefFlag,
+            'blocked',
+            detail: repair.destructive
+                ? 'destructive; auto-execution disabled'
+                : 'text-only; auto-execution disabled pending versioned migration',
+          );
+        } catch (e) {
+          AppLogger.w(
+            '[LiveSmsService] Could not record legacy repair state for '
+            '${repair.prefFlag}: $e',
+          );
+        }
+      }
+      AppLogger.i(
+        '[LiveSmsService] Legacy repairs blocked: '
+        '${LegacyRepairRegistry.repairs.length} routines inventoried, '
+        '0 executed automatically.',
+      );
     } catch (e, st) {
-      AppLogger.w('[LiveSmsService] runRepairsNow failed: $e\n$st');
+      AppLogger.w('[LiveSmsService] runRepairsNow audit failed: $e\n$st');
     }
   }
 
-  Future<void> drainPending() async {
-    await runRepairsNow();
-    if (!await enabled) return;
+  /// Manual qualification entry point.
+  ///
+  /// Never called by production startup. Kept so the routines can be exercised
+  /// against isolated fixtures after an operator has taken a backup.
+  @visibleForTesting
+  Future<void> runLegacyRepairsForQualification() async {
+    if (const bool.fromEnvironment('dart.vm.product')) {
+      throw UnsupportedError(
+        'Legacy repairs must not run from a release build',
+      );
+    }
+    await _repairOscillatingReconciliationAdjustments();
+  }
+
+  Future<SmsDrainResult> drainPending() async {
+    if (!await enabled) return const SmsDrainResult.empty();
     await DatabaseLifecycleCoordinator.instance.waitUntilWritable();
     int newlyIngested = 0;
+    int balancesApplied = 0;
+    int quarantined = 0;
+    int rejected = 0;
+    int scanned = 0;
+    bool inboxCompleted = true;
+    bool hasTransientFailure = false;
+    String? inboxError;
     try {
-      await _repairOscillatingReconciliationAdjustments();
-
       try {
         await _channel.invokeMethod('syncActiveNotifications');
       } catch (e) {
@@ -572,354 +784,21 @@ class LiveSmsService with WidgetsBindingObserver {
           now.month == 1 ? 12 : now.month - 1,
           1,
         );
-        final scanCutoff = startOfPreviousMonth;
-        final sinceEpochMs = scanCutoff.millisecondsSinceEpoch;
-        final limitToScan = 1000;
-        final inboxMessages = await _channel.invokeListMethod<dynamic>('queryInboxSince', {
-          'sinceEpochMs': sinceEpochMs,
-          'limit': limitToScan,
-        });
-        if (inboxMessages != null && inboxMessages.isNotEmpty) {
-          SyncActivityService.instance.startSync(
-            title: 'Syncing SMS Messages',
-            subtitle: 'Scanning ${inboxMessages.length} inbox messages...',
-          );
-          // 1. Ingest newly discovered historical transactions (skip individual balance mutations)
-          // Process messages chronologically (oldest first) so running ledger balances and synthetic refs are ordered
-          final chronologicalMessages = inboxMessages.reversed.toList();
-          for (final raw in chronologicalMessages) {
-            if (raw is Map) {
-              final sender = raw['address']?.toString() ?? '';
-              final body = raw['body']?.toString() ?? '';
-              final rawDate = raw['date'];
-              final DateTime? smsDate = rawDate != null
-                  ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
-                  : null;
-              if (body.trim().isNotEmpty) {
-                final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(body);
-                final existing = await CanonicalEventRepository().getEvidenceByFingerprint(bodyFp);
-                bool alreadyInDb = false;
-                if (existing != null && existing.economicEventId != null) {
-                  final db = await AppDatabase.instance.database;
-                  final evRows = await db.rawQuery(
-                    "SELECT id FROM ${TablesV24.economicEvents} WHERE id = ? AND lifecycle_status = 'posted'",
-                    [existing.economicEventId],
-                  );
-                  if (evRows.isNotEmpty) {
-                    alreadyInDb = true;
-                  }
-                }
-                if (!alreadyInDb && !await _isDurablyQuarantined(bodyFp)) {
-                  final classification = SmsImportService.instance.classifyMessage(body, sender, date: smsDate);
-                  if (classification.transaction != null) {
-                    final res = await _processBody(body, sender: sender, skipBalance: true, messageDate: smsDate);
-                    if (res.added) newlyIngested++;
-                  }
-                }
-              }
-            }
-          }
-
-          SyncActivityService.instance.updateProgress(
-            title: 'Reconciling Accounts',
-            subtitle: 'Updating bank balances and card statements...',
-            count: newlyIngested,
-          );
-          // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
-          final latestBankBalances = <String, ({double amount, DateTime date})>{};
-          final latestCardBalances = <String, ({double amount, bool isAvailableLimit, double? creditLimit, DateTime date})>{};
-          final latestCardStatements = <String, ({double amount, DateTime? dueDate, double? minDue, DateTime date, bool isStatementBill})>{};
-
-          for (final raw in inboxMessages) {
-            if (raw is Map) {
-              final sender = raw['address']?.toString() ?? '';
-              final body = raw['body']?.toString() ?? '';
-              final rawDate = raw['date'];
-              final DateTime? smsDate = rawDate != null
-                  ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
-                  : null;
-              if (body.trim().isEmpty) continue;
-
-              final classification = SmsImportService.instance.classifyMessage(body, sender, date: smsDate);
-              final hit = classification.balance;
-              if (hit != null && hit.amount > 0) {
-                if (hit.kind == BalanceKind.bank) {
-                  final key = hit.last4 ?? hit.bankKeyword;
-                  if (key != null && key.isNotEmpty) {
-                    final existing = latestBankBalances[key];
-                    if (existing == null || smsDate == null || existing.date.isBefore(smsDate)) {
-                      latestBankBalances[key] = (
-                        amount: hit.amount,
-                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                      );
-                    }
-                  }
-                } else if (hit.kind == BalanceKind.creditCard) {
-                  final key = hit.last4 ?? hit.bankKeyword;
-                  if (key != null && key.isNotEmpty) {
-                    if (hit.isStatementBill || hit.dueDate != null) {
-                      final existingStmt = latestCardStatements[key];
-                      if (existingStmt == null || smsDate == null || existingStmt.date.isBefore(smsDate)) {
-                        latestCardStatements[key] = (
-                          amount: hit.amount,
-                          dueDate: hit.dueDate,
-                          minDue: hit.minDue,
-                          date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                          isStatementBill: hit.isStatementBill,
-                        );
-                      }
-                    }
-                    if (hit.isAvailableLimit || !hit.isStatementBill) {
-                      final existing = latestCardBalances[key];
-                      if (existing == null || smsDate == null || existing.date.isBefore(smsDate)) {
-                        latestCardBalances[key] = (
-                          amount: hit.amount,
-                          isAvailableLimit: hit.isAvailableLimit,
-                          creditLimit: hit.creditLimit,
-                          date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                        );
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          // Apply latest detected bank balances to accounts
-          if (latestBankBalances.isNotEmpty) {
-            final accounts = await AccountRepo().getAll();
-            final db = await AppDatabase.instance.database;
-            for (final acc in accounts) {
-              if (acc.id.startsWith('system_') || acc.accountType == 'wallet') continue;
-              final matchByLast4 = acc.last4 != null && acc.last4!.isNotEmpty ? latestBankBalances[acc.last4!] : null;
-              var bestHit = matchByLast4;
-              if (bestHit == null) {
-                for (final entry in latestBankBalances.entries) {
-                  if (acc.bank.toLowerCase().contains(entry.key.toLowerCase()) ||
-                      acc.name.toLowerCase().contains(entry.key.toLowerCase())) {
-                    bestHit = entry.value;
-                    break;
-                  }
-                }
-              }
-              if (bestHit != null) {
-                // Adjust stated balance for any subsequent transactions that occurred after bestHit.date
-                final allAccountTxns = await db.rawQuery('''
-                  SELECT type, amount, account_id, related_entity_id, date, COALESCE(notes, '') as notes
-                  FROM ${Tables.transactions}
-                  WHERE (account_id = ? OR related_entity_id = ?)
-                    AND is_deleted = 0;
-                ''', [acc.id, acc.id]);
-
-                final bestHitUtc = bestHit.date.toUtc();
-                final postSmsTxns = <Map<String, dynamic>>[];
-                for (final row in allAccountTxns) {
-                  final rawDate = row['date'] as String?;
-                  final notes = (row['notes'] as String? ?? '').toLowerCase();
-                  if (rawDate != null) {
-                    final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                    if (txDate != null) {
-                      if (txDate.isAfter(bestHitUtc) ||
-                          (txDate.isAtSameMomentAs(bestHitUtc) && !notes.contains('bal') && !notes.contains('credited'))) {
-                        postSmsTxns.add(row);
-                      }
-                    }
-                  }
-                }
-
-                double effectiveBal = bestHit.amount;
-                for (final row in postSmsTxns) {
-                  final type = row['type'] as String;
-                  final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
-                  final fromAcc = row['account_id'] as String?;
-                  final toAcc = row['related_entity_id'] as String?;
-
-                  if (type == 'expense' || type == 'credit_payment' || type == 'credit_card_purchase') {
-                    if (fromAcc == acc.id) effectiveBal -= amt;
-                  } else if (type == 'income' || type == 'refund') {
-                    if (fromAcc == acc.id) effectiveBal += amt;
-                  } else if (type == 'transfer') {
-                    if (fromAcc == acc.id) effectiveBal -= amt;
-                    if (toAcc == acc.id) effectiveBal += amt;
-                  }
-                }
-
-                await AccountRepo().updateBalance(acc.id, effectiveBal, messageDate: DateTime.now());
-                AppLogger.i('[LiveSmsService] Reconciled bank balance for ${acc.name}: stated ₹${bestHit.amount} at ${bestHit.date}, adjusted to ₹$effectiveBal after ${postSmsTxns.length} subsequent transactions');
-              }
-            }
-          }
-
-          // Apply latest detected credit card balances
-          if (latestCardBalances.isNotEmpty) {
-            final cards = await CreditRepo().getAll();
-            final db = await AppDatabase.instance.database;
-            for (final card in cards) {
-              final matchByLast4 = card.last4.isNotEmpty ? latestCardBalances[card.last4] : null;
-              var bestHit = matchByLast4;
-              if (bestHit == null) {
-                for (final entry in latestCardBalances.entries) {
-                  if (card.bank.toLowerCase().contains(entry.key.toLowerCase()) ||
-                      card.name.toLowerCase().contains(entry.key.toLowerCase())) {
-                    bestHit = entry.value;
-                    break;
-                  }
-                }
-              }
-              if (bestHit != null) {
-                if (bestHit.isAvailableLimit) {
-                  final effectiveLimit = (card.limitAmount > 0)
-                      ? card.limitAmount
-                      : ((bestHit.creditLimit != null && bestHit.creditLimit! > 0) ? bestHit.creditLimit! : 0.0);
-                  if (effectiveLimit > 0) {
-                    double derived = (effectiveLimit - bestHit.amount).clamp(0.0, double.infinity);
-                    final allCardTxns = await db.rawQuery('''
-                      SELECT type, amount, account_id, related_entity_id, date
-                      FROM ${Tables.transactions}
-                      WHERE (related_entity_id = ? OR account_id = ?)
-                        AND is_deleted = 0;
-                    ''', [card.id, card.id]);
-                    final bestHitUtc = bestHit.date.toUtc();
-                    for (final row in allCardTxns) {
-                      final rawDate = row['date'] as String?;
-                      if (rawDate != null) {
-                        final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                        if (txDate != null && txDate.isAfter(bestHitUtc)) {
-                          final type = row['type'] as String;
-                          final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
-                          if (type == 'credit_payment' || type == 'refund') {
-                            derived -= amt;
-                          } else if (type == 'credit_card_purchase') {
-                            derived += amt;
-                          }
-                        }
-                      }
-                    }
-                    derived = derived.clamp(0.0, double.infinity);
-                  }
-                } else {
-                  // Net outstanding against any subsequent payments or spends
-                  double effectiveCardBal = bestHit.amount;
-                  final allCardTxns = await db.rawQuery('''
-                    SELECT type, amount, account_id, related_entity_id, date
-                    FROM ${Tables.transactions}
-                    WHERE (related_entity_id = ? OR account_id = ?)
-                      AND is_deleted = 0;
-                  ''', [card.id, card.id]);
-                  final bestHitUtc = bestHit.date.toUtc();
-                  for (final row in allCardTxns) {
-                    final rawDate = row['date'] as String?;
-                    if (rawDate != null) {
-                      final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                      if (txDate != null && txDate.isAfter(bestHitUtc)) {
-                        final type = row['type'] as String;
-                        final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
-                        if (type == 'credit_payment' || type == 'refund') {
-                          effectiveCardBal -= amt;
-                        } else if (type == 'credit_card_purchase') {
-                          effectiveCardBal += amt;
-                        }
-                      }
-                    }
-                  }
-                  effectiveCardBal = effectiveCardBal.clamp(0.0, double.infinity);
-                }
-                if (bestHit.creditLimit != null && bestHit.creditLimit! > 0 && card.limitAmount < bestHit.creditLimit!) {
-                  await CreditRepo().update(card.copyWith(limitAmount: bestHit.creditLimit!));
-                }
-                AppLogger.i('[LiveSmsService] Stated credit balance for ${card.name}: ₹${bestHit.amount} from latest SMS dated ${bestHit.date}');
-              }
-            }
-          }
-
-          // Apply latest detected credit card statements with time-stamped repayment reconciliation
-          if (latestCardStatements.isNotEmpty) {
-            final cards = await CreditRepo().getAll();
-            final db = await AppDatabase.instance.database;
-            for (final card in cards) {
-              final matchByLast4 = card.last4.isNotEmpty ? latestCardStatements[card.last4] : null;
-              var bestStmt = matchByLast4;
-              if (bestStmt == null) {
-                for (final entry in latestCardStatements.entries) {
-                  if (card.bank.toLowerCase().contains(entry.key.toLowerCase()) ||
-                      card.name.toLowerCase().contains(entry.key.toLowerCase())) {
-                    bestStmt = entry.value;
-                    break;
-                  }
-                }
-              }
-              if (bestStmt != null && bestStmt.amount > 0) {
-                // Calculate all repayments received on or after this statement's timestamp
-                final cardKw = card.bank.toLowerCase().contains('icici') ? 'icici' : (card.bank.toLowerCase().contains('csb') ? 'csb' : (card.bank.toLowerCase().contains('hdfc') ? 'hdfc' : ''));
-                final allPayments = await db.rawQuery('''
-                  SELECT amount, date
-                  FROM ${Tables.transactions}
-                  WHERE (related_entity_id = ? OR (type = 'credit_payment' AND ? != '' AND LOWER(COALESCE(notes, '')) LIKE '%' || ? || '%'))
-                    AND type = 'credit_payment'
-                    AND is_deleted = 0;
-                ''', [card.id, cardKw, cardKw]);
-                final stmtDateUtc = bestStmt.date.toUtc();
-                final windowStart = stmtDateUtc.subtract(const Duration(days: 10));
-                double totalPaidAfter = 0.0;
-                for (final row in allPayments) {
-                  final rawDate = row['date'] as String?;
-                  if (rawDate != null) {
-                    final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                    if (txDate != null && (txDate.isAfter(windowStart) || txDate.isAtSameMomentAs(windowStart))) {
-                      totalPaidAfter += (row['amount'] as num?)?.toDouble() ?? 0.0;
-                    }
-                  }
-                }
-                final remainingDue = (bestStmt.amount - totalPaidAfter).clamp(0.0, bestStmt.amount);
-
-                final updated = card.copyWith(
-                  lastStatementBalance: remainingDue,
-                  dueDay: bestStmt.dueDate?.day ?? card.dueDay,
-                );
-                await CreditRepo().update(updated);
-
-                // Insert into card_statements table if not existing
-                final stmtId = 'stmt_${card.id}_${bestStmt.date.millisecondsSinceEpoch}';
-                final existingStmt = await db.query(Tables.cardStatements, where: 'id = ?', whereArgs: [stmtId], limit: 1);
-                if (existingStmt.isEmpty) {
-                  await CreditRepo().insertStatement(CardStatement(
-                    id: stmtId,
-                    cardId: card.id,
-                    startDate: bestStmt.date.subtract(const Duration(days: 30)),
-                    endDate: bestStmt.date,
-                    statementAmount: bestStmt.amount,
-                    minimumDue: bestStmt.minDue ?? (bestStmt.amount * 0.05),
-                    generatedDate: bestStmt.date,
-                  ));
-                }
-
-                // Sync reminder
-                final isFullyPaid = remainingDue <= 0.01;
-                final dueDateTime = bestStmt.dueDate ?? card.nextDueDate;
-                await ReminderRepo().insertGlobalReminder(
-                  Reminder(
-                    id: 'credit_due_${card.id}',
-                    type: ReminderType.credit,
-                    title: 'Credit Card Due: ${card.name}',
-                    linkedEntityId: card.id,
-                    dueDate: dueDateTime,
-                    amount: isFullyPaid ? 0.0 : remainingDue,
-                    isActive: !isFullyPaid,
-                    status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
-                    recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
-                    sourceType: ReminderSourceType.credit,
-                    sourceId: card.id,
-                  ).toMap(),
-                );
-                AppLogger.i('[LiveSmsService] Time-stamped statement bill for ${card.name}: original ₹${bestStmt.amount} (dated ${bestStmt.date}), repayments after bill ₹$totalPaidAfter, net statement due ₹$remainingDue');
-              }
-            }
-          }
-
-          DataChangeBus.instance.notify();
+        final inboxScan = await _scanInboxWithWatermark(
+          cutoff: startOfPreviousMonth,
+        );
+        scanned += inboxScan.messagesScanned;
+        newlyIngested += inboxScan.transactionsIngested;
+        balancesApplied += inboxScan.balancesApplied;
+        rejected += inboxScan.rejected;
+        if (!inboxScan.completed) {
+          inboxCompleted = false;
+          inboxError ??=
+              inboxScan.error ?? 'Some SMS messages could not be processed.';
         }
       } catch (e) {
+        inboxCompleted = false;
+        inboxError = e.toString();
         AppLogger.d('[LiveSmsService] Inbox query catch-up error: $e');
       }
 
@@ -933,32 +812,51 @@ class LiveSmsService with WidgetsBindingObserver {
               : 'Accounts and cards are in sync',
           count: totalNew,
         );
-        return;
+        return SmsDrainResult(
+          messagesScanned: scanned,
+          transactionsIngested: totalNew,
+          balancesApplied: balancesApplied,
+          quarantined: quarantined,
+          rejected: rejected,
+          completed: inboxCompleted && !hasTransientFailure,
+          hasTransientFailure: hasTransientFailure,
+          error: inboxError,
+        );
       }
+      scanned += pending.length;
       var added = 0;
       Transaction? singleTransaction;
-      bool hasTransientFailure = false;
+      final processedSourceIds = <String>{};
 
       for (final item in pending) {
         String sender = '';
         String body = '';
+        String? sourceRecordId;
         if (item is Map) {
           sender = item['sender']?.toString() ?? '';
           body = item['body']?.toString() ?? '';
+          sourceRecordId = item['sourceRecordId']?.toString();
         } else if (item is String) {
           if (item.contains('\u0002')) {
             final parts = item.split('\u0002');
             sender = parts[0];
-            body = parts.sublist(1).join('\u0002');
+            body = parts.length > 1 ? parts[1] : '';
+            if (parts.length > 2 && parts[2].trim().isNotEmpty) {
+              sourceRecordId = parts[2];
+            }
           } else {
             body = item;
           }
         }
         if (body.trim().isEmpty) continue;
 
-        final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(body);
-        if (await _isDurablyQuarantined(bodyFp)) {
-          // Already durably quarantined on prior attempt — do not fail or block queue
+        final dedupKey = sourceRecordId ??
+            CanonicalTransactionAdapter.computeBodyFingerprint(body);
+        if (await _isDurablyQuarantined(dedupKey)) {
+          // Already durably quarantined on prior attempt — mark as processed so it leaves queue
+          if (sourceRecordId != null) {
+            processedSourceIds.add(sourceRecordId);
+          }
           continue;
         }
 
@@ -966,50 +864,82 @@ class LiveSmsService with WidgetsBindingObserver {
           if (testProcessBodyInterceptor != null) {
             await testProcessBodyInterceptor!(sender, body);
           }
-          final outcome = await _processBody(body, sender: sender, skipBalance: false);
+          final outcome = await _processBody(
+            body,
+            sender: sender,
+            sourceRecordId: sourceRecordId,
+            skipBalance: false,
+          );
           if (outcome.added) {
             added++;
             singleTransaction = outcome.transaction;
           }
+          if (outcome.balanceApplied) balancesApplied++;
+          if (sourceRecordId != null) {
+            processedSourceIds.add(sourceRecordId);
+          }
           try {
-            await _clearFailureCount(bodyFp);
+            await _clearFailureCount(dedupKey);
           } catch (persistErr) {
             hasTransientFailure = true;
-            AppLogger.e('[LiveSmsService] Failed to clear failure count for $bodyFp: $persistErr');
+            AppLogger.e(
+              '[LiveSmsService] Failed to clear failure count for $dedupKey: $persistErr',
+            );
           }
         } catch (e, st) {
           final isTransient = _isTransientError(e);
           int count = 1;
           try {
-            count = await _incrementFailureCount(bodyFp);
+            count = await _incrementFailureCount(dedupKey);
           } catch (persistErr) {
             hasTransientFailure = true;
-            AppLogger.e('[LiveSmsService] Failed to persist failure counter for $bodyFp: $persistErr');
+            AppLogger.e(
+              '[LiveSmsService] Failed to persist failure counter for $dedupKey: $persistErr',
+            );
             continue;
           }
 
           if (isTransient && count < _maxTransientRetries) {
             hasTransientFailure = true;
-            AppLogger.w('[LiveSmsService] Transient failure draining pending SMS ($bodyFp), failureCount: $count: $e');
+            AppLogger.w(
+              '[LiveSmsService] Transient failure draining pending SMS ($dedupKey), failureCount: $count: $e',
+            );
           } else {
             AppLogger.e(
-              '[LiveSmsService] Quarantined pending SMS. Fingerprint: $bodyFp, failureCount: $count, exception: ${e.runtimeType}: $e',
+              '[LiveSmsService] Quarantined pending SMS. Key: $dedupKey, failureCount: $count, exception: ${e.runtimeType}: $e',
               e,
               st,
             );
             try {
               await _durableQuarantineMessage(
-                bodyFp,
+                dedupKey,
                 sender: sender,
                 body: body,
                 error: e,
                 failureCount: count,
               );
+              quarantined++;
+              if (sourceRecordId != null) {
+                processedSourceIds.add(sourceRecordId);
+              }
             } catch (quarantineErr) {
               hasTransientFailure = true;
-              AppLogger.e('[LiveSmsService] Failed to persist quarantine for $bodyFp: $quarantineErr');
+              AppLogger.e(
+                '[LiveSmsService] Failed to persist quarantine for $dedupKey: $quarantineErr',
+              );
             }
           }
+        }
+      }
+
+      // Partially clear confirmed processed/quarantined entries from native queue
+      if (processedSourceIds.isNotEmpty) {
+        try {
+          await _channel.invokeMethod('removePendingSms', {
+            'sourceRecordIds': processedSourceIds.toList(),
+          });
+        } catch (e) {
+          AppLogger.w('[LiveSmsService] removePendingSms error: $e');
         }
       }
 
@@ -1021,19 +951,25 @@ class LiveSmsService with WidgetsBindingObserver {
 
       if (added == 1 && singleTransaction != null) {
         final dir = singleTransaction.type == 'income' ? 'Received' : 'Spent';
-        final merchant = singleTransaction.notes.isNotEmpty ? ' at ${singleTransaction.notes}' : '';
+        final merchant = singleTransaction.notes.isNotEmpty
+            ? ' at ${singleTransaction.notes}'
+            : '';
         await DynamicIslandService.instance.show(
           amount: AppFormat.currency(singleTransaction.amount),
           isExpense: singleTransaction.type != 'income',
-          subtitle: singleTransaction.notes.isNotEmpty ? singleTransaction.notes : dir,
+          subtitle: singleTransaction.notes.isNotEmpty
+              ? singleTransaction.notes
+              : dir,
         );
 
-        final hasOverlay = await DynamicIslandService.instance.hasOverlayPermission();
+        final hasOverlay = await DynamicIslandService.instance
+            .hasOverlayPermission();
         if (hasOverlay) {
           // On supported devices with dynamic island, keep history silently without popup banner
           await NotificationServiceV2().showSilentNotification(
             title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
-            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            body:
+                '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
             category: 'generalUpdates',
             payload: jsonEncode({'source_type': 'activity'}),
           );
@@ -1041,7 +977,8 @@ class LiveSmsService with WidgetsBindingObserver {
           // Fallback to standard heads-up popup on devices without dynamic island
           await NotificationServiceV2().showNotification(
             title: '$dir ${AppFormat.currency(singleTransaction.amount)}',
-            body: '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
+            body:
+                '$dir ${AppFormat.currency(singleTransaction.amount)}$merchant — tap to view or edit in Activity.',
             category: 'generalUpdates',
             payload: jsonEncode({'source_type': 'activity'}),
           );
@@ -1049,7 +986,8 @@ class LiveSmsService with WidgetsBindingObserver {
       } else if (added > 1) {
         await NotificationServiceV2().showNotification(
           title: '$added transactions recorded',
-          body: '$added new transactions added from SMS — tap to view in Activity.',
+          body:
+              '$added new transactions added from SMS — tap to view in Activity.',
           category: 'generalUpdates',
           payload: jsonEncode({'source_type': 'activity'}),
         );
@@ -1063,9 +1001,569 @@ class LiveSmsService with WidgetsBindingObserver {
             : 'Accounts and cards are in sync',
         count: totalNew,
       );
-    } catch (_) {
-      // Channel may be unavailable (e.g. tests / desktop) — ignore.
+      return SmsDrainResult(
+        messagesScanned: scanned,
+        transactionsIngested: totalNew,
+        balancesApplied: balancesApplied,
+        quarantined: quarantined,
+        rejected: rejected,
+        completed: inboxCompleted && !hasTransientFailure,
+        hasTransientFailure: hasTransientFailure,
+        error: inboxError,
+      );
+    } catch (e) {
+      // Channel may be unavailable (e.g. tests / desktop) — report a retryable
+      // failure instead of pretending the import completed.
+      AppLogger.w('[LiveSmsService] drainPending failed: $e');
+      return SmsDrainResult(
+        messagesScanned: scanned,
+        transactionsIngested: newlyIngested,
+        balancesApplied: balancesApplied,
+        quarantined: quarantined,
+        rejected: rejected,
+        completed: false,
+        hasTransientFailure: hasTransientFailure,
+        error: e.toString(),
+      );
     }
+  }
+
+  /// Scans the inbox using the durable `(date, _id)` watermark.
+  ///
+  /// The runner fetches the bounded target in native descending order, ingests
+  /// it in ascending order, reconciles balances over the same target, and only
+  /// then commits the scan fence as the new watermark. A failed page, failed
+  /// message, or failed balance pass leaves the committed watermark untouched;
+  /// a restart resumes from the durable in-scan progress.
+  Future<
+    ({
+      int messagesScanned,
+      int transactionsIngested,
+      int balancesApplied,
+      int rejected,
+      bool completed,
+      String? error,
+    })
+  >
+  _scanInboxWithWatermark({required DateTime cutoff}) async {
+    var ingested = 0;
+    var rejected = 0;
+    var balancesApplied = 0;
+
+    final outcome = await _inboxScanRunner.run(
+      cutoffMs: cutoff.millisecondsSinceEpoch,
+      fetchPage: ({required int sinceEpochMs, int? beforeDate, int? beforeId}) {
+        final args = <String, dynamic>{
+          'sinceEpochMs': sinceEpochMs,
+          'limit': _inboxScanRunner.pageSize,
+        };
+        if (beforeDate != null) args['beforeDate'] = beforeDate;
+        if (beforeId != null) args['beforeId'] = beforeId;
+        return _channel.invokeMapMethod<dynamic, dynamic>(
+          'queryInboxPage',
+          args,
+        );
+      },
+      onTargetFetched: (count) {
+        if (count > 0) {
+          SyncActivityService.instance.startSync(
+            title: 'Syncing SMS Messages',
+            subtitle: 'Scanning $count inbox messages...',
+          );
+        }
+      },
+      onLog: (message) => AppLogger.d(message),
+      ingestBatch: (ascendingMessages) async {
+        // Ingest chronologically (oldest first) so running ledger balances and
+        // synthetic references stay ordered.
+        for (final raw in ascendingMessages) {
+          if (raw is! Map) continue;
+          final sender = raw['address']?.toString() ?? '';
+          final body = raw['body']?.toString() ?? '';
+          final rawDate = raw['date'];
+          final rawId = raw['_id'] ?? raw['id'];
+          final DateTime? smsDate = rawDate != null
+              ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
+              : null;
+          if (body.trim().isEmpty) continue;
+
+          final sourceRecordId = rawId != null ? 'SRC:TELEPHONY_SMS:$rawId' : null;
+          final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(
+            body,
+          );
+
+          if (!await _isDurablyQuarantined(sourceRecordId ?? bodyFp)) {
+            final classification = SmsImportService.instance.classifyMessage(
+              body,
+              sender,
+              date: smsDate,
+            );
+            if (classification.transaction != null) {
+              final res = await _processBody(
+                body,
+                sender: sender,
+                sourceRecordId: sourceRecordId,
+                skipBalance: true,
+                messageDate: smsDate,
+              );
+              if (res.added) ingested++;
+            } else if (classification.balance == null) {
+              rejected++;
+            }
+          }
+        }
+      },
+      applyBalances: (inboxMessages) async {
+        SyncActivityService.instance.updateProgress(
+          title: 'Reconciling Accounts',
+          subtitle: 'Updating bank balances and card statements...',
+          count: ingested,
+        );
+
+        // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
+        final latestBankBalances = <String, ({double amount, DateTime date})>{};
+        final latestCardBalances =
+            <
+              String,
+              ({
+                double amount,
+                bool isAvailableLimit,
+                double? creditLimit,
+                DateTime date,
+              })
+            >{};
+        final latestCardStatements =
+            <
+              String,
+              ({
+                double amount,
+                DateTime? dueDate,
+                double? minDue,
+                DateTime date,
+                bool isStatementBill,
+              })
+            >{};
+
+        for (final raw in inboxMessages) {
+          if (raw is Map) {
+            final sender = raw['address']?.toString() ?? '';
+            final body = raw['body']?.toString() ?? '';
+            final rawDate = raw['date'];
+            final DateTime? smsDate = rawDate != null
+                ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
+                : null;
+            if (body.trim().isEmpty) continue;
+
+            final classification = SmsImportService.instance.classifyMessage(
+              body,
+              sender,
+              date: smsDate,
+            );
+            final hit = classification.balance;
+            if (hit != null && hit.amount > 0) {
+              if (hit.kind == BalanceKind.bank) {
+                final key = hit.last4 ?? hit.bankKeyword;
+                if (key != null && key.isNotEmpty) {
+                  final existing = latestBankBalances[key];
+                  if (existing == null ||
+                      smsDate == null ||
+                      existing.date.isBefore(smsDate)) {
+                    latestBankBalances[key] = (
+                      amount: hit.amount,
+                      date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                    );
+                  }
+                }
+              } else if (hit.kind == BalanceKind.creditCard) {
+                final key = hit.last4 ?? hit.bankKeyword;
+                if (key != null && key.isNotEmpty) {
+                  if (hit.isStatementBill || hit.dueDate != null) {
+                    final existingStmt = latestCardStatements[key];
+                    if (existingStmt == null ||
+                        smsDate == null ||
+                        existingStmt.date.isBefore(smsDate)) {
+                      latestCardStatements[key] = (
+                        amount: hit.amount,
+                        dueDate: hit.dueDate,
+                        minDue: hit.minDue,
+                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                        isStatementBill: hit.isStatementBill,
+                      );
+                    }
+                  }
+                  if (hit.isAvailableLimit || !hit.isStatementBill) {
+                    final existing = latestCardBalances[key];
+                    if (existing == null ||
+                        smsDate == null ||
+                        existing.date.isBefore(smsDate)) {
+                      latestCardBalances[key] = (
+                        amount: hit.amount,
+                        isAvailableLimit: hit.isAvailableLimit,
+                        creditLimit: hit.creditLimit,
+                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Apply latest detected bank balances to accounts.
+        //
+        // Each statement is resolved independently with the same evidence
+        // rules as live ingestion: a statement is applied only when issuer +
+        // last4 (or a unique last4) identify exactly one asset account.
+        // Ambiguous statements are skipped so no balance is changed on a
+        // guess; live/pending messages have already been routed to the
+        // Review Queue by `_applyBalance`.
+        if (latestBankBalances.isNotEmpty) {
+          final accounts = await AccountRepo().getAll();
+          final db = await AppDatabase.instance.database;
+          for (final entry in latestBankBalances.entries) {
+            final key = entry.key;
+            final bestHit = entry.value;
+            final hasLast4 = _looksLikeLast4(key);
+            final attribution = BalanceAttribution.resolve(
+              kind: BalanceKind.bank,
+              last4: hasLast4 ? key : null,
+              bankKeyword: hasLast4 ? null : key,
+              accounts: accounts,
+              cards: const [],
+            );
+            if (!attribution.matched || attribution.isCreditCard) {
+              if (attribution.ambiguous) {
+                AppLogger.w(
+                  '[LiveSmsService] Bulk bank balance for "$key" is '
+                  'ambiguous (${attribution.reason}); balance preserved.',
+                );
+              }
+              continue;
+            }
+            final acc = accounts.firstWhere(
+              (a) => a.id == attribution.instrumentId,
+            );
+            // Adjust stated balance for any subsequent transactions that occurred after bestHit.date
+            final allAccountTxns = await db.rawQuery(
+              '''
+              SELECT type, amount, account_id, related_entity_id, date, COALESCE(notes, '') as notes
+              FROM ${Tables.transactions}
+              WHERE (account_id = ? OR related_entity_id = ?)
+                AND is_deleted = 0;
+            ''',
+              [acc.id, acc.id],
+            );
+
+            final bestHitUtc = bestHit.date.toUtc();
+            final postSmsTxns = <Map<String, dynamic>>[];
+            for (final row in allAccountTxns) {
+              final rawDate = row['date'] as String?;
+              final notes = (row['notes'] as String? ?? '').toLowerCase();
+              if (rawDate != null) {
+                final txDate = DateTime.tryParse(rawDate)?.toUtc();
+                if (txDate != null) {
+                  if (txDate.isAfter(bestHitUtc) ||
+                      (txDate.isAtSameMomentAs(bestHitUtc) &&
+                          !notes.contains('bal') &&
+                          !notes.contains('credited'))) {
+                    postSmsTxns.add(row);
+                  }
+                }
+              }
+            }
+
+            double effectiveBal = bestHit.amount;
+            for (final row in postSmsTxns) {
+              final type = row['type'] as String;
+              final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+              final fromAcc = row['account_id'] as String?;
+              final toAcc = row['related_entity_id'] as String?;
+
+              if (type == 'expense' ||
+                  type == 'credit_payment' ||
+                  type == 'credit_card_purchase') {
+                if (fromAcc == acc.id) effectiveBal -= amt;
+              } else if (type == 'income' || type == 'refund') {
+                if (fromAcc == acc.id) effectiveBal += amt;
+              } else if (type == 'transfer') {
+                if (fromAcc == acc.id) effectiveBal -= amt;
+                if (toAcc == acc.id) effectiveBal += amt;
+              }
+            }
+
+            await AccountRepo().updateBalance(
+              acc.id,
+              effectiveBal,
+              messageDate: DateTime.now(),
+            );
+            balancesApplied++;
+            AppLogger.i(
+              '[LiveSmsService] Reconciled bank balance for ${acc.name}: '
+              'stated ₹${bestHit.amount} at ${bestHit.date}, adjusted to '
+              '₹$effectiveBal after ${postSmsTxns.length} subsequent '
+              'transactions (${attribution.reason})',
+            );
+          }
+        }
+
+        // Apply latest detected credit card balances.
+        //
+        // Resolved with the same unique-evidence rule as bank balances so a
+        // single statement can never be broadcast to every card of an issuer.
+        if (latestCardBalances.isNotEmpty) {
+          final cards = await CreditRepo().getAll();
+          final db = await AppDatabase.instance.database;
+          for (final entry in latestCardBalances.entries) {
+            final key = entry.key;
+            final hasLast4 = _looksLikeLast4(key);
+            final attribution = BalanceAttribution.resolve(
+              kind: BalanceKind.creditCard,
+              last4: hasLast4 ? key : null,
+              bankKeyword: hasLast4 ? null : key,
+              accounts: const [],
+              cards: cards,
+            );
+            if (!attribution.matched || !attribution.isCreditCard) {
+              if (attribution.ambiguous) {
+                AppLogger.w(
+                  '[LiveSmsService] Bulk card balance for "$key" is '
+                  'ambiguous (${attribution.reason}); balance preserved.',
+                );
+              }
+              continue;
+            }
+            final card = cards.firstWhere(
+              (c) => c.id == attribution.instrumentId,
+            );
+            final bestHit = entry.value;
+            if (bestHit.amount > 0 || bestHit.isAvailableLimit) {
+              if (bestHit.isAvailableLimit) {
+                final effectiveLimit = (card.limitAmount > 0)
+                    ? card.limitAmount
+                    : ((bestHit.creditLimit != null && bestHit.creditLimit! > 0)
+                          ? bestHit.creditLimit!
+                          : 0.0);
+                if (effectiveLimit > 0) {
+                  double derived = (effectiveLimit - bestHit.amount).clamp(
+                    0.0,
+                    double.infinity,
+                  );
+                  final allCardTxns = await db.rawQuery(
+                    '''
+                    SELECT type, amount, account_id, related_entity_id, date
+                    FROM ${Tables.transactions}
+                    WHERE (related_entity_id = ? OR account_id = ?)
+                      AND is_deleted = 0;
+                  ''',
+                    [card.id, card.id],
+                  );
+                  final bestHitUtc = bestHit.date.toUtc();
+                  for (final row in allCardTxns) {
+                    final rawDate = row['date'] as String?;
+                    if (rawDate != null) {
+                      final txDate = DateTime.tryParse(rawDate)?.toUtc();
+                      if (txDate != null && txDate.isAfter(bestHitUtc)) {
+                        final type = row['type'] as String;
+                        final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+                        if (type == 'credit_payment' || type == 'refund') {
+                          derived -= amt;
+                        } else if (type == 'credit_card_purchase') {
+                          derived += amt;
+                        }
+                      }
+                    }
+                  }
+                  derived = derived.clamp(0.0, double.infinity);
+                }
+              } else {
+                // Net outstanding against any subsequent payments or spends
+                double effectiveCardBal = bestHit.amount;
+                final allCardTxns = await db.rawQuery(
+                  '''
+                  SELECT type, amount, account_id, related_entity_id, date
+                  FROM ${Tables.transactions}
+                  WHERE (related_entity_id = ? OR account_id = ?)
+                    AND is_deleted = 0;
+                ''',
+                  [card.id, card.id],
+                );
+                final bestHitUtc = bestHit.date.toUtc();
+                for (final row in allCardTxns) {
+                  final rawDate = row['date'] as String?;
+                  if (rawDate != null) {
+                    final txDate = DateTime.tryParse(rawDate)?.toUtc();
+                    if (txDate != null && txDate.isAfter(bestHitUtc)) {
+                      final type = row['type'] as String;
+                      final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+                      if (type == 'credit_payment' || type == 'refund') {
+                        effectiveCardBal -= amt;
+                      } else if (type == 'credit_card_purchase') {
+                        effectiveCardBal += amt;
+                      }
+                    }
+                  }
+                }
+                effectiveCardBal = effectiveCardBal.clamp(0.0, double.infinity);
+              }
+              if (bestHit.creditLimit != null &&
+                  bestHit.creditLimit! > 0 &&
+                  card.limitAmount < bestHit.creditLimit!) {
+                await CreditRepo().update(
+                  card.copyWith(limitAmount: bestHit.creditLimit!),
+                );
+              }
+              AppLogger.i(
+                '[LiveSmsService] Stated credit balance for ${card.name}: '
+                '₹${bestHit.amount} from latest SMS dated ${bestHit.date}',
+              );
+            }
+          }
+        }
+
+        // Apply latest detected credit card statements with time-stamped
+        // repayment reconciliation, resolved by unique card identity.
+        if (latestCardStatements.isNotEmpty) {
+          final cards = await CreditRepo().getAll();
+          final db = await AppDatabase.instance.database;
+          for (final entry in latestCardStatements.entries) {
+            final key = entry.key;
+            final hasLast4 = _looksLikeLast4(key);
+            final attribution = BalanceAttribution.resolve(
+              kind: BalanceKind.creditCard,
+              last4: hasLast4 ? key : null,
+              bankKeyword: hasLast4 ? null : key,
+              accounts: const [],
+              cards: cards,
+            );
+            if (!attribution.matched || !attribution.isCreditCard) {
+              if (attribution.ambiguous) {
+                AppLogger.w(
+                  '[LiveSmsService] Bulk card statement for "$key" is '
+                  'ambiguous (${attribution.reason}); statement preserved.',
+                );
+              }
+              continue;
+            }
+            final card = cards.firstWhere(
+              (c) => c.id == attribution.instrumentId,
+            );
+            final bestStmt = entry.value;
+            if (bestStmt.amount > 0) {
+              // Calculate all repayments received on or after this statement's timestamp
+              final cardKw = card.bank.toLowerCase().contains('icici')
+                  ? 'icici'
+                  : (card.bank.toLowerCase().contains('csb')
+                        ? 'csb'
+                        : (card.bank.toLowerCase().contains('hdfc')
+                              ? 'hdfc'
+                              : ''));
+              final allPayments = await db.rawQuery(
+                '''
+                SELECT amount, date
+                FROM ${Tables.transactions}
+                WHERE (related_entity_id = ? OR (type = 'credit_payment' AND ? != '' AND LOWER(COALESCE(notes, '')) LIKE '%' || ? || '%'))
+                  AND type = 'credit_payment'
+                  AND is_deleted = 0;
+              ''',
+                [card.id, cardKw, cardKw],
+              );
+              final stmtDateUtc = bestStmt.date.toUtc();
+              final windowStart = stmtDateUtc.subtract(
+                const Duration(days: 10),
+              );
+              double totalPaidAfter = 0.0;
+              for (final row in allPayments) {
+                final rawDate = row['date'] as String?;
+                if (rawDate != null) {
+                  final txDate = DateTime.tryParse(rawDate)?.toUtc();
+                  if (txDate != null &&
+                      (txDate.isAfter(windowStart) ||
+                          txDate.isAtSameMomentAs(windowStart))) {
+                    totalPaidAfter +=
+                        (row['amount'] as num?)?.toDouble() ?? 0.0;
+                  }
+                }
+              }
+              final remainingDue = (bestStmt.amount - totalPaidAfter).clamp(
+                0.0,
+                bestStmt.amount,
+              );
+
+              final updated = card.copyWith(
+                lastStatementBalance: remainingDue,
+                dueDay: bestStmt.dueDate?.day ?? card.dueDay,
+              );
+              await CreditRepo().update(updated);
+              balancesApplied++;
+
+              // Insert into card_statements table if not existing
+              final stmtId =
+                  'stmt_${card.id}_${bestStmt.date.millisecondsSinceEpoch}';
+              final existingStmt = await db.query(
+                Tables.cardStatements,
+                where: 'id = ?',
+                whereArgs: [stmtId],
+                limit: 1,
+              );
+              if (existingStmt.isEmpty) {
+                await CreditRepo().insertStatement(
+                  CardStatement(
+                    id: stmtId,
+                    cardId: card.id,
+                    startDate: bestStmt.date.subtract(const Duration(days: 30)),
+                    endDate: bestStmt.date,
+                    statementAmount: bestStmt.amount,
+                    minimumDue: bestStmt.minDue ?? (bestStmt.amount * 0.05),
+                    generatedDate: bestStmt.date,
+                  ),
+                );
+              }
+
+              // Sync reminder
+              final isFullyPaid = remainingDue <= 0.01;
+              final dueDateTime = bestStmt.dueDate ?? card.nextDueDate;
+              await ReminderRepo().insertGlobalReminder(
+                Reminder(
+                  id: 'credit_due_${card.id}',
+                  type: ReminderType.credit,
+                  title: 'Credit Card Due: ${card.name}',
+                  linkedEntityId: card.id,
+                  dueDate: dueDateTime,
+                  amount: isFullyPaid ? 0.0 : remainingDue,
+                  isActive: !isFullyPaid,
+                  status: isFullyPaid
+                      ? ReminderStatus.inactive
+                      : ReminderStatus.upcoming,
+                  recordStatus: isFullyPaid
+                      ? ReminderRecordStatus.done
+                      : ReminderRecordStatus.pending,
+                  sourceType: ReminderSourceType.credit,
+                  sourceId: card.id,
+                ).toMap(),
+              );
+              AppLogger.i(
+                '[LiveSmsService] Time-stamped statement bill for ${card.name}: '
+                'original ₹${bestStmt.amount} (dated ${bestStmt.date}), '
+                'repayments after bill ₹$totalPaidAfter, net statement due '
+                '₹$remainingDue',
+              );
+            }
+          }
+        }
+
+        DataChangeBus.instance.notify();
+      },
+    );
+
+    return (
+      messagesScanned: outcome.messagesScanned,
+      transactionsIngested: ingested,
+      balancesApplied: balancesApplied,
+      rejected: rejected,
+      completed: outcome.completed,
+      error: outcome.error,
+    );
   }
 
   /// One-time self-healing repair for any oscillating balance reconciliation adjustments
@@ -1081,13 +1579,17 @@ class LiveSmsService with WidgetsBindingObserver {
         final db = await AppDatabase.instance.database;
         try {
           await db.execute('PRAGMA foreign_keys = OFF;');
-          await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET reversal_of_event_id = NULL, corrected_by_event_id = NULL, lifecycle_status = 'draft'");
+          await db.rawUpdate(
+            "UPDATE ${TablesV24.economicEvents} SET reversal_of_event_id = NULL, corrected_by_event_id = NULL, lifecycle_status = 'draft'",
+          );
           await db.delete(TablesV24.postings);
           await db.delete(TablesV24.evidence);
           await db.delete(TablesV24.openingBalanceReconciliations);
           await db.delete(TablesV24.economicEvents);
           await db.execute('PRAGMA foreign_keys = ON;');
-          AppLogger.i('[LiveSmsService] Cleared misdated transactions and evidence for clean historical re-scan');
+          AppLogger.i(
+            '[LiveSmsService] Cleared misdated transactions and evidence for clean historical re-scan',
+          );
           await prefs.setBool('repair_historical_sms_dates_v7', true);
         } catch (e) {
           AppLogger.w('[LiveSmsService] Error clearing misdated events: $e');
@@ -1105,22 +1607,49 @@ class LiveSmsService with WidgetsBindingObserver {
           ''');
           for (final r in recRows) {
             final eid = r['id'] as String;
-            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [eid]);
-            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.openingBalanceReconciliations, where: 'generated_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+            await db.rawUpdate(
+              "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?",
+              [eid],
+            );
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.openingBalanceReconciliations,
+              where: 'generated_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [eid],
+            );
           }
-          await db.delete(TablesV24.evidence, where: "source_type = 'sms_balance'");
+          await db.delete(
+            TablesV24.evidence,
+            where: "source_type = 'sms_balance'",
+          );
 
           // 2. Normalize credit cards with negative liability (overpaid illusion from unbacked payments)
           final cards = await CreditRepo().getAll();
           for (final card in cards) {
-            final derived = await CanonicalAccountRepository(executor: db).getDerivedBalance(card.id);
+            final derived = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(card.id);
             if (derived.minorUnits < 0) {
               // Post an equity-balancing opening balance to neutralize the unbacked historical payments
-              final offsetAmount = Money.fromMinorUnits(derived.minorUnits.abs());
-              final eventId = 'evt_ob_fix_${card.id}_${DateTime.now().millisecondsSinceEpoch}';
+              final offsetAmount = Money.fromMinorUnits(
+                derived.minorUnits.abs(),
+              );
+              final eventId =
+                  'evt_ob_fix_${card.id}_${DateTime.now().millisecondsSinceEpoch}';
               await db.insert(TablesV24.economicEvents, {
                 'id': eventId,
                 'event_type': 'opening_balance',
@@ -1151,15 +1680,24 @@ class LiveSmsService with WidgetsBindingObserver {
                 'sequence_number': 2,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               });
-              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [eventId]);
+              await db.rawUpdate(
+                "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?",
+                [eventId],
+              );
             }
           }
 
           // 3. Purge any bogus 22k digital wallet accounts
-          await db.delete(TablesV24.accounts, where: "account_type = 'wallet' AND (name LIKE '%22%' OR icon_name = 'wallet_22k')");
+          await db.delete(
+            TablesV24.accounts,
+            where:
+                "account_type = 'wallet' AND (name LIKE '%22%' OR icon_name = 'wallet_22k')",
+          );
 
           await db.execute('PRAGMA foreign_keys = ON;');
-          AppLogger.i('[LiveSmsService] v8 Repair: Cleaned spurious reconciliations and normalized card liabilities');
+          AppLogger.i(
+            '[LiveSmsService] v8 Repair: Cleaned spurious reconciliations and normalized card liabilities',
+          );
           await prefs.setBool('repair_reconciliation_adjustments_v8', true);
         } catch (e) {
           AppLogger.w('[LiveSmsService] Error in v8 repair: $e');
@@ -1186,11 +1724,30 @@ class LiveSmsService with WidgetsBindingObserver {
 
           for (final fe in fakeCredEvents) {
             final feId = fe['id'] as String;
-            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [feId]);
-            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [feId]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [feId]);
-            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [feId]);
-            await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [feId]);
+            await db.rawUpdate(
+              "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?",
+              [feId],
+            );
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [feId],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [feId],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [feId],
+            );
+            await db.delete(
+              Tables.transactions,
+              where: 'id = ?',
+              whereArgs: [feId],
+            );
           }
 
           // 2. Pair up the 43,000 transfer between Jio and Federal
@@ -1221,13 +1778,33 @@ class LiveSmsService with WidgetsBindingObserver {
             final toAcc = incEvent['account_id'] as String;
             final ts = expEvent['timestamp'] as String;
 
-            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id IN (?, ?)", [expId, incId]);
-            await db.delete(TablesV24.postings, where: 'economic_event_id IN (?, ?)', whereArgs: [expId, incId]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id IN (?, ?)', whereArgs: [expId, incId]);
-            await db.delete(TablesV24.economicEvents, where: 'id IN (?, ?)', whereArgs: [expId, incId]);
-            await db.delete(Tables.transactions, where: 'id IN (?, ?)', whereArgs: [expId, incId]);
+            await db.rawUpdate(
+              "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id IN (?, ?)",
+              [expId, incId],
+            );
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id IN (?, ?)',
+              whereArgs: [expId, incId],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id IN (?, ?)',
+              whereArgs: [expId, incId],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id IN (?, ?)',
+              whereArgs: [expId, incId],
+            );
+            await db.delete(
+              Tables.transactions,
+              where: 'id IN (?, ?)',
+              whereArgs: [expId, incId],
+            );
 
-            final transferEventId = 'evt_transfer_${DateTime.now().millisecondsSinceEpoch}_4300000';
+            final transferEventId =
+                'evt_transfer_${DateTime.now().millisecondsSinceEpoch}_4300000';
             // Step A: Insert draft
             await db.insert(TablesV24.economicEvents, {
               'id': transferEventId,
@@ -1261,7 +1838,10 @@ class LiveSmsService with WidgetsBindingObserver {
               'created_at': DateTime.now().toUtc().toIso8601String(),
             });
             // Step C: Post event
-            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [transferEventId]);
+            await db.rawUpdate(
+              "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?",
+              [transferEventId],
+            );
 
             await db.insert(Tables.transactions, {
               'id': transferEventId,
@@ -1284,20 +1864,59 @@ class LiveSmsService with WidgetsBindingObserver {
           await db.execute('PRAGMA foreign_keys = ON;');
           final allAccs = await AccountRepo().getAll();
           final allCc = await CreditRepo().getAll();
-          final jio = allAccs.where((a) => a.last4 == '3284' || a.name.toLowerCase().contains('jio') || a.bank.toLowerCase().contains('jio')).firstOrNull;
-          final sbi = allAccs.where((a) => a.last4 == '9331' || a.name.toLowerCase().contains('sbi') || a.bank.toLowerCase().contains('sbi')).firstOrNull;
-          final fed = allAccs.where((a) => a.last4 == '8434' || a.name.toLowerCase().contains('federal') || a.bank.toLowerCase().contains('federal')).firstOrNull;
-          final icici = allCc.where((c) => c.last4 == '5007' || c.name.toLowerCase().contains('icici') || c.bank.toLowerCase().contains('icici')).firstOrNull;
-          final csb = allCc.where((c) => c.last4 == '2834' || c.name.toLowerCase().contains('csb') || c.bank.toLowerCase().contains('csb') || c.name.toLowerCase().contains('edge')).firstOrNull;
+          final jio = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '3284' ||
+                    a.name.toLowerCase().contains('jio') ||
+                    a.bank.toLowerCase().contains('jio'),
+              )
+              .firstOrNull;
+          final sbi = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '9331' ||
+                    a.name.toLowerCase().contains('sbi') ||
+                    a.bank.toLowerCase().contains('sbi'),
+              )
+              .firstOrNull;
+          final fed = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '8434' ||
+                    a.name.toLowerCase().contains('federal') ||
+                    a.bank.toLowerCase().contains('federal'),
+              )
+              .firstOrNull;
+          final icici = allCc
+              .where(
+                (c) =>
+                    c.last4 == '5007' ||
+                    c.name.toLowerCase().contains('icici') ||
+                    c.bank.toLowerCase().contains('icici'),
+              )
+              .firstOrNull;
+          final csb = allCc
+              .where(
+                (c) =>
+                    c.last4 == '2834' ||
+                    c.name.toLowerCase().contains('csb') ||
+                    c.bank.toLowerCase().contains('csb') ||
+                    c.name.toLowerCase().contains('edge'),
+              )
+              .firstOrNull;
 
           if (fed != null) await AccountRepo().updateBalance(fed.id, 17590.25);
           if (jio != null) await AccountRepo().updateBalance(jio.id, 492.91);
           if (sbi != null) await AccountRepo().updateBalance(sbi.id, 21449.88);
           if (csb != null) await CreditRepo().updateBalance(csb.id, 3415.00);
-          if (icici != null) await CreditRepo().updateBalance(icici.id, 25010.35);
+          if (icici != null)
+            await CreditRepo().updateBalance(icici.id, 25010.35);
 
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v16 Repair: Successfully purged fake Cred expenses and unified transfer');
+          AppLogger.i(
+            '[LiveSmsService] v16 Repair: Successfully purged fake Cred expenses and unified transfer',
+          );
           await prefs.setBool('repair_credit_and_transfers_v16', true);
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v16 repair: $e\n$st');
@@ -1307,8 +1926,12 @@ class LiveSmsService with WidgetsBindingObserver {
       if (prefs.getBool('repair_restore_federal_bank_v24') != true) {
         try {
           await db.execute('PRAGMA foreign_keys = OFF;');
-          await db.execute('DROP TRIGGER IF EXISTS trg_postings_prevent_delete_on_posted;');
-          await db.execute('DROP TRIGGER IF EXISTS trg_postings_prevent_update_on_posted;');
+          await db.execute(
+            'DROP TRIGGER IF EXISTS trg_postings_prevent_delete_on_posted;',
+          );
+          await db.execute(
+            'DROP TRIGGER IF EXISTS trg_postings_prevent_update_on_posted;',
+          );
 
           // 1. Ensure Federal Bank Account exists in accounts and bank_accounts
           const federalBankId = 'ae7b92a1-580c-468f-8478-71cee7c66a06';
@@ -1328,7 +1951,10 @@ class LiveSmsService with WidgetsBindingObserver {
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-          await db.rawUpdate("UPDATE ${TablesV24.accounts} SET account_type = 'asset', subtype = 'savings', is_active = 1 WHERE id = ? OR account_number_last4 = '8434'", [federalBankId]);
+          await db.rawUpdate(
+            "UPDATE ${TablesV24.accounts} SET account_type = 'asset', subtype = 'savings', is_active = 1 WHERE id = ? OR account_number_last4 = '8434'",
+            [federalBankId],
+          );
 
           await db.insert(Tables.bankAccounts, {
             'id': federalBankId,
@@ -1355,13 +1981,36 @@ class LiveSmsService with WidgetsBindingObserver {
           for (final fcr in federalCardRows) {
             final fId = fcr['id'] as String;
             if (fId == federalBankId) continue;
-            await db.rawUpdate('UPDATE ${Tables.transactions} SET account_id = ? WHERE account_id = ?', [federalBankId, fId]);
-            await db.rawUpdate('UPDATE ${Tables.transactions} SET related_entity_id = ? WHERE related_entity_id = ?', [federalBankId, fId]);
-            await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE account_id = ?', [federalBankId, fId]);
-            await db.rawUpdate('UPDATE ${TablesV24.evidence} SET account_id = ? WHERE account_id = ?', [federalBankId, fId]);
-            await db.delete(Tables.creditCards, where: 'id = ?', whereArgs: [fId]);
-            await db.rawUpdate('UPDATE ${TablesV24.accounts} SET is_active = 0 WHERE id = ?', [fId]);
-            await db.delete(TablesV24.accounts, where: 'id = ?', whereArgs: [fId]);
+            await db.rawUpdate(
+              'UPDATE ${Tables.transactions} SET account_id = ? WHERE account_id = ?',
+              [federalBankId, fId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${Tables.transactions} SET related_entity_id = ? WHERE related_entity_id = ?',
+              [federalBankId, fId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.postings} SET account_id = ? WHERE account_id = ?',
+              [federalBankId, fId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.evidence} SET account_id = ? WHERE account_id = ?',
+              [federalBankId, fId],
+            );
+            await db.delete(
+              Tables.creditCards,
+              where: 'id = ?',
+              whereArgs: [fId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.accounts} SET is_active = 0 WHERE id = ?',
+              [fId],
+            );
+            await db.delete(
+              TablesV24.accounts,
+              where: 'id = ?',
+              whereArgs: [fId],
+            );
           }
 
           // Resolve IDs of active entities
@@ -1379,11 +2028,24 @@ class LiveSmsService with WidgetsBindingObserver {
             final last4 = a['account_number_last4'] as String? ?? '';
 
             if (type == 'asset') {
-              if (inst.contains('jio') || name.contains('jio') || last4 == '3284') jioBankId = id;
-              if (inst.contains('sbi') || name.contains('sbi') || last4 == '9331') sbiBankId = id;
+              if (inst.contains('jio') ||
+                  name.contains('jio') ||
+                  last4 == '3284')
+                jioBankId = id;
+              if (inst.contains('sbi') ||
+                  name.contains('sbi') ||
+                  last4 == '9331')
+                sbiBankId = id;
             } else if (type == 'credit_card') {
-              if (inst.contains('icici') || name.contains('icici') || last4 == '5007') iciciCardId = id;
-              if (inst.contains('csb') || name.contains('csb') || name.contains('edge') || last4 == '2834') csbCardId = id;
+              if (inst.contains('icici') ||
+                  name.contains('icici') ||
+                  last4 == '5007')
+                iciciCardId = id;
+              if (inst.contains('csb') ||
+                  name.contains('csb') ||
+                  name.contains('edge') ||
+                  last4 == '2834')
+                csbCardId = id;
             }
           }
 
@@ -1400,7 +2062,8 @@ class LiveSmsService with WidgetsBindingObserver {
               final merchant = amt == 185.76
                   ? 'Edge CSB RuPay Spend'
                   : (amt == 210.0 ? 'Edge CSB RuPay Spend' : 'CSB Card Spend');
-              await db.rawUpdate('''
+              await db.rawUpdate(
+                '''
                 UPDATE ${Tables.transactions}
                 SET type = 'credit_card_purchase',
                     account_id = ?,
@@ -1408,22 +2071,33 @@ class LiveSmsService with WidgetsBindingObserver {
                     notes = ?,
                     note = ?
                 WHERE id = ?;
-              ''', [csbCardId, merchant, merchant, txId]);
+              ''',
+                [csbCardId, merchant, merchant, txId],
+              );
 
-              await db.rawUpdate('''
+              await db.rawUpdate(
+                '''
                 UPDATE ${TablesV24.economicEvents}
                 SET event_type = 'cardPurchase',
                     description = ?,
                     notes = ?
                 WHERE id = ?;
-              ''', [merchant, merchant, txId]);
+              ''',
+                [merchant, merchant, txId],
+              );
 
-              final pRows = await db.rawQuery('SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;', [txId]);
+              final pRows = await db.rawQuery(
+                'SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;',
+                [txId],
+              );
               for (final p in pRows) {
                 final pId = p['id'] as String;
                 final dir = p['direction'] as String;
                 if (dir == 'credit') {
-                  await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;', [csbCardId, pId]);
+                  await db.rawUpdate(
+                    'UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;',
+                    [csbCardId, pId],
+                  );
                 }
               }
             }
@@ -1443,24 +2117,32 @@ class LiveSmsService with WidgetsBindingObserver {
               final amt = pair.amt;
               final bId = pair.bankId;
 
-              final txns = await db.rawQuery('''
+              final txns = await db.rawQuery(
+                '''
                 SELECT id, type, notes, note, date FROM ${Tables.transactions}
                 WHERE amount = ? AND is_deleted = 0;
-              ''', [amt]);
+              ''',
+                [amt],
+              );
 
               if (txns.length > 1) {
                 String? canonicalPaymentId;
                 for (final t in txns) {
-                  final notes = (t['notes'] as String? ?? t['note'] as String? ?? '').toLowerCase();
+                  final notes =
+                      (t['notes'] as String? ?? t['note'] as String? ?? '')
+                          .toLowerCase();
                   final type = t['type'] as String;
-                  if (type == 'credit_payment' || notes.contains('icici') || notes.contains('payment')) {
+                  if (type == 'credit_payment' ||
+                      notes.contains('icici') ||
+                      notes.contains('payment')) {
                     canonicalPaymentId = t['id'] as String;
                     break;
                   }
                 }
                 canonicalPaymentId ??= txns.first['id'] as String;
 
-                await db.rawUpdate('''
+                await db.rawUpdate(
+                  '''
                   UPDATE ${Tables.transactions}
                   SET type = 'credit_payment',
                       account_id = ?,
@@ -1468,41 +2150,76 @@ class LiveSmsService with WidgetsBindingObserver {
                       notes = 'Payment towards ICICI Card',
                       note = 'Payment towards ICICI Card'
                   WHERE id = ?;
-                ''', [bId, iciciCardId, canonicalPaymentId]);
+                ''',
+                  [bId, iciciCardId, canonicalPaymentId],
+                );
 
-                await db.rawUpdate('''
+                await db.rawUpdate(
+                  '''
                   UPDATE ${TablesV24.economicEvents}
                   SET event_type = 'cardPayment',
                       description = 'Payment towards ICICI Card',
                       notes = 'Payment towards ICICI Card'
                   WHERE id = ?;
-                ''', [canonicalPaymentId]);
+                ''',
+                  [canonicalPaymentId],
+                );
 
-                final pRows = await db.rawQuery('SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;', [canonicalPaymentId]);
+                final pRows = await db.rawQuery(
+                  'SELECT id, direction FROM ${TablesV24.postings} WHERE economic_event_id = ?;',
+                  [canonicalPaymentId],
+                );
                 for (final p in pRows) {
                   final pId = p['id'] as String;
                   final dir = p['direction'] as String;
                   if (dir == 'credit') {
-                    await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;', [bId, pId]);
+                    await db.rawUpdate(
+                      'UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;',
+                      [bId, pId],
+                    );
                   } else {
-                    await db.rawUpdate('UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;', [iciciCardId, pId]);
+                    await db.rawUpdate(
+                      'UPDATE ${TablesV24.postings} SET account_id = ? WHERE id = ?;',
+                      [iciciCardId, pId],
+                    );
                   }
                 }
 
                 for (final t in txns) {
                   final dupId = t['id'] as String;
                   if (dupId == canonicalPaymentId) continue;
-                  final notes = (t['notes'] as String? ?? t['note'] as String? ?? '').toLowerCase();
+                  final notes =
+                      (t['notes'] as String? ?? t['note'] as String? ?? '')
+                          .toLowerCase();
                   if (notes.contains('amazon pay') ||
                       notes.contains('sent from') ||
                       notes.contains('cred') ||
                       notes.contains('icici') ||
                       notes.contains('payment')) {
-                    await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [dupId]);
-                    await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [dupId]);
-                    await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [dupId]);
-                    await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [dupId]);
-                    await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [dupId]);
+                    await db.rawUpdate(
+                      "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?",
+                      [dupId],
+                    );
+                    await db.delete(
+                      TablesV24.postings,
+                      where: 'economic_event_id = ?',
+                      whereArgs: [dupId],
+                    );
+                    await db.delete(
+                      TablesV24.evidence,
+                      where: 'economic_event_id = ?',
+                      whereArgs: [dupId],
+                    );
+                    await db.delete(
+                      TablesV24.economicEvents,
+                      where: 'id = ?',
+                      whereArgs: [dupId],
+                    );
+                    await db.delete(
+                      Tables.transactions,
+                      where: 'id = ?',
+                      whereArgs: [dupId],
+                    );
                   }
                 }
               }
@@ -1510,16 +2227,40 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // Clean any leftover transactions or economic events mentioning "Federal Card"
-          final fedCardEvts = await db.rawQuery("SELECT id FROM ${TablesV24.economicEvents} WHERE LOWER(description) LIKE '%federal card%' OR LOWER(notes) LIKE '%federal card%';");
+          final fedCardEvts = await db.rawQuery(
+            "SELECT id FROM ${TablesV24.economicEvents} WHERE LOWER(description) LIKE '%federal card%' OR LOWER(notes) LIKE '%federal card%';",
+          );
           for (final fe in fedCardEvts) {
             final feId = fe['id'] as String;
-            await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [feId]);
-            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [feId]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [feId]);
-            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [feId]);
-            await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [feId]);
+            await db.rawUpdate(
+              "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?",
+              [feId],
+            );
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [feId],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [feId],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [feId],
+            );
+            await db.delete(
+              Tables.transactions,
+              where: 'id = ?',
+              whereArgs: [feId],
+            );
           }
-          await db.delete(Tables.transactions, where: "LOWER(COALESCE(notes, note, '')) LIKE '%federal card%'");
+          await db.delete(
+            Tables.transactions,
+            where: "LOWER(COALESCE(notes, note, '')) LIKE '%federal card%'",
+          );
 
           // 5. Unify 17,000 transfer between Jio and Federal on 8 Nov
           if (jioBankId != null) {
@@ -1533,24 +2274,47 @@ class LiveSmsService with WidgetsBindingObserver {
               final ts = t17Rows.first['date'] as String;
               for (final r in t17Rows) {
                 final rId = r['id'] as String;
-                await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [rId]);
-                await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [rId]);
-                await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [rId]);
-                await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [rId]);
-                await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [rId]);
+                await db.rawUpdate(
+                  "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?",
+                  [rId],
+                );
+                await db.delete(
+                  TablesV24.postings,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [rId],
+                );
+                await db.delete(
+                  TablesV24.evidence,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [rId],
+                );
+                await db.delete(
+                  TablesV24.economicEvents,
+                  where: 'id = ?',
+                  whereArgs: [rId],
+                );
+                await db.delete(
+                  Tables.transactions,
+                  where: 'id = ?',
+                  whereArgs: [rId],
+                );
               }
 
               const unified17Id = 'evt_transfer_17000_jio_to_fed';
-              await db.insert(TablesV24.economicEvents, {
-                'id': unified17Id,
-                'event_type': 'transfer',
-                'description': 'Transfer: Jio → Federal',
-                'timestamp': ts,
-                'lifecycle_status': 'draft',
-                'currency': 'INR',
-                'created_at': DateTime.now().toUtc().toIso8601String(),
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              }, conflictAlgorithm: ConflictAlgorithm.replace);
+              await db.insert(
+                TablesV24.economicEvents,
+                {
+                  'id': unified17Id,
+                  'event_type': 'transfer',
+                  'description': 'Transfer: Jio → Federal',
+                  'timestamp': ts,
+                  'lifecycle_status': 'draft',
+                  'currency': 'INR',
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                  'updated_at': DateTime.now().toUtc().toIso8601String(),
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
               await db.insert(TablesV24.postings, {
                 'id': 'pst_${unified17Id}_dr',
                 'economic_event_id': unified17Id,
@@ -1571,7 +2335,10 @@ class LiveSmsService with WidgetsBindingObserver {
                 'sequence_number': 2,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               }, conflictAlgorithm: ConflictAlgorithm.replace);
-              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [unified17Id]);
+              await db.rawUpdate(
+                "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?",
+                [unified17Id],
+              );
 
               await db.insert(Tables.transactions, {
                 'id': unified17Id,
@@ -1603,24 +2370,47 @@ class LiveSmsService with WidgetsBindingObserver {
               final ts = rows43.first['timestamp'] as String;
               for (final r in rows43) {
                 final rId = r['id'] as String;
-                await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?", [rId]);
-                await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [rId]);
-                await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [rId]);
-                await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [rId]);
-                await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [rId]);
+                await db.rawUpdate(
+                  "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'deleted' WHERE id = ?",
+                  [rId],
+                );
+                await db.delete(
+                  TablesV24.postings,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [rId],
+                );
+                await db.delete(
+                  TablesV24.evidence,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [rId],
+                );
+                await db.delete(
+                  TablesV24.economicEvents,
+                  where: 'id = ?',
+                  whereArgs: [rId],
+                );
+                await db.delete(
+                  Tables.transactions,
+                  where: 'id = ?',
+                  whereArgs: [rId],
+                );
               }
 
               const unifiedId = 'evt_transfer_43000_jio_to_fed';
-              await db.insert(TablesV24.economicEvents, {
-                'id': unifiedId,
-                'event_type': 'transfer',
-                'description': 'Transfer: Jio → Federal',
-                'timestamp': ts,
-                'lifecycle_status': 'draft',
-                'currency': 'INR',
-                'created_at': DateTime.now().toUtc().toIso8601String(),
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              }, conflictAlgorithm: ConflictAlgorithm.replace);
+              await db.insert(
+                TablesV24.economicEvents,
+                {
+                  'id': unifiedId,
+                  'event_type': 'transfer',
+                  'description': 'Transfer: Jio → Federal',
+                  'timestamp': ts,
+                  'lifecycle_status': 'draft',
+                  'currency': 'INR',
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                  'updated_at': DateTime.now().toUtc().toIso8601String(),
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
               await db.insert(TablesV24.postings, {
                 'id': 'pst_${unifiedId}_dr',
                 'economic_event_id': unifiedId,
@@ -1641,7 +2431,10 @@ class LiveSmsService with WidgetsBindingObserver {
                 'sequence_number': 2,
                 'created_at': DateTime.now().toUtc().toIso8601String(),
               }, conflictAlgorithm: ConflictAlgorithm.replace);
-              await db.rawUpdate("UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?", [unifiedId]);
+              await db.rawUpdate(
+                "UPDATE ${TablesV24.economicEvents} SET lifecycle_status = 'posted' WHERE id = ?",
+                [unifiedId],
+              );
 
               await db.insert(Tables.transactions, {
                 'id': unifiedId,
@@ -1663,9 +2456,19 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // Purge any orphan transaction records for 43,000
-          await db.delete(Tables.transactions, where: "amount = 43000.0 AND id != 'evt_transfer_43000_jio_to_fed'");
-          await db.delete(Tables.transactions, where: "LOWER(COALESCE(notes, note, '')) LIKE '%43000 credited%'");
-          await db.delete(TablesV24.economicEvents, where: "LOWER(description) LIKE '%43000 credited%' AND id != 'evt_transfer_43000_jio_to_fed'");
+          await db.delete(
+            Tables.transactions,
+            where: "amount = 43000.0 AND id != 'evt_transfer_43000_jio_to_fed'",
+          );
+          await db.delete(
+            Tables.transactions,
+            where: "LOWER(COALESCE(notes, note, '')) LIKE '%43000 credited%'",
+          );
+          await db.delete(
+            TablesV24.economicEvents,
+            where:
+                "LOWER(description) LIKE '%43000 credited%' AND id != 'evt_transfer_43000_jio_to_fed'",
+          );
 
           // 7. Restore authentic account balances based on last received SMS and all subsequent debits
           // Federal Bank: 17,590.25 (last stated after ₹507 Amazon debit)
@@ -1686,20 +2489,59 @@ class LiveSmsService with WidgetsBindingObserver {
           await db.execute('PRAGMA foreign_keys = ON;');
           final allAccs = await AccountRepo().getAll();
           final allCc = await CreditRepo().getAll();
-          final jio = allAccs.where((a) => a.last4 == '3284' || a.name.toLowerCase().contains('jio') || a.bank.toLowerCase().contains('jio')).firstOrNull;
-          final sbi = allAccs.where((a) => a.last4 == '9331' || a.name.toLowerCase().contains('sbi') || a.bank.toLowerCase().contains('sbi')).firstOrNull;
-          final fed = allAccs.where((a) => a.last4 == '8434' || a.name.toLowerCase().contains('federal') || a.bank.toLowerCase().contains('federal')).firstOrNull;
-          final icici = allCc.where((c) => c.last4 == '5007' || c.name.toLowerCase().contains('icici') || c.bank.toLowerCase().contains('icici')).firstOrNull;
-          final csb = allCc.where((c) => c.last4 == '2834' || c.name.toLowerCase().contains('csb') || c.bank.toLowerCase().contains('csb') || c.name.toLowerCase().contains('edge')).firstOrNull;
+          final jio = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '3284' ||
+                    a.name.toLowerCase().contains('jio') ||
+                    a.bank.toLowerCase().contains('jio'),
+              )
+              .firstOrNull;
+          final sbi = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '9331' ||
+                    a.name.toLowerCase().contains('sbi') ||
+                    a.bank.toLowerCase().contains('sbi'),
+              )
+              .firstOrNull;
+          final fed = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '8434' ||
+                    a.name.toLowerCase().contains('federal') ||
+                    a.bank.toLowerCase().contains('federal'),
+              )
+              .firstOrNull;
+          final icici = allCc
+              .where(
+                (c) =>
+                    c.last4 == '5007' ||
+                    c.name.toLowerCase().contains('icici') ||
+                    c.bank.toLowerCase().contains('icici'),
+              )
+              .firstOrNull;
+          final csb = allCc
+              .where(
+                (c) =>
+                    c.last4 == '2834' ||
+                    c.name.toLowerCase().contains('csb') ||
+                    c.bank.toLowerCase().contains('csb') ||
+                    c.name.toLowerCase().contains('edge'),
+              )
+              .firstOrNull;
 
           if (fed != null) await AccountRepo().updateBalance(fed.id, 17590.25);
           if (jio != null) await AccountRepo().updateBalance(jio.id, 492.91);
           if (sbi != null) await AccountRepo().updateBalance(sbi.id, 21449.88);
           if (csb != null) await CreditRepo().updateBalance(csb.id, 3415.00);
-          if (icici != null) await CreditRepo().updateBalance(icici.id, 25010.35);
+          if (icici != null)
+            await CreditRepo().updateBalance(icici.id, 25010.35);
 
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v24 Repair: Fixed CSB spends, unified CC bill payments & transfers, updated live bank balances');
+          AppLogger.i(
+            '[LiveSmsService] v24 Repair: Fixed CSB spends, unified CC bill payments & transfers, updated live bank balances',
+          );
           await prefs.setBool('repair_restore_federal_bank_v24', true);
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v24 repair: $e\n$st');
@@ -1724,14 +2566,38 @@ class LiveSmsService with WidgetsBindingObserver {
 
           for (final row in legacyRecEvents) {
             final evId = row['id'] as String;
-            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [evId]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [evId]);
-            await db.delete(TablesV24.openingBalanceReconciliations, where: 'generated_event_id = ?', whereArgs: [evId]);
-            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [evId]);
-            await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [evId]);
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [evId],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [evId],
+            );
+            await db.delete(
+              TablesV24.openingBalanceReconciliations,
+              where: 'generated_event_id = ?',
+              whereArgs: [evId],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [evId],
+            );
+            await db.delete(
+              Tables.transactions,
+              where: 'id = ?',
+              whereArgs: [evId],
+            );
           }
 
-          await db.delete(Tables.transactions, where: "type = 'reconciliation' OR LOWER(COALESCE(notes, note, '')) LIKE '%reconciliation%' OR LOWER(COALESCE(notes, note, '')) LIKE '%opening balance%'");
+          await db.delete(
+            Tables.transactions,
+            where:
+                "type = 'reconciliation' OR LOWER(COALESCE(notes, note, '')) LIKE '%reconciliation%' OR LOWER(COALESCE(notes, note, '')) LIKE '%opening balance%'",
+          );
 
           // 1b. Purge orphan evidence records that point to non-existent or deleted economic events
           // This unblocks historical SMS messages so they can be re-ingested after data clearing!
@@ -1759,18 +2625,38 @@ class LiveSmsService with WidgetsBindingObserver {
             final last4 = a['account_number_last4'] as String? ?? '';
 
             if (type == 'asset') {
-              if (inst.contains('jio') || name.contains('jio') || last4 == '3284') jioBankId = id;
-              if (inst.contains('sbi') || name.contains('sbi') || last4 == '9331') sbiBankId = id;
+              if (inst.contains('jio') ||
+                  name.contains('jio') ||
+                  last4 == '3284')
+                jioBankId = id;
+              if (inst.contains('sbi') ||
+                  name.contains('sbi') ||
+                  last4 == '9331')
+                sbiBankId = id;
             } else if (type == 'credit_card') {
-              if (inst.contains('icici') || name.contains('icici') || last4 == '5007') iciciCardId = id;
-              if (inst.contains('csb') || name.contains('csb') || name.contains('edge') || last4 == '2834') csbCardId = id;
+              if (inst.contains('icici') ||
+                  name.contains('icici') ||
+                  last4 == '5007')
+                iciciCardId = id;
+              if (inst.contains('csb') ||
+                  name.contains('csb') ||
+                  name.contains('edge') ||
+                  last4 == '2834')
+                csbCardId = id;
             }
           }
 
           // 3. For each account, compute delta from current pure transaction balance to target balance,
           // and insert a single canonical reconciliation event balancing against sys_equity_opening
-          Future<void> setExactBalance(String accountId, String accountName, double targetRupees, {bool isLiability = false}) async {
-            final currentBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(accountId);
+          Future<void> setExactBalance(
+            String accountId,
+            String accountName,
+            double targetRupees, {
+            bool isLiability = false,
+          }) async {
+            final currentBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(accountId);
             final targetBal = Money.fromRupees(targetRupees);
             final deltaPaise = targetBal.minorUnits - currentBal.minorUnits;
             if (deltaPaise == 0) return;
@@ -1779,16 +2665,20 @@ class LiveSmsService with WidgetsBindingObserver {
             final eventId = 'evt_rec_${accountId}_v25';
             final now = DateTime.now().toUtc();
 
-            await db.insert(TablesV24.economicEvents, {
-              'id': eventId,
-              'event_type': 'opening_balance',
-              'description': 'Reconciliation adjustment: $accountName',
-              'timestamp': now.toIso8601String(),
-              'lifecycle_status': 'posted',
-              'currency': 'INR',
-              'created_at': now.toIso8601String(),
-              'updated_at': now.toIso8601String(),
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
+            await db.insert(
+              TablesV24.economicEvents,
+              {
+                'id': eventId,
+                'event_type': 'opening_balance',
+                'description': 'Reconciliation adjustment: $accountName',
+                'timestamp': now.toIso8601String(),
+                'lifecycle_status': 'posted',
+                'currency': 'INR',
+                'created_at': now.toIso8601String(),
+                'updated_at': now.toIso8601String(),
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
 
             if (isLiability) {
               final cardDirection = deltaPaise > 0 ? 'credit' : 'debit';
@@ -1840,37 +2730,94 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // Apply authentic target balances:
-          await setExactBalance(federalBankId, 'Federal Account (..8434)', 17590.25);
+          await setExactBalance(
+            federalBankId,
+            'Federal Account (..8434)',
+            17590.25,
+          );
           if (jioBankId != null) {
-            await setExactBalance(jioBankId, 'Jio Payments Bank Account (..3284)', 492.91);
+            await setExactBalance(
+              jioBankId,
+              'Jio Payments Bank Account (..3284)',
+              492.91,
+            );
           }
           if (sbiBankId != null) {
             await setExactBalance(sbiBankId, 'SBI Account (..9331)', 21449.88);
           }
           if (iciciCardId != null) {
-            await setExactBalance(iciciCardId, 'ICICI Card (..5007)', 25010.35, isLiability: true);
+            await setExactBalance(
+              iciciCardId,
+              'ICICI Card (..5007)',
+              25010.35,
+              isLiability: true,
+            );
           }
           if (csbCardId != null) {
-            await setExactBalance(csbCardId, 'CSB Bank Card (..2834)', 3415.00, isLiability: true);
+            await setExactBalance(
+              csbCardId,
+              'CSB Bank Card (..2834)',
+              3415.00,
+              isLiability: true,
+            );
           }
 
           await db.execute('PRAGMA foreign_keys = ON;');
           final allAccs = await AccountRepo().getAll();
           final allCc = await CreditRepo().getAll();
-          final jio = allAccs.where((a) => a.last4 == '3284' || a.name.toLowerCase().contains('jio') || a.bank.toLowerCase().contains('jio')).firstOrNull;
-          final sbi = allAccs.where((a) => a.last4 == '9331' || a.name.toLowerCase().contains('sbi') || a.bank.toLowerCase().contains('sbi')).firstOrNull;
-          final fed = allAccs.where((a) => a.last4 == '8434' || a.name.toLowerCase().contains('federal') || a.bank.toLowerCase().contains('federal')).firstOrNull;
-          final icici = allCc.where((c) => c.last4 == '5007' || c.name.toLowerCase().contains('icici') || c.bank.toLowerCase().contains('icici')).firstOrNull;
-          final csb = allCc.where((c) => c.last4 == '2834' || c.name.toLowerCase().contains('csb') || c.bank.toLowerCase().contains('csb') || c.name.toLowerCase().contains('edge')).firstOrNull;
+          final jio = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '3284' ||
+                    a.name.toLowerCase().contains('jio') ||
+                    a.bank.toLowerCase().contains('jio'),
+              )
+              .firstOrNull;
+          final sbi = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '9331' ||
+                    a.name.toLowerCase().contains('sbi') ||
+                    a.bank.toLowerCase().contains('sbi'),
+              )
+              .firstOrNull;
+          final fed = allAccs
+              .where(
+                (a) =>
+                    a.last4 == '8434' ||
+                    a.name.toLowerCase().contains('federal') ||
+                    a.bank.toLowerCase().contains('federal'),
+              )
+              .firstOrNull;
+          final icici = allCc
+              .where(
+                (c) =>
+                    c.last4 == '5007' ||
+                    c.name.toLowerCase().contains('icici') ||
+                    c.bank.toLowerCase().contains('icici'),
+              )
+              .firstOrNull;
+          final csb = allCc
+              .where(
+                (c) =>
+                    c.last4 == '2834' ||
+                    c.name.toLowerCase().contains('csb') ||
+                    c.bank.toLowerCase().contains('csb') ||
+                    c.name.toLowerCase().contains('edge'),
+              )
+              .firstOrNull;
 
           if (fed != null) await AccountRepo().updateBalance(fed.id, 17590.25);
           if (jio != null) await AccountRepo().updateBalance(jio.id, 492.91);
           if (sbi != null) await AccountRepo().updateBalance(sbi.id, 21449.88);
           if (csb != null) await CreditRepo().updateBalance(csb.id, 3415.00);
-          if (icici != null) await CreditRepo().updateBalance(icici.id, 25010.35);
+          if (icici != null)
+            await CreditRepo().updateBalance(icici.id, 25010.35);
 
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v27 Repair: Purged legacy reconciliation records, unblocked orphan evidence, and restored authentic account balances');
+          AppLogger.i(
+            '[LiveSmsService] v27 Repair: Purged legacy reconciliation records, unblocked orphan evidence, and restored authentic account balances',
+          );
           await prefs.setBool('repair_restore_accounts_v27', true);
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v27 repair: $e\n$st');
@@ -1939,25 +2886,45 @@ class LiveSmsService with WidgetsBindingObserver {
           // 4. Link SBI transactions to SBI account ID
           final accounts = await AccountRepo().getAll();
 
-          final jioBank = accounts.where((a) => a.last4 == '3284' || a.name.toLowerCase().contains('jio') || a.bank.toLowerCase().contains('jio')).firstOrNull;
-          final sbiBank = accounts.where((a) => a.last4 == '9331' || a.name.toLowerCase().contains('sbi') || a.bank.toLowerCase().contains('sbi')).firstOrNull;
+          final jioBank = accounts
+              .where(
+                (a) =>
+                    a.last4 == '3284' ||
+                    a.name.toLowerCase().contains('jio') ||
+                    a.bank.toLowerCase().contains('jio'),
+              )
+              .firstOrNull;
+          final sbiBank = accounts
+              .where(
+                (a) =>
+                    a.last4 == '9331' ||
+                    a.name.toLowerCase().contains('sbi') ||
+                    a.bank.toLowerCase().contains('sbi'),
+              )
+              .firstOrNull;
 
           if (sbiBank != null) {
-            await db.rawUpdate('''
+            await db.rawUpdate(
+              '''
               UPDATE ${Tables.transactions}
               SET account_id = ?
               WHERE (account_id IS NULL OR account_id = '')
                 AND (LOWER(COALESCE(notes, note, '')) LIKE '%9331%' OR LOWER(COALESCE(notes, note, '')) LIKE '%sbi%');
-            ''', [sbiBank.id]);
+            ''',
+              [sbiBank.id],
+            );
           }
 
           if (jioBank != null) {
-            await db.rawUpdate('''
+            await db.rawUpdate(
+              '''
               UPDATE ${Tables.transactions}
               SET account_id = ?
               WHERE (account_id IS NULL OR account_id = '')
                 AND (LOWER(COALESCE(notes, note, '')) LIKE '%3284%' OR LOWER(COALESCE(notes, note, '')) LIKE '%jpbl%' OR LOWER(COALESCE(notes, note, '')) LIKE '%jio%');
-            ''', [jioBank.id]);
+            ''',
+              [jioBank.id],
+            );
           }
 
           await db.execute('PRAGMA foreign_keys = ON;');
@@ -1976,22 +2943,71 @@ class LiveSmsService with WidgetsBindingObserver {
           await TablesV24.dropTriggers(db);
 
           // 1. Purge previous reconciliation adjustments
-          await db.delete(TablesV24.postings, where: "economic_event_id LIKE 'evt_rec_%'");
-          await db.delete(TablesV24.economicEvents, where: "id LIKE 'evt_rec_%'");
+          await db.delete(
+            TablesV24.postings,
+            where: "economic_event_id LIKE 'evt_rec_%'",
+          );
+          await db.delete(
+            TablesV24.economicEvents,
+            where: "id LIKE 'evt_rec_%'",
+          );
 
           // 2. Identify all account and card IDs
           final accounts = await AccountRepo().getAll();
           final cards = await CreditRepo().getAll();
 
-          final jioBank = accounts.where((a) => a.last4 == '3284' || a.name.toLowerCase().contains('jio') || a.bank.toLowerCase().contains('jio')).firstOrNull;
-          final sbiBank = accounts.where((a) => a.last4 == '9331' || a.name.toLowerCase().contains('sbi') || a.bank.toLowerCase().contains('sbi')).firstOrNull;
-          final federalBank = accounts.where((a) => a.last4 == '8434' || a.name.toLowerCase().contains('federal') || a.bank.toLowerCase().contains('federal')).firstOrNull;
+          final jioBank = accounts
+              .where(
+                (a) =>
+                    a.last4 == '3284' ||
+                    a.name.toLowerCase().contains('jio') ||
+                    a.bank.toLowerCase().contains('jio'),
+              )
+              .firstOrNull;
+          final sbiBank = accounts
+              .where(
+                (a) =>
+                    a.last4 == '9331' ||
+                    a.name.toLowerCase().contains('sbi') ||
+                    a.bank.toLowerCase().contains('sbi'),
+              )
+              .firstOrNull;
+          final federalBank = accounts
+              .where(
+                (a) =>
+                    a.last4 == '8434' ||
+                    a.name.toLowerCase().contains('federal') ||
+                    a.bank.toLowerCase().contains('federal'),
+              )
+              .firstOrNull;
 
-          final iciciCard = cards.where((c) => c.last4 == '5007' || c.name.toLowerCase().contains('icici') || c.bank.toLowerCase().contains('icici')).firstOrNull;
-          final csbCard = cards.where((c) => c.last4 == '2834' || c.name.toLowerCase().contains('csb') || c.bank.toLowerCase().contains('csb') || c.name.toLowerCase().contains('edge')).firstOrNull;
+          final iciciCard = cards
+              .where(
+                (c) =>
+                    c.last4 == '5007' ||
+                    c.name.toLowerCase().contains('icici') ||
+                    c.bank.toLowerCase().contains('icici'),
+              )
+              .firstOrNull;
+          final csbCard = cards
+              .where(
+                (c) =>
+                    c.last4 == '2834' ||
+                    c.name.toLowerCase().contains('csb') ||
+                    c.bank.toLowerCase().contains('csb') ||
+                    c.name.toLowerCase().contains('edge'),
+              )
+              .firstOrNull;
 
-          Future<void> setExactBalance(String accountId, String accountName, double targetRupees, {bool isLiability = false}) async {
-            final currentBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(accountId);
+          Future<void> setExactBalance(
+            String accountId,
+            String accountName,
+            double targetRupees, {
+            bool isLiability = false,
+          }) async {
+            final currentBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(accountId);
             final targetBal = Money.fromRupees(targetRupees);
             final deltaPaise = targetBal.minorUnits - currentBal.minorUnits;
             if (deltaPaise == 0) return;
@@ -2000,16 +3016,20 @@ class LiveSmsService with WidgetsBindingObserver {
             final eventId = 'evt_rec_${accountId}_v30';
             final now = DateTime.now().toUtc();
 
-            await db.insert(TablesV24.economicEvents, {
-              'id': eventId,
-              'event_type': 'opening_balance',
-              'description': 'Reconciliation adjustment: $accountName',
-              'timestamp': now.toIso8601String(),
-              'lifecycle_status': 'posted',
-              'currency': 'INR',
-              'created_at': now.toIso8601String(),
-              'updated_at': now.toIso8601String(),
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
+            await db.insert(
+              TablesV24.economicEvents,
+              {
+                'id': eventId,
+                'event_type': 'opening_balance',
+                'description': 'Reconciliation adjustment: $accountName',
+                'timestamp': now.toIso8601String(),
+                'lifecycle_status': 'posted',
+                'currency': 'INR',
+                'created_at': now.toIso8601String(),
+                'updated_at': now.toIso8601String(),
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
 
             if (isLiability) {
               final cardDirection = deltaPaise > 0 ? 'credit' : 'debit';
@@ -2061,11 +3081,19 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           if (federalBank != null) {
-            await setExactBalance(federalBank.id, 'Federal Account (..8434)', 17590.25);
+            await setExactBalance(
+              federalBank.id,
+              'Federal Account (..8434)',
+              17590.25,
+            );
             await AccountRepo().updateBalance(federalBank.id, 17590.25);
           }
           if (jioBank != null) {
-            await setExactBalance(jioBank.id, 'Jio Payments Bank Account (..3284)', 492.91);
+            await setExactBalance(
+              jioBank.id,
+              'Jio Payments Bank Account (..3284)',
+              492.91,
+            );
             await AccountRepo().updateBalance(jioBank.id, 492.91);
           }
           if (sbiBank != null) {
@@ -2073,17 +3101,29 @@ class LiveSmsService with WidgetsBindingObserver {
             await AccountRepo().updateBalance(sbiBank.id, 21449.88);
           }
           if (csbCard != null) {
-            await setExactBalance(csbCard.id, 'CSB Bank Card (..2834)', 3415.00, isLiability: true);
+            await setExactBalance(
+              csbCard.id,
+              'CSB Bank Card (..2834)',
+              3415.00,
+              isLiability: true,
+            );
             await CreditRepo().updateBalance(csbCard.id, 3415.00);
           }
           if (iciciCard != null) {
-            await setExactBalance(iciciCard.id, 'ICICI Card (..5007)', 25010.35, isLiability: true);
+            await setExactBalance(
+              iciciCard.id,
+              'ICICI Card (..5007)',
+              25010.35,
+              isLiability: true,
+            );
             await CreditRepo().updateBalance(iciciCard.id, 25010.35);
           }
 
           await db.execute('PRAGMA foreign_keys = ON;');
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v30 Repair: Applied canonical postings to align derived balances');
+          AppLogger.i(
+            '[LiveSmsService] v30 Repair: Applied canonical postings to align derived balances',
+          );
           await prefs.setBool('repair_canonical_balances_v30', true);
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v30 repair: $e\n$st');
@@ -2104,8 +3144,16 @@ class LiveSmsService with WidgetsBindingObserver {
           ''');
           for (final r in phantomTx) {
             final txId = r['id'] as String;
-            await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [txId]);
-            await db.delete(Tables.creditTransactions, where: 'id = ?', whereArgs: [txId]);
+            await db.delete(
+              Tables.transactions,
+              where: 'id = ?',
+              whereArgs: [txId],
+            );
+            await db.delete(
+              Tables.creditTransactions,
+              where: 'id = ?',
+              whereArgs: [txId],
+            );
           }
 
           final phantomEvents = await db.rawQuery('''
@@ -2116,60 +3164,113 @@ class LiveSmsService with WidgetsBindingObserver {
           ''');
           for (final r in phantomEvents) {
             final eid = r['id'] as String;
-            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [eid],
+            );
           }
 
           // 2. Purge synthetic adjustments / alignment events
-          await db.delete(TablesV24.postings, where: "economic_event_id LIKE 'evt_align_%' OR economic_event_id LIKE 'evt_rec_%' OR economic_event_id LIKE 'evt_ob_fix_%'");
-          await db.delete(TablesV24.evidence, where: "economic_event_id LIKE 'evt_align_%' OR economic_event_id LIKE 'evt_rec_%' OR economic_event_id LIKE 'evt_ob_fix_%'");
-          await db.delete(TablesV24.openingBalanceReconciliations, where: "generated_event_id LIKE 'evt_align_%' OR generated_event_id LIKE 'evt_rec_%' OR generated_event_id LIKE 'evt_ob_fix_%'");
-          await db.delete(TablesV24.economicEvents, where: "id LIKE 'evt_align_%' OR id LIKE 'evt_rec_%' OR id LIKE 'evt_ob_fix_%' OR LOWER(description) LIKE '%outstanding adjustment%' OR LOWER(description) LIKE '%statement alignment%'");
+          await db.delete(
+            TablesV24.postings,
+            where:
+                "economic_event_id LIKE 'evt_align_%' OR economic_event_id LIKE 'evt_rec_%' OR economic_event_id LIKE 'evt_ob_fix_%'",
+          );
+          await db.delete(
+            TablesV24.evidence,
+            where:
+                "economic_event_id LIKE 'evt_align_%' OR economic_event_id LIKE 'evt_rec_%' OR economic_event_id LIKE 'evt_ob_fix_%'",
+          );
+          await db.delete(
+            TablesV24.openingBalanceReconciliations,
+            where:
+                "generated_event_id LIKE 'evt_align_%' OR generated_event_id LIKE 'evt_rec_%' OR generated_event_id LIKE 'evt_ob_fix_%'",
+          );
+          await db.delete(
+            TablesV24.economicEvents,
+            where:
+                "id LIKE 'evt_align_%' OR id LIKE 'evt_rec_%' OR id LIKE 'evt_ob_fix_%' OR LOWER(description) LIKE '%outstanding adjustment%' OR LOWER(description) LIKE '%statement alignment%'",
+          );
 
           try {
-            await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE LOWER(COALESCE(notes, '')) LIKE '%outstanding adjustment%' OR LOWER(COALESCE(notes, '')) LIKE '%statement alignment%'");
-            await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE LOWER(COALESCE(description, notes, '')) LIKE '%outstanding adjustment%' OR LOWER(COALESCE(description, notes, '')) LIKE '%statement alignment%'");
+            await db.rawDelete(
+              "DELETE FROM ${Tables.transactions} WHERE LOWER(COALESCE(notes, '')) LIKE '%outstanding adjustment%' OR LOWER(COALESCE(notes, '')) LIKE '%statement alignment%'",
+            );
+            await db.rawDelete(
+              "DELETE FROM ${Tables.creditTransactions} WHERE LOWER(COALESCE(description, notes, '')) LIKE '%outstanding adjustment%' OR LOWER(COALESCE(description, notes, '')) LIKE '%statement alignment%'",
+            );
           } catch (_) {}
 
           // 3. Set exact balance for ICICI Card to 25010.35 (91,760.35 bill - 66,750 repayments)
           final cards = await CreditRepo().getAll();
-          final iciciCard = cards.where((c) => c.bank.toLowerCase().contains('icici') || c.last4 == '5007').firstOrNull;
+          final iciciCard = cards
+              .where(
+                (c) =>
+                    c.bank.toLowerCase().contains('icici') || c.last4 == '5007',
+              )
+              .firstOrNull;
           if (iciciCard != null) {
             final stmtDate = DateTime(2026, 11, 9, 17, 56);
-            final stmtId = 'stmt_${iciciCard.id}_${stmtDate.millisecondsSinceEpoch}';
+            final stmtId =
+                'stmt_${iciciCard.id}_${stmtDate.millisecondsSinceEpoch}';
             try {
-              await CreditRepo().insertStatement(CardStatement(
-                id: stmtId,
-                cardId: iciciCard.id,
-                startDate: DateTime(2026, 10, 9),
-                endDate: stmtDate,
-                statementAmount: 91760.35,
-                minimumDue: 4588.02,
-                generatedDate: stmtDate,
-              ));
+              await CreditRepo().insertStatement(
+                CardStatement(
+                  id: stmtId,
+                  cardId: iciciCard.id,
+                  startDate: DateTime(2026, 10, 9),
+                  endDate: stmtDate,
+                  statementAmount: 91760.35,
+                  minimumDue: 4588.02,
+                  generatedDate: stmtDate,
+                ),
+              );
             } catch (_) {}
 
-            await db.rawUpdate('UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 20000000 WHERE id = ?', [iciciCard.id]);
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET limit_amount = 200000.0, used_amount = 25010.35, last_statement_balance = 25010.35 WHERE id = ?', [iciciCard.id]);
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 20000000 WHERE id = ?',
+              [iciciCard.id],
+            );
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET limit_amount = 200000.0, used_amount = 25010.35, last_statement_balance = 25010.35 WHERE id = ?',
+              [iciciCard.id],
+            );
 
-            final currentBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(iciciCard.id);
+            final currentBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(iciciCard.id);
             final targetBal = Money.fromRupees(25010.35);
             final deltaPaise = targetBal.minorUnits - currentBal.minorUnits;
             if (deltaPaise != 0) {
               final absPaise = deltaPaise.abs();
               final eventId = 'evt_rec_${iciciCard.id}_v32';
               final now = DateTime.now().toUtc();
-              await db.insert(TablesV24.economicEvents, {
-                'id': eventId,
-                'event_type': 'opening_balance',
-                'description': 'Reconciliation adjustment: ICICI Card (..5007)',
-                'timestamp': now.toIso8601String(),
-                'lifecycle_status': 'posted',
-                'currency': 'INR',
-                'created_at': now.toIso8601String(),
-                'updated_at': now.toIso8601String(),
-              }, conflictAlgorithm: ConflictAlgorithm.replace);
+              await db.insert(
+                TablesV24.economicEvents,
+                {
+                  'id': eventId,
+                  'event_type': 'opening_balance',
+                  'description':
+                      'Reconciliation adjustment: ICICI Card (..5007)',
+                  'timestamp': now.toIso8601String(),
+                  'lifecycle_status': 'posted',
+                  'currency': 'INR',
+                  'created_at': now.toIso8601String(),
+                  'updated_at': now.toIso8601String(),
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
 
               final cardDirection = deltaPaise > 0 ? 'credit' : 'debit';
               final equityDirection = deltaPaise > 0 ? 'debit' : 'credit';
@@ -2202,12 +3303,18 @@ class LiveSmsService with WidgetsBindingObserver {
               dueDay: 20,
             );
             await CreditRepo().update(updated);
-            await CreditRepo().updateBalance(iciciCard.id, 25010.35, messageDate: stmtDate);
+            await CreditRepo().updateBalance(
+              iciciCard.id,
+              25010.35,
+              messageDate: stmtDate,
+            );
           }
 
           await db.execute('PRAGMA foreign_keys = ON;');
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v32 Repair: Normalized ICICI balance to 25,010.35, purged all synthetic adjustments');
+          AppLogger.i(
+            '[LiveSmsService] v32 Repair: Normalized ICICI balance to 25,010.35, purged all synthetic adjustments',
+          );
           await prefs.setBool('repair_icici_clean_balance_v32', true);
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v32 repair: $e\n$st');
@@ -2242,7 +3349,9 @@ class LiveSmsService with WidgetsBindingObserver {
           await db.execute('PRAGMA foreign_keys = ON;');
           await prefs.setBool('repair_foreign_currency_and_merchant_v33', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v33 Repair: Cleaned Air Arabia merchant and foreign currency');
+          AppLogger.i(
+            '[LiveSmsService] v33 Repair: Cleaned Air Arabia merchant and foreign currency',
+          );
         } catch (e) {
           AppLogger.w('[LiveSmsService] Error in v33 repair: $e');
         }
@@ -2266,15 +3375,20 @@ class LiveSmsService with WidgetsBindingObserver {
               reason: 'ICICI Statement Bill baseline',
             );
 
-            await db.rawUpdate('''
+            await db.rawUpdate(
+              '''
               UPDATE ${Tables.creditCards}
               SET last_statement_balance = 91760.35
               WHERE id = ?;
-            ''', [cardId]);
+            ''',
+              [cardId],
+            );
           }
           await prefs.setBool('repair_icici_live_outstanding_v34', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v34 Repair: Anchored ICICI baseline to 91,760.35 and restored live outstanding');
+          AppLogger.i(
+            '[LiveSmsService] v34 Repair: Anchored ICICI baseline to 91,760.35 and restored live outstanding',
+          );
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v34 repair: $e\n$st');
         }
@@ -2289,7 +3403,9 @@ class LiveSmsService with WidgetsBindingObserver {
             TablesV24.accounts,
             where: "account_type = 'liability' AND subtype = 'credit_card'",
           );
-          final cardIds = cardLiabilityAccounts.map((r) => r['id'] as String).toList();
+          final cardIds = cardLiabilityAccounts
+              .map((r) => r['id'] as String)
+              .toList();
 
           // 1. Purge spurious reconciliation/adjustment events on credit cards
           if (cardIds.isNotEmpty) {
@@ -2304,47 +3420,101 @@ class LiveSmsService with WidgetsBindingObserver {
 
             for (final row in oldRecEvents) {
               final eid = row['id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.openingBalanceReconciliations, where: 'generated_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.openingBalanceReconciliations,
+                where: 'generated_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [eid],
+              );
             }
           }
 
           // 2. Clean up duplicate HDFC payment events (SMS 1 + SMS 2 dual ingestion)
-          final hdfcCardRow = cardLiabilityAccounts.where((r) =>
-            (r['name'] as String).toLowerCase().contains('hdfc') ||
-            (r['bank'] as String? ?? '').toLowerCase().contains('hdfc') ||
-            (r['account_number_last4'] as String? ?? '').contains('6366')
-          ).firstOrNull;
+          final hdfcCardRow = cardLiabilityAccounts
+              .where(
+                (r) =>
+                    (r['name'] as String).toLowerCase().contains('hdfc') ||
+                    (r['bank'] as String? ?? '').toLowerCase().contains(
+                      'hdfc',
+                    ) ||
+                    (r['account_number_last4'] as String? ?? '').contains(
+                      '6366',
+                    ),
+              )
+              .firstOrNull;
 
           if (hdfcCardRow != null) {
             final hdfcId = hdfcCardRow['id'] as String;
-            await db.rawUpdate('UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 14200000 WHERE id = ?', [hdfcId]);
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET limit_amount = 142000.0 WHERE id = ?', [hdfcId]);
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 14200000 WHERE id = ?',
+              [hdfcId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET limit_amount = 142000.0 WHERE id = ?',
+              [hdfcId],
+            );
 
-            final hdfcPayments = await db.rawQuery('''
+            final hdfcPayments = await db.rawQuery(
+              '''
               SELECT e.id, e.timestamp, p.amount_minor_units
               FROM ${TablesV24.economicEvents} e
               JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
               WHERE p.account_id = ? AND p.direction = 'debit'
               ORDER BY e.timestamp ASC;
-            ''', [hdfcId]);
+            ''',
+              [hdfcId],
+            );
 
             final seenHdfc = <int, DateTime>{};
             for (final hp in hdfcPayments) {
               final amt = (hp['amount_minor_units'] as num).toInt();
-              final ts = DateTime.tryParse(hp['timestamp'] as String) ?? DateTime.now();
+              final ts =
+                  DateTime.tryParse(hp['timestamp'] as String) ??
+                  DateTime.now();
               final eid = hp['id'] as String;
               if (seenHdfc.containsKey(amt)) {
                 final prevTs = seenHdfc[amt]!;
                 if (ts.difference(prevTs).inHours.abs() <= 36) {
-                  await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-                  await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-                  await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+                  await db.delete(
+                    TablesV24.postings,
+                    where: 'economic_event_id = ?',
+                    whereArgs: [eid],
+                  );
+                  await db.delete(
+                    TablesV24.evidence,
+                    where: 'economic_event_id = ?',
+                    whereArgs: [eid],
+                  );
+                  await db.delete(
+                    TablesV24.economicEvents,
+                    where: 'id = ?',
+                    whereArgs: [eid],
+                  );
                   try {
-                    await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [eid]);
-                    await db.delete(Tables.creditTransactions, where: 'id = ?', whereArgs: [eid]);
+                    await db.delete(
+                      Tables.transactions,
+                      where: 'id = ?',
+                      whereArgs: [eid],
+                    );
+                    await db.delete(
+                      Tables.creditTransactions,
+                      where: 'id = ?',
+                      whereArgs: [eid],
+                    );
                   } catch (_) {}
                   continue;
                 }
@@ -2354,43 +3524,92 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // 3. Clean up synthetic/manual duplicate ICICI card payments
-          final iciciCardRow = cardLiabilityAccounts.where((r) =>
-            (r['name'] as String).toLowerCase().contains('icici') ||
-            (r['bank'] as String? ?? '').toLowerCase().contains('icici') ||
-            (r['account_number_last4'] as String? ?? '').contains('5007')
-          ).firstOrNull;
+          final iciciCardRow = cardLiabilityAccounts
+              .where(
+                (r) =>
+                    (r['name'] as String).toLowerCase().contains('icici') ||
+                    (r['bank'] as String? ?? '').toLowerCase().contains(
+                      'icici',
+                    ) ||
+                    (r['account_number_last4'] as String? ?? '').contains(
+                      '5007',
+                    ),
+              )
+              .firstOrNull;
 
           if (iciciCardRow != null) {
             final iciciId = iciciCardRow['id'] as String;
-            await db.rawUpdate('UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 20000000 WHERE id = ?', [iciciId]);
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET limit_amount = 200000.0 WHERE id = ?', [iciciId]);
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 20000000 WHERE id = ?',
+              [iciciId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET limit_amount = 200000.0 WHERE id = ?',
+              [iciciId],
+            );
 
-            final synTx = await db.rawQuery('''
+            final synTx = await db.rawQuery(
+              '''
               SELECT id FROM ${Tables.transactions}
               WHERE (amount IN (60760.35, 25010.0, 25010.35))
                 AND (related_entity_id = ? OR account_id = ?);
-            ''', [iciciId, iciciId]);
+            ''',
+              [iciciId, iciciId],
+            );
             for (final r in synTx) {
               final tid = r['id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [tid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [tid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [tid]);
-              await db.delete(Tables.transactions, where: 'id = ?', whereArgs: [tid]);
-              await db.delete(Tables.creditTransactions, where: 'id = ?', whereArgs: [tid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [tid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [tid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [tid],
+              );
+              await db.delete(
+                Tables.transactions,
+                where: 'id = ?',
+                whereArgs: [tid],
+              );
+              await db.delete(
+                Tables.creditTransactions,
+                where: 'id = ?',
+                whereArgs: [tid],
+              );
             }
           }
 
           // 4. CSB card limit
-          final csbCardRow = cardLiabilityAccounts.where((r) =>
-            (r['name'] as String).toLowerCase().contains('csb') ||
-            (r['bank'] as String? ?? '').toLowerCase().contains('csb') ||
-            (r['account_number_last4'] as String? ?? '').contains('2834')
-          ).firstOrNull;
+          final csbCardRow = cardLiabilityAccounts
+              .where(
+                (r) =>
+                    (r['name'] as String).toLowerCase().contains('csb') ||
+                    (r['bank'] as String? ?? '').toLowerCase().contains(
+                      'csb',
+                    ) ||
+                    (r['account_number_last4'] as String? ?? '').contains(
+                      '2834',
+                    ),
+              )
+              .firstOrNull;
 
           if (csbCardRow != null) {
             final csbId = csbCardRow['id'] as String;
-            await db.rawUpdate('UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 5000000 WHERE id = ?', [csbId]);
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET limit_amount = 50000.0 WHERE id = ?', [csbId]);
+            await db.rawUpdate(
+              'UPDATE ${TablesV24.accounts} SET credit_limit_minor_units = 5000000 WHERE id = ?',
+              [csbId],
+            );
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET limit_amount = 50000.0 WHERE id = ?',
+              [csbId],
+            );
           }
 
           // 5. Clean Air Arabia transaction
@@ -2421,7 +3640,9 @@ class LiveSmsService with WidgetsBindingObserver {
           // 6. Anchor cards to true ledger balances
           if (iciciCardRow != null) {
             final iciciId = iciciCardRow['id'] as String;
-            final curBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(iciciId);
+            final curBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(iciciId);
             const target = 33999.61;
             final diff = target - curBal.asRupees;
             if (diff.abs() > 0.05) {
@@ -2431,12 +3652,17 @@ class LiveSmsService with WidgetsBindingObserver {
                 reason: 'ICICI True Outstanding Balance Anchor',
               );
             }
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET used_amount = 33999.61, last_statement_balance = 91760.35 WHERE id = ?', [iciciId]);
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET used_amount = 33999.61, last_statement_balance = 91760.35 WHERE id = ?',
+              [iciciId],
+            );
           }
 
           if (hdfcCardRow != null) {
             final hdfcId = hdfcCardRow['id'] as String;
-            final curBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(hdfcId);
+            final curBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(hdfcId);
             const target = 31000.00;
             final diff = target - curBal.asRupees;
             if (diff.abs() > 0.05) {
@@ -2446,12 +3672,17 @@ class LiveSmsService with WidgetsBindingObserver {
                 reason: 'HDFC True Outstanding Balance Anchor',
               );
             }
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET used_amount = 31000.00 WHERE id = ?', [hdfcId]);
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET used_amount = 31000.00 WHERE id = ?',
+              [hdfcId],
+            );
           }
 
           if (csbCardRow != null) {
             final csbId = csbCardRow['id'] as String;
-            final curBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(csbId);
+            final curBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(csbId);
             const target = 2640.76;
             final diff = target - curBal.asRupees;
             if (diff.abs() > 0.05) {
@@ -2461,12 +3692,17 @@ class LiveSmsService with WidgetsBindingObserver {
                 reason: 'CSB True Outstanding Balance Anchor',
               );
             }
-            await db.rawUpdate('UPDATE ${Tables.creditCards} SET used_amount = 2640.76 WHERE id = ?', [csbId]);
+            await db.rawUpdate(
+              'UPDATE ${Tables.creditCards} SET used_amount = 2640.76 WHERE id = ?',
+              [csbId],
+            );
           }
 
           await prefs.setBool('repair_credit_cards_and_accounting_v35', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v35 Repair: Fully restored ICICI, HDFC, CSB true balances and pruned duplicate payments');
+          AppLogger.i(
+            '[LiveSmsService] v35 Repair: Fully restored ICICI, HDFC, CSB true balances and pruned duplicate payments',
+          );
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v35 repair: $e\n$st');
         }
@@ -2484,13 +3720,29 @@ class LiveSmsService with WidgetsBindingObserver {
           ''');
           for (final r in events60k) {
             final eid = r['economic_event_id'] as String;
-            await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+            await db.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await db.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [eid],
+            );
           }
           try {
-            await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE amount BETWEEN 60760 AND 60761");
-            await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE amount BETWEEN 60760 AND 60761");
+            await db.rawDelete(
+              "DELETE FROM ${Tables.transactions} WHERE amount BETWEEN 60760 AND 60761",
+            );
+            await db.rawDelete(
+              "DELETE FROM ${Tables.creditTransactions} WHERE amount BETWEEN 60760 AND 60761",
+            );
           } catch (_) {}
 
           // 2. Remove misrouted 4,000 Jio UPI transfer from ICICI Card postings
@@ -2498,72 +3750,145 @@ class LiveSmsService with WidgetsBindingObserver {
             TablesV24.accounts,
             where: "account_type = 'liability' AND subtype = 'credit_card'",
           );
-          final iciciCardRow = cardLiabilityAccounts.where((r) =>
-            (r['name'] as String).toLowerCase().contains('icici') ||
-            (r['account_number_last4'] as String? ?? '').contains('5007')
-          ).firstOrNull;
+          final iciciCardRow = cardLiabilityAccounts
+              .where(
+                (r) =>
+                    (r['name'] as String).toLowerCase().contains('icici') ||
+                    (r['account_number_last4'] as String? ?? '').contains(
+                      '5007',
+                    ),
+              )
+              .firstOrNull;
           if (iciciCardRow != null) {
             final iciciId = iciciCardRow['id'] as String;
-            final misrouted4k = await db.rawQuery('''
+            final misrouted4k = await db.rawQuery(
+              '''
               SELECT DISTINCT p.economic_event_id FROM ${TablesV24.postings} p
               JOIN ${TablesV24.economicEvents} e ON e.id = p.economic_event_id
               WHERE p.account_id = ? AND p.amount_minor_units = 400000
                 AND (e.description LIKE '%4000%' OR e.description LIKE '%Amazon Pay%' OR e.description LIKE '%Credit Card Bill Payment%');
-            ''', [iciciId]);
+            ''',
+              [iciciId],
+            );
             for (final r in misrouted4k) {
               final eid = r['economic_event_id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [eid],
+              );
               try {
-                await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ?", [eid]);
-                await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [eid]);
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.transactions} WHERE id = ?",
+                  [eid],
+                );
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                  [eid],
+                );
               } catch (_) {}
             }
 
             // 3. Deduplicate 25,010.00 payment events on ICICI Card (keep earliest, prune all others)
-            final pay25k = await db.rawQuery('''
+            final pay25k = await db.rawQuery(
+              '''
               SELECT DISTINCT e.id, e.timestamp FROM ${TablesV24.economicEvents} e
               JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
               WHERE p.account_id = ? AND p.amount_minor_units = 2501000
               ORDER BY e.timestamp ASC;
-            ''', [iciciId]);
+            ''',
+              [iciciId],
+            );
             if (pay25k.length > 1) {
               for (int i = 1; i < pay25k.length; i++) {
                 final eid = pay25k[i]['id'] as String;
-                await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-                await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-                await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+                await db.delete(
+                  TablesV24.postings,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [eid],
+                );
+                await db.delete(
+                  TablesV24.evidence,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [eid],
+                );
+                await db.delete(
+                  TablesV24.economicEvents,
+                  where: 'id = ?',
+                  whereArgs: [eid],
+                );
                 try {
-                  await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?", [eid, eid]);
-                  await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [eid]);
+                  await db.rawDelete(
+                    "DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?",
+                    [eid, eid],
+                  );
+                  await db.rawDelete(
+                    "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                    [eid],
+                  );
                 } catch (_) {}
               }
             }
           }
 
           // 4. Deduplicate District Movies (amount_minor_units = 37152) on CSB Card
-          final csbCardRow = cardLiabilityAccounts.where((r) =>
-            (r['name'] as String).toLowerCase().contains('csb') ||
-            (r['account_number_last4'] as String? ?? '').contains('2834')
-          ).firstOrNull;
+          final csbCardRow = cardLiabilityAccounts
+              .where(
+                (r) =>
+                    (r['name'] as String).toLowerCase().contains('csb') ||
+                    (r['account_number_last4'] as String? ?? '').contains(
+                      '2834',
+                    ),
+              )
+              .firstOrNull;
           if (csbCardRow != null) {
             final csbId = csbCardRow['id'] as String;
-            final movies371 = await db.rawQuery('''
+            final movies371 = await db.rawQuery(
+              '''
               SELECT DISTINCT e.id, e.timestamp FROM ${TablesV24.economicEvents} e
               JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
               WHERE p.account_id = ? AND p.amount_minor_units = 37152
               ORDER BY e.timestamp ASC;
-            ''', [csbId]);
+            ''',
+              [csbId],
+            );
             if (movies371.length > 1) {
               for (int i = 1; i < movies371.length; i++) {
                 final eid = movies371[i]['id'] as String;
-                await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-                await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-                await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+                await db.delete(
+                  TablesV24.postings,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [eid],
+                );
+                await db.delete(
+                  TablesV24.evidence,
+                  where: 'economic_event_id = ?',
+                  whereArgs: [eid],
+                );
+                await db.delete(
+                  TablesV24.economicEvents,
+                  where: 'id = ?',
+                  whereArgs: [eid],
+                );
                 try {
-                  await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?", [eid, eid]);
-                  await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [eid]);
+                  await db.rawDelete(
+                    "DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?",
+                    [eid, eid],
+                  );
+                  await db.rawDelete(
+                    "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                    [eid],
+                  );
                 } catch (_) {}
               }
             }
@@ -2581,7 +3906,9 @@ class LiveSmsService with WidgetsBindingObserver {
             final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
             final type = row['type'] as String? ?? '';
             final txId = row['id'] as String;
-            final notes = (row['notes'] as String? ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+            final notes = (row['notes'] as String? ?? '')
+                .toLowerCase()
+                .replaceAll(RegExp(r'[^a-z0-9]'), '');
             final rawDate = row['date'] as String?;
             if (rawDate != null && amt > 0) {
               final txDate = DateTime.tryParse(rawDate) ?? DateTime.now();
@@ -2589,11 +3916,30 @@ class LiveSmsService with WidgetsBindingObserver {
               if (seenTxMap.containsKey(key)) {
                 final prev = seenTxMap[key]!;
                 if (txDate.difference(prev.date).inMinutes.abs() <= 75) {
-                  if (prev.notes.isEmpty || notes.isEmpty || prev.notes == notes || prev.notes.contains(notes) || notes.contains(prev.notes)) {
-                    await db.rawUpdate('UPDATE ${Tables.transactions} SET is_deleted = 1 WHERE id = ?', [txId]);
-                    await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [txId]);
-                    await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [txId]);
-                    await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [txId]);
+                  if (prev.notes.isEmpty ||
+                      notes.isEmpty ||
+                      prev.notes == notes ||
+                      prev.notes.contains(notes) ||
+                      notes.contains(prev.notes)) {
+                    await db.rawUpdate(
+                      'UPDATE ${Tables.transactions} SET is_deleted = 1 WHERE id = ?',
+                      [txId],
+                    );
+                    await db.delete(
+                      TablesV24.postings,
+                      where: 'economic_event_id = ?',
+                      whereArgs: [txId],
+                    );
+                    await db.delete(
+                      TablesV24.evidence,
+                      where: 'economic_event_id = ?',
+                      whereArgs: [txId],
+                    );
+                    await db.delete(
+                      TablesV24.economicEvents,
+                      where: 'id = ?',
+                      whereArgs: [txId],
+                    );
                     continue;
                   }
                 }
@@ -2607,7 +3953,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await prefs.setBool('repair_dedup_and_timestamps_v37', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v37 Repair: Cleaned duplicate 371.52, duplicate 25k, purged synthetic 60k and misrouted 4k, and deduped all accounts');
+          AppLogger.i(
+            '[LiveSmsService] v37 Repair: Cleaned duplicate 371.52, duplicate 25k, purged synthetic 60k and misrouted 4k, and deduped all accounts',
+          );
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v37 repair: $e\n$st');
         }
@@ -2628,12 +3976,30 @@ class LiveSmsService with WidgetsBindingObserver {
           if (movies371.length > 1) {
             for (int i = 1; i < movies371.length; i++) {
               final eid = movies371[i]['id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [eid],
+              );
               try {
-                await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?", [eid, eid]);
-                await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [eid]);
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?",
+                  [eid, eid],
+                );
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                  [eid],
+                );
               } catch (_) {}
             }
           }
@@ -2646,12 +4012,30 @@ class LiveSmsService with WidgetsBindingObserver {
           if (legacy371.length > 1) {
             for (int i = 1; i < legacy371.length; i++) {
               final tid = legacy371[i]['id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [tid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [tid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [tid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [tid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [tid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [tid],
+              );
               try {
-                await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ?", [tid]);
-                await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [tid]);
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.transactions} WHERE id = ?",
+                  [tid],
+                );
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                  [tid],
+                );
               } catch (_) {}
             }
           }
@@ -2666,12 +4050,30 @@ class LiveSmsService with WidgetsBindingObserver {
           if (pay25k.length > 1) {
             for (int i = 1; i < pay25k.length; i++) {
               final eid = pay25k[i]['id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [eid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [eid],
+              );
               try {
-                await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?", [eid, eid]);
-                await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [eid]);
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?",
+                  [eid, eid],
+                );
+                await db.rawDelete(
+                  "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                  [eid],
+                );
               } catch (_) {}
             }
           }
@@ -2684,24 +4086,52 @@ class LiveSmsService with WidgetsBindingObserver {
             WHERE e.lifecycle_status = 'posted' AND e.event_type != 'opening_balance'
             ORDER BY e.timestamp ASC;
           ''');
-          final seenMap = <int, ({DateTime ts, String alphaDesc, String eid})>{};
+          final seenMap =
+              <int, ({DateTime ts, String alphaDesc, String eid})>{};
           for (final row in allDupes) {
             final amt = (row['amount_minor_units'] as num?)?.toInt() ?? 0;
             if (amt <= 0) continue;
             final eid = row['id'] as String;
-            final desc = (row['description'] as String? ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+            final desc = (row['description'] as String? ?? '')
+                .toLowerCase()
+                .replaceAll(RegExp(r'[^a-z0-9]'), '');
             final rawTs = row['timestamp'] as String?;
-            final ts = rawTs != null ? (DateTime.tryParse(rawTs) ?? DateTime.now()) : DateTime.now();
+            final ts = rawTs != null
+                ? (DateTime.tryParse(rawTs) ?? DateTime.now())
+                : DateTime.now();
             if (seenMap.containsKey(amt)) {
               final prev = seenMap[amt]!;
               if (ts.difference(prev.ts).inMinutes.abs() <= 60) {
-                if (prev.eid != eid && (prev.alphaDesc.isEmpty || desc.isEmpty || prev.alphaDesc == desc || prev.alphaDesc.contains(desc) || desc.contains(prev.alphaDesc))) {
-                  await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-                  await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-                  await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+                if (prev.eid != eid &&
+                    (prev.alphaDesc.isEmpty ||
+                        desc.isEmpty ||
+                        prev.alphaDesc == desc ||
+                        prev.alphaDesc.contains(desc) ||
+                        desc.contains(prev.alphaDesc))) {
+                  await db.delete(
+                    TablesV24.postings,
+                    where: 'economic_event_id = ?',
+                    whereArgs: [eid],
+                  );
+                  await db.delete(
+                    TablesV24.evidence,
+                    where: 'economic_event_id = ?',
+                    whereArgs: [eid],
+                  );
+                  await db.delete(
+                    TablesV24.economicEvents,
+                    where: 'id = ?',
+                    whereArgs: [eid],
+                  );
                   try {
-                    await db.rawDelete("DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?", [eid, eid]);
-                    await db.rawDelete("DELETE FROM ${Tables.creditTransactions} WHERE id = ?", [eid]);
+                    await db.rawDelete(
+                      "DELETE FROM ${Tables.transactions} WHERE id = ? OR economic_event_id = ?",
+                      [eid, eid],
+                    );
+                    await db.rawDelete(
+                      "DELETE FROM ${Tables.creditTransactions} WHERE id = ?",
+                      [eid],
+                    );
                   } catch (_) {}
                   continue;
                 }
@@ -2715,7 +4145,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await prefs.setBool('repair_dedup_and_instant_delete_v38', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v38 Repair: Cleaned all duplicates and enabled instant deletion');
+          AppLogger.i(
+            '[LiveSmsService] v38 Repair: Cleaned all duplicates and enabled instant deletion',
+          );
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v38 repair: $e\n$st');
         }
@@ -2723,7 +4155,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
       if (prefs.getBool('repair_card_outstandings_v43') != true) {
         try {
-          debugPrint('[LiveSmsService] Running v43 card outstandings repair...');
+          debugPrint(
+            '[LiveSmsService] Running v43 card outstandings repair...',
+          );
           await TablesV24.dropTriggers(db);
           await db.execute('PRAGMA foreign_keys = OFF;');
 
@@ -2736,12 +4170,22 @@ class LiveSmsService with WidgetsBindingObserver {
           for (final cRow in cardAccRows) {
             final cardId = cRow['id'] as String;
             final cardName = (cRow['name'] as String? ?? '').toLowerCase();
-            final cardInst = (cRow['institution_name'] as String? ?? '').toLowerCase();
+            final cardInst = (cRow['institution_name'] as String? ?? '')
+                .toLowerCase();
             final last4 = (cRow['account_number_last4'] as String? ?? '');
 
-            final isCsb = last4 == '2834' || cardName.contains('csb') || cardInst.contains('csb');
-            final isIcici = last4 == '5007' || cardName.contains('icici') || cardInst.contains('icici');
-            final isHdfc = last4 == '6366' || cardName.contains('hdfc') || cardInst.contains('hdfc');
+            final isCsb =
+                last4 == '2834' ||
+                cardName.contains('csb') ||
+                cardInst.contains('csb');
+            final isIcici =
+                last4 == '5007' ||
+                cardName.contains('icici') ||
+                cardInst.contains('icici');
+            final isHdfc =
+                last4 == '6366' ||
+                cardName.contains('hdfc') ||
+                cardInst.contains('hdfc');
 
             double? targetUsed;
             if (isCsb) {
@@ -2752,39 +4196,63 @@ class LiveSmsService with WidgetsBindingObserver {
               targetUsed = 0.0;
             }
 
-            final bogusEvents = await db.rawQuery('''
+            final bogusEvents = await db.rawQuery(
+              '''
               SELECT DISTINCT e.id FROM ${TablesV24.economicEvents} e
               JOIN ${TablesV24.postings} p ON p.economic_event_id = e.id
               WHERE p.account_id = ?
                 AND (e.id LIKE 'evt_rec_%' OR e.id LIKE 'evt_ob_%' OR e.id LIKE 'evt_anchor_%' OR e.event_type = 'reconciliation_adjustment' OR LOWER(e.description) LIKE '%reconciliation%' OR LOWER(e.description) LIKE '%anchor%');
-            ''', [cardId]);
+            ''',
+              [cardId],
+            );
 
             for (final bRow in bogusEvents) {
               final beid = bRow['id'] as String;
-              await db.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [beid]);
-              await db.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [beid]);
-              await db.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [beid]);
+              await db.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [beid],
+              );
+              await db.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [beid],
+              );
+              await db.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [beid],
+              );
             }
 
-            final curBal = await CanonicalAccountRepository(executor: db).getDerivedBalance(cardId);
-            debugPrint('[v43_DEBUG] card: name=${cRow['name']}, last4=$last4, isCsb=$isCsb, isIcici=$isIcici, isHdfc=$isHdfc, curBal=${curBal.minorUnits}, targetUsed=$targetUsed');
+            final curBal = await CanonicalAccountRepository(
+              executor: db,
+            ).getDerivedBalance(cardId);
+            debugPrint(
+              '[v43_DEBUG] card: name=${cRow['name']}, last4=$last4, isCsb=$isCsb, isIcici=$isIcici, isHdfc=$isHdfc, curBal=${curBal.minorUnits}, targetUsed=$targetUsed',
+            );
 
             if (targetUsed != null) {
-              final deltaPaise = (targetUsed * 100.0).round() - curBal.minorUnits;
+              final deltaPaise =
+                  (targetUsed * 100.0).round() - curBal.minorUnits;
               if (deltaPaise != 0) {
                 final absPaise = deltaPaise.abs();
                 final eventId = 'evt_anchor_v43_$cardId';
                 final now = DateTime.now().toIso8601String();
-                await db.insert(TablesV24.economicEvents, {
-                  'id': eventId,
-                  'event_type': 'opening_balance',
-                  'lifecycle_status': 'posted',
-                  'timestamp': now,
-                  'currency': 'INR',
-                  'description': 'True balance anchor for ${cRow['name']}',
-                  'created_at': now,
-                  'updated_at': now,
-                }, conflictAlgorithm: ConflictAlgorithm.replace);
+                await db.insert(
+                  TablesV24.economicEvents,
+                  {
+                    'id': eventId,
+                    'event_type': 'opening_balance',
+                    'lifecycle_status': 'posted',
+                    'timestamp': now,
+                    'currency': 'INR',
+                    'description': 'True balance anchor for ${cRow['name']}',
+                    'created_at': now,
+                    'updated_at': now,
+                  },
+                  conflictAlgorithm: ConflictAlgorithm.replace,
+                );
 
                 final dir = deltaPaise > 0 ? 'credit' : 'debit';
                 final eqDir = deltaPaise > 0 ? 'debit' : 'credit';
@@ -2818,9 +4286,15 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // Specific updates for known card last4s
-          await db.rawUpdate("UPDATE ${Tables.creditCards} SET used_amount = 3012.28, last_statement_balance = 0.0 WHERE last4 = '2834' OR LOWER(bank) LIKE '%csb%'");
-          await db.rawUpdate("UPDATE ${Tables.creditCards} SET used_amount = 0.0, last_statement_balance = 0.0 WHERE last4 = '5007' OR LOWER(bank) LIKE '%icici%'");
-          await db.rawUpdate("UPDATE ${Tables.creditCards} SET used_amount = 0.0, last_statement_balance = 0.0 WHERE last4 = '6366' OR LOWER(bank) LIKE '%hdfc%'");
+          await db.rawUpdate(
+            "UPDATE ${Tables.creditCards} SET used_amount = 3012.28, last_statement_balance = 0.0 WHERE last4 = '2834' OR LOWER(bank) LIKE '%csb%'",
+          );
+          await db.rawUpdate(
+            "UPDATE ${Tables.creditCards} SET used_amount = 0.0, last_statement_balance = 0.0 WHERE last4 = '5007' OR LOWER(bank) LIKE '%icici%'",
+          );
+          await db.rawUpdate(
+            "UPDATE ${Tables.creditCards} SET used_amount = 0.0, last_statement_balance = 0.0 WHERE last4 = '6366' OR LOWER(bank) LIKE '%hdfc%'",
+          );
 
           // Silence reminders for paid cards
           await db.rawUpdate('''
@@ -2836,7 +4310,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await prefs.setBool('repair_card_outstandings_v43', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v43 Repair: Corrected card outstandings to authentic values (CSB: 3012.28, ICICI: 0.00, HDFC: 0.00) and silenced resolved reminders');
+          AppLogger.i(
+            '[LiveSmsService] v43 Repair: Corrected card outstandings to authentic values (CSB: 3012.28, ICICI: 0.00, HDFC: 0.00) and silenced resolved reminders',
+          );
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v43 repair: $e\n$st');
         }
@@ -2844,7 +4320,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
       if (prefs.getBool('repair_purge_phantom_liabilities_v44') != true) {
         try {
-          debugPrint('[LiveSmsService] Running v44 purge phantom liabilities and stale reminders...');
+          debugPrint(
+            '[LiveSmsService] Running v44 purge phantom liabilities and stale reminders...',
+          );
           // 1. Purge phantom or stale overdue reminders (Groww SIP, unlinked bills, test reminders)
           await db.rawUpdate('''
             UPDATE ${Tables.reminders}
@@ -2859,16 +4337,23 @@ class LiveSmsService with WidgetsBindingObserver {
           ''');
 
           // 2. Mark any overdue reminders older than 3 days as completed/dismissed
-          final cutoffIso = DateTime.now().subtract(const Duration(days: 3)).toIso8601String();
-          await db.rawUpdate('''
+          final cutoffIso = DateTime.now()
+              .subtract(const Duration(days: 3))
+              .toIso8601String();
+          await db.rawUpdate(
+            '''
             UPDATE ${Tables.reminders}
             SET is_active = 0, is_completed = 1, record_status = 'done'
             WHERE is_completed = 0 AND date < ?;
-          ''', [cutoffIso]);
+          ''',
+            [cutoffIso],
+          );
 
           await prefs.setBool('repair_purge_phantom_liabilities_v44', true);
           DataChangeBus.instance.notify();
-          AppLogger.i('[LiveSmsService] v44 Repair: Purged phantom reminders and aligned liabilities to < ₹7,000');
+          AppLogger.i(
+            '[LiveSmsService] v44 Repair: Purged phantom reminders and aligned liabilities to < ₹7,000',
+          );
         } catch (e, st) {
           AppLogger.w('[LiveSmsService] Error in v44 repair: $e\n$st');
         }
@@ -2891,13 +4376,31 @@ class LiveSmsService with WidgetsBindingObserver {
         await db.transaction((txn) async {
           for (final r in rows) {
             final eid = r['id'] as String;
-            await txn.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await txn.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eid]);
-            await txn.delete(TablesV24.openingBalanceReconciliations, where: 'generated_event_id = ?', whereArgs: [eid]);
-            await txn.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eid]);
+            await txn.delete(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await txn.delete(
+              TablesV24.evidence,
+              where: 'economic_event_id = ?',
+              whereArgs: [eid],
+            );
+            await txn.delete(
+              TablesV24.openingBalanceReconciliations,
+              where: 'generated_event_id = ?',
+              whereArgs: [eid],
+            );
+            await txn.delete(
+              TablesV24.economicEvents,
+              where: 'id = ?',
+              whereArgs: [eid],
+            );
           }
         });
-        AppLogger.i('[LiveSmsService] Purged ${rows.length} duplicate reconciliation adjustments');
+        AppLogger.i(
+          '[LiveSmsService] Purged ${rows.length} duplicate reconciliation adjustments',
+        );
       }
 
       // Deduplicate duplicate income transactions of same amount from recent days
@@ -2918,11 +4421,25 @@ class LiveSmsService with WidgetsBindingObserver {
         if (amountMinor > 0) {
           if (seenAmounts.containsKey(amountMinor)) {
             await db.transaction((txn) async {
-              await txn.delete(TablesV24.postings, where: 'economic_event_id = ?', whereArgs: [eventId]);
-              await txn.delete(TablesV24.evidence, where: 'economic_event_id = ?', whereArgs: [eventId]);
-              await txn.delete(TablesV24.economicEvents, where: 'id = ?', whereArgs: [eventId]);
+              await txn.delete(
+                TablesV24.postings,
+                where: 'economic_event_id = ?',
+                whereArgs: [eventId],
+              );
+              await txn.delete(
+                TablesV24.evidence,
+                where: 'economic_event_id = ?',
+                whereArgs: [eventId],
+              );
+              await txn.delete(
+                TablesV24.economicEvents,
+                where: 'id = ?',
+                whereArgs: [eventId],
+              );
             });
-            AppLogger.i('[LiveSmsService] Pruned duplicate income event $eventId for minorUnits $amountMinor');
+            AppLogger.i(
+              '[LiveSmsService] Pruned duplicate income event $eventId for minorUnits $amountMinor',
+            );
           } else {
             seenAmounts[amountMinor] = eventId;
           }
@@ -2935,7 +4452,9 @@ class LiveSmsService with WidgetsBindingObserver {
       if (jioAcc != null) {
         // Link 6000 income transaction to jioAcc
         final allTxns = await TransactionRepo().getAll();
-        final income6k = allTxns.where((t) => t.amount == 6000.0 && t.type == 'income').firstOrNull;
+        final income6k = allTxns
+            .where((t) => t.amount == 6000.0 && t.type == 'income')
+            .firstOrNull;
         if (income6k != null && income6k.accountId != jioAcc.id) {
           final updated = income6k.copyWith(accountId: jioAcc.id);
           await FinancialTransactionService().editTransaction(
@@ -2953,7 +4472,8 @@ class LiveSmsService with WidgetsBindingObserver {
   }
 
   /// Resolves the instrument (credit card, bank, or digital wallet) for a transaction.
-  Future<({String? accountId, String source, String instrumentType})> _classifyAndResolveAccount({
+  Future<({String? accountId, String source, String instrumentType})>
+  _classifyAndResolveAccount({
     required ParsedTransaction parsed,
     required String sender,
     required String body,
@@ -2963,22 +4483,26 @@ class LiveSmsService with WidgetsBindingObserver {
     final lowerBody = body.toLowerCase();
     final cards = await CreditRepo().getAll();
 
-    final isExplicitBankAccount = lowerBody.contains('from a/c') ||
+    final isExplicitBankAccount =
+        lowerBody.contains('from a/c') ||
         lowerBody.contains('from your a/c') ||
         lowerBody.contains('debited from a/c') ||
         lowerBody.contains('credited to your a/c') ||
         lowerBody.contains('credited to a/c') ||
         lowerBody.contains('to your a/c') ||
         lowerBody.contains('in your a/c') ||
-        (lowerBody.contains('a/c') && (lowerBody.contains('debited') || lowerBody.contains('credited')));
+        (lowerBody.contains('a/c') &&
+            (lowerBody.contains('debited') || lowerBody.contains('credited')));
 
     // 1. Check for Credit Card (only if not an explicit bank account SMS)
     if (!isExplicitBankAccount) {
-      final matchedCardByLast4 = (parsed.last4 != null && parsed.last4!.isNotEmpty)
+      final matchedCardByLast4 =
+          (parsed.last4 != null && parsed.last4!.isNotEmpty)
           ? cards.where((c) => c.last4 == parsed.last4).firstOrNull
           : null;
 
-      final isCcSignal = matchedCardByLast4 != null ||
+      final isCcSignal =
+          matchedCardByLast4 != null ||
           balanceHit?.kind == BalanceKind.creditCard ||
           lowerSender.contains('crd') ||
           lowerSender.contains('card') ||
@@ -2997,7 +4521,10 @@ class LiveSmsService with WidgetsBindingObserver {
           lowerBody.contains('hdfc bank card') ||
           lowerBody.contains('block cc') ||
           lowerBody.contains('tata neu') ||
-          RegExp(r'(?:card|cc)[\s#:]*(?:xx|no\.?|ending)?\s*\d{4}', caseSensitive: false).hasMatch(lowerBody) ||
+          RegExp(
+            r'(?:card|cc)[\s#:]*(?:xx|no\.?|ending)?\s*\d{4}',
+            caseSensitive: false,
+          ).hasMatch(lowerBody) ||
           (parsed.bankName?.toLowerCase() == 'hdfc');
 
       if (isCcSignal) {
@@ -3025,10 +4552,13 @@ class LiveSmsService with WidgetsBindingObserver {
     }
     if (!isHdfcCandidate && matchedBank == null && parsed.bankName != null) {
       final kw = parsed.bankName!.toLowerCase();
-      final matching = accounts.where((a) =>
-        a.bank.toLowerCase().contains(kw) ||
-        a.name.toLowerCase().contains(kw),
-      ).toList();
+      final matching = accounts
+          .where(
+            (a) =>
+                a.bank.toLowerCase().contains(kw) ||
+                a.name.toLowerCase().contains(kw),
+          )
+          .toList();
       if (matching.isNotEmpty) matchedBank = matching.first;
     }
 
@@ -3039,11 +4569,13 @@ class LiveSmsService with WidgetsBindingObserver {
         final bName = a.bank.toLowerCase();
         final aName = a.name.toLowerCase();
         if (bName == 'hdfc' || aName.contains('hdfc')) continue;
-        if (bName.length >= 3 && (lowerSender.contains(bName) || lowerBody.contains(bName))) {
+        if (bName.length >= 3 &&
+            (lowerSender.contains(bName) || lowerBody.contains(bName))) {
           matchedBank = a;
           break;
         }
-        if (aName.length >= 3 && (lowerSender.contains(aName) || lowerBody.contains(aName))) {
+        if (aName.length >= 3 &&
+            (lowerSender.contains(aName) || lowerBody.contains(aName))) {
           matchedBank = a;
           break;
         }
@@ -3051,12 +4583,17 @@ class LiveSmsService with WidgetsBindingObserver {
     }
 
     // Check for UPI Lite signal first
-    final isUpiLite = lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
+    final isUpiLite =
+        lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
     if (isUpiLite) {
-      final upiLiteAcc = accounts.where((a) =>
-        a.accountType == 'wallet' &&
-        (a.name.toLowerCase().contains('upi lite') || a.bank.toLowerCase().contains('upi lite')),
-      ).firstOrNull;
+      final upiLiteAcc = accounts
+          .where(
+            (a) =>
+                a.accountType == 'wallet' &&
+                (a.name.toLowerCase().contains('upi lite') ||
+                    a.bank.toLowerCase().contains('upi lite')),
+          )
+          .firstOrNull;
       if (upiLiteAcc != null) {
         return (
           accountId: upiLiteAcc.id,
@@ -3067,22 +4604,29 @@ class LiveSmsService with WidgetsBindingObserver {
     }
 
     // Check for Digital Wallet signals
-    final hasNoBankSignal = (parsed.last4 == null || parsed.last4!.isEmpty) && parsed.bankName == null;
-    final isWalletSignal = hasNoBankSignal && (
-        balanceHit?.kind == BalanceKind.wallet ||
-        lowerSender.contains('qcamzn') ||
-        lowerBody.contains('amazon pay balance') ||
-        lowerBody.contains('paytm wallet') ||
-        lowerBody.contains('wallet balance'));
+    final hasNoBankSignal =
+        (parsed.last4 == null || parsed.last4!.isEmpty) &&
+        parsed.bankName == null;
+    final isWalletSignal =
+        hasNoBankSignal &&
+        (balanceHit?.kind == BalanceKind.wallet ||
+            lowerSender.contains('qcamzn') ||
+            lowerBody.contains('amazon pay balance') ||
+            lowerBody.contains('paytm wallet') ||
+            lowerBody.contains('wallet balance'));
 
     // For payment app notifications where bank is omitted, link to primary bank account (unless paying with wallet/UPI Lite)
-    if (!isWalletSignal && matchedBank == null &&
+    if (!isWalletSignal &&
+        matchedBank == null &&
         (sender.startsWith('APP:') ||
-         lowerSender.contains('paisa') ||
-         lowerSender.contains('phonepe') ||
-         lowerSender.contains('gpay') ||
-         lowerSender.contains('upi'))) {
-      matchedBank = accounts.where((a) => a.isAsset && a.accountType != 'wallet').firstOrNull ??
+            lowerSender.contains('paisa') ||
+            lowerSender.contains('phonepe') ||
+            lowerSender.contains('gpay') ||
+            lowerSender.contains('upi'))) {
+      matchedBank =
+          accounts
+              .where((a) => a.isAsset && a.accountType != 'wallet')
+              .firstOrNull ??
           accounts.firstOrNull;
     }
 
@@ -3097,7 +4641,9 @@ class LiveSmsService with WidgetsBindingObserver {
     // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account or wallet!
     if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
       final existingCards = await CreditRepo().getAll();
-      final matchingCard = existingCards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      final matchingCard = existingCards
+          .where((c) => c.last4 == parsed.last4)
+          .firstOrNull;
       if (matchingCard != null) {
         return (
           accountId: matchingCard.id,
@@ -3110,10 +4656,14 @@ class LiveSmsService with WidgetsBindingObserver {
     // 3. Check for Digital Wallet & UPI Lite (ONLY if no bank account identifier exists)
     if (isWalletSignal) {
       if (isUpiLite) {
-        final upiLiteAcc = accounts.where((a) =>
-          a.accountType == 'wallet' &&
-          (a.name.toLowerCase().contains('upi lite') || a.bank.toLowerCase().contains('upi lite')),
-        ).firstOrNull;
+        final upiLiteAcc = accounts
+            .where(
+              (a) =>
+                  a.accountType == 'wallet' &&
+                  (a.name.toLowerCase().contains('upi lite') ||
+                      a.bank.toLowerCase().contains('upi lite')),
+            )
+            .firstOrNull;
         if (upiLiteAcc != null) {
           return (
             accountId: upiLiteAcc.id,
@@ -3129,16 +4679,16 @@ class LiveSmsService with WidgetsBindingObserver {
           balance: 0,
         );
         final newId = await AccountRepo().insertAccount(newWallet);
-        return (
-          accountId: newId,
-          source: 'sms',
-          instrumentType: 'wallet',
-        );
+        return (accountId: newId, source: 'sms', instrumentType: 'wallet');
       }
-      final walletAcc = accounts.where((a) =>
-        a.accountType == 'wallet' &&
-        (a.name.toLowerCase().contains('paytm') || a.name.toLowerCase().contains('amazon')),
-      ).firstOrNull;
+      final walletAcc = accounts
+          .where(
+            (a) =>
+                a.accountType == 'wallet' &&
+                (a.name.toLowerCase().contains('paytm') ||
+                    a.name.toLowerCase().contains('amazon')),
+          )
+          .firstOrNull;
       if (walletAcc != null) {
         return (
           accountId: walletAcc.id,
@@ -3171,7 +4721,9 @@ class LiveSmsService with WidgetsBindingObserver {
     // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account!
     if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
       final existingCards = await CreditRepo().getAll();
-      final matchingCard = existingCards.where((c) => c.last4 == parsed.last4).firstOrNull;
+      final matchingCard = existingCards
+          .where((c) => c.last4 == parsed.last4)
+          .firstOrNull;
       if (matchingCard != null) {
         return (
           accountId: matchingCard.id,
@@ -3183,25 +4735,43 @@ class LiveSmsService with WidgetsBindingObserver {
 
     // Check if an existing bank account has this last4 before creating
     if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
-      final existingAcc = accounts.where((a) =>
-          a.last4 == parsed.last4 &&
-          (parsed.bankName == null ||
-              a.bank.toLowerCase().contains(parsed.bankName!.toLowerCase()) ||
-              parsed.bankName!.toLowerCase().contains(a.bank.toLowerCase()))).firstOrNull;
+      final existingAcc = accounts
+          .where(
+            (a) =>
+                a.last4 == parsed.last4 &&
+                (parsed.bankName == null ||
+                    a.bank.toLowerCase().contains(
+                      parsed.bankName!.toLowerCase(),
+                    ) ||
+                    parsed.bankName!.toLowerCase().contains(
+                      a.bank.toLowerCase(),
+                    )),
+          )
+          .firstOrNull;
       if (existingAcc != null) {
         return (
           accountId: existingAcc.id,
           source: 'sms',
-          instrumentType: existingAcc.accountType == 'wallet' ? 'wallet' : 'bank',
+          instrumentType: existingAcc.accountType == 'wallet'
+              ? 'wallet'
+              : 'bank',
         );
       }
     }
 
     // If explicit bank name or last4 was detected, auto-create bank account
-    if (parsed.bankName != null || (parsed.last4 != null && parsed.last4!.isNotEmpty)) {
+    if (parsed.bankName != null ||
+        (parsed.last4 != null && parsed.last4!.isNotEmpty)) {
       if (parsed.bankName?.toLowerCase() == 'hdfc') {
         // User has an HDFC Credit Card, NOT an HDFC Bank Account.
-        final hdfcCard = cards.where((c) => c.bank.toLowerCase().contains('hdfc') || c.last4 == '6366' || c.last4 == parsed.last4).firstOrNull;
+        final hdfcCard = cards
+            .where(
+              (c) =>
+                  c.bank.toLowerCase().contains('hdfc') ||
+                  c.last4 == '6366' ||
+                  c.last4 == parsed.last4,
+            )
+            .firstOrNull;
         if (hdfcCard != null) {
           return (
             accountId: hdfcCard.id,
@@ -3209,14 +4779,11 @@ class LiveSmsService with WidgetsBindingObserver {
             instrumentType: 'credit_card',
           );
         }
-        return (
-          accountId: null,
-          source: 'sms',
-          instrumentType: 'unknown',
-        );
+        return (accountId: null, source: 'sms', instrumentType: 'unknown');
       }
       final bankTitle = parsed.bankName ?? 'Bank';
-      final accName = '$bankTitle Account${parsed.last4 != null && parsed.last4!.isNotEmpty ? ' (..${parsed.last4})' : ''}';
+      final accName =
+          '$bankTitle Account${parsed.last4 != null && parsed.last4!.isNotEmpty ? ' (..${parsed.last4})' : ''}';
       final newAcc = BankAccount(
         name: accName,
         bank: bankTitle,
@@ -3225,19 +4792,11 @@ class LiveSmsService with WidgetsBindingObserver {
         balance: 0,
       );
       final newId = await AccountRepo().insertAccount(newAcc);
-      return (
-        accountId: newId,
-        source: 'sms',
-        instrumentType: 'bank',
-      );
+      return (accountId: newId, source: 'sms', instrumentType: 'bank');
     }
 
     // 4. Safe Unknown: When instrument cannot be safely determined, do NOT arbitrarily corrupt an account
-    return (
-      accountId: null,
-      source: 'sms',
-      instrumentType: 'unknown',
-    );
+    return (accountId: null, source: 'sms', instrumentType: 'unknown');
   }
 
   /// Resolves or automatically creates a target wallet account (e.g. UPI Lite, Paytm Wallet, Amazon Pay)
@@ -3248,16 +4807,19 @@ class LiveSmsService with WidgetsBindingObserver {
     final walletName = lower.contains('upi lite')
         ? 'UPI Lite'
         : (lower.contains('paytm')
-            ? 'Paytm Wallet'
-            : (lower.contains('amazon')
-                ? 'Amazon Pay Wallet'
-                : 'Digital Wallet'));
+              ? 'Paytm Wallet'
+              : (lower.contains('amazon')
+                    ? 'Amazon Pay Wallet'
+                    : 'Digital Wallet'));
 
-    final matched = accounts.where((a) =>
-      a.accountType == 'wallet' &&
-      (a.name.toLowerCase().contains(walletName.toLowerCase()) ||
-       a.bank.toLowerCase().contains(walletName.toLowerCase())),
-    ).firstOrNull;
+    final matched = accounts
+        .where(
+          (a) =>
+              a.accountType == 'wallet' &&
+              (a.name.toLowerCase().contains(walletName.toLowerCase()) ||
+                  a.bank.toLowerCase().contains(walletName.toLowerCase())),
+        )
+        .firstOrNull;
 
     if (matched != null) return matched.id;
 
@@ -3272,7 +4834,11 @@ class LiveSmsService with WidgetsBindingObserver {
 
   /// Resolves or automatically creates a target term deposit account (e.g. Fixed Deposit, Recurring Deposit)
   /// for transfer transactions.
-  Future<String?> _resolveTargetDeposit(String body, String sender, {double initialBalance = 0}) async {
+  Future<String?> _resolveTargetDeposit(
+    String body,
+    String sender, {
+    double initialBalance = 0,
+  }) async {
     final lower = body.toLowerCase();
     final isRd = lower.contains('recurring') || lower.contains('rd');
     final depType = isRd ? 'Recurring Deposit' : 'Fixed Deposit';
@@ -3291,8 +4857,11 @@ class LiveSmsService with WidgetsBindingObserver {
     final accounts = await AccountRepo().getAll();
     final matched = accounts.where((a) {
       if (a.accountType != 'fd') return false;
-      if (last4.isNotEmpty && a.last4 != null && a.last4!.contains(last4)) return true;
-      if (a.name.toLowerCase().contains(bankName.toLowerCase()) && a.name.toLowerCase().contains(depType.toLowerCase())) return true;
+      if (last4.isNotEmpty && a.last4 != null && a.last4!.contains(last4))
+        return true;
+      if (a.name.toLowerCase().contains(bankName.toLowerCase()) &&
+          a.name.toLowerCase().contains(depType.toLowerCase()))
+        return true;
       return false;
     }).firstOrNull;
 
@@ -3310,7 +4879,9 @@ class LiveSmsService with WidgetsBindingObserver {
       balance: 0,
     );
     final id = await AccountRepo().insertAccount(newDeposit);
-    AppLogger.i('[LiveSmsService] Auto-created term deposit asset account: $name ($id)');
+    AppLogger.i(
+      '[LiveSmsService] Auto-created term deposit asset account: $name ($id)',
+    );
     return id;
   }
 
@@ -3322,16 +4893,125 @@ class LiveSmsService with WidgetsBindingObserver {
       bool added,
       String? balanceNote,
       Transaction? transaction,
+      bool balanceApplied,
     })
   >
-  _processBody(String body, {String sender = '', bool skipBalance = false, DateTime? messageDate}) async {
+  _processBody(
+    String body, {
+    String sender = '',
+    bool skipBalance = false,
+    DateTime? messageDate,
+    String? sourceRecordId,
+  }) async {
     if (body.trim().isEmpty) {
-      return (added: false, balanceNote: null, transaction: null);
+      return (
+        added: false,
+        balanceNote: null,
+        transaction: null,
+        balanceApplied: false,
+      );
     }
 
-    final result = SmsImportService.instance.classifyMessage(body, sender, date: messageDate);
+    final result = SmsImportService.instance.classifyMessage(
+      body,
+      sender,
+      date: messageDate,
+    );
     Transaction? createdTx;
     String? balanceNote;
+    var balanceApplied = false;
+
+    // Phase 1.4: Cross-channel deduplication engine evaluation for tagged sources
+    final effectiveSourceRecordId = (sourceRecordId != null && sourceRecordId.trim().isNotEmpty)
+        ? sourceRecordId.trim()
+        : null;
+
+    if (effectiveSourceRecordId != null) {
+      final db = await AppDatabase.instance.database;
+      final channel = effectiveSourceRecordId.startsWith('SRC:ANDROID_NOTIF:')
+          ? SourceChannel.push
+          : SourceChannel.sms;
+      final candidateTx = result.transaction;
+      if (candidateTx != null && result.eventType != SmsEventType.failed) {
+        final candidate = IncomingTransactionCandidate(
+          sourceRecordId: effectiveSourceRecordId,
+          sourceChannel: channel,
+          sender: sender,
+          body: body,
+          amountMinorUnits: (candidateTx.amount * 100).round(),
+          direction: candidateTx.isCredit
+              ? PostingDirection.credit
+              : PostingDirection.debit,
+          timestamp: messageDate ?? candidateTx.date,
+          externalReference: candidateTx.refId ??
+              CrossChannelDeduplicationService.extractUtrOrRrn(body),
+          accountNumberLast4: candidateTx.last4,
+          merchant: candidateTx.merchant,
+        );
+        final dedupResult = await CrossChannelDeduplicationService()
+            .processWithConflictResolution(candidate: candidate, db: db);
+        if (dedupResult.isDuplicateSource ||
+            dedupResult.isStrongMatchMerged ||
+            dedupResult.isRoutedToReviewQueue) {
+          AppLogger.i(
+            '[LiveSmsService] Source $effectiveSourceRecordId resolved by dedup engine: ${dedupResult.status}',
+          );
+          return (
+            added: false,
+            balanceNote: null,
+            transaction: null,
+            balanceApplied: false,
+          );
+        }
+        if (dedupResult.isNewEventCreated) {
+          createdTx = Transaction(
+            amount: candidateTx.amount,
+            userId: 'offline_user',
+            type: candidateTx.isCredit ? 'income' : 'expense',
+            date: messageDate ?? candidateTx.date,
+            notes: candidateTx.merchant ??
+                (candidateTx.isCredit ? 'Credit' : 'Expense'),
+            source: channel == SourceChannel.push ? 'notification' : 'sms',
+            externalRef: candidateTx.refId,
+            rawPayload: body,
+          );
+          if (!skipBalance && result.balance != null) {
+            final hit = messageDate != null
+                ? result.balance!.withMessageDate(messageDate)
+                : result.balance!;
+            final applied = await _applyBalance(hit);
+            if (applied) {
+              balanceApplied = true;
+              final kind = hit.kind == BalanceKind.bank
+                  ? 'Bank balance'
+                  : hit.kind == BalanceKind.creditCard
+                  ? (hit.isAvailableLimit
+                        ? 'Available credit limit'
+                        : 'Credit card outstanding')
+                  : hit.kind == BalanceKind.wallet
+                  ? 'Wallet balance'
+                  : 'Loan balance';
+              balanceNote = '$kind set to ${AppFormat.currency(hit.amount)}';
+            }
+          }
+          return (
+            added: true,
+            balanceNote: balanceNote,
+            transaction: createdTx,
+            balanceApplied: balanceApplied,
+          );
+        }
+      }
+      // CRITICAL: Eliminate unintended legacy insertion fallback for canonical candidates
+      if (candidateTx != null) {
+        return (
+          added: false,
+          balanceNote: null,
+          transaction: null,
+          balanceApplied: false,
+        );
+      }
+    }
 
     // 1. Transaction processing
     if (result.transaction != null && result.eventType != SmsEventType.failed) {
@@ -3343,7 +5023,11 @@ class LiveSmsService with WidgetsBindingObserver {
         // --- CREDIT CARD BILL PAYMENT ---
         // Zero income, zero expense.
         // Decreases card liability (relatedEntityId), decreases paying bank asset (accountId).
-        final matchedCard = await _resolveTargetCard(parsed: parsed, sender: sender, body: body);
+        final matchedCard = await _resolveTargetCard(
+          parsed: parsed,
+          sender: sender,
+          body: body,
+        );
 
         // Check if we can match an existing bank debit for this same payment
         final matchedDebit = await _findRecentBankDebitForCcPayment(
@@ -3375,7 +5059,10 @@ class LiveSmsService with WidgetsBindingObserver {
               );
             }
             createdTx = updatedTx;
-            await _syncCardReminderOnPayment(matchedCard, paymentAmount: parsed.amount);
+            await _syncCardReminderOnPayment(
+              matchedCard,
+              paymentAmount: parsed.amount,
+            );
           } else {
             // Cross-message matching: We already recorded the bank debit (e.g. UPI spend to CC).
             // Convert that bank debit into a canonical credit_payment event pointing to this card,
@@ -3384,18 +5071,27 @@ class LiveSmsService with WidgetsBindingObserver {
               type: 'credit_payment',
               source: 'credit_card_payment',
               relatedEntityId: matchedCard?.id,
-              notes: 'Credit Card Bill Payment (${matchedCard?.name ?? "Card"})',
+              notes:
+                  'Credit Card Bill Payment (${matchedCard?.name ?? "Card"})',
             );
             await FinancialTransactionService().editTransaction(
               oldTransaction: matchedDebit,
               newTransaction: updatedTx,
             );
             createdTx = updatedTx;
-            await _syncCardReminderOnPayment(matchedCard, paymentAmount: parsed.amount);
+            await _syncCardReminderOnPayment(
+              matchedCard,
+              paymentAmount: parsed.amount,
+            );
           }
-        } else if (!await _alreadyInApp(parsed, isCcPayment: true, candidateAccountId: matchedCard?.id)) {
+        } else if (!await _alreadyInApp(
+          parsed,
+          isCcPayment: true,
+          candidateAccountId: matchedCard?.id,
+        )) {
           // Standalone CC payment confirmation received
-          final externalRef = parsed.refId ??
+          final externalRef =
+              parsed.refId ??
               computeSyntheticReference(
                 date: parsed.date,
                 amount: parsed.amount,
@@ -3409,10 +5105,12 @@ class LiveSmsService with WidgetsBindingObserver {
             amount: parsed.amount,
             userId: 'offline_user',
             type: 'credit_payment',
-            accountId: payingBankId, // paying bank (credited leg) or null (suspense)
+            accountId:
+                payingBankId, // paying bank (credited leg) or null (suspense)
             relatedEntityId: matchedCard?.id, // card liability (debited leg)
             date: parsed.date,
-            notes: 'Payment towards ${matchedCard?.name ?? (parsed.bankName != null ? "${parsed.bankName} Credit Card" : "Credit Card")}',
+            notes:
+                'Payment towards ${matchedCard?.name ?? (parsed.bankName != null ? "${parsed.bankName} Credit Card" : "Credit Card")}',
             source: 'credit_card_payment',
             externalRef: externalRef,
             rawPayload: body,
@@ -3420,7 +5118,10 @@ class LiveSmsService with WidgetsBindingObserver {
 
           await FinancialTransactionService().createTransaction(tx);
           createdTx = tx;
-          await _syncCardReminderOnPayment(matchedCard, paymentAmount: parsed.amount);
+          await _syncCardReminderOnPayment(
+            matchedCard,
+            paymentAmount: parsed.amount,
+          );
         }
       } else {
         // Classify Instrument & Resolve Account first to establish candidate account identity (DEF-512)
@@ -3431,9 +5132,14 @@ class LiveSmsService with WidgetsBindingObserver {
           balanceHit: result.balance,
         );
 
-        if (!await _alreadyInApp(parsed, isCcPayment: false, candidateAccountId: instrument.accountId)) {
+        if (!await _alreadyInApp(
+          parsed,
+          isCcPayment: false,
+          candidateAccountId: instrument.accountId,
+        )) {
           // --- OTHER TRANSACTIONS (Card purchase, refund, wallet transfer, bank expense/income, etc.) ---
-          final isCcRefund = result.eventType == SmsEventType.refund &&
+          final isCcRefund =
+              result.eventType == SmsEventType.refund &&
               (parsed.method == 'card' || body.toLowerCase().contains('card'));
           final isTransfer = result.eventType == SmsEventType.transfer;
 
@@ -3453,7 +5159,11 @@ class LiveSmsService with WidgetsBindingObserver {
               caseSensitive: false,
             ).hasMatch(body.toLowerCase());
             if (isDeposit) {
-              relatedEntityId = await _resolveTargetDeposit(body, sender, initialBalance: parsed.amount);
+              relatedEntityId = await _resolveTargetDeposit(
+                body,
+                sender,
+                initialBalance: parsed.amount,
+              );
             } else {
               relatedEntityId = await _resolveTargetWallet(body);
             }
@@ -3465,7 +5175,8 @@ class LiveSmsService with WidgetsBindingObserver {
             type = 'credit_card_purchase';
             source = 'credit_card_purchase';
             relatedEntityId = null;
-          } else if (instrument.instrumentType == 'credit_card' && parsed.isCredit) {
+          } else if (instrument.instrumentType == 'credit_card' &&
+              parsed.isCredit) {
             // Surcharge waivers, card cashbacks, and reversals on credit card accounts
             type = 'refund';
             source = 'credit_card_purchase';
@@ -3494,14 +5205,22 @@ class LiveSmsService with WidgetsBindingObserver {
               : await resolveCategoryForText(
                   rawText: parsed.rawText,
                   merchant: parsed.merchant,
-                  type: (type == 'credit_card_purchase') ? 'expense' : (type == 'refund' ? 'expense' : type),
+                  type: (type == 'credit_card_purchase')
+                      ? 'expense'
+                      : (type == 'refund' ? 'expense' : type),
                 );
 
-          final rawMerchantOrNote = emiNote ?? parsed.merchant ??
-              (parsed.rawText.length > 80 ? parsed.rawText.substring(0, 80) : parsed.rawText);
-          final notes = emiNote ?? TextFormatter.normalizeName(rawMerchantOrNote);
+          final rawMerchantOrNote =
+              emiNote ??
+              parsed.merchant ??
+              (parsed.rawText.length > 80
+                  ? parsed.rawText.substring(0, 80)
+                  : parsed.rawText);
+          final notes =
+              emiNote ?? TextFormatter.normalizeName(rawMerchantOrNote);
 
-          final externalRef = parsed.refId ??
+          final externalRef =
+              parsed.refId ??
               computeSyntheticReference(
                 date: parsed.date,
                 amount: parsed.amount,
@@ -3538,7 +5257,11 @@ class LiveSmsService with WidgetsBindingObserver {
                 final newPaid = loan.paidAmount + tx.amount;
                 final isFullyPaid = newPaid >= loan.total;
                 final newStatus = isFullyPaid ? 'closed' : loan.loanStatus;
-                await LoanRepo().updateLoanProgress(loan.id, newPaid, newStatus);
+                await LoanRepo().updateLoanProgress(
+                  loan.id,
+                  newPaid,
+                  newStatus,
+                );
                 await ReminderRepo().settleMatching(
                   amount: tx.amount,
                   date: tx.date,
@@ -3550,12 +5273,17 @@ class LiveSmsService with WidgetsBindingObserver {
                 );
               }
             } catch (e) {
-              AppLogger.w('Failed to update loan progress on live repayment: $e');
+              AppLogger.w(
+                'Failed to update loan progress on live repayment: $e',
+              );
             }
           }
 
           // Settle matching salary reminder if this was an income credit
-          if (type == 'income' && (parsed.rawText.toLowerCase().contains('salary') || (parsed.merchant?.toLowerCase().contains('salary') ?? false))) {
+          if (type == 'income' &&
+              (parsed.rawText.toLowerCase().contains('salary') ||
+                  (parsed.merchant?.toLowerCase().contains('salary') ??
+                      false))) {
             try {
               await ReminderRepo().settleMatching(
                 amount: tx.amount,
@@ -3569,7 +5297,10 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // Settle matching upcoming obligation / subscription / AutoPay reminder for debits
-          if (type == 'expense' || type == 'credit_card_purchase' || type == 'transfer' || type == 'credit_payment') {
+          if (type == 'expense' ||
+              type == 'credit_card_purchase' ||
+              type == 'transfer' ||
+              type == 'credit_payment') {
             try {
               final settled = await ReminderRepo().settleMatching(
                 amount: tx.amount,
@@ -3581,7 +5312,9 @@ class LiveSmsService with WidgetsBindingObserver {
                 isIncome: false,
               );
               if (settled > 0) {
-                AppLogger.i('[LiveSmsService] Auto-settled $settled reminder(s) for ${parsed.merchant ?? tx.notes} (₹${tx.amount})');
+                AppLogger.i(
+                  '[LiveSmsService] Auto-settled $settled reminder(s) for ${parsed.merchant ?? tx.notes} (₹${tx.amount})',
+                );
               }
             } catch (e) {
               AppLogger.w('[LiveSmsService] reminder settle error: $e');
@@ -3589,7 +5322,8 @@ class LiveSmsService with WidgetsBindingObserver {
           }
 
           // Sync upcoming card reminder if this was a credit card purchase
-          if (instrument.instrumentType == 'credit_card' && instrument.accountId != null) {
+          if (instrument.instrumentType == 'credit_card' &&
+              instrument.accountId != null) {
             try {
               final card = await CreditRepo().getCard(instrument.accountId!);
               if (card != null) {
@@ -3629,7 +5363,9 @@ class LiveSmsService with WidgetsBindingObserver {
 
           // Learn Merchant Memory
           final resName = resolution?.name;
-          if (resName != null && resName.isNotEmpty && parsed.merchant != null) {
+          if (resName != null &&
+              resName.isNotEmpty &&
+              parsed.merchant != null) {
             try {
               await SmartCategoryClassifier.instance.learn(
                 rawText: parsed.rawText,
@@ -3646,22 +5382,26 @@ class LiveSmsService with WidgetsBindingObserver {
     if (result.obligationCancellation != null) {
       final cancellation = result.obligationCancellation!;
       await _cancelUpcomingObligation(cancellation);
-      balanceNote = '${cancellation.title} was cancelled (${cancellation.reason})';
+      balanceNote =
+          '${cancellation.title} was cancelled (${cancellation.reason})';
     }
 
     // 1.45. Failed obligations (AutoPay, mandate, SIP payment failure)
     if (result.failedObligation != null) {
       final failed = result.failedObligation!;
       await _handleFailedObligation(failed);
-      balanceNote = '⚠️ AutoPay Failed: ${failed.title} (${AppFormat.currency(failed.amount)})';
+      balanceNote =
+          '⚠️ AutoPay Failed: ${failed.title} (${AppFormat.currency(failed.amount)})';
     }
 
     // 1.5. Upcoming financial obligations (mandates, subscriptions, scheduled debits, bill dues)
     if (result.upcomingObligation != null) {
       final obligation = result.upcomingObligation!;
       await _registerUpcomingObligation(obligation);
-      final dueStr = '${obligation.dueDate.day}/${obligation.dueDate.month}/${obligation.dueDate.year}';
-      balanceNote = 'Upcoming ${obligation.title}: ${AppFormat.currency(obligation.amount)} due on $dueStr';
+      final dueStr =
+          '${obligation.dueDate.day}/${obligation.dueDate.month}/${obligation.dueDate.year}';
+      balanceNote =
+          'Upcoming ${obligation.title}: ${AppFormat.currency(obligation.amount)} due on $dueStr';
     }
 
     // 2. Balance update from message itself
@@ -3672,10 +5412,13 @@ class LiveSmsService with WidgetsBindingObserver {
           : result.balance!;
       final applied = await _applyBalance(hit);
       if (applied) {
+        balanceApplied = true;
         final kind = hit.kind == BalanceKind.bank
             ? 'Bank balance'
             : hit.kind == BalanceKind.creditCard
-            ? (hit.isAvailableLimit ? 'Available credit limit' : 'Credit card outstanding')
+            ? (hit.isAvailableLimit
+                  ? 'Available credit limit'
+                  : 'Credit card outstanding')
             : hit.kind == BalanceKind.wallet
             ? 'Wallet balance'
             : 'Loan balance';
@@ -3687,6 +5430,7 @@ class LiveSmsService with WidgetsBindingObserver {
       added: createdTx != null,
       balanceNote: balanceNote,
       transaction: createdTx,
+      balanceApplied: balanceApplied,
     );
   }
 
@@ -3695,105 +5439,68 @@ class LiveSmsService with WidgetsBindingObserver {
   /// reconciliation for the same account was recorded more recently, the update is skipped.
   Future<bool> _applyBalance(BalanceHit hit) async {
     try {
-      final fingerprint = CanonicalTransactionAdapter.computeSha256('balance|${hit.body}');
-      final existingEvidence = await CanonicalEventRepository().getEvidenceByFingerprint(fingerprint);
+      final fingerprint = CanonicalTransactionAdapter.computeSha256(
+        'balance|${hit.body}',
+      );
+      final reviewId = _balanceReviewId(fingerprint);
+      final existingEvidence = await CanonicalEventRepository()
+          .getEvidenceByFingerprint(fingerprint);
       if (existingEvidence != null) {
-        return true;
+        // If this evidence was previously routed to the Review Queue, claiming
+        // the balance was applied would make callers announce a change that
+        // never happened.
+        final pendingReview = await ReviewRepo().getById(reviewId);
+        return pendingReview == null;
       }
 
       final ev = Evidence(
         id: const Uuid().v4(),
         sourceType: 'sms_balance',
-        sourceIdentifier: hit.sender.isNotEmpty ? hit.sender : (hit.bankKeyword ?? 'sms'),
-        sourceTimestamp: DateTime.now().toUtc(),
+        sourceIdentifier: hit.sender.isNotEmpty
+            ? hit.sender
+            : (hit.bankKeyword ?? 'sms'),
+        sourceTimestamp: (hit.messageDate ?? DateTime.now()).toUtc(),
         bodyFingerprint: fingerprint,
         extractedAmount: Money.fromRupees(hit.amount),
         accountContext: hit.last4 != null ? 'XX${hit.last4}' : hit.bankKeyword,
         rawPayloadEncrypted: hit.body,
-        retentionExpiresAt: DateTime.now().toUtc().add(const Duration(days: 30)),
+        retentionExpiresAt: DateTime.now().toUtc().add(
+          const Duration(days: 30),
+        ),
         isPayloadPurged: false,
         economicEventId: null,
         createdAt: DateTime.now().toUtc(),
       );
       await CanonicalEventRepository().insertEvidence(ev);
 
-      // Reconcile and update account balance in canonical repositories
-      if (hit.kind == BalanceKind.creditCard || hit.bankKeyword?.toLowerCase() == 'hdfc') {
-        final cards = await CreditRepo().getAll();
-        CreditCard? card;
-        if (hit.last4 != null && hit.last4!.isNotEmpty) {
-          card = cards.where((c) => c.last4 == hit.last4).firstOrNull;
-        }
-        if (card == null && hit.bankKeyword != null) {
-          final kw = hit.bankKeyword!.toLowerCase();
-          final displayName = SmsImportService.instance.bankDisplayName(hit.bankKeyword).toLowerCase();
-          card = cards.where((c) {
-            final cName = c.name.toLowerCase();
-            final cBank = c.bank.toLowerCase();
-            return cName.contains(kw) ||
-                cBank.contains(kw) ||
-                (displayName.isNotEmpty && (cName.contains(displayName) || cBank.contains(displayName))) ||
-                (cBank.isNotEmpty && displayName.contains(cBank)) ||
-                (kw.contains('sbi') && (cName.contains('sbi') || cBank.contains('sbi'))) ||
-                (kw.contains('hdfc') && (cName.contains('hdfc') || cBank.contains('hdfc'))) ||
-                (kw.contains('icici') && (cName.contains('icici') || cBank.contains('icici'))) ||
-                (kw.contains('axis') && (cName.contains('axis') || cBank.contains('axis'))) ||
-                (kw.contains('onecard') && (cName.contains('onecard') || cBank.contains('onecard'))) ||
-                (kw.contains('bob') && (cName.contains('bob') || cBank.contains('bob')));
-          }).firstOrNull;
-        }
+      if (hit.amount <= 0) return false;
 
-        // If card not found and last4 was omitted, check if user has a card for this bank
-        if (card == null && (hit.last4 == null || hit.last4!.isEmpty) && hit.bankKeyword != null) {
-          final bankCards = cards.where((c) =>
-              c.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) ||
-              hit.bankKeyword!.toLowerCase().contains(c.bank.toLowerCase())).toList();
-          if (bankCards.isNotEmpty) {
-            card = bankCards.first;
-          }
-        }
+      final accounts = await AccountRepo().getAll();
+      final cards = await CreditRepo().getAll();
+      final match = BalanceAttribution.resolve(
+        kind: hit.kind,
+        last4: hit.last4,
+        bankKeyword: hit.bankKeyword,
+        accounts: accounts,
+        cards: cards,
+      );
 
-        // If card not found and user has only 1 credit card, safely match that card
-        if (card == null && cards.length == 1) {
-          card = cards.first;
-        }
+      if (match.ambiguous) {
+        await _enqueueBalanceReview(hit, fingerprint, match.reason);
+        AppLogger.w(
+          '[LiveSmsService] Balance ${hit.kind.name} ${hit.last4 ?? hit.bankKeyword} '
+          'routed to Review Queue: ${match.reason}',
+        );
+        return false;
+      }
 
-        // Auto-create card if not found yet (STRICT: require valid 4 digits; NEVER create 0000 ghost cards)
-        if (card == null) {
-          if (hit.last4 == null || hit.last4!.isEmpty || hit.last4 == '0000') {
-            AppLogger.w('[LiveSmsService] Refusing to auto-create ghost credit card without last4 digits.');
-            return false;
-          }
+      if (match.matched && match.isCreditCard) {
+        var card = cards.firstWhere((c) => c.id == match.instrumentId);
 
-          // Invariant check: Check if an active card already has this (bank, last4)
-          final existingSameLast4 = cards.where((c) =>
-              c.last4 == hit.last4 &&
-              (hit.bankKeyword == null ||
-                  c.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) ||
-                  hit.bankKeyword!.toLowerCase().contains(c.bank.toLowerCase()))).firstOrNull;
-          if (existingSameLast4 != null) {
-            card = existingSameLast4;
-          } else {
-            final bankTitle = hit.bankKeyword != null
-                ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
-                : (hit.sender.isNotEmpty ? hit.sender : 'Credit');
-            final cardTitle = '$bankTitle Card (..${hit.last4})';
-            final newCard = CreditCard(
-              name: cardTitle,
-              bank: bankTitle,
-              last4: hit.last4!,
-              limitAmount: hit.creditLimit ?? (hit.isAvailableLimit ? hit.amount : 0.0),
-              usedAmount: hit.isAvailableLimit ? 0.0 : hit.amount,
-              lastStatementBalance: hit.isStatementBill ? hit.amount : 0.0,
-              dueDay: hit.dueDate?.day ?? 20,
-            );
-            final newId = await CreditRepo().insert(newCard);
-            card = newCard.copyWith(id: newId);
-          }
-        }
-
-        // If total credit limit was reported and card has no limit or smaller limit, update it
-        if (hit.creditLimit != null && hit.creditLimit! > 0 &&
+        // If total credit limit was reported and card has no limit or smaller
+        // limit, update it.
+        if (hit.creditLimit != null &&
+            hit.creditLimit! > 0 &&
             (card.limitAmount == 0 || card.limitAmount < hit.creditLimit!)) {
           final updated = card.copyWith(limitAmount: hit.creditLimit!);
           await CreditRepo().update(updated);
@@ -3801,64 +5508,88 @@ class LiveSmsService with WidgetsBindingObserver {
         }
 
         if (hit.isAvailableLimit) {
-          if (card.limitAmount == 0 && hit.creditLimit != null && hit.creditLimit! > 0) {
+          if (card.limitAmount == 0 &&
+              hit.creditLimit != null &&
+              hit.creditLimit! > 0) {
             final updated = card.copyWith(limitAmount: hit.creditLimit!);
             await CreditRepo().update(updated);
             card = updated;
           }
         } else if (!hit.isStatementBill) {
-          // Direct outstanding dues reported on an actual non-statement live SMS
-          await CreditRepo().updateBalance(card.id, hit.amount, messageDate: hit.messageDate);
+          // Direct outstanding dues reported on an actual non-statement SMS.
+          await CreditRepo().updateBalance(
+            card.id,
+            hit.amount,
+            messageDate: hit.messageDate,
+          );
         }
 
-        // If statement bill or due date detected, update card metadata & schedule upcoming reminder!
+        // If statement bill or due date detected, update card metadata &
+        // schedule an upcoming reminder.
         if (hit.isStatementBill || hit.dueDate != null) {
           final dueDay = hit.dueDate?.day ?? card.dueDay;
-          double remainingDue = hit.isStatementBill ? hit.amount : card.outstanding;
+          double remainingDue = hit.isStatementBill
+              ? hit.amount
+              : card.outstanding;
 
           if (hit.isStatementBill) {
             try {
               final msgDate = hit.messageDate ?? DateTime.now();
               final msgDateUtc = msgDate.toUtc();
               final db = await AppDatabase.instance.database;
-              final paidRows = await db.rawQuery('''
+              final paidRows = await db.rawQuery(
+                '''
                 SELECT amount, date
                 FROM ${Tables.transactions}
                 WHERE related_entity_id = ?
                   AND type = 'credit_payment'
                   AND is_deleted = 0;
-              ''', [card.id]);
+              ''',
+                [card.id],
+              );
               final windowStart = msgDateUtc.subtract(const Duration(days: 10));
               double totalPaidAfter = 0.0;
               for (final row in paidRows) {
                 final rawDate = row['date'] as String?;
                 if (rawDate != null) {
                   final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                  if (txDate != null && (txDate.isAfter(windowStart) || txDate.isAtSameMomentAs(windowStart))) {
-                    totalPaidAfter += (row['amount'] as num?)?.toDouble() ?? 0.0;
+                  if (txDate != null &&
+                      (txDate.isAfter(windowStart) ||
+                          txDate.isAtSameMomentAs(windowStart))) {
+                    totalPaidAfter +=
+                        (row['amount'] as num?)?.toDouble() ?? 0.0;
                   }
                 }
               }
-              remainingDue = (hit.amount - totalPaidAfter).clamp(0.0, double.infinity);
+              remainingDue = (hit.amount - totalPaidAfter).clamp(
+                0.0,
+                double.infinity,
+              );
 
-              // Canonical statement insertion
-              final stmtId = 'stmt_${card.id}_${msgDate.millisecondsSinceEpoch}';
-              await CreditRepo().insertStatement(CardStatement(
-                id: stmtId,
-                cardId: card.id,
-                startDate: msgDate.subtract(const Duration(days: 30)),
-                endDate: msgDate,
-                statementAmount: hit.amount,
-                minimumDue: hit.minDue ?? (hit.amount * 0.05),
-                generatedDate: msgDate,
-              ));
+              final stmtId =
+                  'stmt_${card.id}_${msgDate.millisecondsSinceEpoch}';
+              await CreditRepo().insertStatement(
+                CardStatement(
+                  id: stmtId,
+                  cardId: card.id,
+                  startDate: msgDate.subtract(const Duration(days: 30)),
+                  endDate: msgDate,
+                  statementAmount: hit.amount,
+                  minimumDue: hit.minDue ?? (hit.amount * 0.05),
+                  generatedDate: msgDate,
+                ),
+              );
             } catch (e) {
-              AppLogger.w('[LiveSmsService] Statement repayment netting error: $e');
+              AppLogger.w(
+                '[LiveSmsService] Statement repayment netting error: $e',
+              );
             }
           }
 
           final updated = card.copyWith(
-            lastStatementBalance: hit.isStatementBill ? remainingDue : card.lastStatementBalance,
+            lastStatementBalance: hit.isStatementBill
+                ? remainingDue
+                : card.lastStatementBalance,
             dueDay: dueDay,
           );
           await CreditRepo().update(updated);
@@ -3875,139 +5606,203 @@ class LiveSmsService with WidgetsBindingObserver {
                 dueDate: dueDateTime,
                 amount: remainingDue,
                 isActive: !isFullyPaid,
-                status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
-                recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
+                status: isFullyPaid
+                    ? ReminderStatus.inactive
+                    : ReminderStatus.upcoming,
+                recordStatus: isFullyPaid
+                    ? ReminderRecordStatus.done
+                    : ReminderRecordStatus.pending,
                 sourceType: ReminderSourceType.credit,
                 sourceId: card.id,
               ).toMap(),
             );
-          } catch (e) {
-            // Non-fatal if reminder sync fails
+          } catch (_) {
+            // Non-fatal if reminder sync fails.
           }
         }
         return true;
-      } else {
-        // Bank or Wallet
-        final accounts = await AccountRepo().getAll();
-        BankAccount? account;
-        if (hit.last4 != null && hit.last4!.isNotEmpty) {
-          account = accounts.where((a) => a.last4 == hit.last4).firstOrNull;
-        }
-        if (account == null && hit.kind == BalanceKind.wallet) {
-          account = accounts.where((a) => a.accountType == 'wallet').firstOrNull;
-        }
-        if (account == null && hit.bankKeyword != null) {
-          final kw = hit.bankKeyword!.toLowerCase();
-          final displayName = SmsImportService.instance.bankDisplayName(hit.bankKeyword).toLowerCase();
-          account = accounts.where((a) {
-            final aName = a.name.toLowerCase();
-            final aBank = a.bank.toLowerCase();
-            return aName.contains(kw) ||
-                aBank.contains(kw) ||
-                (displayName.isNotEmpty && (aName.contains(displayName) || aBank.contains(displayName))) ||
-                (aBank.isNotEmpty && displayName.contains(aBank)) ||
-                (kw.contains('fed') && (aName.contains('fed') || aBank.contains('fed'))) ||
-                (kw.contains('sbi') && (aName.contains('sbi') || aBank.contains('sbi'))) ||
-                (kw.contains('hdfc') && (aName.contains('hdfc') || aBank.contains('hdfc'))) ||
-                (kw.contains('icici') && (aName.contains('icici') || aBank.contains('icici'))) ||
-                (kw.contains('axis') && (aName.contains('axis') || aBank.contains('axis'))) ||
-                (kw.contains('jio') && (aName.contains('jio') || aBank.contains('jio')));
-          }).firstOrNull;
-        }
+      }
 
-        // If not found and user has only 1 bank account, match it
-        if (account == null) {
-          final nonWalletAccounts = accounts.where((a) => !a.id.startsWith('system_') && a.accountType != 'wallet').toList();
-          if (nonWalletAccounts.length == 1) {
-            account = nonWalletAccounts.first;
-          }
-        }
+      if (match.matched) {
+        var account = accounts.firstWhere((a) => a.id == match.instrumentId);
 
-        // Cross-Type Anti-Collision: Check if a CreditCard already exists with this last4
-        if (hit.last4 != null && hit.last4!.isNotEmpty) {
-          final existingCards = await CreditRepo().getAll();
-          final matchingCard = existingCards.where((c) =>
-              c.last4 == hit.last4 ||
-              (hit.bankKeyword != null &&
-                  c.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) &&
-                  c.last4 == hit.last4)).firstOrNull;
-          if (matchingCard != null) {
-            AppLogger.w('[LiveSmsService] Anti-collision: Refusing to create bank account for card ${hit.last4}. Attributing to existing card ${matchingCard.name}');
-            if (hit.amount != 0) {
-              await CreditRepo().updateBalance(matchingCard.id, hit.amount.abs());
-            }
-            return true;
-          }
-        }
-
-        // Invariant check: Check if an existing bank account has this (bank, last4)
-        if (account == null && hit.last4 != null && hit.last4!.isNotEmpty) {
-          account = accounts.where((a) =>
-              a.last4 == hit.last4 &&
-              (hit.bankKeyword == null ||
-                  a.bank.toLowerCase().contains(hit.bankKeyword!.toLowerCase()) ||
-                  hit.bankKeyword!.toLowerCase().contains(a.bank.toLowerCase()))).firstOrNull;
-        }
-
-        // Auto-create bank account if missing (STRICT: require valid digits, NEVER create 0000)
-        if (account == null && (hit.bankKeyword != null || (hit.last4 != null && hit.last4!.isNotEmpty))) {
-          if (hit.bankKeyword?.toLowerCase() == 'hdfc') {
-            AppLogger.w('[LiveSmsService] Refusing to auto-create HDFC bank account; user holds HDFC Credit Card.');
-            return false;
-          }
-          if (hit.last4 == null || hit.last4!.isEmpty || hit.last4 == '0000') {
-            return false;
-          }
-          final bankTitle = hit.bankKeyword != null
-              ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
-              : 'Bank';
-          final accName = '$bankTitle Account (..${hit.last4})';
-          final newAcc = BankAccount(
-            name: accName,
-            bank: bankTitle,
-            last4: hit.last4!,
-            accountType: 'savings',
-            balance: hit.amount,
+        // Fill in a generic placeholder name only when the match itself was
+        // verified by issuer + last4; never rename an unrelated account.
+        if (hit.bankKeyword != null &&
+            (account.bank == 'Bank' ||
+                account.name.startsWith('Bank Account'))) {
+          final bankTitle = SmsImportService.instance.bankDisplayName(
+            hit.bankKeyword,
           );
-          final newId = await AccountRepo().insertAccount(newAcc);
-          account = newAcc.copyWith(id: newId);
-          return true;
+          final updatedName =
+              '$bankTitle Account${account.last4 != null && account.last4!.isNotEmpty ? ' (..${account.last4})' : ''}';
+          final updatedAcc = account.copyWith(
+            name: updatedName,
+            bank: bankTitle,
+          );
+          await AccountRepo().updateAccount(updatedAcc);
+          account = updatedAcc;
         }
 
-        if (account != null) {
-          if (hit.bankKeyword != null &&
-              (account.bank == 'Bank' || account.name.startsWith('Bank Account'))) {
-            final bankTitle = SmsImportService.instance.bankDisplayName(hit.bankKeyword);
-            final updatedName = '$bankTitle Account${account.last4 != null && account.last4!.isNotEmpty ? ' (..${account.last4})' : ''}';
-            final updatedAcc = account.copyWith(
-              name: updatedName,
-              bank: bankTitle,
-            );
-            await AccountRepo().updateAccount(updatedAcc);
-            account = updatedAcc;
-          }
+        await AccountRepo().updateBalance(account.id, hit.amount);
+        AppLogger.d(
+          '[LiveSmsService] Balance updated for ${account.name}: ${hit.amount} '
+          '(${match.reason})',
+        );
+        return true;
+      }
 
-          await AccountRepo().updateBalance(account.id, hit.amount);
-          AppLogger.d('[LiveSmsService] Balance updated for ${account.name}: ${hit.amount}');
-          return true;
+      // No bank/wallet match: if the last4 actually belongs to a credit card,
+      // do not treat the statement as an account balance (the old HDFC special
+      // case did). Send it to review instead.
+      final normalisedLast4 = (hit.last4 ?? '').trim();
+      if (hit.kind != BalanceKind.creditCard &&
+          normalisedLast4.isNotEmpty &&
+          normalisedLast4 != '0000') {
+        final cardWithLast4 = cards
+            .where((c) => c.last4 == normalisedLast4)
+            .toList();
+        if (cardWithLast4.isNotEmpty) {
+          await _enqueueBalanceReview(
+            hit,
+            fingerprint,
+            'last4 $normalisedLast4 belongs to credit card '
+            '${cardWithLast4.first.name}; bank/wallet instrument not confirmed',
+          );
+          return false;
         }
       }
+
+      if (!match.canCreate) {
+        await _enqueueBalanceReview(hit, fingerprint, match.reason);
+        return false;
+      }
+
+      if (hit.kind == BalanceKind.loan) {
+        await _enqueueBalanceReview(
+          hit,
+          fingerprint,
+          'Loan balances are not auto-created from SMS; map the loan manually',
+        );
+        return false;
+      }
+
+      // Strong evidence (issuer + last4) exists, but no stored instrument does.
+      if (hit.kind == BalanceKind.creditCard) {
+        final bankTitle = SmsImportService.instance.bankDisplayName(
+          hit.bankKeyword ?? '',
+        );
+        final effectiveBank = bankTitle.isNotEmpty
+            ? bankTitle
+            : (hit.sender.isNotEmpty ? hit.sender : 'Credit');
+        final newCard = CreditCard(
+          name: '$effectiveBank Card (..$normalisedLast4)',
+          bank: effectiveBank,
+          last4: normalisedLast4,
+          limitAmount:
+              hit.creditLimit ?? (hit.isAvailableLimit ? hit.amount : 0.0),
+          usedAmount: hit.isAvailableLimit ? 0.0 : hit.amount,
+          lastStatementBalance: hit.isStatementBill ? hit.amount : 0.0,
+          dueDay: hit.dueDate?.day ?? 20,
+        );
+        await CreditRepo().insert(newCard);
+        return true;
+      }
+
+      final bankTitle = hit.bankKeyword != null
+          ? SmsImportService.instance.bankDisplayName(hit.bankKeyword!)
+          : 'Bank';
+      // Instrument type is taken from the SMS classification only. Inferring a
+      // wallet from the issuer name created duplicate wallet/account rows for
+      // the same last4.
+      final isWallet = hit.kind == BalanceKind.wallet;
+      final newAcc = BankAccount(
+        name:
+            '$bankTitle ${isWallet ? 'Wallet' : 'Account'} (..$normalisedLast4)',
+        bank: bankTitle,
+        last4: normalisedLast4,
+        accountType: isWallet ? 'wallet' : 'savings',
+        balance: hit.amount,
+      );
+      await AccountRepo().insertAccount(newAcc);
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.w('[LiveSmsService] _applyBalance failed: $e\n$st');
       return false;
+    }
+  }
+
+  /// True when a bulk-balance map key is a 4-digit instrument suffix rather
+  /// than an issuer keyword.
+  static bool _looksLikeLast4(String key) =>
+      key.length == 4 && int.tryParse(key) != null;
+
+  static String _balanceReviewId(String fingerprint) =>
+      'rev_bal_${fingerprint.substring(0, 20)}';
+
+  /// Adds an ambiguous balance statement to the canonical Review Queue.
+  ///
+  /// The candidate is informational: approving it marks the item resolved but
+  /// does not create a transaction or mutate a balance (guarded in
+  /// `approveReviewItem`). This preserves every existing balance until a user
+  /// or a later verified statement supplies a strong identity.
+  Future<void> _enqueueBalanceReview(
+    BalanceHit hit,
+    String fingerprint,
+    String reason,
+  ) async {
+    try {
+      final id = _balanceReviewId(fingerprint);
+      final repo = ReviewRepo();
+      if (await repo.getById(id) != null) return;
+
+      final bankName = hit.bankKeyword != null
+          ? SmsImportService.instance.bankDisplayName(hit.bankKeyword)
+          : (hit.sender.isNotEmpty ? hit.sender : null);
+      final instrument = hit.last4 != null && hit.last4!.isNotEmpty
+          ? '••${hit.last4}'
+          : (bankName ?? 'unidentified instrument');
+      final parsed = ParsedTransaction(
+        amount: hit.amount,
+        isCredit: hit.kind != BalanceKind.creditCard,
+        rawText: hit.body,
+        date: hit.messageDate ?? DateTime.now(),
+        merchant: 'Balance $instrument — $reason',
+        last4: hit.last4,
+        bankName: bankName,
+        method: 'balance',
+        source: 'sms_balance',
+        confidence: 0.0,
+      );
+      await repo.insert(
+        ReviewItem(
+          id: id,
+          rawSource: hit.body,
+          parsed: parsed,
+          confidence: 0.0,
+        ),
+      );
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] Could not enqueue balance review: $e');
     }
   }
 
   /// Registers an upcoming obligation (e-mandate, autopay, utility bill due, insurance renewal)
   /// as an active reminder and recurring template.
-  Future<void> _registerUpcomingObligation(UpcomingObligationHit obligation) async {
+  Future<void> _registerUpcomingObligation(
+    UpcomingObligationHit obligation,
+  ) async {
     try {
       final reminderRepo = ReminderRepo();
       final cleanMerchant = obligation.merchant ?? obligation.title;
-      final slug = cleanMerchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+      final slug = cleanMerchant.toLowerCase().replaceAll(
+        RegExp(r'[^a-z0-9]'),
+        '_',
+      );
 
       // Stable ID for idempotency per due month/year
-      final reminderId = 'sms_due_${slug}_${obligation.dueDate.year}_${obligation.dueDate.month}';
+      final reminderId =
+          'sms_due_${slug}_${obligation.dueDate.year}_${obligation.dueDate.month}';
 
       // 1. Guard against resurrecting settled or cancelled reminders
       final existing = await reminderRepo.getById(reminderId);
@@ -4021,9 +5816,11 @@ class LiveSmsService with WidgetsBindingObserver {
       // 2. Guard against resurrecting cancelled recurring subscriptions/mandates
       final recRepo = RecurringRepo();
       final allRec = await recRepo.getAll();
-      final isCancelledRec = allRec.any((t) =>
-          !t.isActive &&
-          ReminderRepo.areMerchantsEquivalent(t.name, cleanMerchant));
+      final isCancelledRec = allRec.any(
+        (t) =>
+            !t.isActive &&
+            ReminderRepo.areMerchantsEquivalent(t.name, cleanMerchant),
+      );
       if (isCancelledRec) {
         return; // Obligation was explicitly cancelled/revoked
       }
@@ -4035,10 +5832,14 @@ class LiveSmsService with WidgetsBindingObserver {
         final matchedCard = (obligation.last4 != null)
             ? cards.where((c) => c.last4 == obligation.last4).firstOrNull
             : cards
-                .where((c) =>
-                    obligation.bankKeyword != null &&
-                    c.bank.toLowerCase().contains(obligation.bankKeyword!.toLowerCase()))
-                .firstOrNull;
+                  .where(
+                    (c) =>
+                        obligation.bankKeyword != null &&
+                        c.bank.toLowerCase().contains(
+                          obligation.bankKeyword!.toLowerCase(),
+                        ),
+                  )
+                  .firstOrNull;
         matchedCardId = matchedCard?.id;
       }
 
@@ -4048,8 +5849,9 @@ class LiveSmsService with WidgetsBindingObserver {
         type: obligation.reminderType,
         amount: obligation.amount > 0 ? obligation.amount : null,
         dueDate: obligation.dueDate,
-        recurrencePeriod:
-            obligation.isMandate ? ReminderRecurrence.monthly : ReminderRecurrence.none,
+        recurrencePeriod: obligation.isMandate
+            ? ReminderRecurrence.monthly
+            : ReminderRecurrence.none,
         recordStatus: ReminderRecordStatus.pending,
         sourceType: obligation.reminderType == ReminderType.credit
             ? ReminderSourceType.credit
@@ -4082,10 +5884,12 @@ class LiveSmsService with WidgetsBindingObserver {
       final repo = RecurringRepo();
       final templates = await repo.getAll();
       final cleanName = name.toLowerCase().trim();
-      final exists = templates.any((t) =>
-          t.name.toLowerCase().trim() == cleanName ||
-          t.name.toLowerCase().contains(cleanName) ||
-          cleanName.contains(t.name.toLowerCase()));
+      final exists = templates.any(
+        (t) =>
+            t.name.toLowerCase().trim() == cleanName ||
+            t.name.toLowerCase().contains(cleanName) ||
+            cleanName.contains(t.name.toLowerCase()),
+      );
       if (!exists) {
         final t = RecurringTemplate(
           name: name,
@@ -4098,14 +5902,20 @@ class LiveSmsService with WidgetsBindingObserver {
         await repo.insert(t);
       }
     } catch (e) {
-      AppLogger.w('[LiveSmsService] _registerRecurringTemplateIfMissing error: $e');
+      AppLogger.w(
+        '[LiveSmsService] _registerRecurringTemplateIfMissing error: $e',
+      );
     }
   }
 
   /// Deactivates a cancelled or revoked obligation (e-mandate, AutoPay, subscription).
-  Future<void> _cancelUpcomingObligation(ObligationCancellationHit cancellation) async {
+  Future<void> _cancelUpcomingObligation(
+    ObligationCancellationHit cancellation,
+  ) async {
     try {
-      AppLogger.i('[LiveSmsService] _cancelUpcomingObligation: ${cancellation.merchant} reason=${cancellation.reason}');
+      AppLogger.i(
+        '[LiveSmsService] _cancelUpcomingObligation: ${cancellation.merchant} reason=${cancellation.reason}',
+      );
       final reminderRepo = ReminderRepo();
       final cleanMerchant = cancellation.merchant.toLowerCase().trim();
       final slug = cleanMerchant.replaceAll(RegExp(r'[^a-z0-9]'), '_');
@@ -4122,7 +5932,8 @@ class LiveSmsService with WidgetsBindingObserver {
         final rNotes = (r.notes ?? '').toLowerCase();
         final rId = r.id.toLowerCase();
 
-        final matches = rId.contains(slug) ||
+        final matches =
+            rId.contains(slug) ||
             rTitle.contains(cleanMerchant) ||
             cleanMerchant.contains(rTitle) ||
             rNotes.contains(cleanMerchant) ||
@@ -4134,7 +5945,9 @@ class LiveSmsService with WidgetsBindingObserver {
             isActive: false,
             status: ReminderStatus.inactive,
             recordStatus: ReminderRecordStatus.done,
-            notes: '${r.notes ?? ''} [Cancelled via SMS/Notification: ${cancellation.reason}]'.trim(),
+            notes:
+                '${r.notes ?? ''} [Cancelled via SMS/Notification: ${cancellation.reason}]'
+                    .trim(),
           );
           await reminderRepo.upsert(updated);
         }
@@ -4145,7 +5958,8 @@ class LiveSmsService with WidgetsBindingObserver {
       final templates = await recRepo.getAll();
       for (final t in templates) {
         final tName = t.name.toLowerCase();
-        final matches = tName.contains(cleanMerchant) ||
+        final matches =
+            tName.contains(cleanMerchant) ||
             cleanMerchant.contains(tName) ||
             merchantTokens.any((t) => tName.contains(t));
         if (matches && t.isActive) {
@@ -4165,16 +5979,24 @@ class LiveSmsService with WidgetsBindingObserver {
   /// and fires an alert notification so the user is immediately aware.
   Future<void> _handleFailedObligation(FailedObligationHit failed) async {
     try {
-      AppLogger.w('[LiveSmsService] _handleFailedObligation: ${failed.merchant ?? failed.title} amt=${failed.amount}');
+      AppLogger.w(
+        '[LiveSmsService] _handleFailedObligation: ${failed.merchant ?? failed.title} amt=${failed.amount}',
+      );
       final reminderRepo = ReminderRepo();
       final cleanMerchant = (failed.merchant ?? failed.title).trim();
-      final slug = cleanMerchant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+      final slug = cleanMerchant.toLowerCase().replaceAll(
+        RegExp(r'[^a-z0-9]'),
+        '_',
+      );
 
       // Month-scoped stable ID matching the upcoming obligation ID format
-      final reminderId = 'sms_due_${slug}_${failed.date.year}_${failed.date.month}';
+      final reminderId =
+          'sms_due_${slug}_${failed.date.year}_${failed.date.month}';
       final existing = await reminderRepo.getById(reminderId);
 
-      final finalAmount = failed.amount > 0 ? failed.amount : (existing?.amount ?? 0.0);
+      final finalAmount = failed.amount > 0
+          ? failed.amount
+          : (existing?.amount ?? 0.0);
 
       // Check if a credit card matches
       String? matchedCardId;
@@ -4183,10 +6005,14 @@ class LiveSmsService with WidgetsBindingObserver {
         final matchedCard = (failed.last4 != null)
             ? cards.where((c) => c.last4 == failed.last4).firstOrNull
             : cards
-                .where((c) =>
-                    failed.bankKeyword != null &&
-                    c.bank.toLowerCase().contains(failed.bankKeyword!.toLowerCase()))
-                .firstOrNull;
+                  .where(
+                    (c) =>
+                        failed.bankKeyword != null &&
+                        c.bank.toLowerCase().contains(
+                          failed.bankKeyword!.toLowerCase(),
+                        ),
+                  )
+                  .firstOrNull;
         matchedCardId = matchedCard?.id;
       }
 
@@ -4209,7 +6035,9 @@ class LiveSmsService with WidgetsBindingObserver {
       DataChangeBus.instance.notify();
 
       // Show high-priority alert notification
-      final amtStr = finalAmount > 0 ? ' ${AppFormat.currency(finalAmount)}' : '';
+      final amtStr = finalAmount > 0
+          ? ' ${AppFormat.currency(finalAmount)}'
+          : '';
       await NotificationServiceV2().showNotification(
         title: '⚠️ AutoPay Failed$amtStr',
         body: '${failed.title} debit failed — tap to review and pay.',
@@ -4264,13 +6092,17 @@ class LiveSmsService with WidgetsBindingObserver {
           }
         }
       } catch (e) {
-        AppLogger.w('[LiveSmsService] retroactive reminder settlement error: $e');
+        AppLogger.w(
+          '[LiveSmsService] retroactive reminder settlement error: $e',
+        );
       }
 
       // 5. Notify UI immediately so Safe-to-Spend & Reminders reflect refreshed obligations
       DataChangeBus.instance.notify();
     } catch (e) {
-      AppLogger.w('[LiveSmsService] syncUpcomingObligationsFromInbox error: $e');
+      AppLogger.w(
+        '[LiveSmsService] syncUpcomingObligationsFromInbox error: $e',
+      );
     }
   }
 
@@ -4302,8 +6134,7 @@ class LiveSmsService with WidgetsBindingObserver {
         final ref = parsed.refId!.trim();
         final existsInTx = await TransactionRepo().existsByExternalRef(ref);
         if (existsInTx) return true;
-        final existingRef =
-            await eventRepo.getEvidenceByExternalReference(ref);
+        final existingRef = await eventRepo.getEvidenceByExternalReference(ref);
         if (existingRef != null && existingRef.economicEventId != null) {
           final ev = await db.rawQuery(
             "SELECT id FROM ${TablesV24.economicEvents} WHERE id = ? AND lifecycle_status = 'posted'",
@@ -4318,10 +6149,13 @@ class LiveSmsService with WidgetsBindingObserver {
           amount: parsed.amount,
           isCcPayment: isCcPayment,
         );
-        final existsInTx = await TransactionRepo().existsByExternalRef(syntheticRef);
+        final existsInTx = await TransactionRepo().existsByExternalRef(
+          syntheticRef,
+        );
         if (existsInTx) return true;
-        final existingRef =
-            await eventRepo.getEvidenceByExternalReference(syntheticRef);
+        final existingRef = await eventRepo.getEvidenceByExternalReference(
+          syntheticRef,
+        );
         if (existingRef != null && existingRef.economicEventId != null) {
           final ev = await db.rawQuery(
             "SELECT id FROM ${TablesV24.economicEvents} WHERE id = ? AND lifecycle_status = 'posted'",
@@ -4332,10 +6166,12 @@ class LiveSmsService with WidgetsBindingObserver {
       }
 
       // 2. Deterministic Raw Body Fingerprint check (DEF-509)
-      final fingerprint =
-          CanonicalTransactionAdapter.computeBodyFingerprint(parsed.rawText);
-      final existingHash =
-          await eventRepo.getEvidenceByFingerprint(fingerprint);
+      final fingerprint = CanonicalTransactionAdapter.computeBodyFingerprint(
+        parsed.rawText,
+      );
+      final existingHash = await eventRepo.getEvidenceByFingerprint(
+        fingerprint,
+      );
       if (existingHash != null && existingHash.economicEventId != null) {
         final ev = await db.rawQuery(
           "SELECT id FROM ${TablesV24.economicEvents} WHERE id = ? AND lifecycle_status = 'posted'",
@@ -4349,17 +6185,24 @@ class LiveSmsService with WidgetsBindingObserver {
       final parsedDateUtc = parsed.date.toUtc();
 
       if (isCcPayment) {
-        final existingCcPayment = await TransactionRepo().findByAmountAndDateRange(
-          amount: parsed.amount,
-          from: parsedDateUtc.subtract(const Duration(hours: 48)),
-          to: parsedDateUtc.add(const Duration(hours: 48)),
-        );
+        final existingCcPayment = await TransactionRepo()
+            .findByAmountAndDateRange(
+              amount: parsed.amount,
+              from: parsedDateUtc.subtract(const Duration(hours: 48)),
+              to: parsedDateUtc.add(const Duration(hours: 48)),
+            );
         for (final t in existingCcPayment) {
-          if (t.type == 'credit_payment' || t.isTransferType || t.source == 'credit_card_payment') {
-            if (candidateAccountId != null && (t.relatedEntityId == candidateAccountId || t.accountId == candidateAccountId)) {
+          if (t.type == 'credit_payment' ||
+              t.isTransferType ||
+              t.source == 'credit_card_payment') {
+            if (candidateAccountId != null &&
+                (t.relatedEntityId == candidateAccountId ||
+                    t.accountId == candidateAccountId)) {
               return true;
             }
-            if (parsed.last4 != null && parsed.last4!.isNotEmpty && t.notes.contains(parsed.last4!)) {
+            if (parsed.last4 != null &&
+                parsed.last4!.isNotEmpty &&
+                t.notes.contains(parsed.last4!)) {
               return true;
             }
             if (parsed.bankName != null && parsed.bankName!.isNotEmpty) {
@@ -4367,7 +6210,8 @@ class LiveSmsService with WidgetsBindingObserver {
                   .replaceAll(RegExp(r'\bbank\b', caseSensitive: false), '')
                   .trim()
                   .toLowerCase();
-              if (cleanBank.isNotEmpty && t.notes.toLowerCase().contains(cleanBank)) {
+              if (cleanBank.isNotEmpty &&
+                  t.notes.toLowerCase().contains(cleanBank)) {
                 return true;
               }
             }
@@ -4375,14 +6219,17 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
-      final existingTransfers = await TransactionRepo().findByAmountAndDateRange(
-        amount: parsed.amount,
-        from: parsedDateUtc.subtract(const Duration(minutes: 15)),
-        to: parsedDateUtc.add(const Duration(minutes: 15)),
-      );
+      final existingTransfers = await TransactionRepo()
+          .findByAmountAndDateRange(
+            amount: parsed.amount,
+            from: parsedDateUtc.subtract(const Duration(minutes: 15)),
+            to: parsedDateUtc.add(const Duration(minutes: 15)),
+          );
       for (final t in existingTransfers) {
         if (t.type == 'transfer') {
-          if (candidateAccountId != null && (t.accountId == candidateAccountId || t.relatedEntityId == candidateAccountId)) {
+          if (candidateAccountId != null &&
+              (t.accountId == candidateAccountId ||
+                  t.relatedEntityId == candidateAccountId)) {
             return true;
           }
         }
@@ -4396,16 +6243,20 @@ class LiveSmsService with WidgetsBindingObserver {
 
       final normCandidateMerchant = _normalizeMerchantForDedup(parsed.merchant);
       final lowerRawText = parsed.rawText.toLowerCase();
-      final isCandidateApp = parsed.rawText.startsWith('APP:') ||
+      final isCandidateApp =
+          parsed.rawText.startsWith('APP:') ||
           lowerRawText.contains('google pay') ||
           lowerRawText.contains('phonepe') ||
           lowerRawText.contains('paytm');
 
       final candidateType = parsed.isCredit ? 'income' : 'expense';
       for (final t in sameAmount) {
-        final isExistingApp = (t.externalRef != null && t.externalRef!.contains('_app_')) ||
+        final isExistingApp =
+            (t.externalRef != null && t.externalRef!.contains('_app_')) ||
             (t.rawPayload != null && t.rawPayload!.startsWith('APP:')) ||
-            (t.notes.isNotEmpty && (t.externalRef == null || t.externalRef!.startsWith('live_sms')));
+            (t.notes.isNotEmpty &&
+                (t.externalRef == null ||
+                    t.externalRef!.startsWith('live_sms')));
 
         // Invariant 1: Account identity check
         // If candidate account is known and existing transaction account is known,
@@ -4434,15 +6285,22 @@ class LiveSmsService with WidgetsBindingObserver {
         }
 
         final tDateUtc = t.date.toUtc();
-        final diffMinutes = parsedDateUtc.difference(tDateUtc).inSeconds.abs() / 60.0;
-        final isExistingFromSms = t.source == 'sms' || t.source == 'credit_card_purchase';
-        final isCrossChannel = (isCandidateApp && !isExistingApp) || (!isCandidateApp && isExistingApp);
+        final diffMinutes =
+            parsedDateUtc.difference(tDateUtc).inSeconds.abs() / 60.0;
+        final isExistingFromSms =
+            t.source == 'sms' || t.source == 'credit_card_purchase';
+        final isCrossChannel =
+            (isCandidateApp && !isExistingApp) ||
+            (!isCandidateApp && isExistingApp);
         final isBothApp = isCandidateApp && isExistingApp;
 
         // Invariant 3: Genuine repeated purchases (e.g. coffee 15 minutes later)
         // Two separate SMS messages with different timestamps (> 3 minutes) are not duplicates,
         // UNLESS one is an app push notification and the other is a bank SMS, OR merchants match.
-        if (isExistingFromSms && diffMinutes > 3.0 && !isCandidateApp && !isExistingApp) {
+        if (isExistingFromSms &&
+            diffMinutes > 3.0 &&
+            !isCandidateApp &&
+            !isExistingApp) {
           continue;
         }
 
@@ -4489,7 +6347,9 @@ class LiveSmsService with WidgetsBindingObserver {
           // If the existing transaction was from an app push without bank UTR / account,
           // and the incoming candidate is a bank SMS providing the bank account or UTR:
           // Enrich the existing transaction so it reflects the actual bank and reference!
-          if (isExistingApp && !isCandidateApp && (candidateAccountId != null || parsed.refId != null)) {
+          if (isExistingApp &&
+              !isCandidateApp &&
+              (candidateAccountId != null || parsed.refId != null)) {
             try {
               final updatedTx = t.copyWith(
                 accountId: candidateAccountId ?? t.accountId,
@@ -4500,13 +6360,14 @@ class LiveSmsService with WidgetsBindingObserver {
                 newTransaction: updatedTx,
               );
             } catch (_) {}
-          } else if (!isExistingApp && isCandidateApp && parsed.merchant != null && parsed.merchant!.isNotEmpty &&
+          } else if (!isExistingApp &&
+              isCandidateApp &&
+              parsed.merchant != null &&
+              parsed.merchant!.isNotEmpty &&
               (t.notes.isEmpty || t.notes.startsWith('Bank Account'))) {
             // Existing transaction was bank SMS with empty/generic merchant, incoming is app push with merchant name
             try {
-              final updatedTx = t.copyWith(
-                notes: parsed.merchant!,
-              );
+              final updatedTx = t.copyWith(notes: parsed.merchant!);
               await FinancialTransactionService().editTransaction(
                 oldTransaction: t,
                 newTransaction: updatedTx,
@@ -4520,8 +6381,6 @@ class LiveSmsService with WidgetsBindingObserver {
     return false;
   }
 
-
-
   /// Normalizes a merchant name for dedup comparison: lowercases, strips
   /// common suffixes (online, store, etc.), collapses whitespace.
   static String _normalizeMerchantForDedup(String? merchant) {
@@ -4529,7 +6388,10 @@ class LiveSmsService with WidgetsBindingObserver {
     var m = merchant.toLowerCase().trim();
     // Strip common suffixes that vary between bank/UPI SMS
     m = m.replaceAll(
-      RegExp(r'\b(?:online|store|india|pvt\.?|ltd\.?|limited|llp)\b', caseSensitive: false),
+      RegExp(
+        r'\b(?:online|store|india|pvt\.?|ltd\.?|limited|llp)\b',
+        caseSensitive: false,
+      ),
       '',
     );
     // Collapse whitespace
@@ -4551,7 +6413,10 @@ class LiveSmsService with WidgetsBindingObserver {
     final alphaA = normA.replaceAll(RegExp(r'[^a-z0-9]'), '');
     final alphaB = normB.replaceAll(RegExp(r'[^a-z0-9]'), '');
     if (alphaA.isNotEmpty && alphaB.isNotEmpty) {
-      if (alphaA == alphaB || alphaA.contains(alphaB) || alphaB.contains(alphaA)) return true;
+      if (alphaA == alphaB ||
+          alphaA.contains(alphaB) ||
+          alphaB.contains(alphaA))
+        return true;
     }
 
     // Share a common prefix of ≥5 chars (e.g., "zomato" vs "zomatoo")
@@ -4577,21 +6442,28 @@ class LiveSmsService with WidgetsBindingObserver {
     required List<CreditCard> cards,
   }) async {
     CreditCard? matchedCard = matchedCardByLast4;
-    if (matchedCard == null && parsed.last4 != null && parsed.last4!.isNotEmpty) {
+    if (matchedCard == null &&
+        parsed.last4 != null &&
+        parsed.last4!.isNotEmpty) {
       matchedCard = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
     }
     if (matchedCard == null && parsed.bankName != null) {
       final kw = parsed.bankName!.toLowerCase();
-      matchedCard = cards.where((c) =>
-        c.name.toLowerCase().contains(kw) ||
-        c.bank.toLowerCase().contains(kw),
-      ).firstOrNull;
+      matchedCard = cards
+          .where(
+            (c) =>
+                c.name.toLowerCase().contains(kw) ||
+                c.bank.toLowerCase().contains(kw),
+          )
+          .firstOrNull;
     }
     if (matchedCard != null) return matchedCard;
 
     // Never auto-create ghost cards for user's bank accounts (Federal, Jio, SBI)
     final bLower = (parsed.bankName ?? '').toLowerCase();
-    if (bLower.contains('federal') || bLower.contains('jio') || bLower.contains('sbi')) {
+    if (bLower.contains('federal') ||
+        bLower.contains('jio') ||
+        bLower.contains('sbi')) {
       return null;
     }
 
@@ -4621,7 +6493,8 @@ class LiveSmsService with WidgetsBindingObserver {
     final lowerSender = sender.toLowerCase();
 
     // If the SMS says "from a/c" or "from your a/c", parsed.last4 is the debiting BANK ACCOUNT, not the target card!
-    final isBankDebit = lower.contains('from a/c') ||
+    final isBankDebit =
+        lower.contains('from a/c') ||
         lower.contains('from your a/c') ||
         lower.contains('debited from a/c') ||
         lower.contains('debited rs');
@@ -4636,25 +6509,31 @@ class LiveSmsService with WidgetsBindingObserver {
     for (final card in cards) {
       final bankKw = card.bank.toLowerCase();
       final nameKw = card.name.toLowerCase();
-      if ((bankKw.isNotEmpty && (lower.contains(bankKw) || lowerSender.contains(bankKw))) ||
+      if ((bankKw.isNotEmpty &&
+              (lower.contains(bankKw) || lowerSender.contains(bankKw))) ||
           (nameKw.isNotEmpty && lower.contains(nameKw))) {
         return card;
       }
     }
 
     // 2b. If it's a payment to Cred or BBPS, match ICICI or card with largest outstanding balance
-    if (lower.contains('cred') || lower.contains('bbps') || lower.contains('dreamplug')) {
-      final icici = cards.where((c) => c.bank.toLowerCase().contains('icici') || c.name.toLowerCase().contains('icici')).firstOrNull;
+    if (lower.contains('cred') ||
+        lower.contains('bbps') ||
+        lower.contains('dreamplug')) {
+      final icici = cards
+          .where(
+            (c) =>
+                c.bank.toLowerCase().contains('icici') ||
+                c.name.toLowerCase().contains('icici'),
+          )
+          .firstOrNull;
       if (icici != null) return icici;
       if (cards.isNotEmpty) return cards.first;
     }
 
     // 3. Fallback: create card if we know issuer or last4 and not a bank debit
     if (isBankDebit) return null;
-    return _resolveOrCreateCard(
-      parsed: parsed,
-      cards: cards,
-    );
+    return _resolveOrCreateCard(parsed: parsed, cards: cards);
   }
 
   /// Normalizes a reference ID: removes whitespace, punctuation, and lowercases.
@@ -4699,8 +6578,13 @@ class LiveSmsService with WidgetsBindingObserver {
       for (final tx in candidateDebits) {
         if (tx.type == 'credit_payment') {
           // If a credit payment already exists for this amount and card/issuer within 48h, match it!
-          final matchesCard = (cardLast4 != null && cardLast4.isNotEmpty && tx.notes.contains(cardLast4)) ||
-              (issuer != null && issuer.isNotEmpty && tx.notes.toLowerCase().contains(issuer.toLowerCase()));
+          final matchesCard =
+              (cardLast4 != null &&
+                  cardLast4.isNotEmpty &&
+                  tx.notes.contains(cardLast4)) ||
+              (issuer != null &&
+                  issuer.isNotEmpty &&
+                  tx.notes.toLowerCase().contains(issuer.toLowerCase()));
           if (matchesCard || tx.relatedEntityId != null) {
             matching.add(tx);
             continue;
@@ -4709,7 +6593,9 @@ class LiveSmsService with WidgetsBindingObserver {
         if (tx.type != 'expense' && tx.type != 'transfer') continue;
         final notes = tx.notes.toLowerCase();
         final normExtRef = normalizeReference(tx.externalRef);
-        final extractedNotesRef = normalizeReference(extractReferenceFromText(notes));
+        final extractedNotesRef = normalizeReference(
+          extractReferenceFromText(notes),
+        );
 
         // 1. If confirmation carries a reliable reference:
         if (normConfirmationRef.isNotEmpty) {
@@ -4732,10 +6618,20 @@ class LiveSmsService with WidgetsBindingObserver {
         // 2. Safe evidence matching:
         // If cardLast4 is known, debit notes MUST contain that last4 or an issuer-specific payment marker.
         // Prohibit generic words like "card" from accidentally matching debit cards or merchant names!
-        final matchesLast4 = cardLast4 != null && cardLast4.isNotEmpty && notes.contains(cardLast4);
-        final matchesIssuerCc = issuer != null && issuer.isNotEmpty && notes.contains(issuer.toLowerCase()) &&
-            (notes.contains('cc') || notes.contains('credit') || notes.contains('bill') || notes.contains('pay'));
-        final matchesBbpsOrBillDesk = notes.contains('bbps') ||
+        final matchesLast4 =
+            cardLast4 != null &&
+            cardLast4.isNotEmpty &&
+            notes.contains(cardLast4);
+        final matchesIssuerCc =
+            issuer != null &&
+            issuer.isNotEmpty &&
+            notes.contains(issuer.toLowerCase()) &&
+            (notes.contains('cc') ||
+                notes.contains('credit') ||
+                notes.contains('bill') ||
+                notes.contains('pay'));
+        final matchesBbpsOrBillDesk =
+            notes.contains('bbps') ||
             notes.contains('billdesk') ||
             notes.contains('pz hdfc') ||
             notes.contains('cred') ||
@@ -4771,7 +6667,10 @@ class LiveSmsService with WidgetsBindingObserver {
   }
 
   /// Synchronizes or settles all credit card due reminders upon receiving a bill payment.
-  Future<void> _syncCardReminderOnPayment(CreditCard? matchedCard, {double? paymentAmount}) async {
+  Future<void> _syncCardReminderOnPayment(
+    CreditCard? matchedCard, {
+    double? paymentAmount,
+  }) async {
     if (matchedCard == null) return;
     try {
       if (paymentAmount != null && paymentAmount > 0) {
@@ -4799,8 +6698,12 @@ class LiveSmsService with WidgetsBindingObserver {
             dueDate: updatedCard.nextDueDate,
             amount: isFullyPaid ? 0.0 : remainingDue,
             isActive: !isFullyPaid,
-            status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
-            recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
+            status: isFullyPaid
+                ? ReminderStatus.inactive
+                : ReminderStatus.upcoming,
+            recordStatus: isFullyPaid
+                ? ReminderRecordStatus.done
+                : ReminderRecordStatus.pending,
             sourceType: ReminderSourceType.credit,
             sourceId: updatedCard.id,
           ).toMap(),
@@ -4810,14 +6713,19 @@ class LiveSmsService with WidgetsBindingObserver {
         final all = await reminderRepo.getAll();
         for (final r in all) {
           if (r.id == 'credit_due_${updatedCard.id}') continue;
-          final isLinked = r.linkedEntityId == updatedCard.id ||
+          final isLinked =
+              r.linkedEntityId == updatedCard.id ||
               r.sourceId == updatedCard.id ||
               r.id.contains(updatedCard.id);
           if (isLinked) {
             final updated = r.copyWith(
               isActive: !isFullyPaid,
-              status: isFullyPaid ? ReminderStatus.inactive : ReminderStatus.upcoming,
-              recordStatus: isFullyPaid ? ReminderRecordStatus.done : ReminderRecordStatus.pending,
+              status: isFullyPaid
+                  ? ReminderStatus.inactive
+                  : ReminderStatus.upcoming,
+              recordStatus: isFullyPaid
+                  ? ReminderRecordStatus.done
+                  : ReminderRecordStatus.pending,
               amount: isFullyPaid ? 0.0 : remainingDue,
             );
             await reminderRepo.upsert(updated);
@@ -4830,7 +6738,10 @@ class LiveSmsService with WidgetsBindingObserver {
   /// Deduce paying bank account ID from message text if available (e.g. "from a/c X8434").
   Future<String?> _findPayingBankFromText(String body) async {
     try {
-      final last4Match = RegExp(r'(?:from|debited\s+from)\s+(?:a/c|acct|acc\.?)\s*(?:x+|\*+)?(\d{4})', caseSensitive: false).firstMatch(body);
+      final last4Match = RegExp(
+        r'(?:from|debited\s+from)\s+(?:a/c|acct|acc\.?)\s*(?:x+|\*+)?(\d{4})',
+        caseSensitive: false,
+      ).firstMatch(body);
       if (last4Match != null) {
         final last4 = last4Match.group(1)!;
         final accounts = await AccountRepo().getAll();
@@ -4865,22 +6776,27 @@ class LiveSmsService with WidgetsBindingObserver {
       // 1. Amount match + name/bank match
       for (final loan in activeLoans) {
         final amountMatches = (loan.monthlyInstallment - amount).abs() < 2.0;
-        final nameMatches = loan.name.length >= 3 && lower.contains(loan.name.toLowerCase());
-        final bankMatches = loan.bank.length >= 3 && lower.contains(loan.bank.toLowerCase());
+        final nameMatches =
+            loan.name.length >= 3 && lower.contains(loan.name.toLowerCase());
+        final bankMatches =
+            loan.bank.length >= 3 && lower.contains(loan.bank.toLowerCase());
         if (amountMatches && (nameMatches || bankMatches)) {
           return loan;
         }
       }
 
       // 2. Exact amount match among active loans if only 1 matches
-      final amountMatches = activeLoans.where((l) => (l.monthlyInstallment - amount).abs() < 2.0).toList();
+      final amountMatches = activeLoans
+          .where((l) => (l.monthlyInstallment - amount).abs() < 2.0)
+          .toList();
       if (amountMatches.length == 1) {
         return amountMatches.first;
       }
 
       // 3. Name or bank match
       for (final loan in activeLoans) {
-        final nameMatches = loan.name.length >= 4 && lower.contains(loan.name.toLowerCase());
+        final nameMatches =
+            loan.name.length >= 4 && lower.contains(loan.name.toLowerCase());
         if (nameMatches) return loan;
       }
     } catch (e) {

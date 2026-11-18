@@ -130,6 +130,7 @@ class CanonicalEventRepository {
             'id': ev.id,
             'economic_event_id': event.id,
             'source_type': ev.sourceType,
+            'source_record_id': ev.sourceRecordId,
             'extracted_amount_minor_units':
                 ev.extractedAmount?.minorUnits ?? 0,
             'extracted_timestamp': ev.sourceTimestamp.toUtc().toIso8601String(),
@@ -176,6 +177,7 @@ class CanonicalEventRepository {
       'id': evidence.id,
       'economic_event_id': eventId,
       'source_type': evidence.sourceType,
+      'source_record_id': evidence.sourceRecordId,
       'extracted_amount_minor_units':
           evidence.extractedAmount?.minorUnits ?? 0,
       'extracted_timestamp': evidence.sourceTimestamp.toUtc().toIso8601String(),
@@ -199,6 +201,7 @@ class CanonicalEventRepository {
         'id': evidence.id,
         'economic_event_id': evidence.economicEventId,
         'source_type': evidence.sourceType,
+        'source_record_id': evidence.sourceRecordId,
         'extracted_amount_minor_units':
             evidence.extractedAmount?.minorUnits ?? 0,
         'extracted_timestamp': evidence.sourceTimestamp.toUtc().toIso8601String(),
@@ -326,6 +329,7 @@ class CanonicalEventRepository {
             'id': ev.id,
             'economic_event_id': event.id,
             'source_type': ev.sourceType,
+            'source_record_id': ev.sourceRecordId,
             'extracted_amount_minor_units':
                 ev.extractedAmount?.minorUnits ?? 0,
             'extracted_timestamp': ev.sourceTimestamp.toUtc().toIso8601String(),
@@ -586,6 +590,7 @@ class CanonicalEventRepository {
     final expires = r['retention_expires_at'] as String?;
     return Evidence(
       id: r['id'] as String,
+      sourceRecordId: r['source_record_id'] as String?,
       sourceType: r['source_type'] as String,
       sourceIdentifier: r['sender_address'] as String?,
       sourceTimestamp: DateTime.parse(r['extracted_timestamp'] as String),

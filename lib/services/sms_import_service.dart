@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../core/logging/app_logger.dart';
 import '../models/reminder_model.dart';
 import '../models/review_item.dart';
+import 'sms_inbox_paginator.dart';
 import 'transaction_text_parser.dart';
 
 const _channel = MethodChannel('spendx/sms_live');
@@ -675,24 +676,48 @@ class SmsImportService {
   }
 
   Future<List<SmsMessage>> _queryInbox({DateTime? since}) async {
-    // Use native query with date sorting — the flutter_sms_inbox library caps
-    // at 1000 and doesn't sort, so OneCard/HDFC bills from months ago are missed.
+    // Use the native cursor-paginated query with date sorting — the
+    // flutter_sms_inbox library caps at 1000 and doesn't sort. The native page
+    // is bounded and continues from a stable `(date, _id)` cursor.
+    final result = <SmsMessage>[];
     try {
       final sinceMs = since?.millisecondsSinceEpoch ?? 0;
-      final List<dynamic> raw = await _channel.invokeMethod('queryInboxSince', {
-        'sinceEpochMs': sinceMs,
-        'limit': 20000,
-      });
-      AppLogger.d('[SmsScan] Native queryInboxSince returned ${raw.length} raw messages (since: $since)');
-      final result = raw.map((m) {
-        final map = Map<String, dynamic>.from(m as Map);
-        return SmsMessage.fromJson(map);
-      }).toList();
-      AppLogger.d('[SmsScan] Parsed ${result.length} SmsMessages');
+      final raw = await SmsInboxPaginator.fetchAll(
+        fetchPage: (beforeDate, beforeId) {
+          final args = <String, dynamic>{
+            'sinceEpochMs': sinceMs,
+            'limit': SmsInboxPaginator.defaultPageSize,
+          };
+          if (beforeDate != null) args['beforeDate'] = beforeDate;
+          if (beforeId != null) args['beforeId'] = beforeId;
+          return _channel.invokeMapMethod<dynamic, dynamic>(
+            'queryInboxPage',
+            args,
+          );
+        },
+        onPageError: (e, pages) {
+          AppLogger.w(
+            '[SmsScan] Inbox page $pages failed after ${result.length} '
+            'message(s); keeping the partial result: $e',
+          );
+        },
+      );
+      for (final m in raw) {
+        result.add(SmsMessage.fromJson(Map<String, dynamic>.from(m as Map)));
+      }
+      AppLogger.d(
+        '[SmsScan] Native paginated inbox returned ${result.length} messages '
+        '(since: $since)',
+      );
       return result;
     } catch (e) {
-      AppLogger.w('[SmsScan] Native queryInboxSince failed: $e — falling back to library');
-      // Fallback to library if native query fails
+      AppLogger.w(
+        '[SmsScan] Native paginated inbox failed after ${result.length} '
+        'message(s): $e — falling back to library',
+      );
+      // If a page failed midway, keep the pages already received; a rescan is
+      // idempotent because ingestion is fingerprint-based.
+      if (result.isNotEmpty) return result;
       return SmsQuery().querySms(
         count: 1000,
         kinds: const [SmsQueryKind.inbox],
