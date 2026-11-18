@@ -335,6 +335,7 @@ Future<Database> _openPrimaryEncryptedInternal({
   OnDatabaseConfigureFn? onConfigure,
   OnDatabaseCreateFn? onCreate,
   OnDatabaseVersionChangeFn? onUpgrade,
+  OnDatabaseVersionChangeFn? onDowngrade,
   OnDatabaseOpenFn? onOpen,
 }) async {
   await SpendXDatabaseFactory.instance.initialize();
@@ -365,6 +366,7 @@ Future<Database> _openPrimaryEncryptedInternal({
       },
       onCreate: onCreate,
       onUpgrade: onUpgrade,
+      onDowngrade: onDowngrade,
       onOpen: onOpen,
     ),
   );
@@ -378,6 +380,7 @@ Future<Database> _openPrimaryPlaintextInternal({
   OnDatabaseConfigureFn? onConfigure,
   OnDatabaseCreateFn? onCreate,
   OnDatabaseVersionChangeFn? onUpgrade,
+  OnDatabaseVersionChangeFn? onDowngrade,
   OnDatabaseOpenFn? onOpen,
 }) async {
   await SpendXDatabaseFactory.instance.initialize();
@@ -395,6 +398,7 @@ Future<Database> _openPrimaryPlaintextInternal({
       },
       onCreate: onCreate,
       onUpgrade: onUpgrade,
+      onDowngrade: onDowngrade,
       onOpen: onOpen,
     ),
   );

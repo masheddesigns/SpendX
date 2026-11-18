@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqlite3/sqlite3.dart' as ffi;
 import '../../core/logging/app_logger.dart';
 import 'tables.dart';
+import 'tables_v25.dart';
+import 'tables_v26.dart';
 import '../migrations/ledger_backfill_service.dart';
 import '../migrations/migration_v24_service.dart';
+import '../migrations/migration_v25_service.dart';
+import '../migrations/migration_v26_service.dart';
 import '../security/database_key_manager.dart';
 import '../security/database_encryption_migration_service.dart';
 import '../../services/evidence_pruning_service.dart';
@@ -58,7 +63,7 @@ class PostRestoreValidationResult {
   bool get isValid =>
       integrityCheckPassed &&
       foreignKeyViolations == 0 &&
-      userVersion == 24 &&
+      (userVersion == 24 || userVersion == 25 || userVersion == 26) &&
       canonicalTablesExpected.every(canonicalTablesPresent.contains);
 
   /// Human-readable summary for diagnostic logging.
@@ -70,11 +75,30 @@ class PostRestoreValidationResult {
 }
 
 
+/// Represents the initialization and connection lifecycle of the [AppDatabase] singleton.
+enum AppDatabaseInitState {
+  /// The database singleton has not initiated opening.
+  notInitialized,
+
+  /// An asynchronous database open / initialization operation is currently in flight.
+  openingInProgress,
+
+  /// The database connection has successfully opened and is active.
+  successfullyInitialized,
+
+  /// The most recent database initialization attempt failed with an exception.
+  initializationFailed,
+
+  /// The database connection was explicitly closed.
+  closed,
+}
+
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
   static Database? _database;
   static GatedDatabase? _gatedDatabase;
   static Future<Database>? _initFuture;
+  static AppDatabaseInitState _initState = AppDatabaseInitState.notInitialized;
 
   /// Test-only seam to disable automatic plaintext migration if testing
   /// legacy plaintext schema behavior in isolation. Defaults to true.
@@ -93,12 +117,38 @@ class AppDatabase {
     _database = null;
     _gatedDatabase = null;
     _initFuture = null;
+    _initState = AppDatabaseInitState.notInitialized;
+  }
+
+  /// Returns the current test database path override, or null if using default.
+  static String? get testDatabasePath => _testDbPath;
+
+  /// Test-only seam to inject initialization lifecycle states for negative preflight tests.
+  @visibleForTesting
+  static void setTestInitState(AppDatabaseInitState state) {
+    if (const bool.fromEnvironment('dart.vm.product')) {
+      throw UnsupportedError('setTestInitState is strictly prohibited in release builds');
+    }
+    _initState = state;
   }
 
   AppDatabase._init();
 
   /// Whether the database connection is currently open.
   bool get isOpen => _database != null && _database!.isOpen;
+
+  /// The current initialization lifecycle state of the database singleton.
+  AppDatabaseInitState get initState => _initState;
+
+  /// True if database opening is currently in flight.
+  bool get isOpening => _initState == AppDatabaseInitState.openingInProgress;
+
+  /// True if the database singleton is quiescent and safe for test bootstrap overrides.
+  bool get isCleanForBootstrap =>
+      _database == null &&
+      _initFuture == null &&
+      _initState != AppDatabaseInitState.openingInProgress &&
+      !isOpen;
 
   /// Runs the fixed set of post-restore integrity checks directly on the
   /// underlying database connection, bypassing the [DatabaseAccessGate].
@@ -181,10 +231,12 @@ class AppDatabase {
     if (_database != null && _database!.isOpen) {
       return _gatedDatabase ??= DatabaseAccessGate.instance.wrapDatabase(_database!);
     }
+    _initState = AppDatabaseInitState.openingInProgress;
     _initFuture ??= _initDB('spendx.db');
     try {
       final db = await _initFuture!;
       _database = db;
+      _initState = AppDatabaseInitState.successfullyInitialized;
       if (DatabaseLifecycleCoordinator.instance.currentState ==
           DatabaseLifecycleState.closed) {
         DatabaseLifecycleCoordinator.instance.markActive();
@@ -194,6 +246,7 @@ class AppDatabase {
       }
       return _gatedDatabase = DatabaseAccessGate.instance.wrapDatabase(db);
     } catch (e) {
+      _initState = AppDatabaseInitState.initializationFailed;
       _initFuture = null;
       _gatedDatabase = null;
       rethrow;
@@ -245,6 +298,14 @@ class AppDatabase {
           await tempDb.close();
         }
 
+        if (currentVersion > 26) {
+          throw StateError(
+            'FATAL: Database schema version ($currentVersion) is newer than application '
+            'version (26). Downgrade is prohibited to prevent data loss. '
+            'Please update the application.',
+          );
+        }
+
         if (currentVersion < 24) {
           // Pre-v24 legacy database: upgrade schema to v24 plaintext first
           final upgradeDb = await openDatabase(
@@ -257,6 +318,7 @@ class AppDatabase {
             onUpgrade: (db, oldVersion, newVersion) async {
               await _applyUpgrades(db, oldVersion);
             },
+            onDowngrade: _onDowngradeReject,
           );
           await upgradeDb.close();
         }
@@ -274,7 +336,7 @@ class AppDatabase {
         // Test-only bypass: open plaintext directly without auto-migrating
         return await openDatabase(
           path,
-          version: 24,
+          version: 26,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON;');
             await db.rawQuery('PRAGMA busy_timeout = 5000;');
@@ -283,6 +345,7 @@ class AppDatabase {
           onUpgrade: (db, oldVersion, newVersion) async {
             await _applyUpgrades(db, oldVersion);
           },
+          onDowngrade: _onDowngradeReject,
           onOpen: (db) async {
             await db.execute(TablesV24.createEconomicEventsUniqueReversalIndex);
             if (DatabaseAccessGate.instance.isOpen) {
@@ -305,7 +368,7 @@ class AppDatabase {
     return await _openPrimaryEncryptedInternal(
       path: path,
       password: blobKey,
-      version: 24,
+      version: 26,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
         await db.rawQuery('PRAGMA busy_timeout = 5000;');
@@ -314,6 +377,7 @@ class AppDatabase {
       onUpgrade: (db, oldVersion, newVersion) async {
         await _applyUpgrades(db, oldVersion);
       },
+      onDowngrade: _onDowngradeReject,
       onOpen: (db) async {
         await ReversalIndexCompatibilityService.ensureReversalIndex(db);
         if (DatabaseAccessGate.instance.isOpen) {
@@ -330,8 +394,14 @@ class AppDatabase {
     await TablesV24.createAllV24(db);
     await TablesV24.seedSystemAccounts(db);
     await TablesV24.installTriggers(db);
+    await TablesV25.createAllV25(db);
+    await TablesV25.installTriggers(db);
+    await TablesV26.createAllV26(db);
     await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
   }
+
+  @visibleForTesting
+  Future<void> onCreateForTesting(Database db, int version) async => _onCreate(db, version);
 
   Future<void> _executeCreateQueries(Database db) async {
     for (final query in Tables.allCreateQueries) {
@@ -374,6 +444,12 @@ class AppDatabase {
     }
     if (oldVersion < 24) {
       await _migrateToV24(db);
+    }
+    if (oldVersion < 25) {
+      await _migrateToV25(db);
+    }
+    if (oldVersion < 26) {
+      await _migrateToV26(db);
     }
     await _executeCreateQueries(db);
   }
@@ -586,6 +662,7 @@ class AppDatabase {
     _database = null;
     _gatedDatabase = null;
     _initFuture = null;
+    _initState = AppDatabaseInitState.closed;
     DatabaseLifecycleCoordinator.instance.markClosed();
     if (db != null && db.isOpen) {
       await db.close();
@@ -768,6 +845,67 @@ class AppDatabase {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Legacy SMS repair containment ledger.
+  //
+  // Phase 0 needs a durable record of which legacy repairs were observed and
+  // what containment decision was taken. The v21 `ledger_backfill_flags`
+  // key/value table already ships in every supported schema, so this does not
+  // require a schema-version bump or a financial mutation.
+  // ---------------------------------------------------------------------------
+  static const String _legacyRepairStatePrefix = 'legacy_repair.state.';
+  static const String _legacyRepairPrefPrefix = 'legacy_repair.pref.';
+
+  Future<void> recordLegacyRepairState(
+    String repairId,
+    String state, {
+    String? detail,
+  }) async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    await db.insert(
+      'ledger_backfill_flags',
+      {
+        'key': '$_legacyRepairStatePrefix$repairId',
+        'value': detail == null ? state : '$state|$detail',
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// One-time migration of the SharedPreferences gate into the durable ledger.
+  /// Read-only with respect to financial tables.
+  Future<void> recordLegacyRepairPrefObservation(
+    String repairId, {
+    required bool wasSet,
+  }) async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    await db.insert(
+      'ledger_backfill_flags',
+      {
+        'key': '$_legacyRepairPrefPrefix$repairId',
+        'value': wasSet ? 'set' : 'unset',
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, String>> readLegacyRepairStates() async {
+    final db = await instance.database;
+    await _ensureFlagsTable(db);
+    final rows = await db.query(
+      'ledger_backfill_flags',
+      where: 'key LIKE ?',
+      whereArgs: ['$_legacyRepairStatePrefix%'],
+    );
+    return {
+      for (final row in rows)
+        (row['key'] as String).substring(_legacyRepairStatePrefix.length):
+            row['value'] as String,
+    };
+  }
+
   /// Read-only preflight: analyzes the current data and returns the verdict
   /// WITHOUT mutating anything. Safe to call any time.
   Future<BackfillReport> preflightReconciliation() async {
@@ -839,6 +977,43 @@ class AppDatabase {
       db,
       allowDestructiveDrops: false,
       backupPath: backupPath,
+    );
+  }
+
+  /// V25: SpendX Phase 1.4 Deduplication & Refund Integrity Migration.
+  ///
+  /// Adds durable `source_record_id` to `evidence`, creates `refund_allocations`
+  /// and `migration_historical_baselines`, installs Triggers 1 through 6, and
+  /// records the one-time immutable historical baseline snapshot.
+  ///
+  /// Reuses [MigrationV25Service.run] directly on the active upgrade executor.
+  Future<void> _migrateToV25(DatabaseExecutor db) async {
+    await MigrationV25Service.run(db);
+  }
+
+  /// V26: SpendX Cross-Channel Durable Evidence Reconciliation Migration.
+  ///
+  /// Creates the dedicated `evidence_reconciliations` table and unique indices.
+  /// Migrates legacy reconciliation markers from `evidence.external_reference`
+  /// and cleanses `external_reference` so it holds only genuine external references.
+  Future<void> _migrateToV26(DatabaseExecutor db) async {
+    await MigrationV26Service.run(db);
+  }
+
+  /// Explicit rejection policy for database downgrades.
+  ///
+  /// Permanently prohibits `onDatabaseDowngradeDelete` and throws a fatal
+  /// [StateError] to prevent data loss whenever the database on disk is newer
+  /// than the application code.
+  static Future<void> _onDowngradeReject(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    throw StateError(
+      'FATAL: Database schema version ($oldVersion) is newer than application '
+      'version ($newVersion). Downgrade is prohibited to prevent data loss. '
+      'Please update the application.',
     );
   }
 

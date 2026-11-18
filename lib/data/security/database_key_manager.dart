@@ -334,6 +334,9 @@ class SpendXDatabaseKeyManager {
             FlutterSecureStorageAdapter(secureStorage),
         _keyStorageName = keyStorageName;
 
+  /// The secure storage slot name used by this key manager instance.
+  String get keyStorageName => _keyStorageName;
+
   static SpendXDatabaseKeyManager _instance = SpendXDatabaseKeyManager();
   static SpendXDatabaseKeyManager get instance => _instance;
   static void setTestInstance(SpendXDatabaseKeyManager? testInstance) {
