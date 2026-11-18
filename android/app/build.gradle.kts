@@ -48,17 +48,22 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            keyAlias = (keystoreProperties["keyAlias"] as String?)?.trim()
-            keyPassword = (keystoreProperties["keyPassword"] as String?)?.trim()
-            storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it.toString().trim()) }
-            storePassword = (keystoreProperties["storePassword"] as String?)?.trim()
+        if (keystorePropertiesFile.exists() && keystoreProperties.containsKey("storeFile")) {
+            create("release") {
+                keyAlias = (keystoreProperties["keyAlias"] as String?)?.trim()
+                keyPassword = (keystoreProperties["keyPassword"] as String?)?.trim()
+                storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it.toString().trim()) }
+                storePassword = (keystoreProperties["storePassword"] as String?)?.trim()
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigningConfig = signingConfigs.findByName("release")
+            if (releaseSigningConfig != null) {
+                signingConfig = releaseSigningConfig
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -67,7 +72,8 @@ android {
             )
         }
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("release")
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
