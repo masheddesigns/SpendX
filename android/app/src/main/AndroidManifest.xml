@@ -9,15 +9,25 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- Required only for the non-Vivo WindowManager overlay (TYPE_APPLICATION_OVERLAY).
+         Vivo/iQOO devices use the native Origin Island notification path instead. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Package 03: Android Auto Backup and device-to-device transfer are disabled.
+         SpendX stores financial data in a SQLCipher database whose key lives in the
+         platform Keystore. Keystore keys are never included in OS backups, so an OS
+         restore would leave the database permanently unreadable. User-controlled,
+         password-protected .spendx backup remains the supported restore path. -->
     <application
         android:label="SpendX"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
@@ -99,10 +109,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- Broadcast receiver for Dynamic Island system overlay triggers -->
+        <!-- Internal-only Dynamic Island test trigger. Normal island rendering uses
+             the MainActivity MethodChannel; no cross-app broadcast sender is supported. -->
         <receiver
             android:name=".DynamicIslandReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.mashingdesigns.spend_x.TEST_ISLAND" />
                 <action android:name="com.mashingdesigns.spend_x.SHOW_DYNAMIC_ISLAND" />

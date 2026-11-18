@@ -36,18 +36,30 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
 
+        val subId = intent.getIntExtra(
+            "android.telephony.extra.SUBSCRIPTION_INDEX",
+            intent.getIntExtra("subscription", intent.getIntExtra("subscription_id", -1))
+        )
+        val timestampMillis = messages.first().timestampMillis
+        val sourceRecordId = TelephonyIdentityGenerator.generateSourceId(
+            subId = subId,
+            timestampMillis = timestampMillis,
+            sender = sender,
+            body = fullBody,
+        )
+
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
-            // Pass [sender, body] so Dart can process live on UI thread.
+            // Pass [sender, body, subId, sourceRecordId] so Dart can process live on UI thread.
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
                     MainActivity.CHANNEL,
-                ).invokeMethod("onSmsReceived", listOf(sender, fullBody))
+                ).invokeMethod("onSmsReceived", listOf(sender, fullBody, subId.toString(), sourceRecordId))
             }
         } else {
             // App is killed / engine not cached: queue and notify user via Dynamic Island
-            SmsStore.queue(context, sender, fullBody)
+            SmsStore.queue(context, sender, fullBody, sourceRecordId)
             val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
             if (parsed != null) {
                 DynamicIslandOverlayService.show(context, "SpendX", parsed.first, parsed.second, sender)
@@ -90,5 +102,24 @@ class SmsReceiver : BroadcastReceiver() {
             )
             .build()
         manager.notify((System.currentTimeMillis() % 100000).toInt(), notification)
+    }
+}
+
+object TelephonyIdentityGenerator {
+    fun generateSourceId(
+        subId: Int,
+        timestampMillis: Long,
+        sender: String,
+        body: String,
+    ): String {
+        val cleanSender = sender.trim().uppercase()
+        val cleanBody = body.trim()
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        digest.update(cleanSender.toByteArray(Charsets.UTF_8))
+        digest.update(0.toByte())
+        digest.update(cleanBody.toByteArray(Charsets.UTF_8))
+        val hash = digest.digest().take(8).joinToString("") { "%02x".format(it) }
+        val subToken = if (subId >= 0) subId.toString() else "UNKNOWN"
+        return "SRC:TELEPHONY_BROADCAST:$subToken:$timestampMillis:$hash"
     }
 }

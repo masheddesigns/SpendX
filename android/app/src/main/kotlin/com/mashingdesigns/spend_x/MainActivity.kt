@@ -22,6 +22,8 @@ class MainActivity : FlutterActivity() {
         @Volatile var isAppInForeground: Boolean = false
     }
 
+    private var pendingIslandCardEvent: Map<String, Any?>? = null
+
     override fun onResume() {
         super.onResume()
         isAppInForeground = true
@@ -37,7 +39,7 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ensureSecureStorageAlgorithmMarkers()
-        handleTestIntent(intent)
+        handleIslandIntents(intent)
         rebindNotificationListener()
     }
 
@@ -55,26 +57,46 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleTestIntent(intent)
+        setIntent(intent)
+        handleIslandIntents(intent)
     }
 
-    private fun handleTestIntent(intent: Intent?) {
-        if (intent?.action == "com.mashingdesigns.spend_x.TEST_ISLAND") {
-            val amount = intent.getStringExtra("amount") ?: "371.52"
-            val isExpense = intent.getBooleanExtra("isExpense", true)
-            val subtitle = intent.getStringExtra("subtitle") ?: "District • CSB Card"
-            DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, subtitle)
+    private fun handleIslandIntents(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        android.util.Log.i("MainActivity", "handleIslandIntents: action=$action, extras=${intent.extras}")
+        if (action == "com.mashingdesigns.spend_x.ACTION_SHOW_TRANSACTION_ISLAND" ||
+            action == "com.mashingdesigns.spend_x.TEST_ISLAND" ||
+            intent.hasExtra("displayAmount") || intent.hasExtra("islandAmount") || intent.hasExtra("amount")) {
 
-            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-                MethodChannel(messenger, CHANNEL).invokeMethod(
-                    "onDynamicIslandEvent",
-                    mapOf(
-                        "amount" to amount,
-                        "isExpense" to isExpense,
-                        "subtitle" to subtitle,
-                        "title" to "SpendX"
-                    )
-                )
+            val amount = intent.getStringExtra("amount")
+                ?: intent.getStringExtra("islandAmount")
+                ?: intent.getStringExtra("displayAmount")
+                ?: ""
+            val isExpense = intent.getBooleanExtra("isExpense", true)
+            val subtitle = intent.getStringExtra("subtitle") ?: intent.getStringExtra("sender") ?: "SpendX"
+            val title = intent.getStringExtra("title") ?: if (isExpense) "Expense Recorded" else "Income Recorded"
+
+            android.util.Log.i("MainActivity", "Dispatching island card click to Flutter: amount=$amount, isExpense=$isExpense")
+
+            if (action == "com.mashingdesigns.spend_x.TEST_ISLAND") {
+                DynamicIslandOverlayService.show(this, "SpendX", if (amount.isNotBlank()) amount else "50.00", isExpense, subtitle)
+            }
+
+            val payload = mapOf(
+                "amount" to amount,
+                "isExpense" to isExpense,
+                "subtitle" to subtitle,
+                "title" to title
+            )
+
+            val engine = flutterEngine ?: FlutterEngineCache.getInstance().get(ENGINE_ID)
+            if (engine != null) {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onIslandCardClicked", payload)
+                }, 300)
+            } else {
+                pendingIslandCardEvent = payload
             }
         }
     }
@@ -97,15 +119,29 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         FlutterEngineCache.getInstance().put(ENGINE_ID, flutterEngine)
 
+        pendingIslandCardEvent?.let { payload ->
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onIslandCardClicked", payload)
+            }, 600)
+            pendingIslandCardEvent = null
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler {
                 call,
                 result,
             ->
             when (call.method) {
                 "getPendingSms" -> result.success(SmsStore.all(this))
+                "removePendingSms" -> {
+                    val ids = (call.argument<List<Any?>>("sourceRecordIds") ?: emptyList())
+                        .mapNotNull { it?.toString() }
+                        .toSet()
+                    val success = SmsStore.remove(this, ids)
+                    result.success(success)
+                }
                 "clearPendingSms" -> {
-                    SmsStore.clear(this)
-                    result.success(null)
+                    val success = SmsStore.clear(this)
+                    result.success(success)
                 }
                 "requestReceiveSmsPermission" -> {
                     requestReceiveSmsPermission()
@@ -126,10 +162,30 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
-                "queryInboxSince" -> {
+                "queryInboxPage" -> {
                     val sinceEpochMs = (call.argument<Number>("sinceEpochMs"))?.toLong()
-                    val limit = (call.argument<Number>("limit"))?.toInt() ?: 5000
-                    result.success(queryInboxSince(sinceEpochMs, limit))
+                    val limit = ((call.argument<Number>("limit"))?.toInt() ?: 300).coerceIn(1, 500)
+                    val beforeDate = (call.argument<Number>("beforeDate"))?.toLong()
+                    val beforeId = (call.argument<Number>("beforeId"))?.toLong()
+                    result.success(queryInboxPage(sinceEpochMs, limit, beforeDate, beforeId))
+                }
+                "queryRecoveryInboxPage" -> {
+                    val startMaxId = (call.argument<Number>("startMaxId"))?.toLong()
+                    if (startMaxId == null) {
+                        result.error("INVALID_ARGUMENT", "startMaxId is required", null)
+                        return@setMethodCallHandler
+                    }
+                    val limit = ((call.argument<Number>("limit"))?.toInt() ?: 300).coerceIn(1, 500)
+                    val beforeId = (call.argument<Number>("beforeId"))?.toLong()
+                    val sevenDayThresholdMs = (call.argument<Number>("sevenDayThresholdMs"))?.toLong()
+                    if (sevenDayThresholdMs == null) {
+                        result.error("INVALID_ARGUMENT", "sevenDayThresholdMs is required", null)
+                        return@setMethodCallHandler
+                    }
+                    result.success(queryRecoveryInboxPage(startMaxId, limit, beforeId, sevenDayThresholdMs))
+                }
+                "getMaxInboxId" -> {
+                    result.success(getMaxInboxId())
                 }
                 "syncActiveNotifications" -> {
                     val listener = BankNotificationListener.instance
@@ -168,8 +224,38 @@ class MainActivity : FlutterActivity() {
 
     }
 
-    private fun queryInboxSince(sinceEpochMs: Long?, limit: Int): List<Map<String, Any?>> {
-        val messages = mutableListOf<Map<String, Any?>>()
+    /**
+     * Reads one bounded page of the SMS inbox.
+     *
+     * Cursor is the stable `(date, _id)` tuple in descending order, so messages
+     * that share a timestamp are neither skipped nor duplicated. Returning a
+     * page (rather than the whole inbox) keeps the Binder reply well below the
+     * transaction limit even when the inbox has tens of thousands of messages.
+     */
+    private fun queryInboxPage(
+        sinceEpochMs: Long?,
+        limit: Int,
+        beforeDate: Long?,
+        beforeId: Long?,
+    ): Map<String, Any?> {
+        val clauses = mutableListOf<String>()
+        val args = mutableListOf<String>()
+        if (sinceEpochMs != null && sinceEpochMs > 0) {
+            clauses.add("${Telephony.Sms.DATE} >= ?")
+            args.add(sinceEpochMs.toString())
+        }
+        if (beforeDate != null && beforeId != null) {
+            clauses.add(
+                "(${Telephony.Sms.DATE} < ? OR (${Telephony.Sms.DATE} = ? AND ${Telephony.Sms._ID} < ?))"
+            )
+            args.add(beforeDate.toString())
+            args.add(beforeDate.toString())
+            args.add(beforeId.toString())
+        }
+        val selection = if (clauses.isEmpty()) null else clauses.joinToString(" AND ")
+        val selectionArgs = if (args.isEmpty()) null else args.toTypedArray()
+        val sortOrder = "${Telephony.Sms.DATE} DESC, ${Telephony.Sms._ID} DESC"
+
         val uri = Telephony.Sms.Inbox.CONTENT_URI
         val projection = arrayOf(
             Telephony.Sms._ID,
@@ -179,28 +265,164 @@ class MainActivity : FlutterActivity() {
             Telephony.Sms.DATE,
             Telephony.Sms.DATE_SENT,
         )
-        val selection = if (sinceEpochMs != null && sinceEpochMs > 0) "${Telephony.Sms.DATE} >= ?" else null
-        val selectionArgs = if (sinceEpochMs != null && sinceEpochMs > 0) arrayOf(sinceEpochMs.toString()) else null
-        val sortOrder = "${Telephony.Sms.DATE} DESC"
+
+        val messages = mutableListOf<Map<String, Any?>>()
+        var hasMore = false
+        var lastDate: Long? = null
+        var lastId: Long? = null
 
         val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
         cursor?.use {
+            // Resolve indexes once, outside the row loop.
+            val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
+            val threadIdx = it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
+            val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+            val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
+            val dateSentIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)
+
             var count = 0
-            while (it.moveToNext() && count < limit) {
+            while (it.moveToNext()) {
+                if (count >= limit) {
+                    hasMore = true
+                    break
+                }
+                val id = it.getLong(idIdx)
+                val date = it.getLong(dateIdx)
                 messages.add(
                     mapOf(
-                        "id" to it.getLong(it.getColumnIndexOrThrow(Telephony.Sms._ID)),
-                        "thread_id" to it.getInt(it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)),
-                        "address" to it.getString(it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)),
-                        "body" to it.getString(it.getColumnIndexOrThrow(Telephony.Sms.BODY)),
-                        "date" to it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE)),
-                        "date_sent" to it.getLong(it.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)),
+                        "id" to id,
+                        "thread_id" to it.getInt(threadIdx),
+                        "address" to it.getString(addressIdx),
+                        "body" to it.getString(bodyIdx),
+                        "date" to date,
+                        "date_sent" to it.getLong(dateSentIdx),
                     ),
                 )
+                lastDate = date
+                lastId = id
                 count++
             }
         }
-        return messages
+
+        return mapOf(
+            "messages" to messages,
+            "hasMore" to hasMore,
+            "nextCursor" to if (hasMore && lastDate != null && lastId != null) {
+                mapOf("date" to lastDate, "id" to lastId)
+            } else {
+                null
+            },
+        )
+    }
+
+    /**
+     * Reads one bounded page of the SMS inbox specifically for Phase 1.4 recovery.
+     *
+     * Keys:
+     * - `_id DESC` monotonic keyset pagination
+     * - `_id <= startMaxId`: Immutable snapshot ceiling captured at pass initiation
+     * - `_id < beforeId`: Strict continuation cursor
+     * - `date >= sevenDayThresholdMs`: Inclusive 7-day lookback window
+     *
+     * Decoupled completely from Phase 1.3 `queryInboxPage` and watermark cursor.
+     */
+    private fun queryRecoveryInboxPage(
+        startMaxId: Long,
+        limit: Int,
+        beforeId: Long?,
+        sevenDayThresholdMs: Long,
+    ): Map<String, Any?> {
+        val clampedLimit = limit.coerceIn(1, 500)
+        val clauses = mutableListOf<String>()
+        val args = mutableListOf<String>()
+
+        // 1. Inclusive seven-day timestamp boundary: date >= ?
+        clauses.add("${Telephony.Sms.DATE} >= ?")
+        args.add(sevenDayThresholdMs.toString())
+
+        // 2. Immutable snapshot ceiling: _id <= ?
+        clauses.add("${Telephony.Sms._ID} <= ?")
+        args.add(startMaxId.toString())
+
+        // 3. Monotonic continuation: _id < ? (only when beforeId is provided)
+        if (beforeId != null) {
+            clauses.add("${Telephony.Sms._ID} < ?")
+            args.add(beforeId.toString())
+        }
+
+        val selection = clauses.joinToString(" AND ")
+        val selectionArgs = args.toTypedArray()
+        val sortOrder = "${Telephony.Sms._ID} DESC"
+
+        val uri = Telephony.Sms.Inbox.CONTENT_URI
+        val projection = arrayOf(
+            Telephony.Sms._ID,
+            Telephony.Sms.THREAD_ID,
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
+            Telephony.Sms.DATE,
+            Telephony.Sms.DATE_SENT,
+        )
+
+        val messages = mutableListOf<Map<String, Any?>>()
+        var hasMore = false
+        var lastId: Long? = null
+
+        val cursor = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+        cursor?.use {
+            val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
+            val threadIdx = it.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
+            val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+            val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
+            val dateSentIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)
+
+            var count = 0
+            while (it.moveToNext()) {
+                if (count >= clampedLimit) {
+                    hasMore = true
+                    break
+                }
+                val id = it.getLong(idIdx)
+                messages.add(
+                    mapOf(
+                        "id" to id,
+                        "thread_id" to it.getInt(threadIdx),
+                        "address" to it.getString(addressIdx),
+                        "body" to it.getString(bodyIdx),
+                        "date" to it.getLong(dateIdx),
+                        "date_sent" to it.getLong(dateSentIdx),
+                    )
+                )
+                lastId = id
+                count++
+            }
+        }
+
+        return mapOf(
+            "messages" to messages,
+            "hasMore" to hasMore,
+            "nextBeforeId" to if (hasMore && lastId != null) lastId else null,
+        )
+    }
+
+    /**
+     * Reads the current maximum `_id` in the telephony SMS inbox.
+     * Used to capture the immutable `startMaxId` snapshot at the beginning of a recovery pass.
+     */
+    private fun getMaxInboxId(): Long? {
+        val uri = Telephony.Sms.Inbox.CONTENT_URI
+        val projection = arrayOf(Telephony.Sms._ID)
+        val sortOrder = "${Telephony.Sms._ID} DESC"
+        val cursor = contentResolver.query(uri, projection, null, null, sortOrder)
+        cursor?.use {
+            if (it.moveToNext()) {
+                val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
+                return it.getLong(idIdx)
+            }
+        }
+        return null
     }
 
     private fun requestReceiveSmsPermission() {
@@ -221,32 +443,91 @@ object SmsStore {
     private const val ENTRY_SEP = "\u0001"
     private const val FIELD_SEP = "\u0002"
 
-    fun queue(context: Context, sender: String, body: String) {
+    @Synchronized
+    fun queue(context: Context, sender: String, body: String, sourceRecordId: String? = null): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val existing = prefs.getString(KEY, "") ?: ""
-        val entry = "$sender$FIELD_SEP$body"
         val existingEntries = existing.split(ENTRY_SEP).filter { it.isNotBlank() }
-        val merged = (existingEntries + entry).distinct()
-        prefs.edit().putString(KEY, merged.joinToString(ENTRY_SEP)).apply()
+
+        // Deduplicate strictly by sourceRecordId when provided; never collapse two messages simply because sender and body match
+        if (!sourceRecordId.isNullOrBlank()) {
+            val alreadyQueued = existingEntries.any { entry ->
+                val parts = entry.split(FIELD_SEP, limit = 3)
+                parts.size >= 3 && parts[2] == sourceRecordId
+            }
+            if (alreadyQueued) {
+                return true
+            }
+        }
+
+        val entry = if (!sourceRecordId.isNullOrBlank()) {
+            "$sender$FIELD_SEP$body$FIELD_SEP$sourceRecordId"
+        } else {
+            "$sender$FIELD_SEP$body"
+        }
+
+        val updatedEntries = existingEntries + entry
+        return prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
     }
 
+    @Synchronized
     fun all(context: Context): List<Map<String, String>> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = prefs.getString(KEY, "") ?: ""
         if (raw.isBlank()) return emptyList()
-        return raw.split(ENTRY_SEP)
-            .filter { it.isNotBlank() }
-            .map { entry ->
-                if (entry.contains(FIELD_SEP)) {
-                    val parts = entry.split(FIELD_SEP, limit = 2)
-                    mapOf("sender" to parts[0], "body" to parts[1])
-                } else {
-                    mapOf("sender" to "", "body" to entry)
-                }
+
+        val entries = raw.split(ENTRY_SEP).filter { it.isNotBlank() }
+        var hasLegacy = false
+
+        val updatedEntries = mutableListOf<String>()
+        val resultList = mutableListOf<Map<String, String>>()
+
+        for (entry in entries) {
+            val parts = if (entry.contains(FIELD_SEP)) entry.split(FIELD_SEP, limit = 3) else listOf("", entry)
+            val sender = parts[0]
+            val body = if (parts.size > 1) parts[1] else ""
+            val sourceRecordId = if (parts.size >= 3 && parts[2].isNotBlank()) {
+                parts[2]
+            } else {
+                hasLegacy = true
+                "SRC:LEGACY_QUEUE:" + java.util.UUID.randomUUID().toString()
             }
+
+            updatedEntries.add("$sender$FIELD_SEP$body$FIELD_SEP$sourceRecordId")
+            resultList.add(
+                mapOf(
+                    "sender" to sender,
+                    "body" to body,
+                    "sourceRecordId" to sourceRecordId,
+                )
+            )
+        }
+
+        // If any legacy entries were assigned unique IDs, persist them atomically so they are stable
+        if (hasLegacy) {
+            prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
+        }
+
+        return resultList
     }
 
-    fun clear(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).apply()
+    @Synchronized
+    fun remove(context: Context, sourceRecordIdsToRemove: Set<String>): Boolean {
+        if (sourceRecordIdsToRemove.isEmpty()) return true
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY, "") ?: ""
+        if (raw.isBlank()) return true
+        val remaining = raw.split(ENTRY_SEP)
+            .filter { it.isNotBlank() }
+            .filterNot { entry ->
+                val parts = entry.split(FIELD_SEP, limit = 3)
+                parts.size >= 3 && sourceRecordIdsToRemove.contains(parts[2])
+            }
+        return prefs.edit().putString(KEY, remaining.joinToString(ENTRY_SEP)).commit()
+    }
+
+    @Synchronized
+    fun clear(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).commit()
     }
 }

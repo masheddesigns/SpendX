@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SpendX package 03 backup hardening.
+
+  Android Auto Backup (cloud) and device-to-device transfer must never copy the
+  SQLCipher database, its WAL/SHM sidecars, secure-storage preferences, cached
+  SMS bodies, or exported files. The database encryption key lives in the
+  Android Keystore, which is not transferable; an OS restore would therefore
+  produce an unreadable database and a fatal key-loss state.
+
+  android:allowBackup="false" is the primary control. These explicit exclusions
+  are retained as defence-in-depth for tooling and for any future policy change.
+  User-controlled .spendx backups remain available and are unaffected by this
+  file because they are written through the app's own storage/Drive APIs.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

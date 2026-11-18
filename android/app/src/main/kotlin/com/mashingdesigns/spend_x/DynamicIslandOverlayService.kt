@@ -44,6 +44,7 @@ import androidx.core.content.ContextCompat
 object DynamicIslandOverlayService {
 
     private const val ORIGIN_ISLAND_NOTIFICATION_ID = 7771
+    private const val ORIGIN_ISLAND_TAG = "VIVO_SUPERX_TAG"
     private var activeView: View? = null
     private var dismissRunnable: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -431,7 +432,15 @@ object DynamicIslandOverlayService {
         }
 
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = "com.mashingdesigns.spend_x.ACTION_SHOW_TRANSACTION_ISLAND"
+            putExtra("amount", cleanAmount)
+            putExtra("islandAmount", cleanAmount)
+            putExtra("displayAmount", displayAmount)
+            putExtra("isExpense", isExpense)
+            putExtra("title", fullTitle)
+            putExtra("subtitle", sub)
+            putExtra("timestamp", System.currentTimeMillis())
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pi = if (launchIntent != null) {
             PendingIntent.getActivity(
@@ -443,18 +452,24 @@ object DynamicIslandOverlayService {
         } else null
 
         val icon = createSpendXIslandIcon(context, isExpense)
+        val amountColor = Color.parseColor(if (isExpense) "#F43F5E" else "#10B981")
+        val styledAmount = android.text.SpannableString(displayAmount).apply {
+            setSpan(android.text.style.ForegroundColorSpan(amountColor), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
 
         builder
-            .setSmallIcon(R.drawable.ic_notification)
-            .setTicker(displayAmount)
-            .setContentTitle(displayAmount)
-            .setContentText(sub)
+            .setSmallIcon(icon)
+            .setTicker(styledAmount)
+            .setContentTitle(styledAmount)
+            .setContentText(fullTitle)
             .setSubText("SpendX")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
-            .setColor(Color.parseColor(if (isExpense) "#F43F5E" else "#10B981"))
-            .setStyle(android.app.Notification.BigTextStyle().bigText("$fullTitle • $sub"))
+            .setUsesChronometer(false)
+            .setColor(amountColor)
+            .setStyle(android.app.Notification.BigTextStyle().setBigContentTitle(styledAmount).bigText("$fullTitle • $sub"))
 
         @Suppress("DEPRECATION")
         builder.setPriority(android.app.Notification.PRIORITY_MAX)
@@ -471,7 +486,7 @@ object DynamicIslandOverlayService {
         // Android 15 & Vivo Origin Island Promoted Ongoing APIs
         try {
             val setShortCrit = builder.javaClass.getMethod("setShortCriticalText", CharSequence::class.java)
-            setShortCrit.invoke(builder, displayAmount)
+            setShortCrit.invoke(builder, styledAmount)
         } catch (_: Throwable) {}
 
         try {
@@ -481,7 +496,7 @@ object DynamicIslandOverlayService {
 
         // ShortInfos bundle (required by validSuperXShortInfoData in SuperXNotificationDataUtils)
         val shortInfos = Bundle().apply {
-            putString("notification.superx.shortInfos.coreInfoShort", displayAmount)
+            putCharSequence("notification.superx.shortInfos.coreInfoShort", styledAmount)
             putString("notification.superx.shortInfos.describeShort", if (isExpense) "Spent" else "Received")
             putParcelable("notification.superx.shortInfos.image", icon)
         }
@@ -496,9 +511,9 @@ object DynamicIslandOverlayService {
         // Vivo Origin Island SuperX Capsule bundle (consumed by SuperXCapsuleDataController & addAtomIslandCapsuleElementToShow)
         val capsuleBundle = Bundle().apply {
             putInt("notification.superx.capsule.state", 1) // 1 = ACTIVE/SHOW
-            putCharSequence("notification.superx.capsule.content", displayAmount) // Capsule text (-₹50.00)
+            putCharSequence("notification.superx.capsule.content", styledAmount) // Capsule text (-₹50.00 / +₹50.00)
             putParcelable("notification.superx.capsule.icon", icon) // Capsule icon (SpendX icon)
-            putInt("notification.superx.capsule.contentColor", Color.WHITE)
+            putInt("notification.superx.capsule.contentColor", amountColor)
             putInt("notification.superx.capsule.bgColor", Color.BLACK)
             putInt("notification.superx.capsule.showTime", 6) // Visible for 6 seconds
             putBoolean("notification.superx.capsule.landingAutoHide", true)
@@ -507,15 +522,18 @@ object DynamicIslandOverlayService {
             }
         }
 
-        // Left side of Island: SpendX icon only (leftTemplate = 1 with null content auto-resolves to 101)
+        // Left side of Island: SpendX icon & label
         val leftInfoBundle = Bundle().apply {
             putParcelable("island.superx.leftInfo.icon", icon)
+            putString("island.superx.leftInfo.content", "SpendX")
         }
 
-        // Right side of Island: display amount text (-₹50.00 / +₹50.00) (rightTemplate = 4 with text auto-resolves to 102)
+        // Right side of Island: display amount text (-₹50.00 / +₹50.00) (Template 6 = text display)
         val rightInfoBundle = Bundle().apply {
-            putCharSequence("island.superx.rightInfo.content", displayAmount)
-            putCharSequence("island.superx.rightInfo.capsuleContent", displayAmount)
+            putCharSequence("island.superx.rightInfo.content", styledAmount)
+            putCharSequence("island.superx.rightInfo.capsuleContent", styledAmount)
+            putInt("island.superx.rightInfo.capsuleContentColor", amountColor)
+            putInt("island.superx.rightInfo.contentColor", amountColor)
             putInt("island.superx.rightInfo.capsuleBgColor", Color.BLACK)
             if (pi != null) {
                 putParcelable("island.superx.rightInfo.clickResp", pi)
@@ -525,30 +543,32 @@ object DynamicIslandOverlayService {
         // Vivo Origin Island SuperX bundle (consumed by addAtomIslandElementToShow)
         // MUST be nested inside notification.superx.island!
         val islandBundle = Bundle().apply {
-            putInt("island.superx.template", -1) // -1 prevents Vivo Chronometer "00:00 00:00" layout!
-            putInt("island.superx.leftTemplate", 1) // 1 -> 101 (icon only)
-            putInt("island.superx.rightTemplate", 4) // 4 -> 102 (text only)
+            putInt("island.superx.leftTemplate", 1) // 1 -> Icon + label
+            putInt("island.superx.rightTemplate", 6) // 6 -> Text display (NOT 4 which is chronometer!)
             putBundle("island.superx.leftInfo", leftInfoBundle)
             putBundle("island.superx.rightInfo", rightInfoBundle)
             putBoolean("island.superx.forceShow", true)
             putBoolean("island.superx.forceShowCard", false) // false prevents giant card dropdown!
             putBoolean("island.superx.forceShowCard.keyguard", false)
             putInt("island.superx.forceShowCardInt", 0)
-            putString("island.superx.landingInfo", "app")
+            putString("island.superx.landingInfo", context.packageName)
             putInt("island.superx.islandClick", 1)
             putInt("island.superx.showTime", 6)
             putInt("island.superx.state", 1)
+            if (pi != null) {
+                putParcelable("island.superx.clickResp", pi)
+            }
         }
 
         // Vivo Origin Island & Android 16 Promoted Ongoing contract
         val extras = Bundle().apply {
-            // Android 16 standard Promoted Ongoing & CallStyle chips triggers
+            // Android 16 standard Promoted Ongoing chips triggers
             putBoolean("android.requestPromotedOngoing", true)
-            putString("android.shortCriticalText", displayAmount)
+            putCharSequence("android.shortCriticalText", styledAmount)
             putString("android.substName", "SpendX")
-            putString("android.template", "android.app.Notification\$CallStyle")
-            putInt("android.callType", 2) // 2 = CallStyle incoming/active call ongoing
+            putInt("android.color", amountColor)
             putBoolean("android.colorized", false)
+            putBoolean("android.showChronometer", false)
 
             // Vivo Origin Island SuperX triggers
             putBundle("notification.superx.island", islandBundle)
@@ -558,27 +578,31 @@ object DynamicIslandOverlayService {
             putInt("notification.superx.operation", 0)       // 0 = show/create
             putInt("notification.superx.newNode", 1)
             putInt("notification.superx.displays", 0x00111111) // Bit 0x100 (256) enables status bar island
-            putInt("progress_style_business_type", 1)
             putBoolean("notification.superx.islandNotify", true)
             putString("notification.superx.scene", "finance")
             putString("notification.superx.title", fullTitle)
             putString("notification.superx.content", sub)
-            putString("notification.superx.capsule.text", displayAmount)
+            putCharSequence("notification.superx.capsule.text", styledAmount)
             putString("vivo.summary.text", displayAmount)
             putBoolean("is_live_activity", true)
+            putString("SUPERX_VALUE", "true")
 
             // Compatibility root keys for legacy Vivo SystemUI
             putBoolean("island.superx.forceShow", true)
             putBoolean("island.superx.forceShowCard", false)
             putBoolean("island.superx.forceShowCard.keyguard", false)
             putInt("island.superx.forceShowCardInt", 0)
-            putString("island.superx.landingInfo", "app")
+            putString("island.superx.landingInfo", context.packageName)
             putParcelable("island.superx.leftInfo.icon", icon)
-            putCharSequence("island.superx.rightInfo.content", displayAmount)
-            putCharSequence("island.superx.rightInfo.capsuleContent", displayAmount)
+            putString("island.superx.leftInfo.content", "SpendX")
+            putCharSequence("island.superx.rightInfo.content", styledAmount)
+            putCharSequence("island.superx.rightInfo.capsuleContent", styledAmount)
+            putInt("island.superx.rightInfo.capsuleContentColor", amountColor)
+            putInt("island.superx.rightInfo.contentColor", amountColor)
             putInt("island.superx.rightInfo.capsuleBgColor", Color.BLACK)
             if (pi != null) {
                 putParcelable("island.superx.rightInfo.clickResp", pi)
+                putParcelable("island.superx.clickResp", pi)
             }
             putBundle("island.superx.leftInfo", leftInfoBundle)
             putBundle("island.superx.rightInfo", rightInfoBundle)
@@ -598,12 +622,12 @@ object DynamicIslandOverlayService {
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val notification = buildOriginIslandNotification(context, title, amount, isExpense, subtitle)
-            notificationManager.notify(ORIGIN_ISLAND_NOTIFICATION_ID, notification)
+            notificationManager.notify(ORIGIN_ISLAND_TAG, ORIGIN_ISLAND_NOTIFICATION_ID, notification)
 
             // Auto-dismiss after 6.0 seconds
             mainHandler.postDelayed({
                 try {
-                    notificationManager.cancel(ORIGIN_ISLAND_NOTIFICATION_ID)
+                    notificationManager.cancel(ORIGIN_ISLAND_TAG, ORIGIN_ISLAND_NOTIFICATION_ID)
                 } catch (_: Exception) {}
             }, 6000)
         } catch (e: Exception) {

@@ -16,6 +16,17 @@ import java.util.LinkedHashSet
  *
  * Captures the notification text and pipes it through the exact same
  * FinancialSmsFilter and LiveSmsService accounting pipeline.
+ *
+ * Privacy boundary:
+ * - Only packages in PAYMENT_PACKAGES are inspected. There is deliberately no
+ *   suffix/substring fallback, so arbitrary apps cannot be swept in.
+ * - Email clients and general messaging apps (including Gmail and WhatsApp)
+ *   are not monitored because their notification streams contain unrelated
+ *   personal content.
+ * - Notification bodies are never written to logcat. Only package name and a
+ *   boolean decision are logged for diagnosis.
+ * - Notification Access remains an explicit, user-granted OS permission; the
+ *   disclosure text lives in Notification Settings and the Privacy Policy.
  */
 class BankNotificationListener : NotificationListenerService() {
 
@@ -36,11 +47,9 @@ class BankNotificationListener : NotificationListenerService() {
             }
         })
 
-        // Known banking, UPI, and financial payment app packages in India
+        // Explicit allowlist of banking, UPI, card, and financial apps.
+        // Email and general messaging clients are intentionally excluded.
         private val PAYMENT_PACKAGES = setOf(
-            // Email & Bank Alerts
-            "com.google.android.gm",                 // Gmail (Bank alerts & statements)
-
             // Top UPI & Payment Apps
             "com.google.android.apps.nbu.paisa.user", // Google Pay
             "com.phonepe.app",                       // PhonePe
@@ -99,8 +108,6 @@ class BankNotificationListener : NotificationListenerService() {
             "com.phonepe.app.business",              // PhonePe Business
             "com.paytm.business",                    // Paytm for Business
             "com.khatabook",                         // Khatabook
-            "com.whatsapp",                          // WhatsApp (WhatsApp Pay)
-            "com.whatsapp.w4b",                      // WhatsApp Business (WhatsApp Pay)
             "com.airtel.bank",                       // Airtel Payments Bank
             "com.fss.ippb",                          // India Post Payments Bank (IPPB)
             "com.zerodha.kite3",                     // Zerodha Kite
@@ -171,7 +178,7 @@ class BankNotificationListener : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
         Log.i("SpendX_Notif", "BankNotificationListener connected")
-        syncActiveNotifications()
+        seedActiveNotifications()
     }
 
     override fun onListenerDisconnected() {
@@ -193,26 +200,50 @@ class BankNotificationListener : NotificationListenerService() {
         processNotification(sbn)
     }
 
-    fun syncActiveNotifications() {
+    /**
+     * Seeds pre-existing notifications present in the status bar tray upon listener
+     * connect into [PROCESSED_KEYS] without dispatching them to Flutter or triggering
+     * the Dynamic Island HUD. Only newly posted incoming notifications will trigger alerts.
+     */
+    fun seedActiveNotifications() {
         try {
             val active = activeNotifications ?: return
-            Log.i("SpendX_Notif", "syncActiveNotifications: processing ${active.size} active notifications")
+            Log.i("SpendX_Notif", "seedActiveNotifications: seeding ${active.size} active notifications into processed set")
             for (sbn in active) {
-                processNotification(sbn)
+                val pkg = sbn.packageName ?: continue
+                if (pkg == packageName || !PAYMENT_PACKAGES.contains(pkg)) continue
+                val sbnKey = sbn.key ?: "${pkg}_${sbn.id}_${sbn.postTime}"
+                val tag = sbn.tag ?: ""
+                val sourceRecordId = "SRC:ANDROID_NOTIF:$pkg:${sbn.id}:$tag:${sbn.postTime}"
+                val extras = sbn.notification?.extras
+                val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+                val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+                val fullBody = if (title.isNotBlank() && text.isNotBlank()) "$title: $text" else (text.ifBlank { title })
+                val dedupKey = "$sbnKey|${fullBody.hashCode()}"
+                PROCESSED_KEYS.add(sourceRecordId)
+                PROCESSED_KEYS.add(dedupKey)
             }
         } catch (e: Exception) {
-            Log.e("SpendX_Notif", "syncActiveNotifications error: $e")
+            Log.e("SpendX_Notif", "seedActiveNotifications error: $e")
         }
+    }
+
+    fun syncActiveNotifications() {
+        seedActiveNotifications()
     }
 
     private fun processNotification(sbn: StatusBarNotification?) {
         if (sbn == null) return
 
         val pkg = sbn.packageName ?: return
-        val extras = sbn.notification?.extras ?: return
 
-        // Ignore SpendX's own notifications
+        // Ignore SpendX's own notifications and anything outside the explicit allowlist.
+        // This check happens before reading extras so unmonitored notification content is
+        // never parsed, deduplicated, or logged.
         if (pkg == packageName) return
+        if (!PAYMENT_PACKAGES.contains(pkg)) return
+
+        val extras = sbn.notification?.extras ?: return
 
         val channelId = (sbn.notification?.channelId ?: "").lowercase()
         val tag = (sbn.tag ?: "").lowercase()
@@ -251,40 +282,33 @@ class BankNotificationListener : NotificationListenerService() {
         if (fullBody.isBlank()) return
 
         val sbnKey = sbn.key ?: "${pkg}_${sbn.id}_${sbn.postTime}"
+        val sbnTag = sbn.tag ?: ""
+        val sourceRecordId = "SRC:ANDROID_NOTIF:$pkg:${sbn.id}:$sbnTag:${sbn.postTime}"
         val dedupKey = "$sbnKey|${fullBody.hashCode()}"
-        if (PROCESSED_KEYS.contains(dedupKey)) {
-            Log.i("SpendX_Notif", "Skipping already processed active notification: $dedupKey")
+        if (PROCESSED_KEYS.contains(sourceRecordId) || PROCESSED_KEYS.contains(dedupKey)) {
+            Log.i("SpendX_Notif", "Skipping already processed active notification: $sourceRecordId")
             return
         }
+        PROCESSED_KEYS.add(sourceRecordId)
         PROCESSED_KEYS.add(dedupKey)
 
-        val lowerPkg = pkg.lowercase()
-        val isFromPaymentPackage = PAYMENT_PACKAGES.contains(pkg) ||
-            lowerPkg.contains(".bank") ||
-            lowerPkg.contains("banking") ||
-            lowerPkg.contains("wallet") ||
-            lowerPkg.contains(".upi") ||
-            lowerPkg.contains(".pay") ||
-            lowerPkg.contains("creditcard") ||
-            lowerPkg.contains("cards") ||
-            lowerPkg.contains("finance")
-
-        // Clean sender / title display
+        // Clean sender / title display. The APP: prefix keeps the existing
+        // FinancialSmsFilter sender semantics for explicit allowlisted packages.
         val displaySender = if (title.isNotBlank() && title != fullBody) title else pkg
-        val senderTitle = if (isFromPaymentPackage) "APP:$pkg:$displaySender" else displaySender
+        val senderTitle = "APP:$pkg:$displaySender"
 
         // Strictly evaluate every incoming notification against FinancialSmsFilter.
         // Even notifications from known payment packages (e.g. Google Pay, PhonePe) frequently
         // include ads, cashbacks, scratch cards, or loan offers that must NEVER become expense transactions.
         val isFinancial = FinancialSmsFilter.isFinancial(senderTitle, fullBody)
-        Log.i("SpendX_Notif", "onNotificationPosted: pkg=$pkg, sender=$senderTitle, isFinancial=$isFinancial, body=$fullBody")
+        Log.i("SpendX_Notif", "Evaluated notification: pkg=$pkg, isFinancial=$isFinancial")
         if (!isFinancial) return
 
         // 1. Trigger the Dynamic Island capsule IMMEDIATELY in native Kotlin!
         val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
         val amount = parsed?.first ?: ""
         val isExpense = parsed?.second ?: true
-        Log.i("SpendX_Notif", "Financial transaction verified! Showing Dynamic Island: amount=$amount, isExpense=$isExpense, sender=$displaySender")
+        Log.i("SpendX_Notif", "Financial notification accepted: pkg=$pkg, amountPresent=${amount.isNotBlank()}, isExpense=$isExpense")
         DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
 
         // 2. Deliver to Flutter live on UI thread or queue for later
@@ -294,10 +318,10 @@ class BankNotificationListener : NotificationListenerService() {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
                     MainActivity.CHANNEL,
-                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody, pkg))
+                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody, pkg, sourceRecordId))
             }
         } else {
-            SmsStore.queue(this, senderTitle, fullBody)
+            SmsStore.queue(this, senderTitle, fullBody, sourceRecordId)
         }
     }
 }
