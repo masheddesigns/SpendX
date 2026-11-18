@@ -20,6 +20,14 @@ class MainActivity : FlutterActivity() {
         const val ENGINE_ID = "spendx_engine"
         private const val RECEIVE_SMS_REQUEST_CODE = 5001
         @Volatile var isAppInForeground: Boolean = false
+
+        /**
+         * Pure decision logic for whether a synthetic test SMS intent should be processed.
+         * Enforces strict compile-time / build-type isolation: rejected unless [isDebug] is true.
+         */
+        fun shouldAcceptSyntheticSms(action: String?, isDebug: Boolean = BuildConfig.DEBUG): Boolean {
+            return action == "com.mashingdesigns.spend_x.TEST_SMS" && isDebug
+        }
     }
 
     private var pendingIslandCardEvent: Map<String, Any?>? = null
@@ -68,6 +76,10 @@ class MainActivity : FlutterActivity() {
         android.util.Log.i("MainActivity", "handleIslandIntents: action=$action, extras=${intent.extras}")
 
         if (action == "com.mashingdesigns.spend_x.TEST_SMS") {
+            if (!shouldAcceptSyntheticSms(action, BuildConfig.DEBUG)) {
+                android.util.Log.w("MainActivity", "Rejecting TEST_SMS intent: synthetic injection prohibited in release builds.")
+                return
+            }
             val sender = intent.getStringExtra("sender") ?: "VM-HDFCBK"
             val body = intent.getStringExtra("body") ?: ""
             val subId = intent.getIntExtra("subId", 0)
@@ -105,7 +117,12 @@ class MainActivity : FlutterActivity() {
             android.util.Log.i("MainActivity", "Dispatching island card click to Flutter: amount=$amount, isExpense=$isExpense")
 
             if (action == "com.mashingdesigns.spend_x.TEST_ISLAND") {
-                DynamicIslandOverlayService.show(this, "SpendX", if (amount.isNotBlank()) amount else "50.00", isExpense, subtitle)
+                if (BuildConfig.DEBUG) {
+                    DynamicIslandOverlayService.show(this, "SpendX", if (amount.isNotBlank()) amount else "50.00", isExpense, subtitle)
+                } else {
+                    android.util.Log.w("MainActivity", "Rejecting TEST_ISLAND intent in release builds.")
+                    return
+                }
             }
 
             val payload = mapOf(
