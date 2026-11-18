@@ -29,7 +29,8 @@ class SmsReceiver : BroadcastReceiver() {
             ?: messages.first().originatingAddress
             ?: ""
 
-        val fullBody = bodies.joinToString("\n")
+        // Reassemble multipart SMS segments into a contiguous message body
+        val fullBody = bodies.joinToString("")
 
         // Strictly drop non-financial SMS (OTPs, promo, personal chats, etc.)
         if (!FinancialSmsFilter.isFinancial(sender, fullBody)) {
