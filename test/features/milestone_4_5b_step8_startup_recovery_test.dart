@@ -584,7 +584,7 @@ void main() {
       expect(db.isOpen, isTrue);
 
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, 24);
+      expect(verRows.first.values.first, 26);
 
       // Corrupt live DB was safely rolled back before any query ran
       final rows = await db.query(

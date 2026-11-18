@@ -23,6 +23,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingIslandCardEvent: Map<String, Any?>? = null
+    private var pendingSmsEvent: List<String>? = null
 
     override fun onResume() {
         super.onResume()
@@ -65,6 +66,30 @@ class MainActivity : FlutterActivity() {
         if (intent == null) return
         val action = intent.action
         android.util.Log.i("MainActivity", "handleIslandIntents: action=$action, extras=${intent.extras}")
+
+        if (action == "com.mashingdesigns.spend_x.TEST_SMS") {
+            val sender = intent.getStringExtra("sender") ?: "VM-HDFCBK"
+            val body = intent.getStringExtra("body") ?: ""
+            val subId = intent.getIntExtra("subId", 0)
+            val timestamp = intent.getLongExtra("timestamp", System.currentTimeMillis())
+            val sourceRecordId = intent.getStringExtra("sourceRecordId")
+                ?: TelephonyIdentityGenerator.generateSourceId(subId, timestamp, sender, body)
+
+            android.util.Log.i("MainActivity", "TEST_SMS received: sender=$sender, body=$body, sourceRecordId=$sourceRecordId")
+
+            val payload = listOf(sender, body, subId.toString(), sourceRecordId)
+            val engine = flutterEngine ?: FlutterEngineCache.getInstance().get(ENGINE_ID)
+            if (engine != null && body.isNotBlank()) {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onSmsReceived", payload)
+                }, 300)
+            } else if (body.isNotBlank()) {
+                pendingSmsEvent = payload
+                SmsStore.queue(this, sender, body, sourceRecordId)
+            }
+            return
+        }
+
         if (action == "com.mashingdesigns.spend_x.ACTION_SHOW_TRANSACTION_ISLAND" ||
             action == "com.mashingdesigns.spend_x.TEST_ISLAND" ||
             intent.hasExtra("displayAmount") || intent.hasExtra("islandAmount") || intent.hasExtra("amount")) {
@@ -124,6 +149,13 @@ class MainActivity : FlutterActivity() {
                 MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onIslandCardClicked", payload)
             }, 600)
             pendingIslandCardEvent = null
+        }
+
+        pendingSmsEvent?.let { payload ->
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onSmsReceived", payload)
+            }, 600)
+            pendingSmsEvent = null
         }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler {

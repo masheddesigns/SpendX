@@ -520,7 +520,7 @@ class RestoreRecoveryService {
   static final RestoreRecoveryService instance = RestoreRecoveryService._();
 
   /// Validates an on-disk candidate database file directly on an isolated connection.
-  /// Checks SQLite integrity, foreign keys, user_version == 24, and canonical tables.
+  /// Checks SQLite integrity, foreign keys, user_version (24..26), and canonical tables.
   ///
   /// CRITICAL SAFETY GUARANTEE:
   /// Uses [SpendXDatabaseKeyManager.getKey] which NEVER creates or replaces keys.
@@ -594,10 +594,10 @@ class RestoreRecoveryService {
           }
         }
 
-        // 3. Version == 24
+        // 3. Version (supported schema generations: 24, 25, 26)
         final verRows = await candidateDb.rawQuery('PRAGMA user_version;');
         final ver = (verRows.first.values.first as num?)?.toInt() ?? 0;
-        if (ver != 24) {
+        if (ver != 24 && ver != 25 && ver != 26) {
           return false;
         }
 
