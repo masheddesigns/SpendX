@@ -388,7 +388,9 @@ class _NotificationSettingsScreenState
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Auto-track transactions & balances from GPay, PhonePe, Paytm, and bank apps',
+                'Transaction alerts only, from an explicit list of banking, UPI, card and '
+                'finance apps. Email and messaging apps (including Gmail and WhatsApp) are '
+                'never read. Processed on-device.',
                 style: TextStyle(fontSize: 12),
               ),
               value: _notifListenerEnabled,

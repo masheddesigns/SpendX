@@ -25,8 +25,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Your data stays yours.',
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -61,6 +62,19 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'is not visible in your regular Drive files.',
             ),
             const _PolicySection(
+              title: 'Android System Backup',
+              content:
+                  'SpendX disables Android Auto Backup and device-to-device transfer for app '
+                  'data. The SQLCipher database is encrypted with a key held in the device '
+                  'Keystore, and Android does not transfer Keystore keys. An OS-level restore '
+                  'would therefore leave the database unreadable. If the original Keystore key '
+                  'is unavailable, SpendX refuses to generate a replacement key and will not '
+                  'open the database. Use SpendX\'s own password-protected .spendx backup '
+                  'instead; it is independent of Android system backup. On a different device, '
+                  'the archive still requires the original database key; the archive password '
+                  'does not replace it.',
+            ),
+            const _PolicySection(
               title: 'SMS & Smart Import',
               content:
                   'SpendX can import transactions from files you choose (CSV, JSON, Markdown, '
@@ -69,6 +83,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'using local pattern matching — no message content is transmitted to any '
                   'server. Detected transactions go to the Review Queue for your approval '
                   'before being saved.',
+            ),
+            const _PolicySection(
+              title: 'Bank App Notifications (Optional)',
+              content:
+                  'If you grant Android Notification Access, SpendX reads transaction alerts '
+                  'only from an explicit allowlist of banking, UPI, card, and financial apps. '
+                  'Email clients and general messaging apps — including Gmail and WhatsApp — '
+                  'are not monitored. Notification text is processed on-device, is never '
+                  'uploaded, and is not written to logs. Only messages that pass the local '
+                  'financial filter are retained. You can revoke access at any time in Android '
+                  'Settings or by turning off Bank App Notifications in SpendX.',
             ),
             const _PolicySection(
               title: 'Share-to-Import',
@@ -125,7 +150,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Center(
               child: Text(
-                'Last updated: April 4, 2026',
+                'Last updated: November 17, 2026',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),

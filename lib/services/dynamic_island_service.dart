@@ -28,6 +28,9 @@ class DynamicIslandService {
   final _controller = StreamController<DynamicIslandEvent>.broadcast();
   Stream<DynamicIslandEvent> get events => _controller.stream;
 
+  final _cardClickController = StreamController<DynamicIslandEvent>.broadcast();
+  Stream<DynamicIslandEvent> get cardClicks => _cardClickController.stream;
+
   void _initNativeBridge() {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onDynamicIslandEvent') {
@@ -41,6 +44,18 @@ class DynamicIslandService {
             timestamp: DateTime.now(),
           );
           _controller.add(event);
+        }
+      } else if (call.method == 'onIslandCardClicked') {
+        final args = call.arguments as Map<dynamic, dynamic>?;
+        if (args != null) {
+          final event = DynamicIslandEvent(
+            amount: args['amount']?.toString() ?? '',
+            isExpense: (args['isExpense'] as bool?) ?? true,
+            title: args['title']?.toString() ?? 'SpendX',
+            subtitle: args['subtitle']?.toString() ?? '',
+            timestamp: DateTime.now(),
+          );
+          _cardClickController.add(event);
         }
       }
     });

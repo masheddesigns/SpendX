@@ -17,6 +17,8 @@ import 'data/core/tracked_database_task_queue.dart';
 import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
 import 'core/config/app_env.dart';
+import 'shared/widgets/dynamic_island_hud.dart';
+import 'services/dynamic_island_service.dart';
 
 Future<void>? appInitFuture;
 
@@ -55,6 +57,7 @@ void main() {
       // show/showInstant work even before the first scheduled notification.
       try {
         await NotificationServiceV2().init();
+        DynamicIslandService.instance;
       } catch (e, st) {
         AppLogger.e('NotificationService init failed', e, st);
       }
@@ -113,12 +116,10 @@ Future<void> _deferredInitialization() async {
     AppLogger.e('ReminderService init failed', e, st);
   }
 
-  // Run database ledger balance repairs unconditionally
-  try {
-    await LiveSmsService.instance.runRepairsNow();
-  } catch (e, st) {
-    AppLogger.e('runRepairsNow failed', e, st);
-  }
+  // Legacy repair routines are intentionally NOT executed here. The inventory
+  // and containment policy live in `lib/services/legacy_repair_registry.dart`;
+  // `LiveSmsService.runLegacyRepairsForQualification()` is the only entry
+  // point and is disabled in release builds.
 
   // Live SMS detection — listen for incoming bank SMS and drain anything
   // captured while the app was closed.
@@ -168,6 +169,7 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: settings.themeMode,
+      builder: (context, child) => DynamicIslandHUD(child: child ?? const SizedBox.shrink()),
       home: const SplashScreen(),
     );
   }

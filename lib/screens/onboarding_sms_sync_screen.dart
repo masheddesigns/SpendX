@@ -26,7 +26,13 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
   int _currentStepIndex = 0;
   int _messagesScanned = 0;
   int _transactionsFound = 0;
+  int _balancesApplied = 0;
+  int _quarantined = 0;
+  int _rejected = 0;
   bool _isFinished = false;
+  bool _isRunning = false;
+  bool _isError = false;
+  String? _errorMessage;
 
   final List<String> _steps = const [
     'Scanning SMS inbox for bank & card activity...',
@@ -67,14 +73,29 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
   }
 
   Future<void> _startSyncProcess() async {
+    if (_isRunning) return;
+    _isRunning = true;
+
     // Step 0: Permission & initial scan
-    setState(() => _currentStepIndex = 0);
+    setState(() {
+      _currentStepIndex = 0;
+      _isError = false;
+      _isFinished = false;
+      _errorMessage = null;
+      _messagesScanned = 0;
+      _transactionsFound = 0;
+      _balancesApplied = 0;
+      _quarantined = 0;
+      _rejected = 0;
+    });
     HapticService.instance.tap();
 
     try {
       final permitted = await SmsImportService.instance.requestPermission();
       if (!permitted) {
-        _finishAndNavigate();
+        // The user explicitly declined SMS access; continuing onboarding is
+        // intentional, but this is not a "successful sync".
+        await _finishAndNavigate();
         return;
       }
 
@@ -82,21 +103,34 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
 
       // Step 1: Drain pending messages
       if (mounted) {
-        setState(() {
-          _currentStepIndex = 1;
-          _messagesScanned = 85;
-        });
+        setState(() => _currentStepIndex = 1);
       }
       HapticService.instance.tap();
 
-      await LiveSmsService.instance.drainPending();
+      final result = await LiveSmsService.instance.drainPending();
 
       if (mounted) {
         setState(() {
-          _currentStepIndex = 2;
-          _messagesScanned = 190;
-          _transactionsFound = 24;
+          _messagesScanned = result.messagesScanned;
+          _transactionsFound = result.transactionsIngested;
+          _balancesApplied = result.balancesApplied;
+          _quarantined = result.quarantined;
+          _rejected = result.rejected;
         });
+      }
+
+      if (!result.completed) {
+        _fail(
+          result.error ??
+              (result.hasTransientFailure
+                  ? 'Some messages could not be processed yet.'
+                  : 'The SMS import did not finish.'),
+        );
+        return;
+      }
+
+      if (mounted) {
+        setState(() => _currentStepIndex = 2);
       }
       HapticService.instance.tap();
 
@@ -104,10 +138,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
       await EntityConsolidationService.instance.consolidate();
 
       if (mounted) {
-        setState(() {
-          _currentStepIndex = 3;
-          _transactionsFound = 38;
-        });
+        setState(() => _currentStepIndex = 3);
       }
       HapticService.instance.tap();
 
@@ -123,10 +154,21 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
       HapticService.instance.success();
 
       await Future.delayed(const Duration(milliseconds: 900));
-      _finishAndNavigate();
-    } catch (_) {
-      _finishAndNavigate();
+      await _finishAndNavigate();
+    } catch (e) {
+      _fail('Setup could not finish: $e');
+    } finally {
+      _isRunning = false;
     }
+  }
+
+  void _fail(String message) {
+    if (!mounted) return;
+    setState(() {
+      _isError = true;
+      _errorMessage = message;
+    });
+    HapticService.instance.critical();
   }
 
   Future<void> _finishAndNavigate() async {
@@ -173,7 +215,9 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
 
               // Title and Subtitle
               Text(
-                _isFinished ? 'Financial Vault Initialized' : 'Calibrating SpendX',
+                _isFinished
+                    ? 'Financial Vault Initialized'
+                    : (_isError ? 'Import Needs Attention' : 'Calibrating SpendX'),
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -186,7 +230,9 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
               Text(
                 _isFinished
                     ? 'All bank accounts, cards, and balances are ready.'
-                    : 'Analyzing transaction SMS to set up your accounts and safe-to-spend.',
+                    : (_isError
+                        ? 'Your existing data is safe. Retry to finish scanning, or skip and import later from settings.'
+                        : 'Analyzing transaction SMS to set up your accounts and safe-to-spend.'),
                 style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.white70 : const Color(0xFF64748B),
@@ -198,17 +244,18 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
               const SizedBox(height: 28),
 
               // Live Stat Pills
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 10,
                 children: [
                   _buildStatCard(
                     icon: Icons.mark_email_read_rounded,
-                    label: 'Messages Analyzed',
+                    label: 'Scanned',
                     value: _messagesScanned,
                     color: const Color(0xFF38BDF8),
                     isDark: isDark,
                   ),
-                  const SizedBox(width: 16),
                   _buildStatCard(
                     icon: Icons.receipt_long_rounded,
                     label: 'Transactions',
@@ -216,8 +263,77 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                     color: const Color(0xFF10B981),
                     isDark: isDark,
                   ),
+                  _buildStatCard(
+                    icon: Icons.account_balance_wallet_rounded,
+                    label: 'Balances',
+                    value: _balancesApplied,
+                    color: const Color(0xFF6366F1),
+                    isDark: isDark,
+                  ),
+                  _buildStatCard(
+                    icon: Icons.report_gmailerrorred_rounded,
+                    label: 'Quarantined',
+                    value: _quarantined,
+                    color: const Color(0xFFF59E0B),
+                    isDark: isDark,
+                  ),
+                  _buildStatCard(
+                    icon: Icons.filter_alt_off_rounded,
+                    label: 'Rejected',
+                    value: _rejected,
+                    color: const Color(0xFF94A3B8),
+                    isDark: isDark,
+                  ),
                 ],
               ),
+
+              if (_isError) ...[
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Import incomplete',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? const Color(0xFFFCA5A5)
+                              : const Color(0xFFB91C1C),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _errorMessage ?? 'Some messages could not be processed.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: isDark ? Colors.white70 : const Color(0xFF475569),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _isRunning ? null : _startSyncProcess,
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text('Retry import'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 28),
 

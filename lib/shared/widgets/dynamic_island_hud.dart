@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../services/dynamic_island_service.dart';
-import '../../services/notification_service_v2.dart';
+import 'island_transaction_card.dart';
 
 class DynamicIslandHUD extends StatefulWidget {
   final Widget child;
@@ -20,6 +20,7 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
   late final Animation<double> _fadeAnimation;
 
   StreamSubscription<DynamicIslandEvent>? _subscription;
+  StreamSubscription<DynamicIslandEvent>? _cardClickSubscription;
   DynamicIslandEvent? _currentEvent;
   Timer? _dismissTimer;
 
@@ -45,6 +46,11 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
     );
 
     _subscription = DynamicIslandService.instance.events.listen(_onEvent);
+    _cardClickSubscription = DynamicIslandService.instance.cardClicks.listen((event) {
+      if (mounted) {
+        IslandTransactionCard.show(context, event);
+      }
+    });
   }
 
   void _onEvent(DynamicIslandEvent event) {
@@ -72,6 +78,7 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
   void dispose() {
     _dismissTimer?.cancel();
     _subscription?.cancel();
+    _cardClickSubscription?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -110,8 +117,17 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                   child: GestureDetector(
                     onTap: () {
                       _dismissTimer?.cancel();
-                      _controller.reverse();
-                      NotificationServiceV2().handleNotificationNavigation('activity', '');
+                      final event = _currentEvent;
+                      _controller.reverse().then((_) {
+                        if (mounted) {
+                          setState(() {
+                            _currentEvent = null;
+                          });
+                        }
+                      });
+                      if (event != null) {
+                        IslandTransactionCard.show(context, event);
+                      }
                     },
                     onVerticalDragEnd: (details) {
                       if (details.primaryVelocity != null && details.primaryVelocity! < 0) {
