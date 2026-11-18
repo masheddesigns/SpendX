@@ -16,38 +16,105 @@ import io.flutter.plugin.common.MethodChannel
 /// later processing and, when the Flutter engine is alive, pushes them live to Dart.
 /// Non-financial SMS (OTPs, personal chats, marketing, service alerts) are dropped.
 class SmsReceiver : BroadcastReceiver() {
+
+    data class RawSmsSegment(
+        val originatingAddress: String?,
+        val body: String?,
+        val timestampMillis: Long,
+    )
+
+    data class ReassembledBroadcastSms(
+        val sender: String,
+        val fullBody: String,
+        val timestampMillis: Long,
+        val subId: Int,
+        val sourceRecordId: String,
+    )
+
+    companion object {
+        /**
+         * Pure reassembly and validation logic for raw SMS segments delivered in SMS_RECEIVED_ACTION.
+         * Validates sender consistency, timestamp alignment, multipart concatenation, financial filtering,
+         * and deterministic identity generation.
+         *
+         * Returns null if:
+         * - Segments list is empty or contains no readable bodies.
+         * - Segments have conflicting originating addresses (sender mismatch).
+         * - Segment timestamps diverge by more than 60,000ms.
+         * - Reassembled body is non-financial (OTP, promo, telecom, etc.).
+         */
+        fun validateAndReassemble(
+            segments: List<RawSmsSegment>,
+            subId: Int,
+        ): ReassembledBroadcastSms? {
+            if (segments.isEmpty()) return null
+
+            // 1. Validate sender consistency across all segments
+            val senders = segments.mapNotNull { it.originatingAddress?.trim() }.filter { it.isNotEmpty() }
+            if (senders.isEmpty()) return null
+            val primarySender = senders.first()
+            if (senders.any { !it.equals(primarySender, ignoreCase = true) }) {
+                // Inconsistent senders across segments: reject malformed broadcast
+                return null
+            }
+
+            // 2. Validate timestamp consistency (all segments within 60s window)
+            val timestamps = segments.map { it.timestampMillis }
+            val minTs = timestamps.minOrNull() ?: 0L
+            val maxTs = timestamps.maxOrNull() ?: 0L
+            if (maxTs - minTs > 60_000L) {
+                // Inconsistent timestamps across segments: reject malformed broadcast
+                return null
+            }
+
+            // 3. Reassemble bodies in order
+            val validBodies = segments
+                .mapNotNull { it.body }
+                .filter { it.isNotBlank() }
+            if (validBodies.isEmpty()) return null
+
+            val fullBody = validBodies.joinToString("")
+
+            // 4. Financial classification gate
+            if (!FinancialSmsFilter.isFinancial(primarySender, fullBody)) {
+                return null
+            }
+
+            // 5. Deterministic identity generation
+            val sourceRecordId = TelephonyIdentityGenerator.generateSourceId(
+                subId = subId,
+                timestampMillis = timestamps.first(),
+                sender = primarySender,
+                body = fullBody,
+            )
+
+            return ReassembledBroadcastSms(
+                sender = primarySender,
+                fullBody = fullBody,
+                timestampMillis = timestamps.first(),
+                subId = subId,
+                sourceRecordId = sourceRecordId,
+            )
+        }
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
-        val bodies = messages
-            .mapNotNull { it.displayMessageBody ?: it.messageBody }
-            .filter { it.isNotBlank() }
-        if (bodies.isEmpty()) return
-
-        // Extract sender from the first message segment.
-        val sender = messages.first().displayOriginatingAddress
-            ?: messages.first().originatingAddress
-            ?: ""
-
-        // Reassemble multipart SMS segments into a contiguous message body
-        val fullBody = bodies.joinToString("")
-
-        // Strictly drop non-financial SMS (OTPs, promo, personal chats, etc.)
-        if (!FinancialSmsFilter.isFinancial(sender, fullBody)) {
-            return
+        val segments = messages.map {
+            RawSmsSegment(
+                originatingAddress = it.displayOriginatingAddress ?: it.originatingAddress,
+                body = it.displayMessageBody ?: it.messageBody,
+                timestampMillis = it.timestampMillis,
+            )
         }
 
         val subId = intent.getIntExtra(
             "android.telephony.extra.SUBSCRIPTION_INDEX",
             intent.getIntExtra("subscription", intent.getIntExtra("subscription_id", -1))
         )
-        val timestampMillis = messages.first().timestampMillis
-        val sourceRecordId = TelephonyIdentityGenerator.generateSourceId(
-            subId = subId,
-            timestampMillis = timestampMillis,
-            sender = sender,
-            body = fullBody,
-        )
+
+        val reassembled = validateAndReassemble(segments, subId) ?: return
 
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
@@ -56,16 +123,19 @@ class SmsReceiver : BroadcastReceiver() {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
                     MainActivity.CHANNEL,
-                ).invokeMethod("onSmsReceived", listOf(sender, fullBody, subId.toString(), sourceRecordId))
+                ).invokeMethod(
+                    "onSmsReceived",
+                    listOf(reassembled.sender, reassembled.fullBody, reassembled.subId.toString(), reassembled.sourceRecordId)
+                )
             }
         } else {
             // App is killed / engine not cached: queue and notify user via Dynamic Island
-            SmsStore.queue(context, sender, fullBody, sourceRecordId)
-            val parsed = FinancialSmsFilter.extractAmountAndDirection(fullBody)
+            SmsStore.queue(context, reassembled.sender, reassembled.fullBody, reassembled.sourceRecordId)
+            val parsed = FinancialSmsFilter.extractAmountAndDirection(reassembled.fullBody)
             if (parsed != null) {
-                DynamicIslandOverlayService.show(context, "SpendX", parsed.first, parsed.second, sender)
+                DynamicIslandOverlayService.show(context, "SpendX", parsed.first, parsed.second, reassembled.sender)
             } else {
-                DynamicIslandOverlayService.show(context, "SpendX", fullBody.take(24), true, sender)
+                DynamicIslandOverlayService.show(context, "SpendX", reassembled.fullBody.take(24), true, reassembled.sender)
             }
         }
     }
