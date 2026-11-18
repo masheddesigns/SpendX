@@ -309,11 +309,11 @@ class BankNotificationListener : NotificationListenerService() {
         val amount = parsed?.first ?: ""
         val isExpense = parsed?.second ?: true
         Log.i("SpendX_Notif", "Financial notification accepted: pkg=$pkg, amountPresent=${amount.isNotBlank()}, isExpense=$isExpense")
-        DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
 
-        // 2. Deliver to Flutter live on UI thread or queue for later
+        // 2. Deliver to Flutter live on UI thread or queue durably before showing notification
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
+            DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
@@ -321,7 +321,12 @@ class BankNotificationListener : NotificationListenerService() {
                 ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody, pkg, sourceRecordId))
             }
         } else {
-            SmsStore.queue(this, senderTitle, fullBody, sourceRecordId)
+            val queued = SmsStore.queue(this, senderTitle, fullBody, sourceRecordId)
+            if (!queued) {
+                Log.e("SpendX_Notif", "CRITICAL: Failed to durably queue notification [$sourceRecordId]. Suppressing overlay.")
+                return
+            }
+            DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
         }
     }
 }

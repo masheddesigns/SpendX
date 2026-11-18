@@ -96,8 +96,12 @@ class MainActivity : FlutterActivity() {
                     MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onSmsReceived", payload)
                 }, 300)
             } else if (body.isNotBlank()) {
-                pendingSmsEvent = payload
-                SmsStore.queue(this, sender, body, sourceRecordId)
+                val queued = SmsStore.queue(this, sender, body, sourceRecordId)
+                if (queued) {
+                    pendingSmsEvent = payload
+                } else {
+                    android.util.Log.e("MainActivity", "CRITICAL: Failed to durably queue synthetic SMS: $sourceRecordId")
+                }
             }
             return
         }
@@ -516,7 +520,12 @@ object SmsStore {
         }
 
         val updatedEntries = existingEntries + entry
-        return prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
+        var committed = prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
+        if (!committed) {
+            // Retry once synchronously to recover from transient I/O or locking conditions
+            committed = prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
+        }
+        return committed
     }
 
     @Synchronized
@@ -554,7 +563,10 @@ object SmsStore {
 
         // If any legacy entries were assigned unique IDs, persist them atomically so they are stable
         if (hasLegacy) {
-            prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
+            val success = prefs.edit().putString(KEY, updatedEntries.joinToString(ENTRY_SEP)).commit()
+            if (!success) {
+                android.util.Log.w("SmsStore", "Failed to persist upgraded legacy queue entries to disk.")
+            }
         }
 
         return resultList

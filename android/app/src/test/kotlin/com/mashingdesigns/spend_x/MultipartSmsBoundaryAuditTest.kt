@@ -76,10 +76,11 @@ class MultipartSmsBoundaryAuditTest {
         assertEquals(seg1.body + seg2.body + seg3.body, reassembled.fullBody)
     }
 
-    // ─── 4. Reordered segments ────────────────────────────────────────────────
+    // ─── 4. Segment array order preservation (no sequence reordering) ────────
     @Test
-    fun test04_ReorderedSegments() {
-        // If segments arrive reordered (e.g. seg2 before seg1)
+    fun test04_PreservesArrayOrderWithoutReordering() {
+        // Documents that validateAndReassemble strictly preserves array order and does NOT
+        // reorder or inspect sequence numbers. Inverting input segments inverts the concatenated body.
         val seg1 = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Part 1: Rs 500 debited from A/c 1234 ", 1731950000000L)
         val seg2 = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Part 2: towards Swiggy. Avl Bal Rs 5,000.", 1731950000000L)
 
@@ -88,13 +89,15 @@ class MultipartSmsBoundaryAuditTest {
 
         assertNotNull(natural)
         assertNotNull(inverted)
-        assertNotEquals("Different segment orders produce distinct body content", natural!!.fullBody, inverted!!.fullBody)
+        assertEquals("Natural order concatenates seg1 followed by seg2", seg1.body + seg2.body, natural!!.fullBody)
+        assertEquals("Inverted order concatenates seg2 followed by seg1 without reordering", seg2.body + seg1.body, inverted!!.fullBody)
+        assertNotEquals("Different segment orders produce distinct body content", natural.fullBody, inverted.fullBody)
         assertNotEquals("Different reassembled bodies yield distinct source identities", natural.sourceRecordId, inverted.sourceRecordId)
     }
 
-    // ─── 5. Missing segment (incomplete text) ──────────────────────────────────
+    // ─── 5. Missing segment (dropped if lacking financial tokens) ──────────────
     @Test
-    fun test05_MissingSegment() {
+    fun test05_IncompleteSegmentDroppedIfLackingFinancialTokens() {
         // Only the second segment of a split message arrives; lacking financial amount
         val segMissingAmount = SmsReceiver.RawSmsSegment(
             originatingAddress = "VM-HDFCBK",
@@ -106,16 +109,16 @@ class MultipartSmsBoundaryAuditTest {
         assertNull("Incomplete segment lacking financial amount must be dropped", reassembled)
     }
 
-    // ─── 6. Duplicate segment ─────────────────────────────────────────────────
+    // ─── 6. Duplicate segment in array (concatenated verbatim) ────────────────
     @Test
-    fun test06_DuplicateSegment() {
+    fun test06_RepeatedSegmentConcatenatedVerbatimWithoutIntraArrayDedup() {
         val seg1 = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Rs 500 debited from A/c 1234. ", 1731950000000L)
         val segDup = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Rs 500 debited from A/c 1234. ", 1731950000000L)
 
         val reassembled = SmsReceiver.validateAndReassemble(listOf(seg1, segDup), subId = 0)
         assertNotNull(reassembled)
-        // Both segments concatenated: "Rs 500 debited from A/c 1234. Rs 500 debited from A/c 1234. "
-        assertTrue(reassembled!!.fullBody.contains("Rs 500 debited"))
+        // Both segments concatenated verbatim without internal array deduplication
+        assertEquals(seg1.body + segDup.body, reassembled!!.fullBody)
     }
 
     // ─── 7. Malformed PDU / completely empty bodies ────────────────────────────
@@ -262,8 +265,120 @@ class MultipartSmsBoundaryAuditTest {
         assertTrue("Queue must be empty after complete drain acknowledgment", SmsStore.all(freshContext).isEmpty())
     }
 
+    // ─── 16. Repeated segment behavior (no in-array deduplication) ─────────────
+    @Test
+    fun test16_RepeatedSegmentNotDeduplicatedInArray() {
+        val seg = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Rs 500 debited from A/c 1234. ", 1731950000000L)
+        val reassembled = SmsReceiver.validateAndReassemble(listOf(seg, seg), subId = 0)
+        assertNotNull("Array with repeated segment is accepted", reassembled)
+        assertEquals(
+            "Array concatenation preserves repetitions verbatim without internal deduplication",
+            seg.body + seg.body,
+            reassembled!!.fullBody
+        )
+    }
+
+    // ─── 17. Absent or invalid subscription ID (-1) ───────────────────────────
+    @Test
+    fun test17_AbsentSubscriptionIdProducesFallbackSourceId() {
+        val seg = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Rs 500 debited from A/c 1234", 1731950000000L)
+        val reassembled = SmsReceiver.validateAndReassemble(listOf(seg), subId = -1)
+        assertNotNull(reassembled)
+        assertEquals(-1, reassembled!!.subId)
+        assertTrue(
+            "Fallback subId -1 produces UNKNOWN subToken in deterministic sourceRecordId",
+            reassembled.sourceRecordId.startsWith("SRC:TELEPHONY_BROADCAST:UNKNOWN:1731950000000:")
+        )
+    }
+
+    // ─── 18. Invalid timestamps (0 or negative) ───────────────────────────────
+    @Test
+    fun test18_InvalidTimestampHandledDeterministically() {
+        val segZeroTs = SmsReceiver.RawSmsSegment("VM-HDFCBK", "Rs 500 debited from A/c 1234", 0L)
+        val reassembled = SmsReceiver.validateAndReassemble(listOf(segZeroTs), subId = 0)
+        assertNotNull("Zero timestamp segment is processed with ts=0", reassembled)
+        assertEquals(0L, reassembled!!.timestampMillis)
+        assertTrue(reassembled.sourceRecordId.startsWith("SRC:TELEPHONY_BROADCAST:0:0:"))
+    }
+
+    // ─── 19. Empty and malformed PDU arrays ───────────────────────────────────
+    @Test
+    fun test19_EmptyAndMalformedPduArraysRejected() {
+        assertNull("Empty segment array must return null", SmsReceiver.validateAndReassemble(emptyList(), subId = 0))
+
+        val allNullBodies = listOf(
+            SmsReceiver.RawSmsSegment("VM-HDFCBK", null, 1731950000000L),
+            SmsReceiver.RawSmsSegment("VM-HDFCBK", null, 1731950000000L)
+        )
+        assertNull("Array of segments with only null bodies must return null", SmsReceiver.validateAndReassemble(allNullBodies, subId = 0))
+
+        val allWhitespaceBodies = listOf(
+            SmsReceiver.RawSmsSegment("VM-HDFCBK", "   ", 1731950000000L),
+            SmsReceiver.RawSmsSegment("VM-HDFCBK", "\n\t ", 1731950000000L)
+        )
+        assertNull("Array of segments with only whitespace bodies must return null", SmsReceiver.validateAndReassemble(allWhitespaceBodies, subId = 0))
+    }
+
+    // ─── 20. Truncated message where part 1 looks financial ────────────────────
+    @Test
+    fun test20_PartialFinancialLookingContentCannotBeDetectedAsIncomplete() {
+        // Part 1 contains sufficient financial keywords on its own
+        val part1 = SmsReceiver.RawSmsSegment(
+            originatingAddress = "VM-HDFCBK",
+            body = "Rs 5,000.00 debited from A/c 1234 on 18-Nov-26 towards ",
+            timestampMillis = 1731950000000L
+        )
+        // Part 2 ("AMAZON. Avl Bal Rs 20,000. Ref 9999.") is missing entirely
+
+        val reassembled = SmsReceiver.validateAndReassemble(listOf(part1), subId = 0)
+        // Limitation: SmsMessage exposes no total parts or isComplete() signal,
+        // so validateAndReassemble accepts part1 as a complete message.
+        assertNotNull("Limitation: Part 1 alone satisfies financial filter and is accepted as complete", reassembled)
+        assertEquals(part1.body, reassembled!!.fullBody)
+    }
+
+    // ─── 21. Queue write failure (commit returns false) ────────────────────────
+    @Test
+    fun test21_QueueWriteFailureWhenCommitReturnsFalse() {
+        val failingStorage = ConcurrentHashMap<String, Any>()
+        val failingPrefs = InMemorySharedPreferences(failingStorage, commitResult = false)
+        val failingContext = object : ContextWrapper(null) {
+            override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences = failingPrefs
+        }
+
+        val success = SmsStore.queue(failingContext, "VM-HDFCBK", "Rs 500 debited", "SRC:FAIL:1")
+        assertFalse("SmsStore.queue must return false when commit() returns false", success)
+        val all = SmsStore.all(failingContext)
+        assertTrue("Storage must remain empty when commit() fails", all.isEmpty())
+    }
+
+    // ─── 22. Queue commit retry recovers from transient failure ──────────────
+    @Test
+    fun test22_QueueCommitRetryRecoversFromTransientFailure() {
+        val storage = ConcurrentHashMap<String, Any>()
+        var commitAttempts = 0
+        val retryPrefs = InMemorySharedPreferences(storage, onCommit = {
+            commitAttempts++
+            commitAttempts > 1 // attempt 1 returns false, attempt 2 returns true
+        })
+        val retryContext = object : ContextWrapper(null) {
+            override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences = retryPrefs
+        }
+
+        val success = SmsStore.queue(retryContext, "VM-HDFCBK", "Rs 500 debited", "SRC:RETRY:1")
+        assertTrue("SmsStore.queue must succeed via synchronous retry after transient failure", success)
+        assertEquals("commit() must have been called twice (initial + retry)", 2, commitAttempts)
+        val all = SmsStore.all(retryContext)
+        assertEquals(1, all.size)
+        assertEquals("SRC:RETRY:1", all[0]["sourceRecordId"])
+    }
+
     // ─── In-Memory Storage Helper ─────────────────────────────────────────────
-    private class InMemorySharedPreferences(private val storage: ConcurrentHashMap<String, Any>) : SharedPreferences {
+    private class InMemorySharedPreferences(
+        private val storage: ConcurrentHashMap<String, Any>,
+        private val commitResult: Boolean = true,
+        private val onCommit: (() -> Boolean)? = null,
+    ) : SharedPreferences {
         override fun getAll(): Map<String, *> = storage
         override fun getString(key: String?, defValue: String?): String? = storage[key] as? String ?: defValue
         override fun getStringSet(key: String?, defValues: Set<String>?): Set<String>? =
@@ -273,11 +388,15 @@ class MultipartSmsBoundaryAuditTest {
         override fun getFloat(key: String?, defValue: Float): Float = storage[key] as? Float ?: defValue
         override fun getBoolean(key: String?, defValue: Boolean): Boolean = storage[key] as? Boolean ?: defValue
         override fun contains(key: String?): Boolean = storage.containsKey(key)
-        override fun edit(): SharedPreferences.Editor = InMemoryEditor(storage)
+        override fun edit(): SharedPreferences.Editor = InMemoryEditor(storage, commitResult, onCommit)
         override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
         override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
 
-        private class InMemoryEditor(private val storage: ConcurrentHashMap<String, Any>) : SharedPreferences.Editor {
+        private class InMemoryEditor(
+            private val storage: ConcurrentHashMap<String, Any>,
+            private val commitResult: Boolean = true,
+            private val onCommit: (() -> Boolean)? = null,
+        ) : SharedPreferences.Editor {
             private val pending = mutableMapOf<String, Any?>()
             private var clearRequested = false
 
@@ -314,6 +433,12 @@ class MultipartSmsBoundaryAuditTest {
                 return this
             }
             override fun commit(): Boolean {
+                if (onCommit != null) {
+                    val proceed = onCommit.invoke()
+                    if (!proceed) return false
+                } else if (!commitResult) {
+                    return false
+                }
                 synchronized(storage) {
                     if (clearRequested) storage.clear()
                     for ((k, v) in pending) {

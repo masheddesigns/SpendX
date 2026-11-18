@@ -12,9 +12,31 @@ import androidx.core.app.NotificationCompat
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 
-/// Captures incoming SMS. Filters and queues genuine financial messages for
-/// later processing and, when the Flutter engine is alive, pushes them live to Dart.
-/// Non-financial SMS (OTPs, personal chats, marketing, service alerts) are dropped.
+/**
+ * Captures incoming SMS via SMS_RECEIVED_ACTION.
+ *
+ * Multipart SMS Completeness Policy:
+ * -----------------------------------
+ * SpendX relies on the Android OS Telephony framework (`InboundSmsHandler`) to stage, validate
+ * User Data Headers (UDH), and reassemble multipart 3GPP/3GPP2 SMS PDUs before dispatching
+ * the `SMS_RECEIVED_ACTION` broadcast.
+ *
+ * The public Android SDK `SmsMessage` API intentionally hides internal UDH headers (`@hide SmsHeader`)
+ * and does not expose segment sequence numbers, total part counts, or an `isComplete()` method.
+ * Consequently, SpendX cannot independently reconstruct sequence ordering or determine whether
+ * a delivered segment array is a partial fragment of a larger message if that fragment independently
+ * matches financial token filters.
+ *
+ * Framework reliance:
+ * 1. SpendX assumes the array of `SmsMessage` objects passed in the Intent extras is complete and
+ *    already ordered by sequence number by `InboundSmsHandler`.
+ * 2. SpendX enforces defense-in-depth receiver boundary validation:
+ *    - Rejects broadcasts with conflicting originating addresses across segments.
+ *    - Rejects broadcasts where segment timestamps diverge by more than 60,000 ms.
+ *    - Discards empty or whitespace segments.
+ *    - Evaluates the concatenated text against `FinancialSmsFilter`.
+ *    - Generates a deterministic SHA-256 sourceRecordId to guarantee idempotent processing.
+ */
 class SmsReceiver : BroadcastReceiver() {
 
     data class RawSmsSegment(
@@ -33,15 +55,15 @@ class SmsReceiver : BroadcastReceiver() {
 
     companion object {
         /**
-         * Pure reassembly and validation logic for raw SMS segments delivered in SMS_RECEIVED_ACTION.
-         * Validates sender consistency, timestamp alignment, multipart concatenation, financial filtering,
-         * and deterministic identity generation.
-         *
-         * Returns null if:
-         * - Segments list is empty or contains no readable bodies.
-         * - Segments have conflicting originating addresses (sender mismatch).
-         * - Segment timestamps diverge by more than 60,000ms.
-         * - Reassembled body is non-financial (OTP, promo, telecom, etc.).
+          Pure reassembly and validation logic for raw SMS segments delivered in SMS_RECEIVED_ACTION.
+          Validates sender consistency, timestamp alignment, multipart concatenation, financial filtering,
+          and deterministic identity generation.
+         
+          Returns null if:
+          - Segments list is empty or contains no readable bodies.
+          - Segments have conflicting originating addresses (sender mismatch).
+          - Segment timestamps diverge by more than 60,000ms.
+          - Reassembled body is non-financial (OTP, promo, telecom, etc.).
          */
         fun validateAndReassemble(
             segments: List<RawSmsSegment>,
@@ -67,7 +89,7 @@ class SmsReceiver : BroadcastReceiver() {
                 return null
             }
 
-            // 3. Reassemble bodies in order
+            // 3. Reassemble bodies in order (preserves array order from framework)
             val validBodies = segments
                 .mapNotNull { it.body }
                 .filter { it.isNotBlank() }
@@ -129,8 +151,13 @@ class SmsReceiver : BroadcastReceiver() {
                 )
             }
         } else {
-            // App is killed / engine not cached: queue and notify user via Dynamic Island
-            SmsStore.queue(context, reassembled.sender, reassembled.fullBody, reassembled.sourceRecordId)
+            // App is killed / engine not cached: queue durably before showing overlay
+            val queued = SmsStore.queue(context, reassembled.sender, reassembled.fullBody, reassembled.sourceRecordId)
+            if (!queued) {
+                android.util.Log.e("SmsReceiver", "CRITICAL: Failed to durably queue incoming SMS [${reassembled.sourceRecordId}]. Suppressing notification.")
+                return
+            }
+
             val parsed = FinancialSmsFilter.extractAmountAndDirection(reassembled.fullBody)
             if (parsed != null) {
                 DynamicIslandOverlayService.show(context, "SpendX", parsed.first, parsed.second, reassembled.sender)
