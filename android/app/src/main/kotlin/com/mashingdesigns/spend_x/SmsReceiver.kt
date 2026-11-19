@@ -159,10 +159,8 @@ class SmsReceiver : BroadcastReceiver() {
             }
 
             val parsed = FinancialSmsFilter.extractAmountAndDirection(reassembled.fullBody)
-            if (parsed != null) {
+            if (parsed != null && parsed.first.isNotBlank()) {
                 DynamicIslandOverlayService.show(context, "SpendX", parsed.first, parsed.second, reassembled.sender)
-            } else {
-                DynamicIslandOverlayService.show(context, "SpendX", reassembled.fullBody.take(24), true, reassembled.sender)
             }
         }
     }

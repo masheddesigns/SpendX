@@ -10,16 +10,23 @@ class IslandTransactionCard extends StatelessWidget {
 
   const IslandTransactionCard({super.key, required this.event});
 
-  static Future<void> show(BuildContext? context, DynamicIslandEvent event) {
+  static bool _isShowing = false;
+
+  static Future<void> show(BuildContext? context, DynamicIslandEvent event) async {
     final targetContext = MyApp.navigatorKey.currentContext ?? context;
-    if (targetContext == null) return Future.value();
-    return showModalBottomSheet(
-      context: targetContext,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.65),
-      builder: (ctx) => IslandTransactionCard(event: event),
-    );
+    if (targetContext == null || _isShowing) return;
+    _isShowing = true;
+    try {
+      await showModalBottomSheet(
+        context: targetContext,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.65),
+        builder: (ctx) => IslandTransactionCard(event: event),
+      );
+    } finally {
+      _isShowing = false;
+    }
   }
 
   @override
@@ -61,164 +68,175 @@ class IslandTransactionCard extends StatelessWidget {
             ],
           ),
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Top drag pill
-              Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Glowing Icon Gem
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [accentColor, darkAccent],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: accentColor.withValues(alpha: 0.45),
-                      blurRadius: 24,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  isExpense ? Icons.arrow_outward_rounded : Icons.south_west_rounded,
-                  color: Colors.white,
-                  size: 38,
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Direction Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: accentColor.withValues(alpha: 0.35)),
-                ),
-                child: Text(
-                  isExpense ? 'EXPENSE' : 'INCOME',
-                  style: TextStyle(
-                    color: accentColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Amount
-              Text(
-                displayFormatted,
-                style: TextStyle(
-                  color: lightColor,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(height: 6),
-
-              // Merchant / Subtitle
-              Text(
-                merchant,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFFE5E7EB),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Metadata card container
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildRow(
-                      icon: Icons.access_time_rounded,
-                      label: 'Date & Time',
-                      value: formattedDate,
-                    ),
-                    Divider(color: Colors.white.withValues(alpha: 0.06), height: 20),
-                    _buildRow(
-                      icon: Icons.account_balance_wallet_rounded,
-                      label: 'Logged By',
-                      value: 'SpendX Origin Island',
-                    ),
-                    Divider(color: Colors.white.withValues(alpha: 0.06), height: 20),
-                    _buildRow(
-                      icon: Icons.check_circle_rounded,
-                      label: 'Status',
-                      value: 'Recorded',
-                      valueColor: const Color(0xFF10B981),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Action buttons
-              Row(
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Dismiss', style: TextStyle(fontWeight: FontWeight.w600)),
+                  // Top drag pill
+                  Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: 24),
+
+                  // Glowing Icon Gem
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [accentColor, darkAccent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        NotificationServiceV2().handleNotificationNavigation('activity', '');
-                      },
-                      child: const Text(
-                        'View in Transactions',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.45),
+                          blurRadius: 24,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isExpense ? Icons.arrow_outward_rounded : Icons.south_west_rounded,
+                      color: Colors.white,
+                      size: 38,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Direction Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: accentColor.withValues(alpha: 0.35)),
+                    ),
+                    child: Text(
+                      isExpense ? 'EXPENSE' : 'INCOME',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Amount with scale-down fit
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      displayFormatted,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: lightColor,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Merchant / Subtitle with wrap/overflow protection
+                  Text(
+                    merchant,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFE5E7EB),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Metadata card container
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        _buildRow(
+                          icon: Icons.access_time_rounded,
+                          label: 'Date & Time',
+                          value: formattedDate,
+                        ),
+                        Divider(color: Colors.white.withValues(alpha: 0.06), height: 20),
+                        _buildRow(
+                          icon: Icons.account_balance_wallet_rounded,
+                          label: 'Logged By',
+                          value: 'SpendX Origin Island',
+                        ),
+                        Divider(color: Colors.white.withValues(alpha: 0.06), height: 20),
+                        _buildRow(
+                          icon: Icons.check_circle_rounded,
+                          label: 'Status',
+                          value: 'Recorded',
+                          valueColor: const Color(0xFF10B981),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Dismiss', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            NotificationServiceV2().handleNotificationNavigation('activity', '');
+                          },
+                          child: const Text(
+                            'View in Transactions',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -243,13 +261,18 @@ class IslandTransactionCard extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: TextStyle(
-            color: valueColor ?? Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: valueColor ?? Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

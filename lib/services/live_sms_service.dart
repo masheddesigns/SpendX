@@ -29,6 +29,7 @@ import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/card_statement.dart';
 import 'dynamic_island_service.dart';
+import 'sms_live_channel_bridge.dart';
 import '../models/credit_card.dart';
 import '../models/loan.dart';
 import '../models/recurring_template.dart';
@@ -448,38 +449,35 @@ class LiveSmsService with WidgetsBindingObserver {
     _initialized = true;
     await _synchronizedDurable(() => _loadDurableStateIfNeededLocked());
 
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'onSmsReceived') {
-        final args = call.arguments as List?;
-        String sender = '';
-        String body = '';
-        String? sourceRecordId;
-        if (args != null && args.length >= 2) {
-          sender = args[0]?.toString() ?? '';
-          body = args[1]?.toString() ?? '';
-          if (args.length >= 4) {
-            sourceRecordId = args[3]?.toString();
-          }
-        } else if (args != null && args.isNotEmpty) {
-          body = args.cast<String>().join('\n');
+    SmsLiveChannelBridge.instance.registerSmsHandler((args) {
+      String sender = '';
+      String body = '';
+      String? sourceRecordId;
+      if (args != null && args.length >= 2) {
+        sender = args[0]?.toString() ?? '';
+        body = args[1]?.toString() ?? '';
+        if (args.length >= 4) {
+          sourceRecordId = args[3]?.toString();
         }
-        AppLogger.i(
-          '[LiveSmsService] onSmsReceived: sender="$sender", body="$body", sourceRecordId="$sourceRecordId"',
+      } else if (args != null && args.isNotEmpty) {
+        body = args.cast<String>().join('\n');
+      }
+      AppLogger.i(
+        '[LiveSmsService] onSmsReceived: sender="$sender", body="$body", sourceRecordId="$sourceRecordId"',
+      );
+      if (body.isNotEmpty) {
+        SyncActivityService.instance.startSync(
+          title: 'Incoming Bank SMS',
+          subtitle: 'Analyzing transaction alert...',
         );
-        if (body.isNotEmpty) {
-          SyncActivityService.instance.startSync(
-            title: 'Incoming Bank SMS',
-            subtitle: 'Analyzing transaction alert...',
+        _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId));
+        _flushTimer?.cancel();
+        _flushTimer = Timer(const Duration(milliseconds: 100), () {
+          TrackedDatabaseTaskQueue.instance.runTracked(
+            'live_sms_flush_buffer',
+            () => _flushLiveBuffer(),
           );
-          _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId));
-          _flushTimer?.cancel();
-          _flushTimer = Timer(const Duration(milliseconds: 100), () {
-            TrackedDatabaseTaskQueue.instance.runTracked(
-              'live_sms_flush_buffer',
-              () => _flushLiveBuffer(),
-            );
-          });
-        }
+        });
       }
     });
 

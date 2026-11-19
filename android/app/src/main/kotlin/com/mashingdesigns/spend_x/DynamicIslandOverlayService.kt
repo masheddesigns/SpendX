@@ -71,7 +71,14 @@ object DynamicIslandOverlayService {
 
     fun hasPermission(context: Context): Boolean {
         if (isVivoOriginDevice()) {
-            return true
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
         }
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(context)
@@ -81,14 +88,34 @@ object DynamicIslandOverlayService {
     }
 
     fun requestPermission(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                android.net.Uri.parse("package:${context.packageName}")
-            ).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        if (isVivoOriginDevice()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val hasNotif = ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (!hasNotif) {
+                    try {
+                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(intent)
+                        return
+                    } catch (_: Exception) {}
+                }
             }
-            context.startActivity(intent)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:${context.packageName}")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {}
         }
     }
 
@@ -100,6 +127,10 @@ object DynamicIslandOverlayService {
         isExpense: Boolean,
         subtitle: String = "SpendX"
     ) {
+        if (amount.isBlank()) {
+            android.util.Log.w("DynamicIsland", "Suppressing overlay: blank amount")
+            return
+        }
         val appContext = context.applicationContext
         val isVivo = isVivoOriginDevice()
         android.util.Log.i("DynamicIsland", "show() called: amount=$amount, isExpense=$isExpense, isVivo=$isVivo")
@@ -155,7 +186,10 @@ object DynamicIslandOverlayService {
                 val dp = appContext.resources.displayMetrics.density
 
                 val collapsedWidth = (60 * dp).toInt()
-                val expandedWidth = (340 * dp).toInt()
+                val expandedWidth = minOf(
+                    (340 * dp).toInt(),
+                    (appContext.resources.displayMetrics.widthPixels - (32 * dp).toInt()).coerceAtLeast((200 * dp).toInt())
+                )
                 val targetHeight = (64 * dp).toInt()
 
                 var notchY = 0
@@ -483,6 +517,10 @@ object DynamicIslandOverlayService {
             builder.setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setTimeoutAfter(7000)
+        }
+
         // Android 15 & Vivo Origin Island Promoted Ongoing APIs
         try {
             val setShortCrit = builder.javaClass.getMethod("setShortCriticalText", CharSequence::class.java)
@@ -612,6 +650,8 @@ object DynamicIslandOverlayService {
         return builder.build()
     }
 
+    private var vivoDismissRunnable: Runnable? = null
+
     fun showVivoOriginIslandNotification(
         context: Context,
         title: String,
@@ -624,12 +664,16 @@ object DynamicIslandOverlayService {
             val notification = buildOriginIslandNotification(context, title, amount, isExpense, subtitle)
             notificationManager.notify(ORIGIN_ISLAND_TAG, ORIGIN_ISLAND_NOTIFICATION_ID, notification)
 
-            // Auto-dismiss after 6.0 seconds
-            mainHandler.postDelayed({
+            // Cancel any previously scheduled dismiss runnable so a second transaction within 6s
+            // is not prematurely canceled by the earlier transaction's timer.
+            vivoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+            val runnable = Runnable {
                 try {
                     notificationManager.cancel(ORIGIN_ISLAND_TAG, ORIGIN_ISLAND_NOTIFICATION_ID)
                 } catch (_: Exception) {}
-            }, 6000)
+            }
+            vivoDismissRunnable = runnable
+            mainHandler.postDelayed(runnable, 6000)
         } catch (e: Exception) {
             android.util.Log.w("OriginIsland", "Failed to show Vivo Origin Island notification: $e")
         }

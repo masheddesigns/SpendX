@@ -19,6 +19,7 @@ import 'theme/app_theme.dart';
 import 'core/config/app_env.dart';
 import 'shared/widgets/dynamic_island_hud.dart';
 import 'services/dynamic_island_service.dart';
+import 'services/sms_live_channel_bridge.dart';
 
 Future<void>? appInitFuture;
 
@@ -26,6 +27,8 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      // Eagerly initialize the live channel bridge to capture cold-start platform messages
+      SmsLiveChannelBridge.instance;
 
       // Catch Flutter-level errors
       FlutterError.onError = (FlutterErrorDetails details) {
@@ -57,9 +60,14 @@ void main() {
       // show/showInstant work even before the first scheduled notification.
       try {
         await NotificationServiceV2().init();
-        DynamicIslandService.instance;
       } catch (e, st) {
         AppLogger.e('NotificationService init failed', e, st);
+      }
+
+      try {
+        DynamicIslandService.instance;
+      } catch (e, st) {
+        AppLogger.e('DynamicIslandService init failed', e, st);
       }
 
       if (AppEnv.enableDebugTools) {

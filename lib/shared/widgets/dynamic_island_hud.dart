@@ -23,6 +23,7 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
   StreamSubscription<DynamicIslandEvent>? _cardClickSubscription;
   DynamicIslandEvent? _currentEvent;
   Timer? _dismissTimer;
+  int _eventGeneration = 0;
 
   @override
   void initState() {
@@ -55,6 +56,7 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
 
   void _onEvent(DynamicIslandEvent event) {
     _dismissTimer?.cancel();
+    final generation = ++_eventGeneration;
     setState(() {
       _currentEvent = event;
     });
@@ -62,9 +64,9 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
     _controller.forward(from: 0.0);
 
     _dismissTimer = Timer(const Duration(milliseconds: 3800), () {
-      if (mounted) {
+      if (mounted && _eventGeneration == generation) {
         _controller.reverse().then((_) {
-          if (mounted) {
+          if (mounted && _eventGeneration == generation) {
             setState(() {
               _currentEvent = null;
             });
@@ -118,8 +120,9 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                     onTap: () {
                       _dismissTimer?.cancel();
                       final event = _currentEvent;
+                      final generation = ++_eventGeneration;
                       _controller.reverse().then((_) {
-                        if (mounted) {
+                        if (mounted && _eventGeneration == generation) {
                           setState(() {
                             _currentEvent = null;
                           });
@@ -132,7 +135,14 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                     onVerticalDragEnd: (details) {
                       if (details.primaryVelocity != null && details.primaryVelocity! < 0) {
                         _dismissTimer?.cancel();
-                        _controller.reverse();
+                        final generation = ++_eventGeneration;
+                        _controller.reverse().then((_) {
+                          if (mounted && _eventGeneration == generation) {
+                            setState(() {
+                              _currentEvent = null;
+                            });
+                          }
+                        });
                       }
                     },
                     child: FadeTransition(
@@ -199,6 +209,8 @@ class _DynamicIslandHUDState extends State<DynamicIslandHUD>
                                         Text(
                                           '${isExpense ? "-" : "+"} $displayAmount',
                                           maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          softWrap: false,
                                           style: TextStyle(
                                             color: amountColor,
                                             fontSize: 14.5,

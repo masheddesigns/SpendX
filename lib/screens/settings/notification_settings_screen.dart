@@ -17,18 +17,34 @@ class NotificationSettingsScreen extends StatefulWidget {
 }
 
 class _NotificationSettingsScreenState
-    extends State<NotificationSettingsScreen> {
+    extends State<NotificationSettingsScreen>
+    with WidgetsBindingObserver {
   final _service = NotificationSettingsService();
   NotificationSettings _settings = NotificationSettings();
   bool _loading = true;
   bool _liveSmsEnabled = true;
   bool _notifListenerEnabled = false;
   bool _exactAlarmEnabled = true;
+  bool _overlayPermissionEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadSettings();
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -36,11 +52,14 @@ class _NotificationSettingsScreenState
     final liveSms = await LiveSmsService.instance.enabled;
     final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
     final exactAlarm = await NotificationServiceV2().canScheduleExactAlarms();
+    final overlayPerm = await DynamicIslandService.instance.hasOverlayPermission();
+    if (!mounted) return;
     setState(() {
       _settings = settings;
       _liveSmsEnabled = liveSms;
       _notifListenerEnabled = notifListener;
       _exactAlarmEnabled = exactAlarm;
+      _overlayPermissionEnabled = overlayPerm;
       _loading = false;
     });
   }
@@ -169,6 +188,46 @@ class _NotificationSettingsScreenState
                   ],
                 ),
                 const SizedBox(height: 14),
+                if (!_overlayPermissionEnabled) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: Theme.of(context).colorScheme.error,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Overlay permission required to display floating pill outside the app.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            await DynamicIslandService.instance.requestOverlayPermission();
+                            final updated = await DynamicIslandService.instance.hasOverlayPermission();
+                            if (mounted) setState(() => _overlayPermissionEnabled = updated);
+                          },
+                          child: const Text('Grant'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -187,7 +246,10 @@ class _NotificationSettingsScreenState
                           );
                         },
                         icon: const Icon(Icons.arrow_outward_rounded, size: 16),
-                        label: const Text('Test Expense', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Test Expense', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -207,7 +269,10 @@ class _NotificationSettingsScreenState
                           );
                         },
                         icon: const Icon(Icons.south_west_rounded, size: 16),
-                        label: const Text('Test Income', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Test Income', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ),
                   ],
@@ -234,7 +299,10 @@ class _NotificationSettingsScreenState
                       });
                     },
                     icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                    label: const Text('Test Outside App (Press Home in 3s)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Test Outside App (Press Home in 3s)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                 ),
               ],

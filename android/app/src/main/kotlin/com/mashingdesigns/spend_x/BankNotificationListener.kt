@@ -313,7 +313,9 @@ class BankNotificationListener : NotificationListenerService() {
         // 2. Deliver to Flutter live on UI thread or queue durably before showing notification
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
-            DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
+            // When Flutter engine is running, do NOT show the island from native!
+            // Flutter parses, deduplicates, and ingests the notification; LiveSmsService
+            // will trigger the dynamic island only if the transaction is successfully recorded.
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
@@ -326,7 +328,9 @@ class BankNotificationListener : NotificationListenerService() {
                 Log.e("SpendX_Notif", "CRITICAL: Failed to durably queue notification [$sourceRecordId]. Suppressing overlay.")
                 return
             }
-            DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
+            if (amount.isNotBlank()) {
+                DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
+            }
         }
     }
 }

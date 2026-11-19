@@ -29,6 +29,8 @@ class IslandForegroundService : Service() {
                 @Suppress("DEPRECATION")
                 stopForeground(true)
             }
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(NOTIFICATION_ID)
             stopSelf()
         } catch (e: Exception) {
             Log.w("IslandFGS", "Error stopping foreground: $e")

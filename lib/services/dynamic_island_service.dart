@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
+import 'sms_live_channel_bridge.dart';
 
 class DynamicIslandEvent {
   final String amount;
@@ -23,47 +23,60 @@ class DynamicIslandService {
   }
   static final DynamicIslandService instance = DynamicIslandService._();
 
-  static const _channel = MethodChannel('spendx/sms_live');
-
   final _controller = StreamController<DynamicIslandEvent>.broadcast();
   Stream<DynamicIslandEvent> get events => _controller.stream;
 
-  final _cardClickController = StreamController<DynamicIslandEvent>.broadcast();
+  DynamicIslandEvent? _pendingCardClick;
+  late final StreamController<DynamicIslandEvent> _cardClickController =
+      StreamController<DynamicIslandEvent>.broadcast(onListen: () {
+    final pending = _pendingCardClick;
+    if (pending != null) {
+      _pendingCardClick = null;
+      scheduleMicrotask(() {
+        if (!_cardClickController.isClosed) {
+          _cardClickController.add(pending);
+        }
+      });
+    }
+  });
+
   Stream<DynamicIslandEvent> get cardClicks => _cardClickController.stream;
 
   void _initNativeBridge() {
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'onDynamicIslandEvent') {
-        final args = call.arguments as Map<dynamic, dynamic>?;
-        if (args != null) {
-          final event = DynamicIslandEvent(
-            amount: args['amount']?.toString() ?? '',
-            isExpense: (args['isExpense'] as bool?) ?? true,
-            title: args['title']?.toString() ?? 'SpendX',
-            subtitle: args['subtitle']?.toString() ?? '',
-            timestamp: DateTime.now(),
-          );
-          _controller.add(event);
-        }
-      } else if (call.method == 'onIslandCardClicked') {
-        final args = call.arguments as Map<dynamic, dynamic>?;
-        if (args != null) {
-          final event = DynamicIslandEvent(
-            amount: args['amount']?.toString() ?? '',
-            isExpense: (args['isExpense'] as bool?) ?? true,
-            title: args['title']?.toString() ?? 'SpendX',
-            subtitle: args['subtitle']?.toString() ?? '',
-            timestamp: DateTime.now(),
-          );
+    SmsLiveChannelBridge.instance.registerIslandCardClickHandler((args) {
+      if (args != null) {
+        final event = DynamicIslandEvent(
+          amount: args['amount']?.toString() ?? '',
+          isExpense: (args['isExpense'] as bool?) ?? true,
+          title: args['title']?.toString() ?? 'SpendX',
+          subtitle: args['subtitle']?.toString() ?? '',
+          timestamp: DateTime.now(),
+        );
+        if (_cardClickController.hasListener) {
           _cardClickController.add(event);
+        } else {
+          _pendingCardClick = event;
         }
+      }
+    });
+
+    SmsLiveChannelBridge.instance.registerDynamicIslandEventHandler((args) {
+      if (args != null) {
+        final event = DynamicIslandEvent(
+          amount: args['amount']?.toString() ?? '',
+          isExpense: (args['isExpense'] as bool?) ?? true,
+          title: args['title']?.toString() ?? 'SpendX',
+          subtitle: args['subtitle']?.toString() ?? '',
+          timestamp: DateTime.now(),
+        );
+        _controller.add(event);
       }
     });
   }
 
   Future<bool> hasOverlayPermission() async {
     try {
-      final res = await _channel.invokeMethod<bool>('hasOverlayPermission');
+      final res = await SmsLiveChannelBridge.instance.invokeMethod<bool>('hasOverlayPermission');
       return res ?? false;
     } catch (_) {
       return false;
@@ -72,7 +85,7 @@ class DynamicIslandService {
 
   Future<void> requestOverlayPermission() async {
     try {
-      await _channel.invokeMethod('requestOverlayPermission');
+      await SmsLiveChannelBridge.instance.invokeMethod('requestOverlayPermission');
     } catch (_) {}
   }
 
@@ -97,7 +110,7 @@ class DynamicIslandService {
 
     // 2. Trigger native Android overlay if supported
     try {
-      await _channel.invokeMethod('showDynamicIsland', {
+      await SmsLiveChannelBridge.instance.invokeMethod('showDynamicIsland', {
         'title': title,
         'amount': amount,
         'isExpense': isExpense,
