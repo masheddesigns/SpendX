@@ -1,6 +1,6 @@
 # SpendX — Google Play Distribution Preparation Package
 **Milestone**: Milestone 5.0 — Phase 5C Distribution Qualification  
-**Target Release**: SpendX 1.6.0 (versionCode 16)  
+**Target Release**: SpendX 1.0.1 (versionCode 2)  
 **Package Name**: `com.mashingdesigns.spendx`  
 **Candidate Release AAB SHA-256**: `9d1a7d969c31f8a5846c0c8749ed3c24cf8ab5bfb67667fca776ed7fac7f16cc`  
 **Security Gate**: `G-SEC-01-LOCK` remains **HELD** (Internal test track only; zero public release without explicit security release)
@@ -93,7 +93,7 @@ The in-app disclosure must be displayed **prior** to triggering the Android runt
 
 ## 4. Privacy Policy Verification & Data Handling
 
-- **Public URL**: `https://spendx.mashingdesigns.com/privacy-policy` (must match Google Play Store Listing).
+- **Public URL**: `https://sivek.vercel.app/Spendx/Privacy` (Canonical portfolio host) / `https://spendx.mashingdesigns.com/privacy-policy` (must match Google Play Store Listing).
 - **In-App URL/Screen**: Available offline in `lib/screens/privacy_policy_screen.dart` via Settings -> About SpendX -> Privacy Policy.
 - **Compliance Affirmations**:
   - No central backend server collecting financial data.
@@ -132,9 +132,9 @@ The in-app disclosure must be displayed **prior** to triggering the Android runt
 
 ## 7. Internal Testing Track Release Notes
 
-### What's New in SpendX 1.6.0 (Build 16)
+### What's New in SpendX 1.0.1 (Build 2)
 ```text
-SpendX 1.6.0 — Stability, Precision & Release Candidate Update
+SpendX 1.0.1 — Production Release Update
 
 • Financial Precision: Hardened Safe-to-Spend attribution for partial credit-card payments and zero-interest loans.
 • Real-Time Tracking: Enhanced on-device bank SMS parser with hardened transient retry handling and quarantine protection.

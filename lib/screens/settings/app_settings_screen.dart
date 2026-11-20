@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../theme/app_theme.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/spendx_app_bar.dart';
 
@@ -23,70 +22,6 @@ import '../../shared/widgets/app_page_route.dart';
 
 class AppSettingsScreen extends StatelessWidget {
   const AppSettingsScreen({super.key});
-
-  String _getThemeName(BuildContext context) {
-    final settings = Provider.of<SettingsService>(context, listen: false);
-    final theme = AppTheme.availableThemes.firstWhere(
-      (t) => t['id'] == settings.themeVariant,
-      orElse: () => AppTheme.availableThemes.first,
-    );
-    return theme['name'] as String;
-  }
-
-  void _showThemePicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Consumer<SettingsService>(
-        builder: (ctx, settings, _) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('Choose Theme',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-              ),
-              const SizedBox(height: 16),
-              ...AppTheme.availableThemes.map((theme) {
-                final isSelected = settings.themeVariant == theme['id'];
-                return ListTile(
-                  leading: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: theme['color'] as Color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  title: Text(theme['name'] as String,
-                      style: TextStyle(
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal)),
-                  trailing: isSelected
-                      ? Icon(Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary)
-                      : null,
-                  onTap: () {
-                    settings.setThemeVariant(theme['id'] as String);
-                    Navigator.pop(ctx);
-                  },
-                );
-              }),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showThemeModePicker(BuildContext context) {
     showModalBottomSheet(
@@ -158,26 +93,15 @@ class AppSettingsScreen extends StatelessWidget {
                     AppPageRoute(builder: (_) => const CurrencySelectionScreen())),
               ),
             ),
-            _SettingsTile(
-              icon: Icons.brightness_6_outlined,
-              iconColor: Theme.of(context).colorScheme.primary,
-              title: 'App Theme',
-              subtitle: Provider.of<SettingsService>(context, listen: false)
-                      .themeMode
-                      .name[0]
-                      .toUpperCase() +
-                  Provider.of<SettingsService>(context, listen: false)
-                      .themeMode
-                      .name
-                      .substring(1),
-              onTap: () => _showThemeModePicker(context),
-            ),
-            _SettingsTile(
-              icon: Icons.palette_outlined,
-              iconColor: Theme.of(context).colorScheme.tertiary,
-              title: 'Theme Color',
-              subtitle: _getThemeName(context),
-              onTap: () => _showThemePicker(context),
+            Consumer<SettingsService>(
+              builder: (ctx, settings, _) => _SettingsTile(
+                icon: Icons.brightness_6_outlined,
+                iconColor: Theme.of(context).colorScheme.primary,
+                title: 'App Theme',
+                subtitle: settings.themeMode.name[0].toUpperCase() +
+                    settings.themeMode.name.substring(1),
+                onTap: () => _showThemeModePicker(context),
+              ),
             ),
 
             const Divider(height: 32),

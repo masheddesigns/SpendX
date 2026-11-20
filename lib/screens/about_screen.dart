@@ -19,7 +19,7 @@ class AboutScreen extends StatelessWidget {
         child: FutureBuilder<PackageInfo>(
           future: PackageInfo.fromPlatform(),
           builder: (context, snapshot) {
-            final version = snapshot.data?.version ?? '1.5.0';
+            final version = snapshot.data?.version ?? '1.0.1';
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
@@ -169,7 +169,7 @@ class AboutScreen extends StatelessWidget {
                     _InfoRow(
                       icon: Icons.palette_outlined,
                       label: 'Material Design 3',
-                      value: 'Multiple theme colors, light/dark mode, and consistent card system.',
+                      value: 'Clean Light and Dark modes with a consistent card system.',
                     ),
                   ],
                 ),

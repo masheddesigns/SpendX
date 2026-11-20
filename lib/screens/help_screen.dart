@@ -287,8 +287,7 @@ class HelpScreen extends StatelessWidget {
         items: [
           _GuideItem(
             title: 'Theme & Appearance',
-            body: 'Choose light/dark/system mode and pick a theme color. '
-                'Multiple color themes available (blue, teal, purple, orange, etc.).',
+            body: 'Choose between Light, Dark, or System mode to match your preference.',
           ),
           _GuideItem(
             title: 'Currency',
