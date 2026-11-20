@@ -1,3 +1,4 @@
+import '../core/utils/vpa_resolver.dart';
 import '../models/review_item.dart';
 import 'merchant_memory.dart';
 import 'merchant_normalizer.dart';
@@ -26,7 +27,7 @@ class TransactionTextParser {
   /// stale cached entries from older builds can never be served.
   /// Mixed into the cache key — a version bump effectively wipes the cache
   /// without needing an explicit clear.
-  static const _parserVersion = 8;
+  static const _parserVersion = 9;
 
   // ── Indian-bank date extraction ───────────────────────────────────
   //
@@ -225,16 +226,25 @@ class TransactionTextParser {
       }
     }
     final isCredit = _resolveCredit(hasCredit: hasCredit, hasDebit: hasDebit, lower: lower);
+    // ── VPA resolution ─────────────────────────────────────────────
+    final vpaResolution = VpaResolver.resolve(normalized);
+    final vpa = vpaResolution?.rawVpa;
+    bool isAmbiguous = vpaResolution?.isAmbiguous ?? false;
+
     // Resolution priority (top wins):
     //   1. Learned (user-confirmed memory)
-    //   2. body_strong (dictionary alias match)
-    //   3. keyword regex
-    //   4. fallback regex
+    //   2. VPA resolution (if confident canonical merchant identified)
+    //   3. body_strong (dictionary alias match)
+    //   4. keyword regex
+    //   5. fallback regex
     String? merchant;
     String? merchantSource;
     if (learnedMerchant != null && learnedMerchant.trim().isNotEmpty) {
       merchant = learnedMerchant.trim();
       merchantSource = 'learned';
+    } else if (vpaResolution != null && vpaResolution.merchantName != null) {
+      merchant = vpaResolution.merchantName;
+      merchantSource = vpaResolution.isAggregator ? 'vpa_aggregator' : 'vpa';
     } else {
       final result = _extractMerchantWithSource(normalized);
       merchant = result.$1;
@@ -243,14 +253,24 @@ class TransactionTextParser {
     final method = _extractMethod(lower, tokenSet);
     final refId = _extractRefId(normalized);
     final last4 = _extractLast4(normalized);
-    final bankName = _extractBankName(lower);
+    final bankName = _extractBankName(lower, vpa: vpa);
     final hasDirection = hasCredit || hasDebit;
+
+    // Independent intent classification
+    final intent = _classifyIntent(
+      lower: lower,
+      normalized: normalized,
+      hasCredit: hasCredit,
+      hasDebit: hasDebit,
+      isCredit: isCredit,
+    );
 
     // Confidence scoring. Weighted by signal strength:
     //   amount currency-prefixed → 0.4  (strong)
     //   amount naked-number      → 0.2  (heuristic)
     //   merchant learned         → 0.30 (user-confirmed memory)
     //   merchant body_strong     → 0.20 (dictionary match)
+    //   merchant vpa / aggregator→ 0.25 (direct payment address)
     //   merchant keyword         → 0.12 (explicit "paid to X")
     //   merchant fallback        → 0.05 (weak "to X" / "at X")
     //   direction signal         → 0.2
@@ -261,6 +281,8 @@ class TransactionTextParser {
     if (merchant != null && merchant.isNotEmpty) {
       confidence += switch (merchantSource) {
         'learned' => 0.30,
+        'vpa' => 0.25,
+        'vpa_aggregator' => 0.25,
         'body_strong' => 0.20,
         'keyword' => 0.12,
         'fallback' => 0.05,
@@ -296,6 +318,9 @@ class TransactionTextParser {
       confidence: confidence,
       merchantSource: merchantSource,
       hasDirectionSignal: hasDirection,
+      vpa: vpa,
+      transactionIntent: intent,
+      isAmbiguous: isAmbiguous || (merchant == null && intent == 'expense'),
     );
 
     // FIFO cache: drop oldest when full
@@ -726,6 +751,87 @@ class TransactionTextParser {
   static bool _isFailedPayment(String lower) =>
       _failurePatterns.hasMatch(lower);
 
+  // ── Intent classification ──────────────────────────────────────────
+
+  static final _obligationPatterns = RegExp(
+    r'\b(?:total\s+amount\s+due|statement\s+generated|min(?:imum)?\s+amount\s+due|'
+    r'bill\s+generated|bill\s+due|payment\s+due|e-?mandate\s+scheduled|'
+    r'autopay\s+scheduled|scheduled\s+for\s+debit|will\s+be\s+debited\s+on)\b',
+    caseSensitive: false,
+  );
+
+  static final _refundPatterns = RegExp(
+    r'\b(?:refund(?:ed)?|revers(?:al|ed)|cashback|chargeback|money\s+refunded)\b',
+    caseSensitive: false,
+  );
+
+  static final _cardPaymentReceiptPatterns = RegExp(
+    r'\b(?:payment\s+received\s+towards\s+(?:your\s+)?(?:credit\s+card|card)|'
+    r'thank\s+you\s+for\s+paying\s+towards\s+(?:your\s+)?(?:credit\s+card|card)|'
+    r'received\s+payment\s+of\s+.*towards\s+card|payment\s+of\s+.*received\s+for\s+(?:credit\s+card|card))\b',
+    caseSensitive: false,
+  );
+
+  static final _transferPatterns = RegExp(
+    r'\b(?:transferred?\s+.*?\bto\s+(?:own\s+account|self)|self\s+transfer|'
+    r'transfer(?:red)?\s+to\s+(?:own\s+account|self)|own\s+account\s+transfer|'
+    r'fund\s+transfer\s+to\s+a\/c|transferred\s+between\s+accounts|'
+    r'sent\s+.*?\bto\s+(?:own\s+account|self))\b',
+    caseSensitive: false,
+  );
+
+  static String _classifyIntent({
+    required String lower,
+    required String normalized,
+    required bool hasCredit,
+    required bool hasDebit,
+    required bool isCredit,
+  }) {
+    if (_isFailedPayment(lower)) {
+      return 'failed';
+    }
+    if (_cardPaymentReceiptPatterns.hasMatch(lower)) {
+      return 'card_payment';
+    }
+    if (_refundPatterns.hasMatch(lower)) {
+      return 'refund';
+    }
+    if (_transferPatterns.hasMatch(lower)) {
+      return 'transfer';
+    }
+    if (!hasDebit && _obligationPatterns.hasMatch(lower)) {
+      return 'obligation';
+    }
+    if (isCredit) {
+      return 'income';
+    }
+    if (hasDebit) {
+      return 'expense';
+    }
+    return 'unknown';
+  }
+
+  /// Public helper to classify the transaction intent of arbitrary text.
+  static String classifyIntent(String text) {
+    final normalized = _normalize(text);
+    final lower = normalized.toLowerCase();
+    final hasCredit = _creditKeywords.hasMatch(lower);
+    final hasDebit = _debitKeywords.hasMatch(lower) ||
+        _outgoingToRecipientRe.hasMatch(normalized);
+    final isCredit = _resolveCredit(
+      hasCredit: hasCredit,
+      hasDebit: hasDebit,
+      lower: lower,
+    );
+    return _classifyIntent(
+      lower: lower,
+      normalized: normalized,
+      hasCredit: hasCredit,
+      hasDebit: hasDebit,
+      isCredit: isCredit,
+    );
+  }
+
   // ── Merchant extraction ───────────────────────────────────────────
   //
   // Resolution priority (strict, top wins):
@@ -1085,9 +1191,20 @@ class TransactionTextParser {
     'pnb': 'PNB',
   };
 
-  static String? _extractBankName(String lower) {
+  static String? _extractBankName(String lower, {String? vpa}) {
+    String textWithoutVpa = lower;
+    if (vpa != null && vpa.isNotEmpty) {
+      textWithoutVpa = textWithoutVpa.replaceAll(vpa.toLowerCase(), ' ');
+    }
+    // Strip any VPA pattern so trailing @bank handle does not trigger bankHints
+    textWithoutVpa = textWithoutVpa.replaceAll(
+      RegExp(r'[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+'),
+      ' ',
+    );
+
     for (final entry in _bankHints.entries) {
-      if (lower.contains(entry.key)) return entry.value;
+      final pattern = RegExp(r'\b' + RegExp.escape(entry.key) + r'\b');
+      if (pattern.hasMatch(textWithoutVpa)) return entry.value;
     }
     return null;
   }

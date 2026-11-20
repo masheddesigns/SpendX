@@ -13,9 +13,9 @@
     <!-- Required only for the non-Vivo WindowManager overlay (TYPE_APPLICATION_OVERLAY).
          Vivo/iQOO devices use the native Origin Island notification path instead. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" tools:node="remove" />
     <!-- Package 03: Android Auto Backup and device-to-device transfer are disabled.
          SpendX stores financial data in a SQLCipher database whose key lives in the
          platform Keystore. Keystore keys are never included in OS backups, so an OS
@@ -120,15 +120,6 @@
                 <action android:name="com.mashingdesigns.spend_x.SHOW_DYNAMIC_ISLAND" />
             </intent-filter>
         </receiver>
-
-        <service
-            android:name=".IslandForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync|specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Live financial transaction island notification" />
-        </service>
 
         <!-- Listens to bank and UPI push notifications when banks don't send SMS -->
         <service

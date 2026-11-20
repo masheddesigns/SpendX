@@ -36,6 +36,7 @@ import '../models/recurring_template.dart';
 import '../models/reminder_model.dart';
 import '../models/review_item.dart';
 import '../models/transaction.dart';
+import '../models/calibration_progress.dart';
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
 import 'financial_transaction_service.dart';
@@ -283,6 +284,7 @@ class LiveSmsService with WidgetsBindingObserver {
       String? balanceNote,
       Transaction? transaction,
       bool balanceApplied,
+      String status,
     })
   >
   testProcessBody(
@@ -1195,445 +1197,8 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       },
       applyBalances: (inboxMessages) async {
-        SyncActivityService.instance.updateProgress(
-          title: 'Reconciling Accounts',
-          subtitle: 'Updating bank balances and card statements...',
-          count: ingested,
-        );
-
-        // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
-        final latestBankBalances = <String, ({double amount, DateTime date})>{};
-        final latestCardBalances =
-            <
-              String,
-              ({
-                double amount,
-                bool isAvailableLimit,
-                double? creditLimit,
-                DateTime date,
-              })
-            >{};
-        final latestCardStatements =
-            <
-              String,
-              ({
-                double amount,
-                DateTime? dueDate,
-                double? minDue,
-                DateTime date,
-                bool isStatementBill,
-              })
-            >{};
-
-        for (final raw in inboxMessages) {
-          if (raw is Map) {
-            final sender = raw['address']?.toString() ?? '';
-            final body = raw['body']?.toString() ?? '';
-            final rawDate = raw['date'];
-            final DateTime? smsDate = rawDate != null
-                ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
-                : null;
-            if (body.trim().isEmpty) continue;
-
-            final classification = SmsImportService.instance.classifyMessage(
-              body,
-              sender,
-              date: smsDate,
-            );
-            final hit = classification.balance;
-            if (hit != null && hit.amount > 0) {
-              if (hit.kind == BalanceKind.bank) {
-                final key = hit.last4 ?? hit.bankKeyword;
-                if (key != null && key.isNotEmpty) {
-                  final existing = latestBankBalances[key];
-                  if (existing == null ||
-                      smsDate == null ||
-                      existing.date.isBefore(smsDate)) {
-                    latestBankBalances[key] = (
-                      amount: hit.amount,
-                      date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                    );
-                  }
-                }
-              } else if (hit.kind == BalanceKind.creditCard) {
-                final key = hit.last4 ?? hit.bankKeyword;
-                if (key != null && key.isNotEmpty) {
-                  if (hit.isStatementBill || hit.dueDate != null) {
-                    final existingStmt = latestCardStatements[key];
-                    if (existingStmt == null ||
-                        smsDate == null ||
-                        existingStmt.date.isBefore(smsDate)) {
-                      latestCardStatements[key] = (
-                        amount: hit.amount,
-                        dueDate: hit.dueDate,
-                        minDue: hit.minDue,
-                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                        isStatementBill: hit.isStatementBill,
-                      );
-                    }
-                  }
-                  if (hit.isAvailableLimit || !hit.isStatementBill) {
-                    final existing = latestCardBalances[key];
-                    if (existing == null ||
-                        smsDate == null ||
-                        existing.date.isBefore(smsDate)) {
-                      latestCardBalances[key] = (
-                        amount: hit.amount,
-                        isAvailableLimit: hit.isAvailableLimit,
-                        creditLimit: hit.creditLimit,
-                        date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
-                      );
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Apply latest detected bank balances to accounts.
-        //
-        // Each statement is resolved independently with the same evidence
-        // rules as live ingestion: a statement is applied only when issuer +
-        // last4 (or a unique last4) identify exactly one asset account.
-        // Ambiguous statements are skipped so no balance is changed on a
-        // guess; live/pending messages have already been routed to the
-        // Review Queue by `_applyBalance`.
-        if (latestBankBalances.isNotEmpty) {
-          final accounts = await AccountRepo().getAll();
-          final db = await AppDatabase.instance.database;
-          for (final entry in latestBankBalances.entries) {
-            final key = entry.key;
-            final bestHit = entry.value;
-            final hasLast4 = _looksLikeLast4(key);
-            final attribution = BalanceAttribution.resolve(
-              kind: BalanceKind.bank,
-              last4: hasLast4 ? key : null,
-              bankKeyword: hasLast4 ? null : key,
-              accounts: accounts,
-              cards: const [],
-            );
-            if (!attribution.matched || attribution.isCreditCard) {
-              if (attribution.ambiguous) {
-                AppLogger.w(
-                  '[LiveSmsService] Bulk bank balance for "$key" is '
-                  'ambiguous (${attribution.reason}); balance preserved.',
-                );
-              }
-              continue;
-            }
-            final acc = accounts.firstWhere(
-              (a) => a.id == attribution.instrumentId,
-            );
-            // Adjust stated balance for any subsequent transactions that occurred after bestHit.date
-            final allAccountTxns = await db.rawQuery(
-              '''
-              SELECT type, amount, account_id, related_entity_id, date, COALESCE(notes, '') as notes
-              FROM ${Tables.transactions}
-              WHERE (account_id = ? OR related_entity_id = ?)
-                AND is_deleted = 0;
-            ''',
-              [acc.id, acc.id],
-            );
-
-            final bestHitUtc = bestHit.date.toUtc();
-            final postSmsTxns = <Map<String, dynamic>>[];
-            for (final row in allAccountTxns) {
-              final rawDate = row['date'] as String?;
-              final notes = (row['notes'] as String? ?? '').toLowerCase();
-              if (rawDate != null) {
-                final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                if (txDate != null) {
-                  if (txDate.isAfter(bestHitUtc) ||
-                      (txDate.isAtSameMomentAs(bestHitUtc) &&
-                          !notes.contains('bal') &&
-                          !notes.contains('credited'))) {
-                    postSmsTxns.add(row);
-                  }
-                }
-              }
-            }
-
-            double effectiveBal = bestHit.amount;
-            for (final row in postSmsTxns) {
-              final type = row['type'] as String;
-              final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
-              final fromAcc = row['account_id'] as String?;
-              final toAcc = row['related_entity_id'] as String?;
-
-              if (type == 'expense' ||
-                  type == 'credit_payment' ||
-                  type == 'credit_card_purchase') {
-                if (fromAcc == acc.id) effectiveBal -= amt;
-              } else if (type == 'income' || type == 'refund') {
-                if (fromAcc == acc.id) effectiveBal += amt;
-              } else if (type == 'transfer') {
-                if (fromAcc == acc.id) effectiveBal -= amt;
-                if (toAcc == acc.id) effectiveBal += amt;
-              }
-            }
-
-            await AccountRepo().updateBalance(
-              acc.id,
-              effectiveBal,
-              messageDate: DateTime.now(),
-            );
-            balancesApplied++;
-            AppLogger.i(
-              '[LiveSmsService] Reconciled bank balance for ${acc.name}: '
-              'stated ₹${bestHit.amount} at ${bestHit.date}, adjusted to '
-              '₹$effectiveBal after ${postSmsTxns.length} subsequent '
-              'transactions (${attribution.reason})',
-            );
-          }
-        }
-
-        // Apply latest detected credit card balances.
-        //
-        // Resolved with the same unique-evidence rule as bank balances so a
-        // single statement can never be broadcast to every card of an issuer.
-        if (latestCardBalances.isNotEmpty) {
-          final cards = await CreditRepo().getAll();
-          final db = await AppDatabase.instance.database;
-          for (final entry in latestCardBalances.entries) {
-            final key = entry.key;
-            final hasLast4 = _looksLikeLast4(key);
-            final attribution = BalanceAttribution.resolve(
-              kind: BalanceKind.creditCard,
-              last4: hasLast4 ? key : null,
-              bankKeyword: hasLast4 ? null : key,
-              accounts: const [],
-              cards: cards,
-            );
-            if (!attribution.matched || !attribution.isCreditCard) {
-              if (attribution.ambiguous) {
-                AppLogger.w(
-                  '[LiveSmsService] Bulk card balance for "$key" is '
-                  'ambiguous (${attribution.reason}); balance preserved.',
-                );
-              }
-              continue;
-            }
-            final card = cards.firstWhere(
-              (c) => c.id == attribution.instrumentId,
-            );
-            final bestHit = entry.value;
-            if (bestHit.amount > 0 || bestHit.isAvailableLimit) {
-              if (bestHit.isAvailableLimit) {
-                final effectiveLimit = (card.limitAmount > 0)
-                    ? card.limitAmount
-                    : ((bestHit.creditLimit != null && bestHit.creditLimit! > 0)
-                          ? bestHit.creditLimit!
-                          : 0.0);
-                if (effectiveLimit > 0) {
-                  double derived = (effectiveLimit - bestHit.amount).clamp(
-                    0.0,
-                    double.infinity,
-                  );
-                  final allCardTxns = await db.rawQuery(
-                    '''
-                    SELECT type, amount, account_id, related_entity_id, date
-                    FROM ${Tables.transactions}
-                    WHERE (related_entity_id = ? OR account_id = ?)
-                      AND is_deleted = 0;
-                  ''',
-                    [card.id, card.id],
-                  );
-                  final bestHitUtc = bestHit.date.toUtc();
-                  for (final row in allCardTxns) {
-                    final rawDate = row['date'] as String?;
-                    if (rawDate != null) {
-                      final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                      if (txDate != null && txDate.isAfter(bestHitUtc)) {
-                        final type = row['type'] as String;
-                        final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
-                        if (type == 'credit_payment' || type == 'refund') {
-                          derived -= amt;
-                        } else if (type == 'credit_card_purchase') {
-                          derived += amt;
-                        }
-                      }
-                    }
-                  }
-                  derived = derived.clamp(0.0, double.infinity);
-                }
-              } else {
-                // Net outstanding against any subsequent payments or spends
-                double effectiveCardBal = bestHit.amount;
-                final allCardTxns = await db.rawQuery(
-                  '''
-                  SELECT type, amount, account_id, related_entity_id, date
-                  FROM ${Tables.transactions}
-                  WHERE (related_entity_id = ? OR account_id = ?)
-                    AND is_deleted = 0;
-                ''',
-                  [card.id, card.id],
-                );
-                final bestHitUtc = bestHit.date.toUtc();
-                for (final row in allCardTxns) {
-                  final rawDate = row['date'] as String?;
-                  if (rawDate != null) {
-                    final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                    if (txDate != null && txDate.isAfter(bestHitUtc)) {
-                      final type = row['type'] as String;
-                      final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
-                      if (type == 'credit_payment' || type == 'refund') {
-                        effectiveCardBal -= amt;
-                      } else if (type == 'credit_card_purchase') {
-                        effectiveCardBal += amt;
-                      }
-                    }
-                  }
-                }
-                effectiveCardBal = effectiveCardBal.clamp(0.0, double.infinity);
-              }
-              if (bestHit.creditLimit != null &&
-                  bestHit.creditLimit! > 0 &&
-                  card.limitAmount < bestHit.creditLimit!) {
-                await CreditRepo().update(
-                  card.copyWith(limitAmount: bestHit.creditLimit!),
-                );
-              }
-              AppLogger.i(
-                '[LiveSmsService] Stated credit balance for ${card.name}: '
-                '₹${bestHit.amount} from latest SMS dated ${bestHit.date}',
-              );
-            }
-          }
-        }
-
-        // Apply latest detected credit card statements with time-stamped
-        // repayment reconciliation, resolved by unique card identity.
-        if (latestCardStatements.isNotEmpty) {
-          final cards = await CreditRepo().getAll();
-          final db = await AppDatabase.instance.database;
-          for (final entry in latestCardStatements.entries) {
-            final key = entry.key;
-            final hasLast4 = _looksLikeLast4(key);
-            final attribution = BalanceAttribution.resolve(
-              kind: BalanceKind.creditCard,
-              last4: hasLast4 ? key : null,
-              bankKeyword: hasLast4 ? null : key,
-              accounts: const [],
-              cards: cards,
-            );
-            if (!attribution.matched || !attribution.isCreditCard) {
-              if (attribution.ambiguous) {
-                AppLogger.w(
-                  '[LiveSmsService] Bulk card statement for "$key" is '
-                  'ambiguous (${attribution.reason}); statement preserved.',
-                );
-              }
-              continue;
-            }
-            final card = cards.firstWhere(
-              (c) => c.id == attribution.instrumentId,
-            );
-            final bestStmt = entry.value;
-            if (bestStmt.amount > 0) {
-              // Calculate all repayments received on or after this statement's timestamp
-              final cardKw = card.bank.toLowerCase().contains('icici')
-                  ? 'icici'
-                  : (card.bank.toLowerCase().contains('csb')
-                        ? 'csb'
-                        : (card.bank.toLowerCase().contains('hdfc')
-                              ? 'hdfc'
-                              : ''));
-              final allPayments = await db.rawQuery(
-                '''
-                SELECT amount, date
-                FROM ${Tables.transactions}
-                WHERE (related_entity_id = ? OR (type = 'credit_payment' AND ? != '' AND LOWER(COALESCE(notes, '')) LIKE '%' || ? || '%'))
-                  AND type = 'credit_payment'
-                  AND is_deleted = 0;
-              ''',
-                [card.id, cardKw, cardKw],
-              );
-              final stmtDateUtc = bestStmt.date.toUtc();
-              final windowStart = stmtDateUtc.subtract(
-                const Duration(days: 10),
-              );
-              double totalPaidAfter = 0.0;
-              for (final row in allPayments) {
-                final rawDate = row['date'] as String?;
-                if (rawDate != null) {
-                  final txDate = DateTime.tryParse(rawDate)?.toUtc();
-                  if (txDate != null &&
-                      (txDate.isAfter(windowStart) ||
-                          txDate.isAtSameMomentAs(windowStart))) {
-                    totalPaidAfter +=
-                        (row['amount'] as num?)?.toDouble() ?? 0.0;
-                  }
-                }
-              }
-              final remainingDue = (bestStmt.amount - totalPaidAfter).clamp(
-                0.0,
-                bestStmt.amount,
-              );
-
-              final updated = card.copyWith(
-                lastStatementBalance: remainingDue,
-                dueDay: bestStmt.dueDate?.day ?? card.dueDay,
-              );
-              await CreditRepo().update(updated);
-              balancesApplied++;
-
-              // Insert into card_statements table if not existing
-              final stmtId =
-                  'stmt_${card.id}_${bestStmt.date.millisecondsSinceEpoch}';
-              final existingStmt = await db.query(
-                Tables.cardStatements,
-                where: 'id = ?',
-                whereArgs: [stmtId],
-                limit: 1,
-              );
-              if (existingStmt.isEmpty) {
-                await CreditRepo().insertStatement(
-                  CardStatement(
-                    id: stmtId,
-                    cardId: card.id,
-                    startDate: bestStmt.date.subtract(const Duration(days: 30)),
-                    endDate: bestStmt.date,
-                    statementAmount: bestStmt.amount,
-                    minimumDue: bestStmt.minDue ?? (bestStmt.amount * 0.05),
-                    generatedDate: bestStmt.date,
-                  ),
-                );
-              }
-
-              // Sync reminder
-              final isFullyPaid = remainingDue <= 0.01;
-              final dueDateTime = bestStmt.dueDate ?? card.nextDueDate;
-              await ReminderRepo().insertGlobalReminder(
-                Reminder(
-                  id: 'credit_due_${card.id}',
-                  type: ReminderType.credit,
-                  title: 'Credit Card Due: ${card.name}',
-                  linkedEntityId: card.id,
-                  dueDate: dueDateTime,
-                  amount: isFullyPaid ? 0.0 : remainingDue,
-                  isActive: !isFullyPaid,
-                  status: isFullyPaid
-                      ? ReminderStatus.inactive
-                      : ReminderStatus.upcoming,
-                  recordStatus: isFullyPaid
-                      ? ReminderRecordStatus.done
-                      : ReminderRecordStatus.pending,
-                  sourceType: ReminderSourceType.credit,
-                  sourceId: card.id,
-                ).toMap(),
-              );
-              AppLogger.i(
-                '[LiveSmsService] Time-stamped statement bill for ${card.name}: '
-                'original ₹${bestStmt.amount} (dated ${bestStmt.date}), '
-                'repayments after bill ₹$totalPaidAfter, net statement due '
-                '₹$remainingDue',
-              );
-            }
-          }
-        }
-
-        DataChangeBus.instance.notify();
+        final applied = await _applyLatestBalances(inboxMessages, ingested: ingested);
+        balancesApplied += applied;
       },
     );
 
@@ -1643,6 +1208,625 @@ class LiveSmsService with WidgetsBindingObserver {
       balancesApplied: balancesApplied,
       rejected: rejected,
       completed: outcome.completed,
+      error: outcome.error,
+    );
+  }
+
+  /// Reconciles stated balance snapshots against subsequent ledger transactions.
+  Future<int> _applyLatestBalances(
+    List<dynamic> inboxMessages, {
+    int ingested = 0,
+  }) async {
+    var balancesApplied = 0;
+    SyncActivityService.instance.updateProgress(
+      title: 'Reconciling Accounts',
+      subtitle: 'Updating bank balances and card statements...',
+      count: ingested,
+    );
+
+    // Tracking the most recent SMS timestamp guarantees that newer balances always take precedence.
+    final latestBankBalances = <String, ({double amount, DateTime date})>{};
+    final latestCardBalances =
+        <
+          String,
+          ({
+            double amount,
+            bool isAvailableLimit,
+            double? creditLimit,
+            DateTime date,
+          })
+        >{};
+    final latestCardStatements =
+        <
+          String,
+          ({
+            double amount,
+            DateTime? dueDate,
+            double? minDue,
+            DateTime date,
+            bool isStatementBill,
+          })
+        >{};
+
+    for (final raw in inboxMessages) {
+      if (raw is Map) {
+        final sender = raw['address']?.toString() ?? '';
+        final body = raw['body']?.toString() ?? '';
+        final rawDate = raw['date'];
+        final DateTime? smsDate = rawDate != null
+            ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
+            : null;
+        if (body.trim().isEmpty) continue;
+
+        final classification = SmsImportService.instance.classifyMessage(
+          body,
+          sender,
+          date: smsDate,
+        );
+        final hit = classification.balance;
+        if (hit != null && hit.amount > 0) {
+          if (hit.kind == BalanceKind.bank) {
+            final key = hit.last4 ?? hit.bankKeyword;
+            if (key != null && key.isNotEmpty) {
+              final existing = latestBankBalances[key];
+              if (existing == null ||
+                  smsDate == null ||
+                  existing.date.isBefore(smsDate)) {
+                latestBankBalances[key] = (
+                  amount: hit.amount,
+                  date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                );
+              }
+            }
+          } else if (hit.kind == BalanceKind.creditCard) {
+            final key = hit.last4 ?? hit.bankKeyword;
+            if (key != null && key.isNotEmpty) {
+              if (hit.isStatementBill || hit.dueDate != null) {
+                final existingStmt = latestCardStatements[key];
+                if (existingStmt == null ||
+                    smsDate == null ||
+                    existingStmt.date.isBefore(smsDate)) {
+                  latestCardStatements[key] = (
+                    amount: hit.amount,
+                    dueDate: hit.dueDate,
+                    minDue: hit.minDue,
+                    date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                    isStatementBill: hit.isStatementBill,
+                  );
+                }
+              }
+              if (hit.isAvailableLimit || !hit.isStatementBill) {
+                final existing = latestCardBalances[key];
+                if (existing == null ||
+                    smsDate == null ||
+                    existing.date.isBefore(smsDate)) {
+                  latestCardBalances[key] = (
+                    amount: hit.amount,
+                    isAvailableLimit: hit.isAvailableLimit,
+                    creditLimit: hit.creditLimit,
+                    date: smsDate ?? DateTime.fromMillisecondsSinceEpoch(0),
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Apply latest detected bank balances to accounts.
+    if (latestBankBalances.isNotEmpty) {
+      final accounts = await AccountRepo().getAll();
+      final db = await AppDatabase.instance.database;
+      for (final entry in latestBankBalances.entries) {
+        final key = entry.key;
+        final bestHit = entry.value;
+        final hasLast4 = _looksLikeLast4(key);
+        final attribution = BalanceAttribution.resolve(
+          kind: BalanceKind.bank,
+          last4: hasLast4 ? key : null,
+          bankKeyword: hasLast4 ? null : key,
+          accounts: accounts,
+          cards: const [],
+        );
+        if (!attribution.matched || attribution.isCreditCard) {
+          if (attribution.ambiguous) {
+            AppLogger.w(
+              '[LiveSmsService] Bulk bank balance for "$key" is '
+              'ambiguous (${attribution.reason}); balance preserved.',
+            );
+          }
+          continue;
+        }
+        final acc = accounts.firstWhere(
+          (a) => a.id == attribution.instrumentId,
+        );
+        // Adjust stated balance for any subsequent transactions that occurred after bestHit.date
+        final allAccountTxns = await db.rawQuery(
+          '''
+          SELECT type, amount, account_id, related_entity_id, date, COALESCE(notes, '') as notes
+          FROM ${Tables.transactions}
+          WHERE (account_id = ? OR related_entity_id = ?)
+            AND is_deleted = 0;
+        ''',
+          [acc.id, acc.id],
+        );
+
+        final bestHitUtc = bestHit.date.toUtc();
+        final postSmsTxns = <Map<String, dynamic>>[];
+        for (final row in allAccountTxns) {
+          final rawDate = row['date'] as String?;
+          final notes = (row['notes'] as String? ?? '').toLowerCase();
+          if (rawDate != null) {
+            final txDate = DateTime.tryParse(rawDate)?.toUtc();
+            if (txDate != null) {
+              if (txDate.isAfter(bestHitUtc) ||
+                  (txDate.isAtSameMomentAs(bestHitUtc) &&
+                      !notes.contains('bal') &&
+                      !notes.contains('credited'))) {
+                postSmsTxns.add(row);
+              }
+            }
+          }
+        }
+
+        double effectiveBal = bestHit.amount;
+        for (final row in postSmsTxns) {
+          final type = row['type'] as String;
+          final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+          final fromAcc = row['account_id'] as String?;
+          final toAcc = row['related_entity_id'] as String?;
+
+          if (type == 'expense' ||
+              type == 'credit_payment' ||
+              type == 'credit_card_purchase') {
+            if (fromAcc == acc.id) effectiveBal -= amt;
+          } else if (type == 'income' || type == 'refund') {
+            if (fromAcc == acc.id) effectiveBal += amt;
+          } else if (type == 'transfer') {
+            if (fromAcc == acc.id) effectiveBal -= amt;
+            if (toAcc == acc.id) effectiveBal += amt;
+          }
+        }
+
+        await AccountRepo().updateBalance(
+          acc.id,
+          effectiveBal,
+          messageDate: DateTime.now(),
+        );
+        balancesApplied++;
+        AppLogger.i(
+          '[LiveSmsService] Reconciled bank balance for ${acc.name}: '
+          'stated ₹${bestHit.amount} at ${bestHit.date}, adjusted to '
+          '₹$effectiveBal after ${postSmsTxns.length} subsequent '
+          'transactions (${attribution.reason})',
+        );
+      }
+    }
+
+    // Apply latest detected credit card balances.
+    if (latestCardBalances.isNotEmpty) {
+      final cards = await CreditRepo().getAll();
+      final db = await AppDatabase.instance.database;
+      for (final entry in latestCardBalances.entries) {
+        final key = entry.key;
+        final hasLast4 = _looksLikeLast4(key);
+        final attribution = BalanceAttribution.resolve(
+          kind: BalanceKind.creditCard,
+          last4: hasLast4 ? key : null,
+          bankKeyword: hasLast4 ? null : key,
+          accounts: const [],
+          cards: cards,
+        );
+        if (!attribution.matched || !attribution.isCreditCard) {
+          if (attribution.ambiguous) {
+            AppLogger.w(
+              '[LiveSmsService] Bulk card balance for "$key" is '
+              'ambiguous (${attribution.reason}); balance preserved.',
+            );
+          }
+          continue;
+        }
+        final card = cards.firstWhere(
+          (c) => c.id == attribution.instrumentId,
+        );
+        final bestHit = entry.value;
+        if (bestHit.amount > 0 || bestHit.isAvailableLimit) {
+          if (bestHit.isAvailableLimit) {
+            final effectiveLimit = (card.limitAmount > 0)
+                ? card.limitAmount
+                : ((bestHit.creditLimit != null && bestHit.creditLimit! > 0)
+                      ? bestHit.creditLimit!
+                      : 0.0);
+            if (effectiveLimit > 0) {
+              double derived = (effectiveLimit - bestHit.amount).clamp(
+                0.0,
+                double.infinity,
+              );
+              final allCardTxns = await db.rawQuery(
+                '''
+                SELECT type, amount, account_id, related_entity_id, date
+                FROM ${Tables.transactions}
+                WHERE (related_entity_id = ? OR account_id = ?)
+                  AND is_deleted = 0;
+              ''',
+                [card.id, card.id],
+              );
+              final bestHitUtc = bestHit.date.toUtc();
+              for (final row in allCardTxns) {
+                final rawDate = row['date'] as String?;
+                if (rawDate != null) {
+                  final txDate = DateTime.tryParse(rawDate)?.toUtc();
+                  if (txDate != null && txDate.isAfter(bestHitUtc)) {
+                    final type = row['type'] as String;
+                    final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+                    if (type == 'credit_payment' || type == 'refund') {
+                      derived -= amt;
+                    } else if (type == 'credit_card_purchase') {
+                      derived += amt;
+                    }
+                  }
+                }
+              }
+              derived = derived.clamp(0.0, double.infinity);
+            }
+          } else {
+            // Net outstanding against any subsequent payments or spends
+            double effectiveCardBal = bestHit.amount;
+            final allCardTxns = await db.rawQuery(
+              '''
+              SELECT type, amount, account_id, related_entity_id, date
+              FROM ${Tables.transactions}
+              WHERE (related_entity_id = ? OR account_id = ?)
+                AND is_deleted = 0;
+            ''',
+              [card.id, card.id],
+            );
+            final bestHitUtc = bestHit.date.toUtc();
+            for (final row in allCardTxns) {
+              final rawDate = row['date'] as String?;
+              if (rawDate != null) {
+                final txDate = DateTime.tryParse(rawDate)?.toUtc();
+                if (txDate != null && txDate.isAfter(bestHitUtc)) {
+                  final type = row['type'] as String;
+                  final amt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+                  if (type == 'credit_payment' || type == 'refund') {
+                    effectiveCardBal -= amt;
+                  } else if (type == 'credit_card_purchase') {
+                    effectiveCardBal += amt;
+                  }
+                }
+              }
+            }
+            effectiveCardBal = effectiveCardBal.clamp(0.0, double.infinity);
+          }
+          if (bestHit.creditLimit != null &&
+              bestHit.creditLimit! > 0 &&
+              card.limitAmount < bestHit.creditLimit!) {
+            await CreditRepo().update(
+              card.copyWith(limitAmount: bestHit.creditLimit!),
+            );
+          }
+          AppLogger.i(
+            '[LiveSmsService] Stated credit balance for ${card.name}: '
+            '₹${bestHit.amount} from latest SMS dated ${bestHit.date}',
+          );
+        }
+      }
+    }
+
+    // Apply latest detected credit card statements
+    if (latestCardStatements.isNotEmpty) {
+      final cards = await CreditRepo().getAll();
+      final db = await AppDatabase.instance.database;
+      for (final entry in latestCardStatements.entries) {
+        final key = entry.key;
+        final hasLast4 = _looksLikeLast4(key);
+        final attribution = BalanceAttribution.resolve(
+          kind: BalanceKind.creditCard,
+          last4: hasLast4 ? key : null,
+          bankKeyword: hasLast4 ? null : key,
+          accounts: const [],
+          cards: cards,
+        );
+        if (!attribution.matched || !attribution.isCreditCard) {
+          if (attribution.ambiguous) {
+            AppLogger.w(
+              '[LiveSmsService] Bulk card statement for "$key" is '
+              'ambiguous (${attribution.reason}); statement preserved.',
+            );
+          }
+          continue;
+        }
+        final card = cards.firstWhere(
+          (c) => c.id == attribution.instrumentId,
+        );
+        final bestStmt = entry.value;
+        if (bestStmt.amount > 0) {
+          final cardKw = card.bank.toLowerCase().contains('icici')
+              ? 'icici'
+              : (card.bank.toLowerCase().contains('csb')
+                    ? 'csb'
+                    : (card.bank.toLowerCase().contains('hdfc')
+                          ? 'hdfc'
+                          : ''));
+          final allPayments = await db.rawQuery(
+            '''
+            SELECT amount, date
+            FROM ${Tables.transactions}
+            WHERE (related_entity_id = ? OR (type = 'credit_payment' AND ? != '' AND LOWER(COALESCE(notes, '')) LIKE '%' || ? || '%'))
+              AND type = 'credit_payment'
+              AND is_deleted = 0;
+          ''',
+            [card.id, cardKw, cardKw],
+          );
+          final stmtDateUtc = bestStmt.date.toUtc();
+          final windowStart = stmtDateUtc.subtract(
+            const Duration(days: 10),
+          );
+          double totalPaidAfter = 0.0;
+          for (final row in allPayments) {
+            final rawDate = row['date'] as String?;
+            if (rawDate != null) {
+              final txDate = DateTime.tryParse(rawDate)?.toUtc();
+              if (txDate != null &&
+                  (txDate.isAfter(windowStart) ||
+                      txDate.isAtSameMomentAs(windowStart))) {
+                totalPaidAfter +=
+                    (row['amount'] as num?)?.toDouble() ?? 0.0;
+              }
+            }
+          }
+          final remainingDue = (bestStmt.amount - totalPaidAfter).clamp(
+            0.0,
+            bestStmt.amount,
+          );
+
+          final updated = card.copyWith(
+            lastStatementBalance: remainingDue,
+            dueDay: bestStmt.dueDate?.day ?? card.dueDay,
+          );
+          await CreditRepo().update(updated);
+          balancesApplied++;
+
+          final stmtId =
+              'stmt_${card.id}_${bestStmt.date.millisecondsSinceEpoch}';
+          final existingStmt = await db.query(
+            Tables.cardStatements,
+            where: 'id = ?',
+            whereArgs: [stmtId],
+            limit: 1,
+          );
+          if (existingStmt.isEmpty) {
+            await CreditRepo().insertStatement(
+              CardStatement(
+                id: stmtId,
+                cardId: card.id,
+                startDate: bestStmt.date.subtract(const Duration(days: 30)),
+                endDate: bestStmt.date,
+                statementAmount: bestStmt.amount,
+                minimumDue: bestStmt.minDue ?? (bestStmt.amount * 0.05),
+                generatedDate: bestStmt.date,
+              ),
+            );
+          }
+
+          final isFullyPaid = remainingDue <= 0.01;
+          final dueDateTime = bestStmt.dueDate ?? card.nextDueDate;
+          await ReminderRepo().insertGlobalReminder(
+            Reminder(
+              id: 'credit_due_${card.id}',
+              type: ReminderType.credit,
+              title: 'Credit Card Due: ${card.name}',
+              linkedEntityId: card.id,
+              dueDate: dueDateTime,
+              amount: isFullyPaid ? 0.0 : remainingDue,
+              isActive: !isFullyPaid,
+              status: isFullyPaid
+                  ? ReminderStatus.inactive
+                  : ReminderStatus.upcoming,
+              recordStatus: isFullyPaid
+                  ? ReminderRecordStatus.done
+                  : ReminderRecordStatus.pending,
+              sourceType: ReminderSourceType.credit,
+              sourceId: card.id,
+            ).toMap(),
+          );
+          AppLogger.i(
+            '[LiveSmsService] Time-stamped statement bill for ${card.name}: '
+            'original ₹${bestStmt.amount} (dated ${bestStmt.date}), '
+            'repayments after bill ₹$totalPaidAfter, net statement due '
+            '₹$remainingDue',
+          );
+        }
+      }
+    }
+
+    DataChangeBus.instance.notify();
+    return balancesApplied;
+  }
+
+  /// Scans historical SMS from the device telephony inbox using bounded, resumable
+  /// pagination, reporting distinct real-time progress metrics to [onProgress].
+  ///
+  /// Every counter reflects distinct records:
+  /// - [messagesScanned]: total raw messages inspected.
+  /// - [financialIdentified]: messages with valid financial keywords/structures.
+  /// - [accountsDiscovered]: distinct bank accounts, cards, or wallets detected.
+  /// - [transactionsImported]: confident, verified transactions safely imported.
+  /// - [existingMatched]: transactions already recorded or merged via deduplication.
+  /// - [reviewRequired]: transactions with missing or ambiguous instrument attribution.
+  /// - [obligationsDetected]: statement bills, due dates, or mandate reminders detected.
+  /// - [nonFinancialIgnored]: OTPs, spam, telecom notices, and non-financial texts dropped.
+  Future<CalibrationScanOutcome> calibrateFromInbox({
+    DateTime? cutoff,
+    void Function(CalibrationProgress progress)? onProgress,
+  }) async {
+    await DatabaseLifecycleCoordinator.instance.waitUntilWritable();
+
+    final hasPermission = await SmsImportService.instance.requestPermission();
+    if (!hasPermission) {
+      return const CalibrationScanOutcome(
+        progress: CalibrationProgress(),
+        completed: false,
+        error: 'SMS permission not granted',
+      );
+    }
+
+    try {
+      await _channel.invokeMethod('syncActiveNotifications');
+    } catch (_) {}
+
+    final now = DateTime.now();
+    // Default calibration window scans up to 1 year of historical SMS inbox
+    final defaultCutoff = DateTime(now.year - 1, now.month, now.day);
+    final scanCutoff = cutoff ?? defaultCutoff;
+
+    var messagesScanned = 0;
+    var financialIdentified = 0;
+    final discoveredAccounts = <String>{};
+    var transactionsImported = 0;
+    var existingMatched = 0;
+    var reviewRequired = 0;
+    var obligationsDetected = 0;
+    var nonFinancialIgnored = 0;
+
+    void emitProgress() {
+      onProgress?.call(CalibrationProgress(
+        messagesScanned: messagesScanned,
+        financialIdentified: financialIdentified,
+        accountsDiscovered: discoveredAccounts.length,
+        transactionsImported: transactionsImported,
+        existingMatched: existingMatched,
+        reviewRequired: reviewRequired,
+        obligationsDetected: obligationsDetected,
+        nonFinancialIgnored: nonFinancialIgnored,
+      ));
+    }
+
+    final outcome = await _inboxScanRunner.run(
+      cutoffMs: scanCutoff.millisecondsSinceEpoch,
+      ignoreCommittedWatermark: true,
+      fetchPage: ({required int sinceEpochMs, int? beforeDate, int? beforeId}) {
+        final args = <String, dynamic>{
+          'sinceEpochMs': sinceEpochMs,
+          'limit': _inboxScanRunner.pageSize,
+        };
+        if (beforeDate != null) args['beforeDate'] = beforeDate;
+        if (beforeId != null) args['beforeId'] = beforeId;
+        return _channel.invokeMapMethod<dynamic, dynamic>(
+          'queryInboxPage',
+          args,
+        );
+      },
+      onLog: (msg) => AppLogger.d('[SmsCalibrationScan] $msg'),
+      onTargetFetched: (count) {
+        emitProgress();
+      },
+      ingestBatch: (ascendingMessages) async {
+        for (final raw in ascendingMessages) {
+          if (raw is! Map) continue;
+          final sender = raw['address']?.toString() ?? '';
+          final body = raw['body']?.toString() ?? '';
+          final rawDate = raw['date'];
+          final rawId = raw['_id'] ?? raw['id'];
+          final DateTime? smsDate = rawDate != null
+              ? DateTime.fromMillisecondsSinceEpoch((rawDate as num).toInt())
+              : null;
+          if (body.trim().isEmpty) continue;
+
+          messagesScanned++;
+
+          final sourceRecordId = rawId != null ? 'SRC:TELEPHONY_SMS:$rawId' : null;
+          final bodyFp = CanonicalTransactionAdapter.computeBodyFingerprint(body);
+
+          if (await _isDurablyQuarantined(sourceRecordId ?? bodyFp)) {
+            nonFinancialIgnored++;
+            continue;
+          }
+
+          final classification = SmsImportService.instance.classifyMessage(
+            body,
+            sender,
+            date: smsDate,
+          );
+
+          final isFinancial = classification.transaction != null ||
+              classification.balance != null ||
+              classification.obligationCancellation != null ||
+              classification.failedObligation != null ||
+              classification.eventType == SmsEventType.billReminder;
+
+          if (!isFinancial) {
+            nonFinancialIgnored++;
+            continue;
+          }
+
+          financialIdentified++;
+
+          // Obligation check
+          if (classification.obligationCancellation != null ||
+              classification.failedObligation != null ||
+              classification.eventType == SmsEventType.billReminder) {
+            obligationsDetected++;
+          }
+
+          // Discover accounts / cards / wallets
+          final last4 = classification.transaction?.last4 ?? classification.balance?.last4;
+          final bankOrIssuer = classification.transaction?.bankName ?? classification.balance?.bankKeyword;
+          if (last4 != null && last4.isNotEmpty) {
+            discoveredAccounts.add('${bankOrIssuer ?? sender}_$last4');
+          } else if (bankOrIssuer != null && bankOrIssuer.isNotEmpty) {
+            discoveredAccounts.add(bankOrIssuer);
+          }
+
+          if (classification.transaction != null) {
+            final res = await _processBody(
+              body,
+              sender: sender,
+              sourceRecordId: sourceRecordId,
+              skipBalance: true,
+              messageDate: smsDate,
+            );
+            if (res.added) {
+              transactionsImported++;
+            } else if (res.status == 'matched') {
+              existingMatched++;
+            } else if (res.status == 'review') {
+              reviewRequired++;
+            } else {
+              nonFinancialIgnored++;
+            }
+          }
+        }
+        emitProgress();
+      },
+      applyBalances: (inboxMessages) async {
+        await _applyLatestBalances(
+          inboxMessages,
+          ingested: transactionsImported,
+        );
+      },
+    );
+
+    // Sync active upcoming obligations
+    try {
+      await syncUpcomingObligationsFromInbox();
+    } catch (_) {}
+
+    return CalibrationScanOutcome(
+      progress: CalibrationProgress(
+        messagesScanned: messagesScanned,
+        financialIdentified: financialIdentified,
+        accountsDiscovered: discoveredAccounts.length,
+        transactionsImported: transactionsImported,
+        existingMatched: existingMatched,
+        reviewRequired: reviewRequired,
+        obligationsDetected: obligationsDetected,
+        nonFinancialIgnored: nonFinancialIgnored,
+      ),
+      completed: outcome.completed,
+      resumed: outcome.resumed,
       error: outcome.error,
     );
   }
@@ -4933,17 +5117,15 @@ class LiveSmsService with WidgetsBindingObserver {
       }
     }
 
-    // Payment app notifications omitting bank details -> link to primary bank if available
-    if (!isWalletSignal &&
-        (sender.startsWith('APP:') ||
-            lowerSender.contains('paisa') ||
-            lowerSender.contains('phonepe') ||
-            lowerSender.contains('gpay') ||
-            lowerSender.contains('upi'))) {
+    // Real-time OS payment app notifications (APP:...) omitting bank details:
+    // If there is an active primary bank asset account, use it for in-flight OS push notifications
+    // pending downstream bank SMS deduplication.
+    // For SMS, inbox scans, and calibration: strictly require explicit source evidence (never silent attribution).
+    if (!isWalletSignal && sender.startsWith('APP:')) {
       final primaryBank =
           accounts.where((a) => a.isAsset && a.accountType != 'wallet').firstOrNull;
       if (primaryBank != null) {
-        return (accountId: primaryBank.id, source: 'sms', instrumentType: 'bank');
+        return (accountId: primaryBank.id, source: 'app_notification', instrumentType: 'bank');
       }
     }
 
@@ -5212,6 +5394,7 @@ class LiveSmsService with WidgetsBindingObserver {
       String? balanceNote,
       Transaction? transaction,
       bool balanceApplied,
+      String status,
     })
   >
   _processBody(
@@ -5227,6 +5410,7 @@ class LiveSmsService with WidgetsBindingObserver {
         balanceNote: null,
         transaction: null,
         balanceApplied: false,
+        status: 'ignored',
       );
     }
 
@@ -5445,11 +5629,13 @@ class LiveSmsService with WidgetsBindingObserver {
           AppLogger.i(
             '[LiveSmsService] Source $effectiveSourceRecordId resolved by dedup engine: ${dedupResult.status}',
           );
+          final status = dedupResult.isRoutedToReviewQueue ? 'review' : 'matched';
           return (
             added: false,
             balanceNote: null,
             transaction: null,
             balanceApplied: false,
+            status: status,
           );
         }
         if (dedupResult.isNewEventCreated) {
@@ -5619,6 +5805,7 @@ class LiveSmsService with WidgetsBindingObserver {
             balanceNote: balanceNote,
             transaction: createdTx,
             balanceApplied: balanceApplied,
+            status: 'created',
           );
         }
       }
@@ -5629,6 +5816,7 @@ class LiveSmsService with WidgetsBindingObserver {
           balanceNote: null,
           transaction: null,
           balanceApplied: false,
+          status: 'ignored',
         );
       }
     }
@@ -6051,6 +6239,7 @@ class LiveSmsService with WidgetsBindingObserver {
       balanceNote: balanceNote,
       transaction: createdTx,
       balanceApplied: balanceApplied,
+      status: createdTx != null ? 'created' : 'ignored',
     );
   }
 

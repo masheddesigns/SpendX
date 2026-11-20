@@ -40,24 +40,24 @@ class AboutScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       Container(
-                        width: 96,
-                        height: 96,
+                        width: 80,
+                        height: 80,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF23BE62).withValues(alpha: 0.3),
+                              color: colorScheme.primary.withValues(alpha: 0.35),
                               blurRadius: 24,
                               spreadRadius: 2,
                             ),
                           ],
                         ),
-                        child: Center(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
                           child: SvgPicture.asset(
                             'assets/logo.svg',
-                            width: 56,
-                            height: 56,
+                            width: 80,
+                            height: 80,
                           ),
                         ),
                       ),

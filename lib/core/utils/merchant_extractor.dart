@@ -1,3 +1,5 @@
+import 'vpa_resolver.dart';
+
 class MerchantExtractor {
   static final _stop = {
     'upi', 'txn', 'ref', 'no', 'bank', 'account', 'ac', 'a/c', 'rs', 'inr',
@@ -36,32 +38,47 @@ class MerchantExtractor {
         caseSensitive: false),
   ];
 
-  /// Extract merchant name from SMS body.
+  /// Extract merchant name from SMS body or VPA.
   /// Returns empty string if no merchant found.
   static String extract(String text) {
+    // 0. High-confidence VPA merchant extraction first
+    final vpaRes = VpaResolver.resolve(text);
+    if (vpaRes != null && vpaRes.merchantName != null) {
+      return vpaRes.merchantName!;
+    }
+
     final lower = text.toLowerCase();
 
-    // Try pattern-based extraction first
+    // Try pattern-based extraction
     for (final pattern in _patterns) {
       final match = pattern.firstMatch(lower);
       if (match != null) {
         final candidate = _clean(match.group(1)!);
-        if (candidate.isNotEmpty && candidate.length >= 2) {
+        // Exclude purely numeric strings or single characters
+        if (candidate.isNotEmpty &&
+            candidate.length >= 2 &&
+            !RegExp(r'^\d+$').hasMatch(candidate)) {
           return _titleCase(candidate);
         }
       }
     }
 
-    // Fallback: longest non-stop-word token (3+ chars)
+    // Fallback: longest non-stop-word token (3+ chars, non-numeric)
     final tokens = lower.split(RegExp(r'[\s,.\-]+'))
       ..removeWhere(
-        (token) => token.isEmpty || _stop.contains(token) || token.length < 3,
+        (token) =>
+            token.isEmpty ||
+            _stop.contains(token) ||
+            token.length < 3 ||
+            RegExp(r'^\d+$').hasMatch(token),
       );
 
     tokens.sort((a, b) => b.length.compareTo(a.length));
     if (tokens.isNotEmpty) {
       final fallback = _clean(tokens.first);
-      if (fallback.length >= 3) return _titleCase(fallback);
+      if (fallback.length >= 3 && !RegExp(r'^\d+$').hasMatch(fallback)) {
+        return _titleCase(fallback);
+      }
     }
     return '';
   }

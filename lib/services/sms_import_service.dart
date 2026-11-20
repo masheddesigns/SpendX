@@ -329,8 +329,13 @@ class SmsImportService {
 
   /// Requests the SMS read permission. Returns true when granted.
   Future<bool> requestPermission() async {
-    final status = await Permission.sms.request();
-    return status.isGranted;
+    if (await Permission.sms.isGranted) return true;
+    try {
+      final status = await Permission.sms.request();
+      return status.isGranted;
+    } catch (_) {
+      return await Permission.sms.isGranted;
+    }
   }
 
   /// Classifies a single incoming SMS message (transaction / balance).

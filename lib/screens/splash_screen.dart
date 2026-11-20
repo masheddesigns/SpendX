@@ -331,8 +331,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       backgroundColor: const Color(0xFF060D1B),
       body: AnimatedBuilder(
@@ -341,12 +339,12 @@ class _SplashScreenState extends State<SplashScreen>
           return Stack(
             children: [
               // ── Background gradient circles ─────────────
-              // Background glow orbs (SpendX green)
+              // Background glow orbs (SpendX brand violet and mint green)
               Positioned(
                 top: -120,
                 right: -80,
                 child: Opacity(
-                  opacity: _glowOpacity.value * 0.3,
+                  opacity: _glowOpacity.value * 0.35,
                   child: Container(
                     width: 300,
                     height: 300,
@@ -354,7 +352,7 @@ class _SplashScreenState extends State<SplashScreen>
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          Color(0x6623BE62),
+                          Color(0x666558E8),
                           Colors.transparent,
                         ],
                       ),
@@ -366,15 +364,15 @@ class _SplashScreenState extends State<SplashScreen>
                 bottom: -100,
                 left: -60,
                 child: Opacity(
-                  opacity: _glowOpacity.value * 0.2,
+                  opacity: _glowOpacity.value * 0.25,
                   child: Container(
                     width: 250,
                     height: 250,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          cs.tertiary.withValues(alpha: 0.3),
+                          Color(0x4035B779),
                           Colors.transparent,
                         ],
                       ),
@@ -394,25 +392,25 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Transform.scale(
                         scale: _logoScale.value,
                         child: Container(
-                          width: 120,
-                          height: 120,
+                          width: 104,
+                          height: 104,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
-                            borderRadius: BorderRadius.circular(32),
+                            borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF23BE62).withValues(
-                                    alpha: _glowOpacity.value * 0.5),
-                                blurRadius: 50,
-                                spreadRadius: 8,
+                                color: const Color(0xFF6558E8).withValues(
+                                    alpha: _glowOpacity.value * 0.55),
+                                blurRadius: 40,
+                                spreadRadius: 4,
                               ),
                             ],
                           ),
-                          child: Center(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
                             child: SvgPicture.asset(
                               'assets/logo.svg',
-                              width: 72,
-                              height: 72,
+                              width: 104,
+                              height: 104,
                             ),
                           ),
                         ),
@@ -432,7 +430,7 @@ class _SplashScreenState extends State<SplashScreen>
                           letterSpacing: 3,
                           shadows: [
                             Shadow(
-                              color: Color(0x8023BE62),
+                              color: Color(0x806558E8),
                               blurRadius: 20,
                             ),
                           ],
@@ -515,8 +513,8 @@ class _SplashScreenState extends State<SplashScreen>
                                 child: ElevatedButton(
                                   onPressed: _isRetrying ? null : _checkInitialState,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF23BE62),
-                                    foregroundColor: const Color(0xFF060D1B),
+                                    backgroundColor: const Color(0xFF6558E8),
+                                    foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
@@ -543,7 +541,7 @@ class _SplashScreenState extends State<SplashScreen>
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Color(0x6623BE62),
+                            color: Color(0x996558E8),
                           ),
                         ),
                       ),

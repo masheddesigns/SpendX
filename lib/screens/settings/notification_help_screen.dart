@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:spend_x/widgets/spendx_app_bar.dart';
 
 
@@ -32,6 +33,17 @@ class NotificationHelpScreen extends StatelessWidget {
               
               _buildStep(context, '2', 'Disable Battery Optimization', 
                 'Go to Settings → Battery → High Background Power Consumption → Enable "SpendX" OR Settings → Apps → SpendX → Battery → Don\'t Optimize.'),
+              
+              Padding(
+                padding: const EdgeInsets.only(left: 44, bottom: 20),
+                child: FilledButton.tonalIcon(
+                  onPressed: () async {
+                    await Permission.ignoreBatteryOptimizations.request();
+                  },
+                  icon: const Icon(Icons.bolt_rounded, color: Color(0xFF8B5CF6)),
+                  label: const Text('Allow High Background Battery'),
+                ),
+              ),
               
               _buildStep(context, '3', 'Lock SpendX in Recents', 
                 'Open the Recent Apps screen, find SpendX, and swipe down on the app card to lock it (a lock icon will appear).'),

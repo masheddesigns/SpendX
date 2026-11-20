@@ -141,26 +141,7 @@ object DynamicIslandOverlayService {
             return
         }
 
-        // 2. Start IslandForegroundService to keep process high-priority while island is showing
-        try {
-            val serviceIntent = Intent(appContext, IslandForegroundService::class.java).apply {
-                action = IslandForegroundService.ACTION_SHOW
-                putExtra(IslandForegroundService.EXTRA_AMOUNT, amount)
-                putExtra(IslandForegroundService.EXTRA_IS_EXPENSE, isExpense)
-                putExtra(IslandForegroundService.EXTRA_SUBTITLE, subtitle)
-                putExtra(IslandForegroundService.EXTRA_TITLE, title)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                appContext.startForegroundService(serviceIntent)
-            } else {
-                appContext.startService(serviceIntent)
-            }
-            android.util.Log.i("DynamicIsland", "Started IslandForegroundService successfully")
-        } catch (e: Exception) {
-            android.util.Log.w("DynamicIsland", "startForegroundService exception: $e")
-        }
-
-        // 3. For non-Vivo devices (or if overlay explicitly desired), trigger system WindowManager notch HUD
+        // 2. For non-Vivo devices (or if overlay explicitly desired), trigger system WindowManager notch HUD
         if (isVivo) {
             // Vivo Origin Island natively adapts the status bar (moves left icons left, battery right).
             // Do not paint a floating overlay on top of the native Origin Island.

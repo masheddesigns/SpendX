@@ -283,6 +283,7 @@ class SmsInboxScanRunner {
     required Future<void> Function(List<dynamic> ascendingMessages) ingestBatch,
     required Future<void> Function(List<dynamic> descendingMessages)
     applyBalances,
+    bool ignoreCommittedWatermark = false,
     void Function(int fetchedCount)? onTargetFetched,
     void Function(int pendingIngest)? onIngestStarting,
     void Function(String message)? onLog,
@@ -293,6 +294,7 @@ class SmsInboxScanRunner {
         fetchPage: fetchPage,
         ingestBatch: ingestBatch,
         applyBalances: applyBalances,
+        ignoreCommittedWatermark: ignoreCommittedWatermark,
         onTargetFetched: onTargetFetched,
         onIngestStarting: onIngestStarting,
         onLog: onLog,
@@ -306,13 +308,14 @@ class SmsInboxScanRunner {
     required Future<void> Function(List<dynamic> ascendingMessages) ingestBatch,
     required Future<void> Function(List<dynamic> descendingMessages)
     applyBalances,
+    bool ignoreCommittedWatermark = false,
     void Function(int fetchedCount)? onTargetFetched,
     void Function(int pendingIngest)? onIngestStarting,
     void Function(String message)? onLog,
   }) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final loaded = await store.load();
-    final committed = loaded.committed;
+    final committed = ignoreCommittedWatermark ? null : loaded.committed;
     final resumed = loaded.hasActiveScan;
     final scanCutoffMs = loaded.activeCutoffMs ?? cutoffMs;
     SmsInboxCursor? fence = loaded.activeFence;

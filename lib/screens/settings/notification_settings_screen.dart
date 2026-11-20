@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/notification_settings_service.dart';
 import '../../services/live_sms_service.dart';
 import '../../services/settings_service.dart';
@@ -30,6 +31,7 @@ class _NotificationSettingsScreenState
   bool _gmailPreviewEnabled = false;
   bool _exactAlarmEnabled = true;
   bool _overlayPermissionEnabled = true;
+  bool _batteryOptimizationIgnored = false;
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _NotificationSettingsScreenState
     final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
     final exactAlarm = await NotificationServiceV2().canScheduleExactAlarms();
     final overlayPerm = await DynamicIslandService.instance.hasOverlayPermission();
+    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
     final waEnabled = SettingsService.instance.whatsappIngestionEnabled;
     final gmEnabled = SettingsService.instance.gmailPreviewEnabled;
     await GmailIntegrationService.instance.init();
@@ -70,6 +73,7 @@ class _NotificationSettingsScreenState
       _gmailPreviewEnabled = gmEnabled;
       _exactAlarmEnabled = exactAlarm;
       _overlayPermissionEnabled = overlayPerm;
+      _batteryOptimizationIgnored = battery;
       _loading = false;
     });
   }
@@ -145,6 +149,58 @@ class _NotificationSettingsScreenState
                       setState(() => _exactAlarmEnabled = updated);
                     },
                     child: const Text('Enable'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (!_batteryOptimizationIgnored) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.battery_alert_rounded,
+                    color: Color(0xFF8B5CF6),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Background Battery Restricted',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'OEM battery savers may terminate live UPI listeners when locked. Allow unrestricted background battery for reliable alerts.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await Permission.ignoreBatteryOptimizations.request();
+                      final updated = await Permission.ignoreBatteryOptimizations.isGranted;
+                      if (mounted) setState(() => _batteryOptimizationIgnored = updated);
+                    },
+                    child: const Text('Unrestrict'),
                   ),
                 ],
               ),

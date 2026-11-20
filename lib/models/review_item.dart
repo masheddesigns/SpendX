@@ -82,6 +82,16 @@ class ParsedTransaction {
   /// to mark the type field as confident vs guessed.
   final bool hasDirectionSignal;
 
+  /// Extracted UPI Virtual Payment Address (e.g. 'swiggy@icici', 'uber.payu@hdfcbank').
+  final String? vpa;
+
+  /// High-level independent transaction intent:
+  /// 'expense' | 'income' | 'transfer' | 'card_payment' | 'refund' | 'obligation' | 'failed' | 'unknown'
+  final String? transactionIntent;
+
+  /// True if entity attribution (e.g. personal vs merchant, missing bank instrument) is ambiguous.
+  final bool isAmbiguous;
+
   const ParsedTransaction({
     required this.amount,
     required this.isCredit,
@@ -96,6 +106,9 @@ class ParsedTransaction {
     this.confidence = 0.0,
     this.merchantSource,
     this.hasDirectionSignal = false,
+    this.vpa,
+    this.transactionIntent,
+    this.isAmbiguous = false,
   });
 
   ParsedTransaction copyWith({
@@ -112,6 +125,9 @@ class ParsedTransaction {
     double? confidence,
     String? merchantSource,
     bool? hasDirectionSignal,
+    String? vpa,
+    String? transactionIntent,
+    bool? isAmbiguous,
   }) {
     return ParsedTransaction(
       amount: amount ?? this.amount,
@@ -127,6 +143,9 @@ class ParsedTransaction {
       confidence: confidence ?? this.confidence,
       merchantSource: merchantSource ?? this.merchantSource,
       hasDirectionSignal: hasDirectionSignal ?? this.hasDirectionSignal,
+      vpa: vpa ?? this.vpa,
+      transactionIntent: transactionIntent ?? this.transactionIntent,
+      isAmbiguous: isAmbiguous ?? this.isAmbiguous,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../features/home/screens/home_screen.dart';
+import '../models/calibration_progress.dart';
 import '../services/entity_consolidation_service.dart';
 import '../services/haptic_service.dart';
 import '../services/live_sms_service.dart';
@@ -24,11 +25,8 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
   late final AnimationController _orbitController;
 
   int _currentStepIndex = 0;
-  int _messagesScanned = 0;
-  int _transactionsFound = 0;
-  int _balancesApplied = 0;
-  int _quarantined = 0;
-  int _rejected = 0;
+  CalibrationProgress _progress = const CalibrationProgress();
+  bool _isResumed = false;
   bool _isFinished = false;
   bool _isRunning = false;
   bool _isError = false;
@@ -81,12 +79,9 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
       _currentStepIndex = 0;
       _isError = false;
       _isFinished = false;
+      _isResumed = false;
       _errorMessage = null;
-      _messagesScanned = 0;
-      _transactionsFound = 0;
-      _balancesApplied = 0;
-      _quarantined = 0;
-      _rejected = 0;
+      _progress = const CalibrationProgress();
     });
     HapticService.instance.tap();
 
@@ -99,33 +94,33 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
         return;
       }
 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 300));
 
-      // Step 1: Drain pending messages
+      // Step 1: Historical SMS inbox scan with real-time live progress
       if (mounted) {
         setState(() => _currentStepIndex = 1);
       }
       HapticService.instance.tap();
 
-      final result = await LiveSmsService.instance.drainPending();
+      final outcome = await LiveSmsService.instance.calibrateFromInbox(
+        onProgress: (p) {
+          if (mounted) {
+            setState(() {
+              _progress = p;
+            });
+          }
+        },
+      );
 
       if (mounted) {
         setState(() {
-          _messagesScanned = result.messagesScanned;
-          _transactionsFound = result.transactionsIngested;
-          _balancesApplied = result.balancesApplied;
-          _quarantined = result.quarantined;
-          _rejected = result.rejected;
+          _progress = outcome.progress;
+          _isResumed = outcome.resumed;
         });
       }
 
-      if (!result.completed) {
-        _fail(
-          result.error ??
-              (result.hasTransientFailure
-                  ? 'Some messages could not be processed yet.'
-                  : 'The SMS import did not finish.'),
-        );
+      if (!outcome.completed) {
+        _fail(outcome.error ?? 'The SMS import did not finish.');
         return;
       }
 
@@ -158,7 +153,9 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     } catch (e) {
       _fail('Setup could not finish: $e');
     } finally {
-      _isRunning = false;
+      if (mounted) {
+        setState(() => _isRunning = false);
+      }
     }
   }
 
@@ -187,7 +184,8 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF090D16) : const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
           child: Column(
             children: [
@@ -206,12 +204,12 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                 ),
               ),
 
-              const Spacer(flex: 1),
+              const SizedBox(height: 12),
 
               // Animated Radar Hologram Core
               _buildRadarHologram(isDark),
 
-              const SizedBox(height: 36),
+              const SizedBox(height: 24),
 
               // Title and Subtitle
               Text(
@@ -246,46 +244,102 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
               // Live Stat Pills
               Wrap(
                 alignment: WrapAlignment.center,
-                spacing: 12,
+                spacing: 10,
                 runSpacing: 10,
                 children: [
                   _buildStatCard(
                     icon: Icons.mark_email_read_rounded,
                     label: 'Scanned',
-                    value: _messagesScanned,
+                    value: _progress.messagesScanned,
                     color: const Color(0xFF38BDF8),
                     isDark: isDark,
+                    explanation: 'Total SMS messages processed from your inbox history.',
                   ),
                   _buildStatCard(
-                    icon: Icons.receipt_long_rounded,
-                    label: 'Transactions',
-                    value: _transactionsFound,
+                    icon: Icons.account_balance_rounded,
+                    label: 'Financial',
+                    value: _progress.financialIdentified,
+                    color: const Color(0xFF60A5FA),
+                    isDark: isDark,
+                    explanation: 'Verified bank alerts, debits, credits, and card notifications.',
+                  ),
+                  _buildStatCard(
+                    icon: Icons.credit_card_rounded,
+                    label: 'Accounts',
+                    value: _progress.accountsDiscovered,
+                    color: const Color(0xFF818CF8),
+                    isDark: isDark,
+                    explanation: 'Bank accounts, credit cards, and digital wallets discovered.',
+                  ),
+                  _buildStatCard(
+                    icon: Icons.check_circle_rounded,
+                    label: 'Imported',
+                    value: _progress.transactionsImported,
                     color: const Color(0xFF10B981),
                     isDark: isDark,
+                    explanation: 'Verified transactions posted to your double-entry ledger.',
                   ),
                   _buildStatCard(
-                    icon: Icons.account_balance_wallet_rounded,
-                    label: 'Balances',
-                    value: _balancesApplied,
-                    color: const Color(0xFF6366F1),
+                    icon: Icons.sync_rounded,
+                    label: 'Matched',
+                    value: _progress.existingMatched,
+                    color: const Color(0xFF14B8A6),
                     isDark: isDark,
+                    explanation: 'Duplicate transactions identified to prevent double-counting.',
                   ),
                   _buildStatCard(
-                    icon: Icons.report_gmailerrorred_rounded,
-                    label: 'Quarantined',
-                    value: _quarantined,
+                    icon: Icons.rate_review_rounded,
+                    label: 'Review',
+                    value: _progress.reviewRequired,
                     color: const Color(0xFFF59E0B),
                     isDark: isDark,
+                    explanation: 'Ambiguous items safely waiting for your 1-tap confirmation.',
+                  ),
+                  _buildStatCard(
+                    icon: Icons.event_note_rounded,
+                    label: 'Bills/Dues',
+                    value: _progress.obligationsDetected,
+                    color: const Color(0xFFA855F7),
+                    isDark: isDark,
+                    explanation: 'Upcoming credit card statements, due dates, and mandate alerts.',
                   ),
                   _buildStatCard(
                     icon: Icons.filter_alt_off_rounded,
-                    label: 'Rejected',
-                    value: _rejected,
+                    label: 'Ignored',
+                    value: _progress.nonFinancialIgnored,
                     color: const Color(0xFF94A3B8),
                     isDark: isDark,
+                    explanation: 'OTPs, spam, and non-financial messages safely skipped.',
                   ),
                 ],
               ),
+
+              if (_isResumed) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF38BDF8).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.history_rounded, size: 14, color: Color(0xFF38BDF8)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Resumed from previous scan checkpoint',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0284C7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               if (_isError) ...[
                 const SizedBox(height: 20),
@@ -389,7 +443,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                 ),
               ),
 
-              const Spacer(flex: 2),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -447,56 +501,109 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     );
   }
 
+  void _showStatExplanation(String label, String description, Color color) {
+    HapticService.instance.tap();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: color.withValues(alpha: 0.5)),
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        duration: const Duration(seconds: 3),
+        content: Row(
+          children: [
+            Icon(Icons.info_outline_rounded, color: color, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+                  const SizedBox(height: 2),
+                  Text(description, style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatCard({
     required IconData icon,
     required String label,
     required int value,
     required Color color,
     required bool isDark,
+    required String explanation,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.12 : 0.08),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        onTap: () => _showStatExplanation(label, explanation, color),
+        splashColor: color.withValues(alpha: 0.2),
+        highlightColor: color.withValues(alpha: 0.1),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: isDark ? 0.12 : 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              CountUpText(
-                value: value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-              ),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isDark ? Colors.white60 : Colors.black54,
-                  fontWeight: FontWeight.w500,
-                ),
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CountUpText(
+                    value: value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildRadarHologram(bool isDark) {
-    return SizedBox(
-      width: 200,
-      height: 200,
-      child: AnimatedBuilder(
+    return GestureDetector(
+      onTap: () {
+        HapticService.instance.tap();
+        _pulseController.forward(from: 0.0);
+        if (!_isRunning && !_isFinished) {
+          _startSyncProcess();
+        }
+      },
+      child: SizedBox(
+        width: 170,
+        height: 170,
+        child: AnimatedBuilder(
         animation: Listenable.merge([_radarController, _pulseController, _orbitController]),
         builder: (context, _) {
           return Stack(
@@ -575,8 +682,9 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildOrbitingSatellite({
     required double angle,
