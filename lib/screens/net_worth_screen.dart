@@ -10,10 +10,8 @@ import '../models/credit_card.dart';
 import '../models/lending.dart';
 import '../models/loan.dart';
 import '../models/net_worth_snapshot_record.dart';
-import '../models/transaction.dart' as spx;
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
-import '../widgets/custom_snackbar.dart';
 import '../shared/widgets/skeleton_loader.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/undo_snackbar_listener.dart';
@@ -22,6 +20,13 @@ import '../features/liabilities/providers/liabilities_providers.dart'
 import 'bank/add_bank_account_screen.dart';
 import 'net_worth/net_worth_report_screen.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/glass/spendx_scaffold.dart';
+import '../shared/widgets/glass/spendx_glass_surface.dart';
+import '../shared/widgets/glass/spendx_glass_button.dart';
+import '../shared/widgets/spendx_app_bar.dart';
+import '../theme/app_theme.dart';
+import 'bank/account_list_screen.dart' show resolveAccountDisplayName;
+import 'expense/add_expense_screen.dart';
 
 class NetWorthScreen extends ConsumerStatefulWidget {
   const NetWorthScreen({super.key});
@@ -135,139 +140,6 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     }
   }
 
-  Future<void> _showTransferDialog() async {
-    final accounts = ref.read(accountsProvider).valueOrNull ?? const <BankAccount>[];
-    if (accounts.length < 2) {
-      CustomSnackBar.show(
-        context,
-        message: 'Add at least 2 accounts to transfer.',
-        isError: true,
-      );
-      return;
-    }
-
-    String? sourceId = accounts.first.id;
-    String? destId = accounts.last.id;
-    final amountController = TextEditingController();
-
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setInner) => AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-          title: const Text('Account Transfer'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: sourceId,
-                decoration: InputDecoration(
-                  labelText: 'From Account',
-                  filled: true,
-                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
-                items: accounts
-                    .map(
-                      (a) => DropdownMenuItem(value: a.id, child: Text(a.name)),
-                    )
-                    .toList(),
-                onChanged: (v) => setInner(() => sourceId = v),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: destId,
-                decoration: InputDecoration(
-                  labelText: 'To Account',
-                  filled: true,
-                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
-                items: accounts
-                    .map(
-                      (a) => DropdownMenuItem(value: a.id, child: Text(a.name)),
-                    )
-                    .toList(),
-                onChanged: (v) => setInner(() => destId = v),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                decoration: InputDecoration(
-                  labelText: 'Amount',
-                  prefixText: '₹',
-                  filled: true,
-                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (sourceId == destId) {
-                  CustomSnackBar.show(
-                    ctx,
-                    message: 'Source and Destination cannot be same.',
-                    isError: true,
-                  );
-                  return;
-                }
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Transfer'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirmed == true) {
-      final amount = double.tryParse(amountController.text) ?? 0.0;
-      if (amount <= 0) return;
-
-      final tx = spx.Transaction(
-        type: 'transfer',
-        amount: amount,
-        accountId: sourceId!,
-        relatedEntityId: destId!,
-        date: DateTime.now(),
-        notes: 'Internal Transfer',
-        userId: 'offline_user',
-      );
-
-      await ref.read(financialTransactionServiceProvider).createTransfer(tx);
-      invalidateAllFinancialProviders(ref);
-
-      if (mounted) {
-        CustomSnackBar.show(context, message: 'Transfer successful!');
-        _refreshData();
-      }
-    }
-  }
-
-  Color _hexColor(String hex) {
-    final clean = hex.replaceAll('#', '');
-    return Color(int.parse('0xFF$clean'));
-  }
-
   @override
   Widget build(BuildContext context) {
     context.watch<SettingsService>();
@@ -309,48 +181,70 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Net Worth'),
+    return SpendXScaffold(
+      appBar: SpendXAppBar(
+        title: 'Net Worth',
         actions: [
           IconButton(
-            icon: const Icon(Icons.history),
+            icon: Icon(
+              Icons.history_rounded,
+              size: 20,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppTheme.darkTextPrimary
+                  : AppTheme.lightTextPrimary,
+            ),
             tooltip: 'Detailed History',
             onPressed: () => Navigator.push(
               context,
               AppPageRoute(builder: (_) => NetWorthReportScreen()),
             ),
           ),
+          IconButton(
+            icon: Icon(
+              Icons.camera_alt_outlined,
+              size: 20,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppTheme.darkTextPrimary
+                  : AppTheme.lightTextPrimary,
+            ),
+            tooltip: 'Record Snapshot',
+            onPressed: _captureSnapshot,
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.add_rounded,
+              size: 22,
+              color: AppTheme.primaryBlue,
+            ),
+            tooltip: 'Add Account',
+            onPressed: () async {
+              final res = await Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => AddBankAccountScreen()),
+              );
+              if (res == true) {
+                _refreshData();
+              }
+            },
+          ),
         ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        label: const Text('Add Account'),
-        icon: const Icon(Icons.add_rounded),
-        onPressed: () async {
-          final res = await Navigator.push(
-            context,
-            AppPageRoute(builder: (_) => AddBankAccountScreen()),
-          );
-          if (res == true) {
-            _refreshData();
-          }
-        },
       ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refreshData,
           child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // ─── Net Worth Hero ───
+              // ─── Liquid Glass Solvency Hero ───
               SliverToBoxAdapter(child: _buildNetWorthHero()),
 
               // ─── Assets Section ───
               SliverToBoxAdapter(
                 child: _buildSectionHeader(
-                  'Assets',
+                  'Liquid Assets',
                   totalAssets,
-                  Theme.of(context).colorScheme.primary,
+                  AppTheme.semanticIncome,
+                  isAsset: true,
                 ),
               ),
 
@@ -368,13 +262,15 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 8,
+                      vertical: 12,
                     ),
                     child: Text(
-                      'No accounts added yet. Tap + to add.',
+                      'No accounts added yet. Tap + to add an account.',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        decoration: TextDecoration.none,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
+                        fontSize: 13,
                       ),
                     ),
                   ),
@@ -383,9 +279,10 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               // ─── Liabilities Section ───
               SliverToBoxAdapter(
                 child: _buildSectionHeader(
-                  'Liabilities',
+                  'Liabilities & Debt',
                   totalLiabilities,
-                  Theme.of(context).colorScheme.error,
+                  AppTheme.semanticExpense,
+                  isAsset: false,
                 ),
               ),
 
@@ -431,19 +328,41 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 8,
+                      vertical: 12,
                     ),
-                    child: Text(
-                      'No liabilities 🎉',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        decoration: TextDecoration.none,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.semanticIncome.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.semanticIncome.withValues(alpha: 0.2),
+                          width: 0.75,
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle_outline_rounded, size: 16, color: AppTheme.semanticIncome),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '100% Debt-Free! Zero active liabilities 🎉',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.semanticIncome,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 112)),
+              const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
           ),
         ),
@@ -456,221 +375,239 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
 
     return summary.when(
       data: (data) {
-        final isPositive = data.netWorth >= 0;
+        final isSolvent = data.netWorth >= 0;
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isPositive
-                  ? isDark
-                      ? [const Color(0xFF0D2818), const Color(0xFF1A1D2E)]
-                      : [const Color(0xFFE8F5E9), const Color(0xFFF0F4FF)]
-                  : isDark
-                      ? [const Color(0xFF2D1215), const Color(0xFF1A1D2E)]
-                      : [const Color(0xFFFCE4EC), const Color(0xFFF0F4FF)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isPositive
-                  ? (isDark ? const Color(0xFF4CAF50) : const Color(0xFF81C784))
-                      .withValues(alpha: 0.3)
-                  : (isDark ? const Color(0xFFEF5350) : const Color(0xFFE57373))
-                      .withValues(alpha: 0.3),
-            ),
-          ),
-          child: Column(
-            children: [
-              Text(
-                'Net Worth',
-                style: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
-                  fontSize: 12,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w600,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${isPositive ? '' : '-'}${AppFormat.currency(data.netWorth.abs())}',
-                style: TextStyle(
-                  color: isPositive
-                      ? (isDark ? const Color(0xFF4CAF50) : const Color(0xFF2E7D32))
-                      : (isDark ? const Color(0xFFEF5350) : const Color(0xFFC62828)),
-                  fontSize: 38,
-                  fontWeight: FontWeight.w700,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-              if (SettingsService.instance.netWorthLastUpdated != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Last updated: ${DateFormat('dd MMM, hh:mm a').format(SettingsService.instance.netWorthLastUpdated!)}',
-                    style: TextStyle(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.5),
-                      fontSize: 12,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF0D2818)
-                            : const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: _heroStat(
-                        'Total Assets',
-                        AppFormat.currency(data.assets < 0 ? 0 : data.assets),
-                        isDark
-                            ? const Color(0xFF4CAF50)
-                            : const Color(0xFF2E7D32),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF2D1215)
-                            : const Color(0xFFFCE4EC),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: _heroStat(
-                        'Total Liabilities',
-                        AppFormat.currency(data.liabilities),
-                        isDark
-                            ? const Color(0xFFEF5350)
-                            : const Color(0xFFC62828),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _captureSnapshot,
-                  icon: const Icon(Icons.add_chart, size: 18),
-                  label: const Text('Record Net Worth Snapshot'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.onSurface,
-                    side: BorderSide(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      loading: () => const SkeletonLoader.summary(),
-      error: (e, _) => Text('$e'),
-    );
-  }
+        final nonNegativeAssets = data.assets < 0 ? 0.0 : data.assets;
+        final totalCapital = nonNegativeAssets + data.liabilities;
+        final double assetPct = totalCapital > 0 ? (nonNegativeAssets / totalCapital).clamp(0.0, 1.0) : 1.0;
 
-  Widget _heroStat(String label, String val, Color color) => Column(
-    children: [
-      Text(
-        val,
-        style: TextStyle(
-          color: color,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ),
-    ],
-  );
-
-  Widget _buildSectionHeader(String title, double total, Color color) =>
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Text(
-                    title == 'Liabilities'
-                        ? 'What you owe'
-                        : TextFormatter.toSmartTitleCase(title),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.5,
-                      decoration: TextDecoration.none,
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.elevated,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'TOTAL NET WORTH',
+                      style: TextStyle(
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        fontSize: 11,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (title == 'Assets' &&
-                      (ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[])
-                              .length >=
-                          2) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _showTransferDialog,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isSolvent
+                            ? const Color(0x1F10B981)
+                            : const Color(0x1FEF4444),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSolvent
+                              ? const Color(0x4010B981)
+                              : const Color(0x40EF4444),
+                          width: 0.75,
                         ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isSolvent ? Icons.verified_rounded : Icons.warning_amber_rounded,
+                            size: 13,
+                            color: isSolvent ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isSolvent ? 'Solvent' : 'Debt Exceeds Assets',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isSolvent ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${data.netWorth < 0 ? '-' : ''}${AppFormat.currency(data.netWorth.abs())}',
+                  style: TextStyle(
+                    color: isSolvent
+                        ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                        : AppTheme.semanticExpense,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    letterSpacing: -1.0,
+                  ),
+                ),
+                if (SettingsService.instance.netWorthLastUpdated != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Synced ${DateFormat('dd MMM, hh:mm a').format(SettingsService.instance.netWorthLastUpdated!)}',
+                      style: TextStyle(
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+
+                // Solvency Split Progress Bar
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Assets ${(assetPct * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.semanticIncome,
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.swap_horiz,
-                              size: 14,
-                              color: Theme.of(context).colorScheme.primary,
+                        if (data.liabilities > 0)
+                          Text(
+                            'Liabilities ${((1.0 - assetPct) * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.semanticExpense,
                             ),
-                            const SizedBox(width: 4),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        height: 7,
+                        width: double.infinity,
+                        color: isDark ? const Color(0x22FFFFFF) : const Color(0x18000000),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: (assetPct * 1000).round().clamp(1, 999),
+                              child: Container(color: AppTheme.semanticIncome),
+                            ),
+                            if (data.liabilities > 0)
+                              Expanded(
+                                flex: (((1.0 - assetPct) * 1000).round()).clamp(1, 999),
+                                child: Container(color: AppTheme.semanticExpense),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // Two stats boxes
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.semanticIncome.withValues(alpha: isDark ? 0.12 : 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.semanticIncome.withValues(alpha: isDark ? 0.25 : 0.15),
+                            width: 0.75,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.arrow_upward_rounded, size: 14, color: AppTheme.semanticIncome),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'Total Assets',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
                             Text(
-                              'Transfer',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
+                              AppFormat.currency(nonNegativeAssets),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                                color: AppTheme.semanticIncome,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.12 : 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.25 : 0.15),
+                            width: 0.75,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.arrow_downward_rounded, size: 14, color: AppTheme.semanticExpense),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'Total Liabilities',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              AppFormat.currency(data.liabilities),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: [FontFeature.tabularFigures()],
+                                color: AppTheme.semanticExpense,
                               ),
                             ),
                           ],
@@ -678,16 +615,69 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       ),
                     ),
                   ],
-                ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // Quick Action Button: Move Funds
+                Row(
+                  children: [
+                    Expanded(
+                      child: SpendXGlassButton(
+                        variant: SpendXGlassButtonVariant.tonal,
+                        onPressed: () async {
+                          final res = await Navigator.push(
+                            context,
+                            AppPageRoute(builder: (_) => const AddExpenseScreen(initialType: 'transfer')),
+                          );
+                          if (res == true) _refreshData();
+                        },
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.swap_horiz_rounded, size: 16, color: AppTheme.primaryBlue),
+                            SizedBox(width: 6),
+                            Text('Move Funds', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SkeletonLoader.summary(),
+      error: (e, _) => Center(child: Text('$e')),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, double total, Color color, {required bool isAsset}) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppTheme.darkTextMuted
+                    : AppTheme.lightTextMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
               ),
             ),
             Text(
-              AppFormat.currency(title == 'Assets' ? (total < 0 ? 0 : total) : total),
+              AppFormat.currency(isAsset ? (total < 0 ? 0 : total) : total),
               style: TextStyle(
                 color: color,
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
-                decoration: TextDecoration.none,
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],
@@ -695,24 +685,46 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       );
 
   Widget _buildAccountTile(BankAccount a) {
-    final color = _hexColor(a.color);
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      child: InkWell(
-        onLongPress: () => _showAccountMenu(a),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final displayName = resolveAccountDisplayName(a.name);
+    final isCash = a.id == 'acc_cash_default' ||
+        a.accountType.toLowerCase().contains('cash') ||
+        a.name.toLowerCase().contains('cash');
+    final iconData = isCash
+        ? Icons.payments_rounded
+        : (a.accountType == 'current'
+            ? Icons.business_center_rounded
+            : Icons.account_balance_rounded);
+    final bankName = isCash
+        ? 'Physical Cash'
+        : (a.bank == 'acc_cash_default' ? 'Bank Account' : TextFormatter.toSmartTitleCase(a.bank));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: SpendXGlassSurface(
+        width: double.infinity,
+        level: SpendXGlassLevel.base,
+        borderRadius: BorderRadius.circular(AppRadius.m),
+        padding: const EdgeInsets.all(14),
+        child: InkWell(
+          onLongPress: () => _showAccountMenu(a),
+          borderRadius: BorderRadius.circular(AppRadius.m),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
+                  color: isCash
+                      ? AppTheme.semanticIncome.withValues(alpha: isDark ? 0.20 : 0.12)
+                      : AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.account_balance, color: color, size: 20),
+                child: Icon(
+                  iconData,
+                  color: isCash ? AppTheme.semanticIncome : AppTheme.primaryBlue,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -720,14 +732,24 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      TextFormatter.toSmartTitleCase(a.name),
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    Text(
-                      '${TextFormatter.toSmartTitleCase(a.bank)} · ${TextFormatter.toSmartTitleCase(a.accountType)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      displayName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$bankName • ${TextFormatter.toSmartTitleCase(a.accountType)}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -736,11 +758,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 a.balance < 0
                     ? 'Overdrawn: ${AppFormat.currency(a.balance.abs())}'
                     : AppFormat.currency(a.balance),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                   color: a.balance < 0
                       ? const Color(0xFFD97706)
-                      : color,
-                  fontWeight: FontWeight.w700,
+                      : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
                 ),
               ),
             ],
@@ -752,132 +776,161 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
 
   Widget _buildCcLiabilityTile(CreditCard c) {
     if (c.outstanding <= 0) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.error.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.credit_card,
-              color: Theme.of(context).colorScheme.error,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  TextFormatter.toSmartTitleCase(c.name),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.none,
-                  ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardName = resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Credit Card');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: SpendXGlassSurface(
+        width: double.infinity,
+        level: SpendXGlassLevel.base,
+        borderRadius: BorderRadius.circular(AppRadius.m),
+        padding: const EdgeInsets.all(14),
+        child: InkWell(
+          onTap: () async {
+            final res = await Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => const AddExpenseScreen(initialType: 'transfer')),
+            );
+            if (res == true) _refreshData();
+          },
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.20 : 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                Text(
-                  'Credit Card · ****${c.last4}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                    decoration: TextDecoration.none,
-                  ),
+                child: const Icon(
+                  Icons.credit_card_rounded,
+                  color: AppTheme.semanticExpense,
+                  size: 20,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cardName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${c.bank} • ••${c.last4}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '−${AppFormat.currency(c.usedAmount)}',
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                      color: AppTheme.semanticExpense,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Tap to pay bill',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          Text(
-            '−${AppFormat.currency(c.usedAmount)}',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              decoration: TextDecoration.none,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildLendingLiabilityTile(Lending l) {
     final remaining = l.originalAmount - l.paidAmount;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.tertiary.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: SpendXGlassSurface(
+        width: double.infinity,
+        level: SpendXGlassLevel.base,
+        borderRadius: BorderRadius.circular(AppRadius.m),
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.20 : 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.handshake_rounded,
+                color: Color(0xFFF59E0B),
+                size: 20,
+              ),
             ),
-            child: Icon(
-              Icons.handshake,
-              color: Theme.of(context).colorScheme.tertiary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Borrowed from ${TextFormatter.toSmartTitleCase(l.personName)}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.none,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Borrowed from ${TextFormatter.toSmartTitleCase(l.personName)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                Text(
-                  'Loan',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                    decoration: TextDecoration.none,
+                  const SizedBox(height: 2),
+                  Text(
+                    'Peer Borrowing • Repayment Due',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Text(
-            '−${AppFormat.currency(remaining)}',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.tertiary,
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              decoration: TextDecoration.none,
+            Text(
+              '−${AppFormat.currency(remaining)}',
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                fontFeatures: [FontFeature.tabularFigures()],
+                color: Color(0xFFF59E0B),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
   void _showAccountMenu(BankAccount a) {
     showModalBottomSheet(
       context: context,

@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/category_resolver.dart';
 import '../../../core/utils/merchant_extractor.dart';
 import '../../../data/repositories/account_repo.dart';
+import '../../../data/repositories/credit_repo.dart';
 import '../../../data/repositories/review_repo.dart';
 import '../../../data/repositories/transaction_repo.dart';
-import '../../../models/review_item.dart';
+import '../../../models/bank_account.dart';
+import '../../../shared/widgets/glass/spendx_transaction_tile.dart' show cleanTransactionDisplayTitle;
 import '../../../models/transaction.dart';
+import '../../../models/review_item.dart';
 import '../../../services/financial_transaction_service.dart';
 import '../../../services/smart_category_classifier.dart';
 import '../../merchant_rules/data/merchant_rule_repo.dart';
@@ -33,6 +36,27 @@ Future<String?> _matchAccountIdForParsed(ParsedTransaction parsed) async {
           )
           .toList();
       if (byBank.length == 1) return byBank.first.id;
+    }
+
+    // Auto-match or auto-create digital wallet account on approval
+    final text = '${parsed.rawText} ${parsed.merchant ?? ''}'.toLowerCase();
+    if (text.contains('apay') || text.contains('amazon pay')) {
+      final apay = accounts.where((a) => a.accountType == 'wallet' && (a.name.toLowerCase().contains('amazon') || a.name.toLowerCase().contains('apay'))).firstOrNull;
+      if (apay != null) return apay.id;
+      final newWallet = BankAccount(name: 'Amazon Pay Wallet', bank: 'Amazon Pay', accountType: 'wallet', balance: 0);
+      return await AccountRepo().insertAccount(newWallet);
+    }
+    if (text.contains('paytm wallet') || text.contains('paytm balance')) {
+      final paytm = accounts.where((a) => a.accountType == 'wallet' && a.name.toLowerCase().contains('paytm')).firstOrNull;
+      if (paytm != null) return paytm.id;
+      final newWallet = BankAccount(name: 'Paytm Wallet', bank: 'Paytm', accountType: 'wallet', balance: 0);
+      return await AccountRepo().insertAccount(newWallet);
+    }
+    if (text.contains('mobikwik')) {
+      final mobikwik = accounts.where((a) => a.accountType == 'wallet' && a.name.toLowerCase().contains('mobikwik')).firstOrNull;
+      if (mobikwik != null) return mobikwik.id;
+      final newWallet = BankAccount(name: 'Mobikwik Wallet', bank: 'Mobikwik', accountType: 'wallet', balance: 0);
+      return await AccountRepo().insertAccount(newWallet);
     }
   } catch (_) {}
   return null;
@@ -74,9 +98,19 @@ Future<void> approveReviewItem({
   final rRepo = reviewRepo ?? ReviewRepo();
   final fSvc = financialService ?? FinancialTransactionService();
   final parsed = item.parsed;
-  final fallbackNote = parsed.rawText.length > 100
-      ? parsed.rawText.substring(0, 100)
-      : parsed.rawText;
+
+  // ── Clean fallback note ───────────────────────────────────────────────────
+  // Guard against raw JSON leaking in as the transaction note.
+  // "{"body":"Your Apay..."}}" must never appear as a user-visible note.
+  String cleanNote(String raw) {
+    final trimmed = raw.trim();
+    // Detect raw JSON (starts with '{' or '[') — never use as note.
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return '';
+    // Truncate to a sane display length.
+    return trimmed.length > 80 ? '${trimmed.substring(0, 80)}…' : trimmed;
+  }
+
+  final fallbackNote = cleanNote(parsed.rawText);
 
   // Balance-attribution candidates are informational: they exist because an
   // SMS balance statement could not be matched to an instrument. Approving
@@ -87,7 +121,46 @@ Future<void> approveReviewItem({
     return;
   }
 
-  final type = typeOverride ?? (parsed.isCredit ? 'income' : 'expense');
+  // Detect if this candidate represents a credit card repayment acknowledgment:
+  final isCcPayment = parsed.source == 'credit_card_payment' ||
+      parsed.merchantSource == 'card_payment_receipt' ||
+      RegExp(
+        r'\b(?:payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|settled)\s+(?:on|towards|for)\s+(?:your\s+)?.*?(?:credit\s*card|card))\b',
+        caseSensitive: false,
+      ).hasMatch(parsed.rawText) ||
+      RegExp(r'\b(?:received\s+towards\s+your\s+credit\s*card)\b', caseSensitive: false).hasMatch(parsed.rawText);
+
+  final type = typeOverride ??
+      (isCcPayment
+          ? 'credit_payment'
+          : (parsed.isCredit ? 'income' : 'expense'));
+
+  // Target credit card resolution for credit card repayments:
+  String? relatedEntityId;
+  if (isCcPayment) {
+    try {
+      final cards = await CreditRepo().getAll();
+      if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+        final cardMatch = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
+        relatedEntityId = cardMatch?.id;
+      }
+      if (relatedEntityId == null && parsed.bankName != null) {
+        final cardMatch = cards.where((c) =>
+            c.bank.toLowerCase().contains(parsed.bankName!.toLowerCase()) ||
+            c.name.toLowerCase().contains(parsed.bankName!.toLowerCase())).firstOrNull;
+        relatedEntityId = cardMatch?.id;
+      }
+      if (relatedEntityId == null && cards.isNotEmpty) {
+        for (final c in cards) {
+          if (parsed.rawText.toLowerCase().contains(c.bank.toLowerCase()) ||
+              parsed.rawText.toLowerCase().contains(c.name.toLowerCase())) {
+            relatedEntityId = c.id;
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+  }
 
   // Idempotency: if this item's transaction already exists (e.g. a prior
   // approve inserted it but the item never got marked), just mark approved.
@@ -104,7 +177,7 @@ Future<void> approveReviewItem({
   // pick one — repeat merchants keep the same category.
   var effectiveCategoryId = categoryId;
   String? effectiveCategoryName;
-  if (effectiveCategoryId == null) {
+  if (!isCcPayment && effectiveCategoryId == null) {
     final resolution = await resolveCategoryForText(
       rawText: parsed.rawText,
       merchant: parsed.merchant,
@@ -116,7 +189,25 @@ Future<void> approveReviewItem({
 
   // Auto-link the matched account so approving also updates its balance.
   var effectiveAccountId = accountId;
-  effectiveAccountId ??= await _matchAccountIdForParsed(parsed);
+  if (!isCcPayment) {
+    effectiveAccountId ??= await _matchAccountIdForParsed(parsed);
+  }
+
+  // ── Resolve clean transaction notes ──────────────────────────────────────
+  // Priority: (1) clean display title  (2) parsed merchant name  (3) fallbackNote
+  // Never use raw JSON strings or raw SMS sentences as notes.
+  final cleanTitle = cleanTransactionDisplayTitle(
+    parsed.merchant ?? parsed.rawText,
+    categoryName: effectiveCategoryName,
+    isCcPayment: isCcPayment,
+  );
+  final notes = isCcPayment
+      ? (parsed.bankName != null ? 'Payment to ${parsed.bankName}' : 'Credit Card Repayment')
+      : (cleanTitle.isNotEmpty && !cleanTitle.startsWith('{')
+          ? cleanTitle
+          : ((parsed.merchant != null && parsed.merchant!.trim().isNotEmpty)
+              ? parsed.merchant!.trim()
+              : (fallbackNote.isNotEmpty ? fallbackNote : 'Expense')));
 
   final transaction = Transaction(
     amount: parsed.amount,
@@ -124,9 +215,10 @@ Future<void> approveReviewItem({
     type: type,
     categoryId: effectiveCategoryId,
     accountId: effectiveAccountId,
+    relatedEntityId: relatedEntityId,
     date: parsed.date,
-    notes: parsed.merchant ?? fallbackNote,
-    source: 'review',
+    notes: notes,
+    source: isCcPayment ? 'credit_card_payment' : 'review',
     externalRef: externalRef,
   );
 

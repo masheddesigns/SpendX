@@ -852,8 +852,10 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                     ...List.generate(txnsInGroup.length, (index) {
                       final t = txnsInGroup[index];
                       final isLast = index == txnsInGroup.length - 1;
-                      final fromName = accountsMap[t.accountId];
-                      final toName = accountsMap[t.relatedEntityId];
+                      final fromName = accountsMap[t.accountId] ??
+                          (t.accountId != null && t.accountId!.isNotEmpty ? resolveAccountDisplayName(t.accountId!) : null);
+                      final toName = accountsMap[t.relatedEntityId] ??
+                          (t.relatedEntityId != null && t.relatedEntityId!.isNotEmpty ? resolveAccountDisplayName(t.relatedEntityId!) : null);
                       final flowLabel = (t.isTransferType && toName != null)
                           ? (fromName != null ? '$fromName → $toName' : '→ $toName')
                           : (fromName ?? '');

@@ -22,8 +22,47 @@ class ReportsCategoryResolver {
   };
 
   /// Resolves known seeded category identifiers to human-readable names.
-  /// If the input is not in the exact dictionary, returns [rawName] unchanged.
+  /// Formats hierarchical canonical account names (e.g. "Expense:General:Miscellaneous" -> "Miscellaneous").
+  /// Replaces raw UUID strings with a clean category label.
+  /// Preserves custom user-created category names verbatim.
   static String resolve(String rawName) {
-    return _knownCategoryLabels[rawName] ?? rawName;
+    final trimmed = rawName.trim();
+    if (_knownCategoryLabels.containsKey(trimmed)) {
+      return _knownCategoryLabels[trimmed]!;
+    }
+
+    // Handle hierarchical canonical account names: "Expense:General:Miscellaneous" -> "Miscellaneous"
+    if (trimmed.contains(':')) {
+      final parts = trimmed.split(':');
+      final last = parts.last.trim();
+      if (last.isNotEmpty &&
+          last.toLowerCase() != 'general' &&
+          last.toLowerCase() != 'expense' &&
+          last.toLowerCase() != 'income') {
+        return last;
+      }
+    }
+
+    // Handle sys_ accounts: "sys_exp_misc" -> "Miscellaneous"
+    if (trimmed.startsWith('sys_exp_') || trimmed.startsWith('sys_inc_')) {
+      final key = trimmed.replaceFirst(RegExp(r'^sys_(?:exp|inc)_'), '');
+      if (key == 'misc') return 'Miscellaneous';
+      if (key == 'refunds') return 'Refunds';
+      if (key == 'interest') return 'Interest';
+      if (key.isNotEmpty) {
+        return key[0].toUpperCase() + key.substring(1);
+      }
+    }
+
+    // If it is a raw UUID, fallback to a clean label
+    final uuidRegex = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    );
+    if (uuidRegex.hasMatch(trimmed)) {
+      return 'General Expense';
+    }
+
+    return rawName;
   }
 }

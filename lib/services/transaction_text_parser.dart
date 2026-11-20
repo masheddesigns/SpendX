@@ -26,7 +26,98 @@ class TransactionTextParser {
   /// stale cached entries from older builds can never be served.
   /// Mixed into the cache key — a version bump effectively wipes the cache
   /// without needing an explicit clear.
-  static const _parserVersion = 6;
+  static const _parserVersion = 8;
+
+  // ── Indian-bank date extraction ───────────────────────────────────
+  //
+  // Covers the most common formats found in Indian banking SMS:
+  //   15Nov26 21:43        → "ddMonyy HH:mm"
+  //   19-Nov-2026          → "d-Mon-yyyy"
+  //   2026-11-19T13:46:43  → ISO 8601
+  //   03/11/2026           → "dd/MM/yyyy"
+  //   15-11-26 21:43       → "dd-MM-yy HH:mm"
+
+  static final _monthNames = <String, int>{
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+  };
+
+  /// Extracts the transaction date from raw SMS / notification text.
+  ///
+  /// Skips dates that are preceded by due-date phrases (e.g. "due on", "pay by",
+  /// "scheduled on") to ensure bill due dates are never mistaken for transaction dates.
+  /// Returns null if no date is found; callers must fall back to
+  /// [messageTimestamp] or [DateTime.now()].
+  static DateTime? extractDateFromText(String text) {
+    bool isDueDatePrefix(String prefix) {
+      final trimmed = prefix.trimRight();
+      return RegExp(
+        r'\b(?:due\s+on|due\s+by|pay\s+by|payable\s+by|payable\s+on|scheduled\s+on|'
+        r'next\s+debit\s+on|renew\s+by|valid\s+till|valid\s+up\s+to|expires?\s+on|'
+        r'due\s+date|pay\s+before)\s*[:\-]?$',
+        caseSensitive: false,
+      ).hasMatch(trimmed);
+    }
+
+    // 1. ISO 8601 partial: "2026-11-19T13:46:43...", "2026-11-05:14:49:06" or "2026-11-19"
+    final isoRe = RegExp(
+      r'\b(\d{4})-(\d{2})-(\d{2})(?:[T\s:](\d{2}):(\d{2})(?::(\d{2}))?)?',
+    );
+    for (final isoM in isoRe.allMatches(text)) {
+      if (isDueDatePrefix(text.substring(0, isoM.start))) continue;
+      final y = int.parse(isoM.group(1)!);
+      final mo = int.parse(isoM.group(2)!);
+      final d = int.parse(isoM.group(3)!);
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+        final h = int.tryParse(isoM.group(4) ?? '') ?? 0;
+        final mi = int.tryParse(isoM.group(5) ?? '') ?? 0;
+        final s = int.tryParse(isoM.group(6) ?? '') ?? 0;
+        return DateTime(y, mo, d, h, mi, s);
+      }
+    }
+
+    // 2. "15Nov26 21:43" or "19-Nov-2026" (ddMonyy or dd-Mon-yyyy)
+    final monRe = RegExp(
+      r'\b(\d{1,2})[-\s]?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-\s]?(\d{2,4})'
+      r'(?:[T\s,:]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?',
+      caseSensitive: false,
+    );
+    for (final monM in monRe.allMatches(text)) {
+      if (isDueDatePrefix(text.substring(0, monM.start))) continue;
+      final d = int.parse(monM.group(1)!);
+      final moStr = monM.group(2)!.toLowerCase().substring(0, 3);
+      var y = int.parse(monM.group(3)!);
+      if (y < 100) y += 2000;
+      final mo = _monthNames[moStr] ?? 0;
+      if (mo >= 1 && d >= 1 && d <= 31) {
+        final h = int.tryParse(monM.group(4) ?? '') ?? 0;
+        final mi = int.tryParse(monM.group(5) ?? '') ?? 0;
+        final s = int.tryParse(monM.group(6) ?? '') ?? 0;
+        return DateTime(y, mo, d, h, mi, s);
+      }
+    }
+
+    // 3. "03/11/2026" or "03-11-26" (dd/MM/yyyy or dd-MM-yy)
+    final numRe = RegExp(
+      r'\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})(?:[T\s,:]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?',
+    );
+    for (final numM in numRe.allMatches(text)) {
+      if (isDueDatePrefix(text.substring(0, numM.start))) continue;
+      final d = int.parse(numM.group(1)!);
+      final mo = int.parse(numM.group(2)!);
+      var y = int.parse(numM.group(3)!);
+      if (y < 100) y += 2000;
+      // Sanity check: day 1–31, month 1–12
+      if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
+        final h = int.tryParse(numM.group(4) ?? '') ?? 0;
+        final mi = int.tryParse(numM.group(5) ?? '') ?? 0;
+        final s = int.tryParse(numM.group(6) ?? '') ?? 0;
+        return DateTime(y, mo, d, h, mi, s);
+      }
+    }
+
+    return null;
+  }
 
   /// Cache TTL — entries older than this are evicted on read. Prevents
   /// long-lived runs from accumulating drift; 5 minutes is well past any
@@ -41,12 +132,17 @@ class TransactionTextParser {
   /// Parse [text] with merchant memory lookup. Use this from production
   /// entry points (router, share intent) so user corrections compound
   /// over time. Tests can use the sync [parse] directly.
+  ///
+  /// [messageTimestamp] — the SMS envelope or notification post time.
+  /// When provided, it is used as the transaction date fallback when no
+  /// date is found in the message body. Defaults to [DateTime.now()].
   static Future<ParsedTransaction> parseWithLearning(
     String text, {
     String? source,
+    DateTime? messageTimestamp,
   }) async {
     final learned = await MerchantMemory.instance.check(text);
-    return parse(text, source: source, learnedMerchant: learned);
+    return parse(text, source: source, learnedMerchant: learned, messageTimestamp: messageTimestamp);
   }
 
   /// Parse [text] into a [ParsedTransaction]. Always returns a result —
@@ -56,10 +152,17 @@ class TransactionTextParser {
   /// [learnedMerchant] — optional precomputed merchant from MerchantMemory.
   /// When supplied, takes top priority and returns with `merchantSource =
   /// 'learned'` (highest-confidence band).
+  ///
+  /// [messageTimestamp] — the SMS envelope timestamp (milliseconds epoch from
+  /// the Android `Telephony.Sms.DATE` column) or notification post time.
+  /// Resolution order: (1) date extracted from message body → (2) messageTimestamp
+  /// → (3) DateTime.now(). This ensures transactions always land on their actual
+  /// calendar date rather than the moment SpendX processes them.
   static ParsedTransaction parse(
     String text, {
     String? source,
     String? learnedMerchant,
+    DateTime? messageTimestamp,
   }) {
     // Lightweight cache: identical share within the same session reuses
     // the last result. Most user flows produce duplicate parse calls
@@ -68,7 +171,12 @@ class TransactionTextParser {
     //
     // Key folds in `_parserVersion` so a code bump auto-invalidates all
     // stored entries — no explicit clear ever needed.
-    final cacheKey = Object.hash(_parserVersion, text, source, learnedMerchant);
+    // messageTimestamp epoch millis folded in so callers with different
+    // envelope times produce distinct entries rather than serving stale dates.
+    final cacheKey = Object.hash(
+      _parserVersion, text, source, learnedMerchant,
+      messageTimestamp?.millisecondsSinceEpoch,
+    );
     final cached = _parseCache[cacheKey];
     if (cached != null) {
       // TTL check — drop stale entries even if key still matches.
@@ -116,7 +224,7 @@ class TransactionTextParser {
         amountFromFallback = true;
       }
     }
-    final isCredit = _resolveCredit(hasCredit: hasCredit, hasDebit: hasDebit);
+    final isCredit = _resolveCredit(hasCredit: hasCredit, hasDebit: hasDebit, lower: lower);
     // Resolution priority (top wins):
     //   1. Learned (user-confirmed memory)
     //   2. body_strong (dictionary alias match)
@@ -167,11 +275,18 @@ class TransactionTextParser {
     confidence = confidence.clamp(0.0, 1.0);
     confidence = (confidence * 100).round() / 100;
 
+    // ── Date resolution ─────────────────────────────────────────────
+    // Priority: (1) date in message body → (2) SMS envelope timestamp
+    // → (3) DateTime.now() as last resort.
+    // This guarantees transactions land on the actual calendar day
+    // the transaction happened, not when SpendX processed the alert.
+    final txDate = extractDateFromText(text) ?? messageTimestamp ?? DateTime.now();
+
     final result = ParsedTransaction(
       amount: amount,
       isCredit: isCredit,
       rawText: text,
-      date: DateTime.now(),
+      date: txDate,
       merchant: merchant,
       refId: refId,
       last4: last4,
@@ -554,13 +669,44 @@ class TransactionTextParser {
   /// positives.
   static final _outgoingToRecipientRe = RegExp(r'\bTo\s+[A-Z][a-zA-Z]{1,}');
 
-  /// Resolve credit/debit from precomputed signals. Debit wins on tie
-  /// (most receipts are spends). Pure function — kept here so the tie-
-  /// breaking rule lives next to the keyword definitions.
+  /// Strong credit-only patterns that should NEVER be overridden by
+  /// a generic debit verb. Used to protect incoming credits in Indian bank
+  /// SMS that contain composite phrases like
+  ///   "Payment of Rs 500 credited to your account"  ← payment= debit verb BUT
+  ///   "credited" is the stronger, more specific signal.
+  ///
+  /// Matches:
+  ///   - "credited to (your) a/c / account / account no."
+  ///   - "credited to xx1234" / "credited to your account"
+  ///   - "salary / refund credited"
+  ///   - "Rs X credited"
+  static final _strongCreditOverrideRe = RegExp(
+    r'\b(?:credited\s+(?:to\s+(?:your\s+)?(?:a/c|acct|account)|with)|'
+    r'(?:salary|refund|cashback|reversal|reimbursement)\s+(?:of\s+)?(?:rs\.?|inr|₹)?\s*[\d,]+|'
+    r'(?:rs\.?|inr|₹)\s*[\d,]+(?:\.\d+)?\s+credited|'
+    r'amount\s+(?:of\s+)?(?:rs\.?|inr|₹)?\s*[\d,]+\s+(?:has\s+been\s+)?credited|'
+    r'a/c\s*(?:no\.?\s*)?\S+\s+credited|'
+    r'transferred\s+to\s+(?:your\s+)?(?:a/c|account|wallet)|'
+    r'funds\s+(?:have\s+been\s+)?(?:received|credited))',
+    caseSensitive: false,
+  );
+
+  /// Resolve credit/debit from precomputed signals.
+  ///
+  /// Priority order:
+  ///   1. Explicit strong-credit override (e.g. "credited to your a/c") — always
+  ///      wins even if generic debit verbs ("payment", "sent") are present.
+  ///      This fixes Indian bank SMS like "Payment of Rs 500 credited to your a/c".
+  ///   2. Debit wins on tie (most receipts are spends).
+  ///   3. Credit if no debit signal.
   static bool _resolveCredit({
     required bool hasCredit,
     required bool hasDebit,
+    required String lower,
   }) {
+    // Check for strong credit overrides first — they are unambiguous.
+    if (_strongCreditOverrideRe.hasMatch(lower)) return true;
+    // No override: standard debit-on-tie logic.
     if (hasDebit) return false;
     return hasCredit;
   }
@@ -704,6 +850,36 @@ class TransactionTextParser {
   static (String?, String?) _extractMerchantWithSource(String text) {
     final lower = text.toLowerCase();
 
+    // 0. Explicit Wallet debit phrasing without merchant:
+    // "Your Apay Wallet balance is debited for INR 87.00. Reference Number is 668881518401"
+    if (lower.contains('apay wallet') || lower.contains('apay balance')) {
+      return ('Amazon Pay Wallet', 'wallet_signal');
+    }
+    if (lower.contains('paytm wallet') || lower.contains('paytm balance')) {
+      return ('Paytm Wallet', 'wallet_signal');
+    }
+    if (lower.contains('mobikwik wallet')) {
+      return ('Mobikwik Wallet', 'wallet_signal');
+    }
+
+    // 0b. Credit Card bill payment / repayment receipt:
+    // "Payment of Rs 23,551.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System"
+    // "DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 2000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6366"
+    final ccPaymentMatch = RegExp(
+      r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|settled|successful)\s+(?:on|towards|for)\s+(?:your\s+)?([A-Za-z0-9 ]+?)\s*(?:credit\s*card|card)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (ccPaymentMatch != null) {
+      final cardBank = ccPaymentMatch.group(1)!.trim();
+      return ('$cardBank Card Repayment', 'card_payment_receipt');
+    }
+
+    // 0c. PolicyBazaar confirmation receipt:
+    // "Hi Sivek K Raveendran, Payment of Rs. 4515 is successful for the purchase of your Twowheeler policy. ... - PolicyBazaar"
+    if (lower.contains('policybazaar') || lower.contains('policy bazaar')) {
+      return ('PolicyBazaar', 'merchant_confirmation');
+    }
+
     // 1. Dictionary match — strongest. Bypasses noisy regex entirely.
     final known = MerchantNormalizer.lookupCanonical(lower);
     if (known != null) {
@@ -814,6 +990,11 @@ class TransactionTextParser {
     // UPI/CR/628001122334
     RegExp(
       r'\bUPI\s*/\s*(?:(?:P2M|P2P|P2A|DR|CR|REV)\s*/\s*)?([0-9]{6,18})(?:/|\b)',
+      caseSensitive: false,
+    ),
+    // Reference Number is 668881518401 / Transaction Reference Number is 652632264589
+    RegExp(
+      r'\b(?:Transaction\s+Reference\s+Number|Reference\s+Number)\s+(?:is\s+)?([A-Za-z0-9_\-]{6,24})\b',
       caseSensitive: false,
     ),
     // Standard Bank & UPI UTR, RRN, IMPS, NEFT, RTGS, Order ID, Payment ID formats

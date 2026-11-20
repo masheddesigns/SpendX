@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'live_sms_service.dart';
 
 class SettingsService extends ChangeNotifier {
   static const String _onboardingKey = 'onboarding_complete';
@@ -44,6 +45,65 @@ class SettingsService extends ChangeNotifier {
       'expense_defaults_payment_id_';
   static const String _expenseDefaultsPaymentTypePrefix =
       'expense_defaults_payment_type_';
+
+  // --- External Financial Ingestion Source Keys ---
+  static const String _whatsappIngestionEnabledKey =
+      'whatsapp_financial_ingestion_enabled';
+  static const String _whatsappAllowedSendersKey =
+      'whatsapp_financial_allowed_senders';
+  static const String _gmailPreviewEnabledKey =
+      'gmail_preview_ingestion_enabled';
+  static const String _gmailAllowedSendersKey =
+      'gmail_financial_allowed_senders';
+  static const String _extraIngestionPackagesKey =
+      'extra_ingestion_packages';
+
+  static const List<String> defaultWhatsAppSenders = [
+    'HDFC Bank',
+    'ICICI Bank',
+    'SBI',
+    'Axis Bank',
+    'Kotak Bank',
+    'CRED',
+    'OneCard',
+    'Bank of Baroda',
+    'Punjab National Bank',
+    'Canara Bank',
+    'Union Bank',
+    'IDFC FIRST Bank',
+    'Federal Bank',
+    'IndusInd Bank',
+    'Yes Bank',
+    'RBL Bank',
+    'Standard Chartered',
+    'HSBC',
+    'Citi',
+    'Jupiter',
+    'Fi Money',
+    'Slice',
+    'Paytm',
+    'Groww',
+    'Zerodha',
+  ];
+
+  static const List<String> defaultGmailSenders = [
+    'hdfcbank.net',
+    'icicibank.com',
+    'sbi.co.in',
+    'axisbank.com',
+    'kotak.com',
+    'cred.club',
+    'getonecard.app',
+    'citi.com',
+    'standardchartered.co.in',
+    'federalbank.co.in',
+    'idfcfirstbank.com',
+    'indusind.com',
+    'yesbank.in',
+    'alerts',
+    'statements',
+    'sbicard.com',
+  ];
 
   // Private constructor
   SettingsService._();
@@ -672,5 +732,71 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> setTextNormalizationComplete(bool val) async {
     await _prefs.setBool(_textNormalizationCompleteKey, val);
+  }
+
+  // --- External Financial Ingestion Controls ---
+
+  bool get whatsappIngestionEnabled {
+    return _prefs.getBool(_whatsappIngestionEnabledKey) ?? false;
+  }
+
+  Future<void> setWhatsAppIngestionEnabled(bool value) async {
+    await _prefs.setBool(_whatsappIngestionEnabledKey, value);
+    notifyListeners();
+    await syncIngestionSettingsToNative();
+  }
+
+  List<String> get whatsappAllowedSenders {
+    return _prefs.getStringList(_whatsappAllowedSendersKey) ?? defaultWhatsAppSenders;
+  }
+
+  Future<void> setWhatsAppAllowedSenders(List<String> senders) async {
+    await _prefs.setStringList(_whatsappAllowedSendersKey, senders);
+    notifyListeners();
+    await syncIngestionSettingsToNative();
+  }
+
+  bool get gmailPreviewEnabled {
+    return _prefs.getBool(_gmailPreviewEnabledKey) ?? false;
+  }
+
+  Future<void> setGmailPreviewEnabled(bool value) async {
+    await _prefs.setBool(_gmailPreviewEnabledKey, value);
+    notifyListeners();
+    await syncIngestionSettingsToNative();
+  }
+
+  List<String> get gmailAllowedSenders {
+    return _prefs.getStringList(_gmailAllowedSendersKey) ?? defaultGmailSenders;
+  }
+
+  Future<void> setGmailAllowedSenders(List<String> senders) async {
+    await _prefs.setStringList(_gmailAllowedSendersKey, senders);
+    notifyListeners();
+    await syncIngestionSettingsToNative();
+  }
+
+  List<String> get extraIngestionPackages {
+    return _prefs.getStringList(_extraIngestionPackagesKey) ?? const [];
+  }
+
+  Future<void> setExtraIngestionPackages(List<String> packages) async {
+    await _prefs.setStringList(_extraIngestionPackagesKey, packages);
+    notifyListeners();
+    await syncIngestionSettingsToNative();
+  }
+
+  Future<void> syncIngestionSettingsToNative() async {
+    try {
+      await LiveSmsService.instance.syncIngestionSourceSettings(
+        whatsappEnabled: whatsappIngestionEnabled,
+        whatsappSenders: whatsappAllowedSenders,
+        gmailEnabled: gmailPreviewEnabled,
+        gmailSenders: gmailAllowedSenders,
+        extraPackages: extraIngestionPackages,
+      );
+    } catch (_) {
+      // Best-effort across headless tests/unsupported platforms
+    }
   }
 }

@@ -89,14 +89,15 @@ class MainActivity : FlutterActivity() {
 
             android.util.Log.i("MainActivity", "TEST_SMS received: sender=$sender, body=$body, sourceRecordId=$sourceRecordId")
 
-            val payload = listOf(sender, body, subId.toString(), sourceRecordId)
+            val ts = System.currentTimeMillis()
+            val payload = listOf(sender, body, subId.toString(), sourceRecordId, ts.toString())
             val engine = flutterEngine ?: FlutterEngineCache.getInstance().get(ENGINE_ID)
             if (engine != null && body.isNotBlank()) {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onSmsReceived", payload)
                 }, 300)
             } else if (body.isNotBlank()) {
-                val queued = SmsStore.queue(this, sender, body, sourceRecordId)
+                val queued = SmsStore.queue(this, sender, body, sourceRecordId, ts)
                 if (queued) {
                     pendingSmsEvent = payload
                 } else {
@@ -253,6 +254,22 @@ class MainActivity : FlutterActivity() {
                             android.util.Log.w("MainActivity", "Failed to requestRebind for BankNotificationListener: $e")
                         }
                     }
+                    result.success(true)
+                }
+                "updateIngestionSourceSettings" -> {
+                    val whatsappEnabled = call.argument<Boolean>("whatsappEnabled") ?: false
+                    val whatsappSenders = call.argument<List<String>>("whatsappSenders") ?: emptyList()
+                    val gmailEnabled = call.argument<Boolean>("gmailEnabled") ?: false
+                    val gmailSenders = call.argument<List<String>>("gmailSenders") ?: emptyList()
+                    val extraPackages = call.argument<List<String>>("extraPackages") ?: emptyList()
+                    IngestionConfigStore.save(
+                        this,
+                        whatsappEnabled,
+                        whatsappSenders,
+                        gmailEnabled,
+                        gmailSenders,
+                        extraPackages
+                    )
                     result.success(true)
                 }
                 "hasOverlayPermission" -> {
@@ -497,7 +514,7 @@ object SmsStore {
     private const val FIELD_SEP = "\u0002"
 
     @Synchronized
-    fun queue(context: Context, sender: String, body: String, sourceRecordId: String? = null): Boolean {
+    fun queue(context: Context, sender: String, body: String, sourceRecordId: String? = null, timestampMillis: Long? = null): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val existing = prefs.getString(KEY, "") ?: ""
         val existingEntries = existing.split(ENTRY_SEP).filter { it.isNotBlank() }
@@ -505,7 +522,7 @@ object SmsStore {
         // Deduplicate strictly by sourceRecordId when provided; never collapse two messages simply because sender and body match
         if (!sourceRecordId.isNullOrBlank()) {
             val alreadyQueued = existingEntries.any { entry ->
-                val parts = entry.split(FIELD_SEP, limit = 3)
+                val parts = entry.split(FIELD_SEP)
                 parts.size >= 3 && parts[2] == sourceRecordId
             }
             if (alreadyQueued) {
@@ -513,8 +530,9 @@ object SmsStore {
             }
         }
 
+        val tsStr = timestampMillis?.toString() ?: ""
         val entry = if (!sourceRecordId.isNullOrBlank()) {
-            "$sender$FIELD_SEP$body$FIELD_SEP$sourceRecordId"
+            "$sender$FIELD_SEP$body$FIELD_SEP$sourceRecordId$FIELD_SEP$tsStr"
         } else {
             "$sender$FIELD_SEP$body"
         }
@@ -541,7 +559,7 @@ object SmsStore {
         val resultList = mutableListOf<Map<String, String>>()
 
         for (entry in entries) {
-            val parts = if (entry.contains(FIELD_SEP)) entry.split(FIELD_SEP, limit = 3) else listOf("", entry)
+            val parts = if (entry.contains(FIELD_SEP)) entry.split(FIELD_SEP) else listOf("", entry)
             val sender = parts[0]
             val body = if (parts.size > 1) parts[1] else ""
             val sourceRecordId = if (parts.size >= 3 && parts[2].isNotBlank()) {
@@ -550,15 +568,18 @@ object SmsStore {
                 hasLegacy = true
                 "SRC:LEGACY_QUEUE:" + java.util.UUID.randomUUID().toString()
             }
+            val timestamp = if (parts.size >= 4 && parts[3].isNotBlank()) parts[3] else ""
 
-            updatedEntries.add("$sender$FIELD_SEP$body$FIELD_SEP$sourceRecordId")
-            resultList.add(
-                mapOf(
-                    "sender" to sender,
-                    "body" to body,
-                    "sourceRecordId" to sourceRecordId,
-                )
+            updatedEntries.add("$sender$FIELD_SEP$body$FIELD_SEP$sourceRecordId$FIELD_SEP$timestamp")
+            val itemMap = mutableMapOf(
+                "sender" to sender,
+                "body" to body,
+                "sourceRecordId" to sourceRecordId,
             )
+            if (timestamp.isNotBlank()) {
+                itemMap["timestamp"] = timestamp
+            }
+            resultList.add(itemMap)
         }
 
         // If any legacy entries were assigned unique IDs, persist them atomically so they are stable
@@ -581,7 +602,7 @@ object SmsStore {
         val remaining = raw.split(ENTRY_SEP)
             .filter { it.isNotBlank() }
             .filterNot { entry ->
-                val parts = entry.split(FIELD_SEP, limit = 3)
+                val parts = entry.split(FIELD_SEP)
                 parts.size >= 3 && sourceRecordIdsToRemove.contains(parts[2])
             }
         return prefs.edit().putString(KEY, remaining.joinToString(ENTRY_SEP)).commit()

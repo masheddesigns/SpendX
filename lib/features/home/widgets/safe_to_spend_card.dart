@@ -858,17 +858,31 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   onPressed: () async {
                     HapticService.instance.tap();
                     Navigator.of(sheetContext).pop();
-                    await ReminderRepo().deleteGlobalReminder(c.id!);
-                    try {
-                      final recRepo = RecurringRepo();
-                      final allRec = await recRepo.getAll();
-                      for (final rec in allRec) {
-                        if (rec.name.toLowerCase().contains(c.title.toLowerCase()) ||
-                            c.title.toLowerCase().contains(rec.name.toLowerCase())) {
-                          await recRepo.update(rec.copyWith(isActive: false));
+                    if (c.type == 'recurring') {
+                      try {
+                        final recRepo = RecurringRepo();
+                        final allRec = await recRepo.getAll();
+                        for (final rec in allRec) {
+                          if (rec.id == c.id ||
+                              rec.name.toLowerCase() == c.title.toLowerCase() ||
+                              ReminderRepo.areMerchantsEquivalent(rec.name, c.title)) {
+                            await recRepo.update(rec.copyWith(isActive: false));
+                          }
                         }
-                      }
-                    } catch (_) {}
+                      } catch (_) {}
+                    } else {
+                      await ReminderRepo().deleteGlobalReminder(c.id!);
+                      try {
+                        final recRepo = RecurringRepo();
+                        final allRec = await recRepo.getAll();
+                        for (final rec in allRec) {
+                          if (rec.name.toLowerCase().contains(c.title.toLowerCase()) ||
+                              c.title.toLowerCase().contains(rec.name.toLowerCase())) {
+                            await recRepo.update(rec.copyWith(isActive: false));
+                          }
+                        }
+                      } catch (_) {}
+                    }
                     ref.invalidate(safeToSpendProvider);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -881,31 +895,36 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     }
                   },
                 ),
-                const SizedBox(width: 4),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: const Color(0xFF16A34A),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                // "Mark Paid" is only available for discrete reminders that maintain record completion state.
+                // Recurring templates are generative rules whose occurrences settle dynamically via ledger
+                // postings; their last_generated cursor is an engine watermark and cannot be used as proof of payment.
+                if (c.type != 'recurring') ...[
+                  const SizedBox(width: 4),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: const Color(0xFF16A34A),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    ),
+                    icon: const Icon(Icons.check_circle_outline_rounded, size: 14),
+                    label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    onPressed: () async {
+                      HapticService.instance.tap();
+                      Navigator.of(sheetContext).pop();
+                      await ReminderRepo().markReminderPaid(c.id!);
+                      ref.invalidate(safeToSpendProvider);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${c.title} marked as paid ✓'),
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
                   ),
-                  icon: const Icon(Icons.check_circle_outline_rounded, size: 14),
-                  label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                  onPressed: () async {
-                    HapticService.instance.tap();
-                    Navigator.of(sheetContext).pop();
-                    await ReminderRepo().markReminderPaid(c.id!);
-                    ref.invalidate(safeToSpendProvider);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${c.title} marked as paid ✓'),
-                          duration: const Duration(seconds: 2),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
-                  },
-                ),
+                ],
               ],
               const SizedBox(width: 6),
               OutlinedButton.icon(
@@ -972,6 +991,32 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               const SizedBox(height: 20),
               _buildBreakdownRow('Total Liquid Assets', calc.liquidAssets.toRupees, isDark, isPositive: true),
               _buildBreakdownRow('14-Day Commitments', calc.knownCommitments14d.toRupees, isDark, isNegative: true),
+              if (calc.commitmentItems.any((c) => c.isOverdue)) ...[
+                Builder(
+                  builder: (_) {
+                    final overdueSum = calc.commitmentItems
+                        .where((c) => c.isOverdue)
+                        .fold<double>(0.0, (sum, i) => sum + i.amount.toRupees);
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 4, top: 2, bottom: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFE11D48)),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Includes ${AppFormat.currency(overdueSum)} in overdue obligations',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
               if (calc.commitmentItems.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Container(

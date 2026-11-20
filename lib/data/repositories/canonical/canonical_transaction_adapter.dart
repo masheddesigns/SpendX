@@ -338,6 +338,7 @@ class CanonicalTransactionAdapter {
         ];
 
       case CanonicalEventType.refund:
+      case CanonicalEventType.adjustment:
         final bankId = (tx.accountId != null && tx.accountId!.isNotEmpty)
             ? tx.accountId!
             : TablesV24.sysSuspenseTransfer;
@@ -845,7 +846,9 @@ class CanonicalTransactionAdapter {
       return CanonicalEventType.cardPayment;
     }
     if (tx.type == 'refund') {
-      return CanonicalEventType.refund;
+      return (tx.relatedEntityId != null && tx.relatedEntityId!.isNotEmpty)
+          ? CanonicalEventType.refund
+          : CanonicalEventType.adjustment;
     }
     if (tx.source == 'credit_card_purchase' || tx.type == 'credit_card_purchase') {
       return CanonicalEventType.cardPurchase;

@@ -38,7 +38,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         val customAppId = (project.findProperty("customApplicationId") as String?)?.trim()
-        applicationId = if (!customAppId.isNullOrEmpty()) customAppId else "com.mashingdesigns.spend_x"
+        applicationId = if (!customAppId.isNullOrEmpty()) customAppId else "com.mashingdesigns.spendx"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

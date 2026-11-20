@@ -8,6 +8,7 @@ import '../services/settings_service.dart';
 import '../shared/widgets/app_card.dart';
 import '../models/transaction.dart';
 import '../models/category.dart';
+import '../shared/widgets/glass/spendx_transaction_tile.dart' show cleanTransactionDisplayTitle;
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
 
@@ -75,17 +76,23 @@ class TransactionTile extends StatelessWidget {
   String _buildTitle() {
     final type = transaction.type.trim().toLowerCase();
     final src = transaction.source.trim().toLowerCase();
-    if (type == 'credit_payment' || src == 'credit_card_payment' || src == 'credit_payment') {
-      return transaction.notes.isNotEmpty ? transaction.notes : 'Credit Card Payment';
+    final isCc = type == 'credit_payment' || src == 'credit_card_payment' || src == 'credit_payment';
+    final isTr = type == 'transfer' || src == 'bank_transfer' || src == 'transfer';
+    if (transaction.notes.isNotEmpty) {
+      final clean = cleanTransactionDisplayTitle(
+        transaction.notes,
+        categoryName: category?.name,
+        isCcPayment: isCc,
+        isTransfer: isTr,
+      );
+      if (clean.isNotEmpty && !clean.startsWith('{')) {
+        return clean;
+      }
     }
-    if (type == 'transfer' || src == 'bank_transfer' || src == 'transfer') {
-      return transaction.notes.isNotEmpty ? transaction.notes : 'Account Transfer';
-    }
+    if (isCc) return 'Credit Card Payment';
+    if (isTr) return 'Account Transfer';
     if (category != null) {
       return TextFormatter.toSmartTitleCase(category!.name);
-    }
-    if (transaction.notes.isNotEmpty) {
-      return TextFormatter.toSmartTitleCase(transaction.notes);
     }
     return 'Needs Category';
   }

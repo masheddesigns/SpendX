@@ -14,12 +14,14 @@ import '../../../shared/widgets/glass/spendx_states.dart';
 import '../../../shared/widgets/glass/spendx_transaction_tile.dart';
 import '../../../utils/app_format.dart';
 import '../../accounts/providers/account_providers.dart';
+import '../../review_queue/providers/review_providers.dart';
 import '../../streak/streak_provider.dart' show evaluateStreakProvider;
 import '../../transactions/providers/transaction_providers.dart';
 import '../widgets/category_spending_card.dart';
 import '../widgets/dashboard_budgets_card.dart';
 import '../widgets/dashboard_goals_card.dart';
 import '../widgets/dashboard_greeting_header.dart';
+import '../widgets/home_review_indicator.dart';
 import '../widgets/monthly_pulse_card.dart';
 import '../widgets/quick_actions_row.dart';
 import '../widgets/safe_to_spend_card.dart';
@@ -75,8 +77,10 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     };
 
     String resolveFlow(Transaction t) {
-      final fromName = accountsMap[t.accountId];
-      final toName = accountsMap[t.relatedEntityId];
+      final fromName = accountsMap[t.accountId] ??
+          (t.accountId != null && t.accountId!.isNotEmpty ? resolveAccountDisplayName(t.accountId!) : null);
+      final toName = accountsMap[t.relatedEntityId] ??
+          (t.relatedEntityId != null && t.relatedEntityId!.isNotEmpty ? resolveAccountDisplayName(t.relatedEntityId!) : null);
       if (t.isTransferType && toName != null) {
         if (fromName != null) {
           return '$fromName → $toName';
@@ -107,9 +111,12 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
           await EntityConsolidationService.instance.consolidate();
           await LiveSmsService.instance.drainPending();
           await LiveSmsService.instance.syncUpcomingObligationsFromInbox();
+          await LiveSmsService.instance.notifyEligiblePendingReviews();
           await InboxAuditService.instance.runAutoAuditIfDue();
         } catch (_) {}
         invalidateAllFinancialProviders(ref);
+        ref.invalidate(reviewQueueCountProvider);
+        ref.invalidate(reviewQueueProvider);
         ref.invalidate(evaluateStreakProvider);
         ref.invalidate(transactionCategoryMapProvider);
         await ref.read(paginatedTransactionsProvider.notifier).refresh();
@@ -123,6 +130,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
         slivers: [
           // ── Mindful Atmospheric Header ───────────────────
           const SliverToBoxAdapter(child: DashboardGreetingHeader()),
+
+          // ── Pending Review Queue Indicator ──────────────────
+          const SliverToBoxAdapter(child: HomeReviewIndicator()),
 
           const SliverToBoxAdapter(child: SizedBox(height: 4)),
 

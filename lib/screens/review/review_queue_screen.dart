@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -198,7 +199,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                 ),
               Expanded(
                 child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, hasItems && !_isSelectionMode ? 110 : 24),
                   itemCount: items.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
@@ -411,6 +412,19 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
     return topLeft.dy + cardHeight > 0 && topLeft.dy < size.height;
   }
 
+  String _cleanRawSnippet(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.startsWith('{') && trimmed.contains('"body"')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map && decoded['body'] != null) {
+          return decoded['body'].toString();
+        }
+      } catch (_) {}
+    }
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
@@ -602,7 +616,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  parsed.rawText,
+                  _cleanRawSnippet(parsed.rawText),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

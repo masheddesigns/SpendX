@@ -482,14 +482,21 @@ class SmsImportService {
     // messages that contain both strong transaction language AND account identifiers.
     final isBank = _isBankSender(sender);
     final isPaymentApp = _isPaymentAppSender(sender);
-    if (!isBank && !isPaymentApp && !isCcPaymentCandidate && !isRefund) {
+    final isWalletCandidate = _isWalletSender(sender) ||
+        lower.contains('apay wallet') ||
+        lower.contains('paytm wallet') ||
+        lower.contains('mobikwik');
+    if (!isBank && !isPaymentApp && !isWalletCandidate && !isCcPaymentCandidate && !isRefund) {
       final hasStrongSignal = RegExp(
-        r'\b(?:debited\s*(?:from|by|with)|credited\s*(?:to|with)|has been debited|has been credited|'
-        r'sent from|transferred to|received in|payment of .* (?:to|from|towards))\b',
+        r'\b(?:debited\s*(?:from|by|with|for)|credited\s*(?:to|with)|has been debited|is debited|'
+        r'sent from|transferred to|received in|payment\s+of\s+[^.\n]{1,60}?\s+(?:to|from|towards))\b',
         caseSensitive: false,
       ).hasMatch(lower);
       final hasAccountSignal = RegExp(
-        r'\b(?:a/c|acct|account|card ending|ending with \d{4}|x{2,}\d{2,4}|upi/dr|upi/cr)\b',
+        r'\b(?:(?:a/c|acct|account)\s*(?:ending\s*(?:with|in)?|no\.?)?\s*[:\-]?\s*[xX*]*\d{2,6}|'
+        r'card\s*(?:ending\s*(?:with|in)?\s*)?[:\-]?\s*[xX*]*\d{2,6}|'
+        r'wallet\s*balance|apay\s*wallet|paytm\s*wallet|'
+        r'[xX*]{2,}\d{2,4}|upi/(?:dr|cr))\b',
         caseSensitive: false,
       ).hasMatch(lower);
       if (!hasStrongSignal || !hasAccountSignal) {
@@ -502,6 +509,7 @@ class SmsImportService {
     final parsed = TransactionTextParser.parse(
       body,
       source: isPaymentApp ? 'notification' : 'sms',
+      messageTimestamp: date,
     );
     final minConfidence = isPaymentApp ? 0.25 : 0.4;
     if (parsed.amount <= 0 || parsed.confidence < minConfidence) {
@@ -654,7 +662,7 @@ class SmsImportService {
       amount: parsed.amount,
       isCredit: effectiveIsCredit,
       rawText: parsed.rawText,
-      date: date ?? parsed.date,
+      date: parsed.date,
       merchant: merchant,
       refId: parsed.refId,
       last4: parsed.last4 ?? _last4(body),
@@ -929,17 +937,23 @@ class SmsImportService {
       if (!isBankOrPayment) {
         final hasStrongSignal = RegExp(
           r'\b(?:debited\s*(?:from|by|with)|credited\s*(?:to|with)|has been debited|has been credited|'
-          r'sent from|transferred to|received in|payment of .* (?:to|from))\b',
+          r'sent from|transferred to|received in|payment\s+of\s+[^.\n]{1,60}?\s+(?:to|from|towards))\b',
           caseSensitive: false,
         ).hasMatch(lower);
         final hasAccountSignal = RegExp(
-          r'\b(?:a/c|acct|account|card ending|ending with \d{4}|x{2,}\d{2,4}|upi/dr|upi/cr)\b',
+          r'\b(?:(?:a/c|acct|account)\s*(?:ending\s*(?:with|in)?|no\.?)?\s*[:\-]?\s*[xX*]*\d{2,6}|'
+          r'card\s*(?:ending\s*(?:with|in)?\s*)?[:\-]?\s*[xX*]*\d{2,6}|'
+          r'[xX*]{2,}\d{2,4}|upi/(?:dr|cr))\b',
           caseSensitive: false,
         ).hasMatch(lower);
         if (!hasStrongSignal || !hasAccountSignal) continue;
       }
 
-      final parsed = TransactionTextParser.parse(body, source: 'sms');
+      final parsed = TransactionTextParser.parse(
+        body,
+        source: 'sms',
+        messageTimestamp: smsDate,
+      );
       if (parsed.amount <= 0 || parsed.confidence < 0.4) continue;
 
       // Must have direction signal or explicit financial verb
@@ -963,7 +977,7 @@ class SmsImportService {
         amount: parsed.amount,
         isCredit: parsed.isCredit,
         rawText: parsed.rawText,
-        date: smsDate ?? parsed.date,
+        date: parsed.date,
         merchant: merchant,
         refId: parsed.refId,
         last4: parsed.last4,
@@ -1271,8 +1285,14 @@ class SmsImportService {
         lower.contains('tataneu') ||
         lower.contains('tneu') ||
         lower.contains('tata neu') ||
+        lower.contains('kotak card') ||
+        lower.contains('indusind card') ||
+        lower.contains('scapia card') ||
+        lower.contains('rbl card') ||
+        lower.contains('amex card') ||
+        lower.contains('idfc card') ||
         lower.contains('statement generated') ||
-        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|card)\s+\d{4}\b', caseSensitive: false).hasMatch(lower);
+        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|kotak\s+card|indusind\s+card|scapia\s+card|rbl\s+card|amex\s+card|idfc\s+card|card)\s+\d{4}\b', caseSensitive: false).hasMatch(lower);
     final hasBillSignal = _creditDueRe.hasMatch(lower) ||
         lower.contains('total due') ||
         lower.contains('amount due') ||
@@ -1283,7 +1303,10 @@ class SmsImportService {
         lower.contains('bill generated') ||
         lower.contains('statement generated') ||
         lower.contains('statement has been generated') ||
+        lower.contains('statement is sent') ||
+        lower.contains('is ready') ||
         lower.contains('due on') ||
+        lower.contains('due by') ||
         lower.contains('payable by');
     return hasCardSignal && hasBillSignal;
   }
@@ -1430,6 +1453,9 @@ class SmsImportService {
     final lower = sender.toLowerCase();
     // Strictly wallet shortcodes; NOT payment gateways (Juspay) or Indian Railways (IRSMSA) or Paytm UPI (IPAYTM)
     return lower.contains('qcamzn') ||
+        lower.contains('amazon') ||
+        lower.contains('apay') ||
+        lower.contains('paytm') ||
         lower.contains('mobikwik') ||
         lower.contains('freecharge');
   }
@@ -1464,7 +1490,7 @@ class SmsImportService {
 
   static final RegExp _dueDateRe = RegExp(
     r'(?:due\s*(?:date|on|by|for\s+(?:payment|renewal)\s+on)?|pay\s*(?:by|before)|payable\s*(?:by|on)|scheduled\s+on|before\s*due\s*date|of\s+inr[\d.]+\s+on)[^\w\d]*'
-    r'([0-9]{4}[-\/.][0-9]{1,2}[-\/.][0-9]{1,2}|[0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4}|[0-9]{1,2}[-\/\s](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\/\s]?[0-9]{0,4})',
+    r'([0-9]{4}[-\/.][0-9]{1,2}[-\/.][0-9]{1,2}|[0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4}|[0-9]{1,2}[-\/\s](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[-\/\s,]?[0-9]{0,4})',
     caseSensitive: false,
   );
 
@@ -1495,8 +1521,8 @@ class SmsImportService {
       return DateTime(year, month, day);
     }
 
-    // 2. DD-MMM or DD-MMM-YYYY (e.g. 18-NOV-26 or 15-Nov)
-    final textMatch = RegExp(r'^(\d{1,2})[-\/\s]([A-Za-z]{3,})[-\/\s]?(\d{2,4})?$').firstMatch(rawDate);
+    // 2. DD-MMM or DD-MMM-YYYY or DD MMM, YYYY (e.g. 18-NOV-26, 05 Dec, 2026, or 15-Nov)
+    final textMatch = RegExp(r'^(\d{1,2})[-\/\s]([A-Za-z]{3,})[-\/\s,]*(\d{2,4})?$').firstMatch(rawDate);
     if (textMatch != null) {
       final day = int.tryParse(textMatch.group(1)!) ?? 1;
       final monthStr = textMatch.group(2)!.toLowerCase().substring(0, 3);
@@ -2368,23 +2394,73 @@ class SmsImportService {
       );
     }
 
-    // 6. Standalone Credit Card Bill Due (e.g. Tata Neu):
-    // e.g. "Your HDFC Credit Card bill of Rs.25000.00 is due on 2026-10-21. Pay by 2026-10-21 to avoid late charges"
-    final ccBillMatch = RegExp(
-      r'([A-Za-z0-9]+)\s+credit\s+card\s+bill\s+of\s+(?:rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)\s+is\s+due\s+on\s+([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}[-\/.][0-9]{1,2}[-\/.][0-9]{2,4})',
-      caseSensitive: false,
-    ).firstMatch(body);
-    if (ccBillMatch != null) {
-      final bank = ccBillMatch.group(1)!.trim();
-      final amount = _parseAmount(ccBillMatch.group(2)!);
-      final rawDate = ccBillMatch.group(3)!;
-      final dueDate = _parseDateString(rawDate) ?? smsDate ?? DateTime.now();
+    // 6. Standalone Credit Card Bill Due & Statement Ready Notices:
+    // e.g. "Your BOBCARD One Credit Card bill of Rs. 2,778.88 is ready. Pay by 05 Dec, 2026"
+    // e.g. "Your Edge CSB Bank RuPay Credit Card bill for Rs.2640.76 has been generated"
+    // e.g. "ICICI Bank Credit Card XX5007 Statement is sent ... Total of Rs 91,760.35 ... is due by 20-NOV-26"
+    // e.g. "Your HDFC Credit Card bill of Rs.25000.00 is due on 2026-10-21"
+    if (_isCreditCardBillText(lower)) {
+      final totalDueMatch = RegExp(
+        r'(?:total\s*(?:amount\s*)?due|total\s+of|statement\s+for)[^\d₹]*?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)',
+        caseSensitive: false,
+      ).firstMatch(body);
+      final amtMatch = totalDueMatch ??
+          RegExp(
+            r'(?:bill\s+(?:of|for)|amount\s+due)[^\d₹]*?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)',
+            caseSensitive: false,
+          ).firstMatch(body) ??
+          RegExp(
+            r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)\s*(?:is\s+due|due\s+by|is\s+ready|has\s+been\s+generated)',
+            caseSensitive: false,
+          ).firstMatch(body) ??
+          RegExp(r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)', caseSensitive: false).firstMatch(body);
+
+      final amount = amtMatch != null ? _parseAmount(amtMatch.group(1)!) : 0.0;
+
+      String bank = 'Credit Card';
+      if (lower.contains('bobcard') || lower.contains('bob card')) {
+        bank = 'BOBCARD';
+      } else if (lower.contains('edge csb') || lower.contains('csb')) {
+        bank = 'Edge CSB Bank';
+      } else if (lower.contains('icici')) {
+        bank = 'ICICI Bank';
+      } else if (lower.contains('hdfc')) {
+        bank = 'HDFC Bank';
+      } else if (lower.contains('sbi')) {
+        bank = 'SBI Card';
+      } else if (lower.contains('axis')) {
+        bank = 'Axis Bank';
+      } else if (lower.contains('onecard')) {
+        bank = 'OneCard';
+      } else if (lower.contains('kotak')) {
+        bank = 'Kotak Bank';
+      } else if (lower.contains('indusind')) {
+        bank = 'IndusInd Bank';
+      } else if (lower.contains('scapia')) {
+        bank = 'Federal Bank Scapia';
+      } else if (lower.contains('rbl')) {
+        bank = 'RBL Bank';
+      } else if (lower.contains('amex') || lower.contains('american express')) {
+        bank = 'American Express';
+      } else if (lower.contains('idfc')) {
+        bank = 'IDFC FIRST Bank';
+      } else if (lower.contains('standard chartered') || lower.contains('stanchart')) {
+        bank = 'Standard Chartered';
+      } else {
+        final bankM = RegExp(r'([A-Za-z0-9]+)\s+credit\s+card', caseSensitive: false).firstMatch(body);
+        if (bankM != null) bank = bankM.group(1)!.trim();
+      }
+
+      final dueDate = _extractDueDate(body) ?? smsDate ?? DateTime.now();
+      final last4 = _last4(body);
+
       return UpcomingObligationHit(
         title: '$bank Credit Card Bill',
         amount: amount,
         dueDate: dueDate,
         merchant: '$bank Credit Card',
         bankKeyword: bank.toLowerCase(),
+        last4: last4,
         reminderType: ReminderType.credit,
         isMandate: false,
         sender: sender,
@@ -2428,6 +2504,41 @@ class SmsImportService {
         amount: amount,
         dueDate: nextDate,
         merchant: normalizedMerchant,
+        last4: _last4(body),
+        bankKeyword: _bankKeyword(sender, lower),
+        reminderType: ReminderType.service,
+        isMandate: true,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
+    // 8. General Upcoming / Scheduled Debit / Obligation Reminder:
+    // Catches reminders such as upcoming debits, scheduled mandates, or renewal notices
+    // that have not actually executed yet.
+    final isUpcomingSignal = lower.contains('upcoming debit') ||
+        lower.contains('upcoming payment') ||
+        lower.contains('will be debited') ||
+        lower.contains('scheduled to be debited') ||
+        lower.contains('scheduled to be deducted') ||
+        lower.contains('to be debited on') ||
+        lower.contains('will be deducted') ||
+        (lower.contains('scheduled on') && lower.contains('debit')) ||
+        (lower.contains('due for renewal') || lower.contains('renew your policy') || lower.contains('policy renewal'));
+
+    if (isUpcomingSignal) {
+      final amtMatch = RegExp(r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)', caseSensitive: false).firstMatch(body);
+      final amount = amtMatch != null ? _parseAmount(amtMatch.group(1)!) : 0.0;
+      final dueDate = _extractDueDate(body) ?? smsDate ?? DateTime.now();
+      final merchant = _normalizeMerchantName(
+        (_last4(body)?.isNotEmpty == true) ? 'Scheduled Mandate' : 'Reminder',
+      );
+      return UpcomingObligationHit(
+        title: '$merchant Reminder',
+        amount: amount,
+        dueDate: dueDate,
+        merchant: merchant,
         last4: _last4(body),
         bankKeyword: _bankKeyword(sender, lower),
         reminderType: ReminderType.service,

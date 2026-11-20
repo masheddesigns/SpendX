@@ -378,10 +378,10 @@ class TransactionRepo {
   }) async {
     final database = executor ?? await _db;
     final res = await database.rawQuery(
-      'SELECT id FROM ${TablesV24.evidence} WHERE external_reference = ? LIMIT 1;',
+      'SELECT id, economic_event_id FROM ${TablesV24.evidence} WHERE external_reference = ? LIMIT 1;',
       [externalRef],
     );
-    if (res.isNotEmpty) return true;
+    if (res.isNotEmpty && res.first['economic_event_id'] != null) return true;
     try {
       final resLegacy = await database.rawQuery(
         'SELECT id FROM ${Tables.transactions} WHERE external_ref = ? LIMIT 1;',
@@ -837,7 +837,7 @@ class TransactionRepo {
     return await database.rawQuery('''
       SELECT
         a.id AS category_id,
-        a.name AS category_name,
+        COALESCE(c.name, a.name) AS category_name,
         a.account_type AS type,
         COALESCE(SUM(
           CASE
@@ -851,6 +851,7 @@ class TransactionRepo {
         COUNT(DISTINCT e.id) AS count
       FROM ${TablesV24.postings} p
       JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+      LEFT JOIN ${Tables.categories} c ON a.id = c.id
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
       WHERE e.lifecycle_status = 'posted'
         AND (a.account_type = 'expense' OR a.account_type = 'income')
@@ -869,7 +870,7 @@ class TransactionRepo {
     final cutoff = DateTime.now().toUtc().subtract(Duration(days: monthsBack * 30));
     return await database.rawQuery('''
       SELECT
-        a.name AS category_name,
+        COALESCE(c.name, a.name) AS category_name,
         COALESCE(SUM(
           CASE
             WHEN p.direction = 'debit' THEN p.amount_minor_units
@@ -880,6 +881,7 @@ class TransactionRepo {
         COUNT(DISTINCT e.id) AS count
       FROM ${TablesV24.postings} p
       JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+      LEFT JOIN ${Tables.categories} c ON a.id = c.id
       JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
       WHERE e.lifecycle_status = 'posted'
         AND a.account_type = 'expense'

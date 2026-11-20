@@ -31,11 +31,20 @@ String resolveAccountDisplayName(String rawName) {
   if (trimmed == 'acc_bank_default' || trimmed == 'Asset acc_bank_default') {
     return 'Primary Operating Account';
   }
-  // Match only auto-generated system keys like "Asset acc_123"
-  final generatedKeyPattern = RegExp(r'^Asset acc_[a-zA-Z0-9_\-]+$');
-  if (generatedKeyPattern.hasMatch(trimmed)) {
-    final sub = trimmed.substring('Asset acc_'.length);
+  if (trimmed == 'acc_cash_default' || trimmed == 'Asset acc_cash_default') {
+    return 'Cash';
+  }
+  if (trimmed == 'sys_suspense_transfer' || trimmed.startsWith('sys_suspense') || trimmed.startsWith('sys_')) {
+    return 'Unlinked Account';
+  }
+  // Match only auto-generated system keys like "Asset acc_123" or "acc_123"
+  final generatedKeyPattern = RegExp(r'^(?:Asset\s+)?acc_([a-zA-Z0-9_\-]+)$');
+  final match = generatedKeyPattern.firstMatch(trimmed);
+  if (match != null) {
+    final sub = match.group(1)!;
     if (sub.isNotEmpty) {
+      if (sub == 'cash_default') return 'Cash';
+      if (sub == 'bank_default') return 'Primary Operating Account';
       return '${sub[0].toUpperCase()}${sub.substring(1)} Account';
     }
     return 'Operating Account';

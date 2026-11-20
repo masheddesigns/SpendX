@@ -103,7 +103,7 @@ class LiveSmsService with WidgetsBindingObserver {
 
   bool _initialized = false;
   bool _legacyRepairAuditRecorded = false;
-  final List<({String sender, String body, String? sourceRecordId})> _liveBuffer = [];
+  final List<({String sender, String body, String? sourceRecordId, DateTime? messageDate})> _liveBuffer = [];
   Timer? _flushTimer;
 
   /// Durable `(date, _id)` watermark for the paginated inbox scan.
@@ -126,6 +126,21 @@ class LiveSmsService with WidgetsBindingObserver {
     })
   >
   _quarantined = {};
+
+  static Future<void> _accountCreationLock = Future.value();
+
+  static Future<T> _synchronizedAccountCreation<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _accountCreationLock = _accountCreationLock.then((_) async {
+      try {
+        final res = await action();
+        completer.complete(res);
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
 
   Future<void> _durableStateLock = Future.value();
 
@@ -187,8 +202,8 @@ class LiveSmsService with WidgetsBindingObserver {
   testProcessBodyInterceptor;
 
   int get bufferCountForTesting => _liveBuffer.length;
-  void addLiveBufferForTesting(String sender, String body, [String? sourceRecordId]) {
-    _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId));
+  void addLiveBufferForTesting(String sender, String body, [String? sourceRecordId, DateTime? messageDate]) {
+    _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId, messageDate: messageDate));
   }
 
   Future<void> flushLiveBufferForTesting() => _flushLiveBuffer();
@@ -274,7 +289,15 @@ class LiveSmsService with WidgetsBindingObserver {
     String body, {
     String sender = '',
     bool skipBalance = false,
-  }) => _processBody(body, sender: sender, skipBalance: skipBalance);
+    String? sourceRecordId,
+    DateTime? messageDate,
+  }) => _processBody(
+    body,
+    sender: sender,
+    skipBalance: skipBalance,
+    sourceRecordId: sourceRecordId,
+    messageDate: messageDate,
+  );
   static bool _isTransientError(Object error) {
     if (error is DatabaseException) {
       final msg = error.toString().toLowerCase();
@@ -453,24 +476,36 @@ class LiveSmsService with WidgetsBindingObserver {
       String sender = '';
       String body = '';
       String? sourceRecordId;
+      DateTime? messageDate;
       if (args != null && args.length >= 2) {
         sender = args[0]?.toString() ?? '';
         body = args[1]?.toString() ?? '';
         if (args.length >= 4) {
           sourceRecordId = args[3]?.toString();
         }
+        if (args.length >= 5 && args[4] != null) {
+          final tsMs = int.tryParse(args[4].toString());
+          if (tsMs != null && tsMs > 0) {
+            messageDate = DateTime.fromMillisecondsSinceEpoch(tsMs);
+          }
+        }
       } else if (args != null && args.isNotEmpty) {
         body = args.cast<String>().join('\n');
       }
       AppLogger.i(
-        '[LiveSmsService] onSmsReceived: sender="$sender", body="$body", sourceRecordId="$sourceRecordId"',
+        '[LiveSmsService] onSmsReceived: sender="$sender", body="$body", sourceRecordId="$sourceRecordId", messageDate="$messageDate"',
       );
       if (body.isNotEmpty) {
         SyncActivityService.instance.startSync(
           title: 'Incoming Bank SMS',
           subtitle: 'Analyzing transaction alert...',
         );
-        _liveBuffer.add((sender: sender, body: body, sourceRecordId: sourceRecordId));
+        _liveBuffer.add((
+          sender: sender,
+          body: body,
+          sourceRecordId: sourceRecordId,
+          messageDate: messageDate,
+        ));
         _flushTimer?.cancel();
         _flushTimer = Timer(const Duration(milliseconds: 100), () {
           TrackedDatabaseTaskQueue.instance.runTracked(
@@ -516,7 +551,7 @@ class LiveSmsService with WidgetsBindingObserver {
     final batch = List.of(_liveBuffer);
     _liveBuffer.clear();
 
-    final unhandledTransient = <({String sender, String body, String? sourceRecordId})>[];
+    final unhandledTransient = <({String sender, String body, String? sourceRecordId, DateTime? messageDate})>[];
     var added = 0;
     String? balanceNote;
     Transaction? singleTransaction;
@@ -536,6 +571,7 @@ class LiveSmsService with WidgetsBindingObserver {
           entry.body,
           sender: entry.sender,
           sourceRecordId: entry.sourceRecordId,
+          messageDate: entry.messageDate,
         );
         if (outcome.added) {
           added++;
@@ -650,6 +686,10 @@ class LiveSmsService with WidgetsBindingObserver {
       // Notification dispatch is best-effort and must not fail SMS ingestion
     }
 
+    if (added > 0 || balanceNote != null) {
+      DataChangeBus.instance.notify();
+    }
+
     SyncActivityService.instance.complete(
       title: 'All Caught Up',
       subtitle: added > 0
@@ -692,6 +732,33 @@ class LiveSmsService with WidgetsBindingObserver {
     try {
       await _channel.invokeMethod('openNotificationListenerSettings');
     } catch (_) {}
+  }
+
+  /// Synchronizes dynamic user-enabled ingestion source settings (WhatsApp, Gmail, extra packages)
+  /// down to the native Android notification listener layer.
+  Future<bool> syncIngestionSourceSettings({
+    required bool whatsappEnabled,
+    required List<String> whatsappSenders,
+    required bool gmailEnabled,
+    required List<String> gmailSenders,
+    required List<String> extraPackages,
+  }) async {
+    try {
+      final res = await _channel.invokeMethod<bool>(
+        'updateIngestionSourceSettings',
+        {
+          'whatsappEnabled': whatsappEnabled,
+          'whatsappSenders': whatsappSenders,
+          'gmailEnabled': gmailEnabled,
+          'gmailSenders': gmailSenders,
+          'extraPackages': extraPackages,
+        },
+      );
+      return res ?? true;
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] updateIngestionSourceSettings failed: $e');
+      return false;
+    }
   }
 
   /// Phase 0 safety gate.
@@ -830,10 +897,18 @@ class LiveSmsService with WidgetsBindingObserver {
         String sender = '';
         String body = '';
         String? sourceRecordId;
+        DateTime? messageDate;
         if (item is Map) {
           sender = item['sender']?.toString() ?? '';
           body = item['body']?.toString() ?? '';
           sourceRecordId = item['sourceRecordId']?.toString();
+          final tsVal = item['timestamp'];
+          if (tsVal != null) {
+            final tsMs = int.tryParse(tsVal.toString());
+            if (tsMs != null && tsMs > 0) {
+              messageDate = DateTime.fromMillisecondsSinceEpoch(tsMs);
+            }
+          }
         } else if (item is String) {
           if (item.contains('\u0002')) {
             final parts = item.split('\u0002');
@@ -841,6 +916,12 @@ class LiveSmsService with WidgetsBindingObserver {
             body = parts.length > 1 ? parts[1] : '';
             if (parts.length > 2 && parts[2].trim().isNotEmpty) {
               sourceRecordId = parts[2];
+            }
+            if (parts.length > 3 && parts[3].trim().isNotEmpty) {
+              final tsMs = int.tryParse(parts[3].trim());
+              if (tsMs != null && tsMs > 0) {
+                messageDate = DateTime.fromMillisecondsSinceEpoch(tsMs);
+              }
             }
           } else {
             body = item;
@@ -866,6 +947,7 @@ class LiveSmsService with WidgetsBindingObserver {
             body,
             sender: sender,
             sourceRecordId: sourceRecordId,
+            messageDate: messageDate,
             skipBalance: false,
           );
           if (outcome.added) {
@@ -999,6 +1081,7 @@ class LiveSmsService with WidgetsBindingObserver {
             : 'Accounts and cards are in sync',
         count: totalNew,
       );
+      await notifyEligiblePendingReviews();
       return SmsDrainResult(
         messagesScanned: scanned,
         transactionsIngested: totalNew,
@@ -4470,6 +4553,11 @@ class LiveSmsService with WidgetsBindingObserver {
   }
 
   /// Resolves the instrument (credit card, bank, or digital wallet) for a transaction.
+  /// Resolves the instrument (credit card, bank, or digital wallet) for a transaction.
+  /// Strict instrument-type safety:
+  /// - Explicit bank account SMS resolves or auto-creates bank account (Asset). NEVER selects/creates card.
+  /// - Explicit card SMS resolves or auto-creates credit card (Liability). NEVER selects/creates bank account.
+  /// - Ambiguous messages route to Review Queue (zero guesses).
   Future<({String? accountId, String source, String instrumentType})>
   _classifyAndResolveAccount({
     required ParsedTransaction parsed,
@@ -4479,9 +4567,19 @@ class LiveSmsService with WidgetsBindingObserver {
   }) async {
     final lowerSender = sender.toLowerCase();
     final lowerBody = body.toLowerCase();
-    final cards = await CreditRepo().getAll();
 
+    // ── 1. Establish Instrument Intent ──
+    final bankAcctRegex = RegExp(
+      r'(?:from\s+(?:your\s+)?a/c|debited\s+(?:from\s+)?(?:your\s+)?a/c|credited\s+(?:to\s+)?(?:your\s+)?a/c|'
+      r'to\s+(?:your\s+)?a/c|in\s+(?:your\s+)?a/c|'
+      r'(?:debited|credited)\s+from\s+a/c|'
+      r'(?:a/c|acct|account)\s*(?:no\.?|ending|#)?\s*(?:[x*]+|\d{1,4}\b)|'
+      r'a/c\s+\*{0,4}\d{3,4}|a/c\s+xx\d{3,4}|'
+      r'\ba/c\b|\baccount\b)',
+      caseSensitive: false,
+    );
     final isExplicitBankAccount =
+        bankAcctRegex.hasMatch(lowerBody) ||
         lowerBody.contains('from a/c') ||
         lowerBody.contains('from your a/c') ||
         lowerBody.contains('debited from a/c') ||
@@ -4492,309 +4590,531 @@ class LiveSmsService with WidgetsBindingObserver {
         (lowerBody.contains('a/c') &&
             (lowerBody.contains('debited') || lowerBody.contains('credited')));
 
-    // 1. Check for Credit Card (only if not an explicit bank account SMS)
-    if (!isExplicitBankAccount) {
-      final matchedCardByLast4 =
-          (parsed.last4 != null && parsed.last4!.isNotEmpty)
-          ? cards.where((c) => c.last4 == parsed.last4).firstOrNull
-          : null;
+    final cardRegex = RegExp(
+      r'(?:credit\s*card|crd\s*card|\bcard\b\s*(?:ending|xx|no\.?|#)?\s*(?:[x*]+|\d{1,4}\b)|'
+      r'spent\s+on\s+card|charged\s+to\s+card|used\s+on\s+card|'
+      r'block\s+cc|tata\s+neu\s+(?:card|plus|infinity)|'
+      r'hdfc\s+bank\s+card)',
+      caseSensitive: false,
+    );
+    final isCardSender = lowerSender.contains('crd') ||
+        lowerSender.contains('onecrd') ||
+        lowerSender.contains('bobcrd') ||
+        lowerSender.contains('sbicrd') ||
+        lowerSender.contains('jtedge') ||
+        lowerSender.contains('tnbpay') ||
+        (lowerSender.contains('card') && !lowerSender.contains('reward'));
+    final isExplicitCard = cardRegex.hasMatch(lowerBody) ||
+        isCardSender ||
+        balanceHit?.kind == BalanceKind.creditCard ||
+        parsed.method == 'card';
 
-      final isCcSignal =
-          matchedCardByLast4 != null ||
-          balanceHit?.kind == BalanceKind.creditCard ||
-          lowerSender.contains('crd') ||
-          lowerSender.contains('card') ||
-          lowerSender.contains('cc') ||
-          lowerSender.contains('onecrd') ||
-          lowerSender.contains('onecard') ||
-          lowerSender.contains('bobcrd') ||
-          lowerSender.contains('bobone') ||
-          lowerSender.contains('sbicrd') ||
-          lowerSender.contains('jtedge') ||
-          lowerSender.contains('tnbpay') ||
-          lowerBody.contains('credit card') ||
-          lowerBody.contains('card ending') ||
-          lowerBody.contains('card xx') ||
-          lowerBody.contains('credit card ending') ||
-          lowerBody.contains('hdfc bank card') ||
-          lowerBody.contains('block cc') ||
-          lowerBody.contains('tata neu') ||
-          RegExp(
-            r'(?:card|cc)[\s#:]*(?:xx|no\.?|ending)?\s*\d{4}',
-            caseSensitive: false,
-          ).hasMatch(lowerBody) ||
-          (parsed.bankName?.toLowerCase() == 'hdfc');
+    // ── 2. Explicit Bank Account Resolution ──
+    if (isExplicitBankAccount && !isExplicitCard) {
+      final accounts = await AccountRepo().getAll();
+      final bankAccounts =
+          accounts.where((a) => a.isAsset && a.accountType != 'wallet').toList();
 
-      if (isCcSignal) {
-        final card = await _resolveOrCreateCard(
-          parsed: parsed,
-          matchedCardByLast4: matchedCardByLast4,
-          cards: cards,
+      BankAccount? matchedBank;
+
+      // Match by last4
+      if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+        final matches =
+            bankAccounts.where((a) => a.last4 == parsed.last4).toList();
+        if (matches.length > 1) {
+          final effectiveBank =
+              _detectBankName(sender, body, parsedBankName: parsed.bankName);
+          if (effectiveBank != null) {
+            final narrowed = matches.where((a) =>
+                !_isBankContradiction(a.bank, effectiveBank) ||
+                !_isBankContradiction(a.name, effectiveBank)).toList();
+            if (narrowed.length == 1) {
+              matchedBank = narrowed.first;
+            } else {
+              return (accountId: null, source: 'sms', instrumentType: 'ambiguous');
+            }
+          } else {
+            return (accountId: null, source: 'sms', instrumentType: 'ambiguous');
+          }
+        } else if (matches.length == 1) {
+          final candidate = matches.first;
+          final effectiveBank =
+              _detectBankName(sender, body, parsedBankName: parsed.bankName);
+          if (effectiveBank != null &&
+              _isBankContradiction(candidate.bank, effectiveBank)) {
+            // Contradictory bank names (e.g. Account is SBI but SMS says HDFC)
+            return (accountId: null, source: 'sms', instrumentType: 'ambiguous');
+          }
+          matchedBank = candidate;
+        }
+      }
+
+      // Match by unique bank name if last4 is missing
+      if (matchedBank == null && (parsed.last4 == null || parsed.last4!.isEmpty)) {
+        final effectiveBank =
+            _detectBankName(sender, body, parsedBankName: parsed.bankName);
+        if (effectiveBank != null) {
+          final matches = bankAccounts.where((a) =>
+              a.bank.toLowerCase().contains(effectiveBank.toLowerCase()) ||
+              effectiveBank.toLowerCase().contains(a.bank.toLowerCase()) ||
+              a.name.toLowerCase().contains(effectiveBank.toLowerCase())).toList();
+          if (matches.length == 1) {
+            matchedBank = matches.first;
+          } else if (matches.length > 1) {
+            return (accountId: null, source: 'sms', instrumentType: 'ambiguous');
+          }
+        }
+      }
+
+      if (matchedBank != null) {
+        return (accountId: matchedBank.id, source: 'sms', instrumentType: 'bank');
+      }
+
+      // No matching bank account found -> Auto-create bank account
+      // Strictly NEVER select or create a credit card!
+      final effectiveBank =
+          _detectBankName(sender, body, parsedBankName: parsed.bankName);
+      final last4 = parsed.last4 ?? '';
+      if (effectiveBank != null && effectiveBank.isNotEmpty && last4.isNotEmpty) {
+        return await _synchronizedAccountCreation(() async {
+          try {
+            final currentAccounts = await AccountRepo().getAll();
+            final existing = currentAccounts.where((a) =>
+                a.last4 == last4 &&
+                (a.bank.toLowerCase() == effectiveBank.toLowerCase() ||
+                    a.name.toLowerCase().contains(effectiveBank.toLowerCase()))).firstOrNull;
+            if (existing != null) {
+              return (accountId: existing.id, source: 'sms', instrumentType: 'bank');
+            }
+
+            final deterministicId = 'acc_auto_${_normalizeBankKeyword(effectiveBank)}_$last4';
+            final existingById = await AccountRepo().getById(deterministicId);
+            if (existingById != null) {
+              return (accountId: existingById.id, source: 'sms', instrumentType: 'bank');
+            }
+
+            final accName = '$effectiveBank Account (..$last4)';
+            final newAcc = BankAccount(
+              id: deterministicId,
+              name: accName,
+              bank: effectiveBank,
+              last4: last4,
+              accountType: 'savings',
+              balance: 0.0,
+            );
+            final newId = await AccountRepo().insertAccount(newAcc);
+            return (accountId: newId, source: 'sms', instrumentType: 'bank');
+          } catch (e) {
+            final fallback = (await AccountRepo().getAll()).where((a) =>
+                a.last4 == last4 &&
+                (a.bank.toLowerCase() == effectiveBank.toLowerCase() ||
+                    a.name.toLowerCase().contains(effectiveBank.toLowerCase()))).firstOrNull;
+            if (fallback != null) {
+              return (accountId: fallback.id, source: 'sms', instrumentType: 'bank');
+            }
+            AppLogger.w('[LiveSmsService] Failed to auto-create bank account: $e');
+            return (accountId: null, source: 'sms', instrumentType: 'unknown');
+          }
+        });
+      }
+
+      // Bank identity insufficient -> Route to Review Queue
+      return (accountId: null, source: 'sms', instrumentType: 'unknown');
+    }
+
+    // ── 3. Explicit Credit Card Resolution ──
+    if (isExplicitCard && !isExplicitBankAccount) {
+      final cards = await CreditRepo().getAll();
+      CreditCard? matchedCard;
+
+      // Match by last4
+      if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+        final matches = cards.where((c) => c.last4 == parsed.last4).toList();
+        if (matches.length > 1) {
+          final effectiveIssuer =
+              _detectCardIssuer(sender, body, parsedBankName: parsed.bankName);
+          if (effectiveIssuer != null) {
+            final narrowed = matches.where((c) =>
+                !_isBankContradiction(c.bank, effectiveIssuer) ||
+                !_isBankContradiction(c.name, effectiveIssuer)).toList();
+            if (narrowed.length == 1) {
+              matchedCard = narrowed.first;
+            } else {
+              return (accountId: null, source: 'credit_card_purchase', instrumentType: 'ambiguous');
+            }
+          } else {
+            return (accountId: null, source: 'credit_card_purchase', instrumentType: 'ambiguous');
+          }
+        } else if (matches.length == 1) {
+          final candidate = matches.first;
+          final effectiveIssuer =
+              _detectCardIssuer(sender, body, parsedBankName: parsed.bankName);
+          if (effectiveIssuer != null &&
+              _isBankContradiction(candidate.bank, effectiveIssuer)) {
+            // Contradictory card issuer
+            return (accountId: null, source: 'credit_card_purchase', instrumentType: 'ambiguous');
+          }
+          matchedCard = candidate;
+        }
+      }
+
+      // Match by unique issuer if last4 is missing
+      if (matchedCard == null && (parsed.last4 == null || parsed.last4!.isEmpty)) {
+        final effectiveIssuer =
+            _detectCardIssuer(sender, body, parsedBankName: parsed.bankName);
+        if (effectiveIssuer != null) {
+          final matches = cards.where((c) =>
+              c.bank.toLowerCase().contains(effectiveIssuer.toLowerCase()) ||
+              effectiveIssuer.toLowerCase().contains(c.bank.toLowerCase()) ||
+              c.name.toLowerCase().contains(effectiveIssuer.toLowerCase())).toList();
+          if (matches.length == 1) {
+            matchedCard = matches.first;
+          } else if (matches.length > 1) {
+            return (accountId: null, source: 'credit_card_purchase', instrumentType: 'ambiguous');
+          }
+        }
+      }
+
+      if (matchedCard != null) {
+        return (
+          accountId: matchedCard.id,
+          source: 'credit_card_purchase',
+          instrumentType: 'credit_card',
         );
-        if (card != null) {
-          return (
-            accountId: card.id,
-            source: 'credit_card_purchase',
-            instrumentType: 'credit_card',
-          );
-        }
       }
+
+      // No matching card found -> Auto-create credit card
+      // Strictly NEVER select or create a bank account!
+      final effectiveIssuer =
+          _detectCardIssuer(sender, body, parsedBankName: parsed.bankName);
+      final last4 = parsed.last4 ?? '';
+      if (effectiveIssuer != null && effectiveIssuer.isNotEmpty && last4.isNotEmpty) {
+        return await _synchronizedAccountCreation(() async {
+          try {
+            final currentCards = await CreditRepo().getAll();
+            final existing = currentCards.where((c) =>
+                c.last4 == last4 &&
+                (c.bank.toLowerCase() == effectiveIssuer.toLowerCase() ||
+                    c.name.toLowerCase().contains(effectiveIssuer.toLowerCase()))).firstOrNull;
+            if (existing != null) {
+              return (
+                accountId: existing.id,
+                source: 'credit_card_purchase',
+                instrumentType: 'credit_card',
+              );
+            }
+
+            final deterministicId = 'crd_auto_${_normalizeBankKeyword(effectiveIssuer)}_$last4';
+            final existingById = await CreditRepo().getCard(deterministicId);
+            if (existingById != null) {
+              return (
+                accountId: existingById.id,
+                source: 'credit_card_purchase',
+                instrumentType: 'credit_card',
+              );
+            }
+
+            final cardName = '$effectiveIssuer Card';
+            final newCard = CreditCard(
+              id: deterministicId,
+              name: cardName,
+              bank: effectiveIssuer,
+              last4: last4,
+              limitAmount: 0.0,
+              usedAmount: 0.0,
+            );
+            final newId = await CreditRepo().insert(newCard);
+            return (
+              accountId: newId,
+              source: 'credit_card_purchase',
+              instrumentType: 'credit_card',
+            );
+          } catch (e) {
+            final fallback = (await CreditRepo().getAll()).where((c) =>
+                c.last4 == last4 &&
+                (c.bank.toLowerCase() == effectiveIssuer.toLowerCase() ||
+                    c.name.toLowerCase().contains(effectiveIssuer.toLowerCase()))).firstOrNull;
+            if (fallback != null) {
+              return (
+                accountId: fallback.id,
+                source: 'credit_card_purchase',
+                instrumentType: 'credit_card',
+              );
+            }
+            AppLogger.w('[LiveSmsService] Failed to auto-create credit card: $e');
+            return (
+              accountId: null,
+              source: 'credit_card_purchase',
+              instrumentType: 'unknown',
+            );
+          }
+        });
+      }
+
+      // Card issuer insufficient -> Route to Review Queue
+      return (
+        accountId: null,
+        source: 'credit_card_purchase',
+        instrumentType: 'unknown',
+      );
     }
 
-    // 2. Bank Account matching (Priority: Bank accounts must ALWAYS match if last4 or bankName is present)
+    // ── 4. Digital Wallet / UPI Lite Signals ──
     final accounts = await AccountRepo().getAll();
-    BankAccount? matchedBank;
-    final isHdfcCandidate = parsed.bankName?.toLowerCase() == 'hdfc';
-    if (!isHdfcCandidate && parsed.last4 != null && parsed.last4!.isNotEmpty) {
-      matchedBank = accounts.where((a) => a.last4 == parsed.last4).firstOrNull;
-    }
-    if (!isHdfcCandidate && matchedBank == null && parsed.bankName != null) {
-      final kw = parsed.bankName!.toLowerCase();
-      final matching = accounts
-          .where(
-            (a) =>
-                a.bank.toLowerCase().contains(kw) ||
-                a.name.toLowerCase().contains(kw),
-          )
-          .toList();
-      if (matching.isNotEmpty) matchedBank = matching.first;
-    }
-
-    // Fuzzy matching against bank keywords in sender or body
-    if (!isHdfcCandidate && matchedBank == null) {
-      for (final a in accounts) {
-        if (a.accountType == 'wallet') continue;
-        final bName = a.bank.toLowerCase();
-        final aName = a.name.toLowerCase();
-        if (bName == 'hdfc' || aName.contains('hdfc')) continue;
-        if (bName.length >= 3 &&
-            (lowerSender.contains(bName) || lowerBody.contains(bName))) {
-          matchedBank = a;
-          break;
-        }
-        if (aName.length >= 3 &&
-            (lowerSender.contains(aName) || lowerBody.contains(aName))) {
-          matchedBank = a;
-          break;
-        }
-      }
-    }
-
-    // Check for UPI Lite signal first
     final isUpiLite =
         lowerBody.contains('upi lite') || lowerSender.contains('upi lite');
     if (isUpiLite) {
-      final upiLiteAcc = accounts
-          .where(
-            (a) =>
-                a.accountType == 'wallet' &&
-                (a.name.toLowerCase().contains('upi lite') ||
-                    a.bank.toLowerCase().contains('upi lite')),
-          )
-          .firstOrNull;
+      final upiLiteAcc = accounts.where((a) =>
+          a.accountType == 'wallet' &&
+          (a.name.toLowerCase().contains('upi lite') ||
+              a.bank.toLowerCase().contains('upi lite'))).firstOrNull;
       if (upiLiteAcc != null) {
-        return (
-          accountId: upiLiteAcc.id,
-          source: 'sms',
-          instrumentType: 'wallet',
-        );
+        return (accountId: upiLiteAcc.id, source: 'sms', instrumentType: 'wallet');
       }
+      final newWallet = BankAccount(
+        name: 'UPI Lite',
+        bank: 'UPI Lite',
+        accountType: 'wallet',
+        balance: 0,
+      );
+      final newId = await AccountRepo().insertAccount(newWallet);
+      return (accountId: newId, source: 'sms', instrumentType: 'wallet');
     }
 
-    // Check for Digital Wallet signals
     final hasNoBankSignal =
-        (parsed.last4 == null || parsed.last4!.isEmpty) &&
-        parsed.bankName == null;
-    final isWalletSignal =
-        hasNoBankSignal &&
+        (parsed.last4 == null || parsed.last4!.isEmpty) && parsed.bankName == null;
+    final isWalletSignal = hasNoBankSignal &&
         (balanceHit?.kind == BalanceKind.wallet ||
             lowerSender.contains('qcamzn') ||
             lowerBody.contains('amazon pay balance') ||
+            lowerBody.contains('apay wallet') ||
+            lowerBody.contains('apay balance') ||
             lowerBody.contains('paytm wallet') ||
+            lowerBody.contains('paytm balance') ||
+            lowerBody.contains('mobikwik') ||
             lowerBody.contains('wallet balance'));
+    if (isWalletSignal) {
+      final walletAcc = accounts.where((a) =>
+          a.accountType == 'wallet' &&
+          (a.name.toLowerCase().contains('paytm') ||
+              a.name.toLowerCase().contains('amazon') ||
+              a.name.toLowerCase().contains('apay') ||
+              a.name.toLowerCase().contains('mobikwik'))).firstOrNull;
+      if (walletAcc != null) {
+        return (accountId: walletAcc.id, source: 'sms', instrumentType: 'wallet');
+      }
+      // If wallet is not configured, route candidate for review rather than
+      // auto-creating or silently assigning an unrelated bank or card.
+      return (accountId: null, source: 'sms', instrumentType: 'wallet');
+    }
 
-    // For payment app notifications where bank is omitted, link to primary bank account (unless paying with wallet/UPI Lite)
+    // ── 5. Ambiguous Instrument (Neither or both explicit) ──
+    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
+      final bankMatches = accounts
+          .where((a) =>
+              a.isAsset && a.accountType != 'wallet' && a.last4 == parsed.last4)
+          .toList();
+      final cards = await CreditRepo().getAll();
+      final cardMatches = cards.where((c) => c.last4 == parsed.last4).toList();
+
+      if (bankMatches.length == 1 && cardMatches.isEmpty) {
+        return (accountId: bankMatches.first.id, source: 'sms', instrumentType: 'bank');
+      }
+      if (cardMatches.length == 1 && bankMatches.isEmpty) {
+        return (
+          accountId: cardMatches.first.id,
+          source: 'credit_card_purchase',
+          instrumentType: 'credit_card',
+        );
+      }
+      if (bankMatches.isNotEmpty || cardMatches.isNotEmpty) {
+        // Matches both, or multiple -> Ambiguous -> Review Queue!
+        return (accountId: null, source: 'sms', instrumentType: 'ambiguous');
+      }
+    }
+
+    // Payment app notifications omitting bank details -> link to primary bank if available
     if (!isWalletSignal &&
-        matchedBank == null &&
         (sender.startsWith('APP:') ||
             lowerSender.contains('paisa') ||
             lowerSender.contains('phonepe') ||
             lowerSender.contains('gpay') ||
             lowerSender.contains('upi'))) {
-      matchedBank =
-          accounts
-              .where((a) => a.isAsset && a.accountType != 'wallet')
-              .firstOrNull ??
-          accounts.firstOrNull;
-    }
-
-    if (matchedBank != null) {
-      return (
-        accountId: matchedBank.id,
-        source: 'sms',
-        instrumentType: matchedBank.accountType == 'wallet' ? 'wallet' : 'bank',
-      );
-    }
-
-    // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account or wallet!
-    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
-      final existingCards = await CreditRepo().getAll();
-      final matchingCard = existingCards
-          .where((c) => c.last4 == parsed.last4)
-          .firstOrNull;
-      if (matchingCard != null) {
-        return (
-          accountId: matchingCard.id,
-          source: 'sms',
-          instrumentType: 'card',
-        );
+      final primaryBank =
+          accounts.where((a) => a.isAsset && a.accountType != 'wallet').firstOrNull;
+      if (primaryBank != null) {
+        return (accountId: primaryBank.id, source: 'sms', instrumentType: 'bank');
       }
     }
 
-    // 3. Check for Digital Wallet & UPI Lite (ONLY if no bank account identifier exists)
-    if (isWalletSignal) {
-      if (isUpiLite) {
-        final upiLiteAcc = accounts
-            .where(
-              (a) =>
-                  a.accountType == 'wallet' &&
-                  (a.name.toLowerCase().contains('upi lite') ||
-                      a.bank.toLowerCase().contains('upi lite')),
-            )
-            .firstOrNull;
-        if (upiLiteAcc != null) {
-          return (
-            accountId: upiLiteAcc.id,
-            source: 'sms',
-            instrumentType: 'wallet',
-          );
-        }
-        // Auto-create UPI Lite wallet
-        final newWallet = BankAccount(
-          name: 'UPI Lite',
-          bank: 'UPI Lite',
-          accountType: 'wallet',
-          balance: 0,
-        );
-        final newId = await AccountRepo().insertAccount(newWallet);
-        return (accountId: newId, source: 'sms', instrumentType: 'wallet');
-      }
-      final walletAcc = accounts
-          .where(
-            (a) =>
-                a.accountType == 'wallet' &&
-                (a.name.toLowerCase().contains('paytm') ||
-                    a.name.toLowerCase().contains('amazon')),
-          )
-          .firstOrNull;
-      if (walletAcc != null) {
-        return (
-          accountId: walletAcc.id,
-          source: 'sms',
-          instrumentType: 'wallet',
-        );
-      }
-      // Auto-create wallet account ONLY for explicit Amazon Pay / Paytm wallet
-      if (lowerSender.contains('qcamzn') || lowerBody.contains('amazon pay')) {
-        final newWallet = BankAccount(
-          name: 'Amazon Pay Wallet',
-          bank: 'Amazon Pay Wallet',
-          accountType: 'wallet',
-          balance: 0,
-        );
-        final newId = await AccountRepo().insertAccount(newWallet);
-        return (accountId: newId, source: 'sms', instrumentType: 'wallet');
-      } else if (lowerBody.contains('paytm wallet')) {
-        final newWallet = BankAccount(
-          name: 'Paytm Wallet',
-          bank: 'Paytm Wallet',
-          accountType: 'wallet',
-          balance: 0,
-        );
-        final newId = await AccountRepo().insertAccount(newWallet);
-        return (accountId: newId, source: 'sms', instrumentType: 'wallet');
-      }
-    }
-
-    // Cross-type check: if last4 belongs to a CreditCard, do NOT create a bank account!
-    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
-      final existingCards = await CreditRepo().getAll();
-      final matchingCard = existingCards
-          .where((c) => c.last4 == parsed.last4)
-          .firstOrNull;
-      if (matchingCard != null) {
-        return (
-          accountId: matchingCard.id,
-          source: 'sms',
-          instrumentType: 'card',
-        );
-      }
-    }
-
-    // Check if an existing bank account has this last4 before creating
-    if (parsed.last4 != null && parsed.last4!.isNotEmpty) {
-      final existingAcc = accounts
-          .where(
-            (a) =>
-                a.last4 == parsed.last4 &&
-                (parsed.bankName == null ||
-                    a.bank.toLowerCase().contains(
-                      parsed.bankName!.toLowerCase(),
-                    ) ||
-                    parsed.bankName!.toLowerCase().contains(
-                      a.bank.toLowerCase(),
-                    )),
-          )
-          .firstOrNull;
-      if (existingAcc != null) {
-        return (
-          accountId: existingAcc.id,
-          source: 'sms',
-          instrumentType: existingAcc.accountType == 'wallet'
-              ? 'wallet'
-              : 'bank',
-        );
-      }
-    }
-
-    // If explicit bank name or last4 was detected, auto-create bank account
-    if (parsed.bankName != null ||
-        (parsed.last4 != null && parsed.last4!.isNotEmpty)) {
-      if (parsed.bankName?.toLowerCase() == 'hdfc') {
-        // User has an HDFC Credit Card, NOT an HDFC Bank Account.
-        final hdfcCard = cards
-            .where(
-              (c) =>
-                  c.bank.toLowerCase().contains('hdfc') ||
-                  c.last4 == '6366' ||
-                  c.last4 == parsed.last4,
-            )
-            .firstOrNull;
-        if (hdfcCard != null) {
-          return (
-            accountId: hdfcCard.id,
-            source: 'credit_card_purchase',
-            instrumentType: 'credit_card',
-          );
-        }
-        return (accountId: null, source: 'sms', instrumentType: 'unknown');
-      }
-      final bankTitle = parsed.bankName ?? 'Bank';
-      final accName =
-          '$bankTitle Account${parsed.last4 != null && parsed.last4!.isNotEmpty ? ' (..${parsed.last4})' : ''}';
-      final newAcc = BankAccount(
-        name: accName,
-        bank: bankTitle,
-        last4: parsed.last4 ?? '',
-        accountType: 'savings',
-        balance: 0,
-      );
-      final newId = await AccountRepo().insertAccount(newAcc);
-      return (accountId: newId, source: 'sms', instrumentType: 'bank');
-    }
-
-    // 4. Safe Unknown: When instrument cannot be safely determined, do NOT arbitrarily corrupt an account
+    // Safe Unknown -> Review Queue
     return (accountId: null, source: 'sms', instrumentType: 'unknown');
+  }
+
+  /// Detects reliable bank name from parsed info, sender code, or body keywords.
+  String? _detectBankName(
+    String sender,
+    String body, {
+    String? parsedBankName,
+  }) {
+    if (parsedBankName != null && parsedBankName.trim().isNotEmpty) {
+      return parsedBankName.trim();
+    }
+    final lowerSender = sender.toLowerCase();
+    final lowerBody = body.toLowerCase();
+    for (final entry in SmsImportService.bankNames.entries) {
+      if (lowerSender.contains(entry.key) ||
+          lowerBody.contains(entry.key) ||
+          lowerBody.contains(entry.value.toLowerCase())) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
+
+
+  /// Detects reliable credit card issuer from parsed info, sender code, or body keywords.
+  String? _detectCardIssuer(
+    String sender,
+    String body, {
+    String? parsedBankName,
+  }) {
+    if (parsedBankName != null && parsedBankName.trim().isNotEmpty) {
+      return parsedBankName.trim();
+    }
+    final lowerSender = sender.toLowerCase();
+    final lowerBody = body.toLowerCase();
+    for (final entry in SmsImportService.bankNames.entries) {
+      if (lowerSender.contains(entry.key) ||
+          lowerBody.contains(entry.key) ||
+          lowerBody.contains(entry.value.toLowerCase())) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
+  static String _normalizeBankKeyword(String name) {
+    final l = name.toLowerCase().trim();
+    if (l.contains('sbi') || l.contains('state bank')) return 'sbi';
+    if (l.contains('hdfc')) return 'hdfc';
+    if (l.contains('icici')) return 'icici';
+    if (l.contains('axis')) return 'axis';
+    if (l.contains('kotak')) return 'kotak';
+    if (l.contains('federal') || l.contains('fed')) return 'fed';
+    if (l.contains('bob') || l.contains('baroda')) return 'bob';
+    if (l.contains('pnb') || l.contains('punjab')) return 'pnb';
+    if (l.contains('idfc')) return 'idfc';
+    if (l.contains('jio')) return 'jio';
+    if (l.contains('yes')) return 'yes';
+    if (l.contains('indus')) return 'indus';
+    if (l.contains('au small') || l.contains('aubank')) return 'au';
+    return l.replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  static bool _isBankContradiction(String bankA, String bankB) {
+    final nA = _normalizeBankKeyword(bankA);
+    final nB = _normalizeBankKeyword(bankB);
+    if (nA.isEmpty || nB.isEmpty || nA == 'bank' || nB == 'bank') return false;
+    return nA != nB;
+  }
+
+  /// Sends a local notification for an item routed to the Review Queue.
+  /// Deduplicated persistently via SharedPreferences so each review candidate is
+  /// notified at most once across app launches, refreshes, and process restarts.
+  /// Only persists to SharedPreferences if the notification display actually succeeded.
+  Future<bool> _notifyReviewQueueItem({
+    required String reviewId,
+    required int amountMinorUnits,
+    required String sender,
+    String? merchant,
+    required String reason,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final notifiedSet =
+          prefs.getStringList('notified_review_candidate_ids')?.toSet() ??
+              <String>{};
+      if (notifiedSet.contains(reviewId)) return false;
+
+      // Verify item is still pending in ReviewRepo
+      final item = await ReviewRepo().getById(reviewId);
+      if (item == null || item.status != 'pending') {
+        // Already resolved or nonexistent: mark so we don't repeatedly check
+        notifiedSet.add(reviewId);
+        await prefs.setStringList(
+          'notified_review_candidate_ids',
+          notifiedSet.toList(),
+        );
+        return false;
+      }
+
+      final amount = amountMinorUnits / 100.0;
+      final title = 'Review Needed: ${AppFormat.currency(amount)}';
+      final entityName =
+          merchant ?? (sender.isNotEmpty ? sender : 'Transaction');
+      final body = '$entityName - Needs verification ($reason)';
+      final payload = jsonEncode({
+        'source_type': 'live_choice',
+        'review_id': reviewId,
+        'target': 'review',
+      });
+
+      final success = await NotificationServiceV2().showTransactionChoice(
+        title: title,
+        body: body,
+        payload: payload,
+      );
+
+      if (success) {
+        notifiedSet.add(reviewId);
+        await prefs.setStringList(
+          'notified_review_candidate_ids',
+          notifiedSet.toList(),
+        );
+        return true;
+      } else {
+        AppLogger.w(
+          '[LiveSmsService] Review notification display failed/denied for $reviewId; not persisting to notified set so it can be retried.',
+        );
+        return false;
+      }
+    } catch (e, st) {
+      AppLogger.w('[LiveSmsService] Review notification failed: $e\n$st');
+      return false;
+    }
+  }
+
+  /// Attempts to notify eligible pending Review Queue items that were not yet notified
+  /// (e.g. if notifications were previously disabled or permission was granted later).
+  Future<int> notifyEligiblePendingReviews() async {
+    try {
+      final pendingItems = await ReviewRepo().getPending();
+      if (pendingItems.isEmpty) return 0;
+
+      final prefs = await SharedPreferences.getInstance();
+      final notifiedSet =
+          prefs.getStringList('notified_review_candidate_ids')?.toSet() ??
+              <String>{};
+
+      int notifiedCount = 0;
+      for (final item in pendingItems) {
+        if (notifiedSet.contains(item.id)) continue;
+        final success = await _notifyReviewQueueItem(
+          reviewId: item.id,
+          amountMinorUnits: (item.parsed.amount * 100).round(),
+          sender: item.parsed.bankName ?? '',
+          merchant: item.parsed.merchant,
+          reason: 'Needs verification',
+        );
+        if (success) notifiedCount++;
+      }
+      return notifiedCount;
+    } catch (e) {
+      AppLogger.w('[LiveSmsService] notifyEligiblePendingReviews failed: $e');
+      return 0;
+    }
   }
 
   /// Resolves or automatically creates a target wallet account (e.g. UPI Lite, Paytm Wallet, Amazon Pay)
@@ -4931,26 +5251,197 @@ class LiveSmsService with WidgetsBindingObserver {
           : SourceChannel.sms;
       final candidateTx = result.transaction;
       if (candidateTx != null && result.eventType != SmsEventType.failed) {
+        final parsed = messageDate != null
+            ? candidateTx.copyWith(date: messageDate)
+            : candidateTx;
+
+        // ── 1. Resolve Instrument, Target Card, and Event Type ──
+        CanonicalEventType canonicalEventType = CanonicalEventType.expense;
+        PostingDirection direction = parsed.isCredit
+            ? PostingDirection.credit
+            : PostingDirection.debit;
+        String? accountId;
+        String? counterpartyAccountId;
+        String? merchant = parsed.merchant;
+        bool isAmbiguous = false;
+        String? ambiguityReason;
+        CreditCard? matchedCard;
+        Loan? matchedLoan;
+        bool isCcRefund = false;
+
+        if (result.eventType == SmsEventType.creditCardPayment) {
+          canonicalEventType = CanonicalEventType.cardPayment;
+          direction = PostingDirection.debit;
+          matchedCard = await _resolveTargetCard(
+            parsed: parsed,
+            sender: sender,
+            body: body,
+          );
+          var payingBankId = await _findPayingBankFromText(body);
+          if (payingBankId == null) {
+            final recentDebit = await _findRecentBankDebitForCcPayment(
+              amount: parsed.amount,
+              date: parsed.date,
+              cardLast4: parsed.last4 ?? matchedCard?.last4,
+              issuer: parsed.bankName ?? matchedCard?.bank,
+              confirmationRef: parsed.refId,
+            );
+            if (recentDebit != null && recentDebit.accountId != null) {
+              payingBankId = recentDebit.accountId;
+            }
+          }
+
+          accountId = payingBankId;
+          counterpartyAccountId = matchedCard?.id;
+          merchant = matchedCard?.name ??
+              (parsed.bankName != null ? '${parsed.bankName} Credit Card' : 'Credit Card');
+
+          if (matchedCard == null) {
+            isAmbiguous = true;
+            ambiguityReason = 'UNRESOLVED_TARGET_CARD';
+          } else if (payingBankId == null) {
+            isAmbiguous = true;
+            ambiguityReason = 'UNRESOLVED_PAYING_BANK';
+          }
+        } else {
+          final instrument = await _classifyAndResolveAccount(
+            parsed: parsed,
+            sender: sender,
+            body: body,
+            balanceHit: result.balance,
+          );
+          accountId = instrument.accountId;
+
+          final isRefund = result.eventType == SmsEventType.refund ||
+              (instrument.instrumentType == 'credit_card' && parsed.isCredit);
+          isCcRefund = isRefund &&
+              (parsed.method == 'card' ||
+                  body.toLowerCase().contains('card') ||
+                  instrument.instrumentType == 'credit_card');
+          final isTransfer = result.eventType == SmsEventType.transfer;
+
+          if (isTransfer) {
+            canonicalEventType = CanonicalEventType.transfer;
+            direction = PostingDirection.debit;
+            final isDeposit = RegExp(
+              r'\b(?:fixed\s+deposit|term\s+deposit|recurring\s+deposit|fd\s+a/c|rd\s+a/c|'
+              r'fd\s+no\.?|rd\s+no\.?|fd\s+created|fd\s+booked|deposit\s+created|'
+              r'deposit\s+booked|towards\s+fd|towards\s+rd|booked\s+(?:a\s+)?(?:fixed|term)\s+deposit|'
+              r'invested\s+in\s+fd|credited\s+to\s+fd|opened\s+fd)\b',
+              caseSensitive: false,
+            ).hasMatch(body.toLowerCase());
+            if (isDeposit) {
+              counterpartyAccountId = await _resolveTargetDeposit(
+                body,
+                sender,
+                initialBalance: parsed.amount,
+              );
+            } else {
+              counterpartyAccountId = await _resolveTargetWallet(body);
+            }
+          } else if (isRefund) {
+            canonicalEventType = CanonicalEventType.refund;
+            direction = PostingDirection.credit;
+          } else if (result.eventType == SmsEventType.creditCardPurchase ||
+              instrument.instrumentType == 'credit_card') {
+            canonicalEventType = CanonicalEventType.cardPurchase;
+            direction = PostingDirection.debit;
+          } else {
+            if (!parsed.isCredit && _isEmiDebitText(body)) {
+              matchedLoan = await _findMatchingLoan(parsed.amount, body);
+            }
+            if (matchedLoan != null) {
+              canonicalEventType = CanonicalEventType.loanRepayment;
+              direction = PostingDirection.debit;
+              counterpartyAccountId = matchedLoan.id;
+              merchant = 'EMI Payment towards ${matchedLoan.name}';
+            } else {
+              canonicalEventType = parsed.isCredit
+                  ? CanonicalEventType.income
+                  : CanonicalEventType.expense;
+              direction = parsed.isCredit
+                  ? PostingDirection.credit
+                  : PostingDirection.debit;
+            }
+          }
+
+          if (instrument.instrumentType == 'ambiguous') {
+            isAmbiguous = true;
+            ambiguityReason = 'AMBIGUOUS_INSTRUMENT_ATTRIBUTION';
+          } else if (instrument.accountId == null) {
+            isAmbiguous = true;
+            ambiguityReason = instrument.instrumentType == 'wallet'
+                ? 'UNCONFIGURED_WALLET'
+                : 'UNRESOLVED_INSTRUMENT';
+          }
+
+          // Category resolution for non-transfer, non-loan
+          if (canonicalEventType != CanonicalEventType.transfer &&
+              canonicalEventType != CanonicalEventType.loanRepayment) {
+            final categoryType = (canonicalEventType == CanonicalEventType.cardPurchase ||
+                    canonicalEventType == CanonicalEventType.refund)
+                ? 'expense'
+                : (parsed.isCredit ? 'income' : 'expense');
+            final resolution = await resolveCategoryForText(
+              rawText: parsed.rawText,
+              merchant: parsed.merchant,
+              type: categoryType,
+            );
+            final defaultCat = (canonicalEventType == CanonicalEventType.refund ||
+                    canonicalEventType == CanonicalEventType.cardPurchase ||
+                    !parsed.isCredit)
+                ? TablesV24.sysExpMisc
+                : TablesV24.sysIncMisc;
+            counterpartyAccountId = (resolution.id != null && resolution.id!.isNotEmpty) ? resolution.id :
+                defaultCat;
+          }
+        }
+
+        final String? primaryAccountType;
+        if (canonicalEventType == CanonicalEventType.cardPurchase) {
+          primaryAccountType = 'liability';
+        } else if (canonicalEventType == CanonicalEventType.refund) {
+          primaryAccountType = isCcRefund ? 'liability' : 'asset';
+        } else if (canonicalEventType == CanonicalEventType.cardPayment) {
+          primaryAccountType = 'asset';
+        } else {
+          primaryAccountType = 'asset';
+        }
+
         final candidate = IncomingTransactionCandidate(
           sourceRecordId: effectiveSourceRecordId,
           sourceChannel: channel,
           sender: sender,
           body: body,
-          amountMinorUnits: (candidateTx.amount * 100).round(),
-          direction: candidateTx.isCredit
-              ? PostingDirection.credit
-              : PostingDirection.debit,
-          timestamp: messageDate ?? candidateTx.date,
-          externalReference: candidateTx.refId ??
+          amountMinorUnits: (parsed.amount * 100).round(),
+          direction: direction,
+          timestamp: messageDate ?? parsed.date,
+          externalReference: parsed.refId ??
               CrossChannelDeduplicationService.extractUtrOrRrn(body),
-          accountNumberLast4: candidateTx.last4,
-          merchant: candidateTx.merchant,
+          accountNumberLast4: parsed.last4,
+          accountId: accountId,
+          counterpartyAccountId: counterpartyAccountId,
+          merchant: merchant ?? parsed.merchant,
+          eventType: canonicalEventType,
+          isAmbiguous: isAmbiguous,
+          ambiguityReason: ambiguityReason,
+          primaryAccountType: primaryAccountType,
         );
         final dedupResult = await CrossChannelDeduplicationService()
             .processWithConflictResolution(candidate: candidate, db: db);
         if (dedupResult.isDuplicateSource ||
             dedupResult.isStrongMatchMerged ||
             dedupResult.isRoutedToReviewQueue) {
+          if (dedupResult.isRoutedToReviewQueue &&
+              dedupResult.reviewCandidateId != null) {
+            await _notifyReviewQueueItem(
+              reviewId: dedupResult.reviewCandidateId!,
+              amountMinorUnits: candidate.amountMinorUnits,
+              sender: candidate.sender,
+              merchant: candidate.merchant,
+              reason: dedupResult.reviewReason ?? 'Needs verification',
+            );
+          }
           AppLogger.i(
             '[LiveSmsService] Source $effectiveSourceRecordId resolved by dedup engine: ${dedupResult.status}',
           );
@@ -4962,15 +5453,36 @@ class LiveSmsService with WidgetsBindingObserver {
           );
         }
         if (dedupResult.isNewEventCreated) {
+          final txType = switch (canonicalEventType) {
+            CanonicalEventType.income => 'income',
+            CanonicalEventType.cardPurchase => 'credit_card_purchase',
+            CanonicalEventType.cardPayment => 'credit_payment',
+            CanonicalEventType.transfer => 'transfer',
+            CanonicalEventType.loanRepayment => 'loan_repayment',
+            CanonicalEventType.refund => 'refund',
+            _ => 'expense',
+          };
           createdTx = Transaction(
-            amount: candidateTx.amount,
+            amount: parsed.amount,
             userId: 'offline_user',
-            type: candidateTx.isCredit ? 'income' : 'expense',
-            date: messageDate ?? candidateTx.date,
-            notes: candidateTx.merchant ??
-                (candidateTx.isCredit ? 'Credit' : 'Expense'),
-            source: channel == SourceChannel.push ? 'notification' : 'sms',
-            externalRef: candidateTx.refId,
+            type: txType,
+            date: messageDate ?? parsed.date,
+            accountId: accountId,
+            relatedEntityId: (canonicalEventType == CanonicalEventType.cardPayment ||
+                    canonicalEventType == CanonicalEventType.transfer ||
+                    canonicalEventType == CanonicalEventType.loanRepayment)
+                ? counterpartyAccountId
+                : null,
+            categoryId: (canonicalEventType != CanonicalEventType.cardPayment &&
+                    canonicalEventType != CanonicalEventType.transfer &&
+                    canonicalEventType != CanonicalEventType.loanRepayment)
+                ? counterpartyAccountId
+                : null,
+            notes: merchant ?? (parsed.isCredit ? 'Credit' : 'Expense'),
+            source: channel == SourceChannel.push
+                ? 'notification'
+                : (canonicalEventType == CanonicalEventType.cardPurchase ? 'credit_card_purchase' : 'sms'),
+            externalRef: parsed.refId,
             rawPayload: body,
           );
           if (!skipBalance && result.balance != null) {
@@ -4992,6 +5504,116 @@ class LiveSmsService with WidgetsBindingObserver {
               balanceNote = '$kind set to ${AppFormat.currency(hit.amount)}';
             }
           }
+
+          if (canonicalEventType == CanonicalEventType.cardPayment && matchedCard != null) {
+            await _syncCardReminderOnPayment(
+              matchedCard,
+              paymentAmount: parsed.amount,
+            );
+          }
+
+          if (canonicalEventType == CanonicalEventType.cardPurchase && accountId != null) {
+            try {
+              final card = await CreditRepo().getCard(accountId);
+              if (card != null) {
+                await ReminderRepo().insertGlobalReminder(
+                  Reminder(
+                    id: 'credit_due_${card.id}',
+                    type: ReminderType.credit,
+                    title: 'Credit Card Due: ${card.name}',
+                    linkedEntityId: card.id,
+                    dueDate: card.nextDueDate,
+                    amount: card.outstanding,
+                    isActive: true,
+                    status: ReminderStatus.upcoming,
+                    recordStatus: ReminderRecordStatus.pending,
+                    sourceType: ReminderSourceType.credit,
+                    sourceId: card.id,
+                  ).toMap(),
+                );
+              }
+            } catch (_) {}
+          }
+
+          if (canonicalEventType == CanonicalEventType.loanRepayment && matchedLoan != null) {
+            try {
+              final newPaid = matchedLoan.paidAmount + parsed.amount;
+              final isFullyPaid = newPaid >= matchedLoan.total;
+              final newStatus = isFullyPaid ? 'closed' : matchedLoan.loanStatus;
+              await LoanRepo().updateLoanProgress(
+                matchedLoan.id,
+                newPaid,
+                newStatus,
+              );
+              await ReminderRepo().settleMatching(
+                amount: parsed.amount,
+                date: parsed.date,
+                title: matchedLoan.name,
+                merchant: matchedLoan.name,
+                notes: createdTx.notes,
+                linkedEntityId: matchedLoan.id,
+                isIncome: false,
+              );
+            } catch (e) {
+              AppLogger.w('Failed to update loan progress on live repayment: $e');
+            }
+          }
+
+          if (canonicalEventType == CanonicalEventType.income &&
+              (parsed.rawText.toLowerCase().contains('salary') ||
+                  (parsed.merchant?.toLowerCase().contains('salary') ?? false))) {
+            try {
+              await ReminderRepo().settleMatching(
+                amount: parsed.amount,
+                date: parsed.date,
+                title: 'Salary',
+                merchant: parsed.merchant,
+                notes: createdTx.notes,
+                isIncome: true,
+              );
+            } catch (_) {}
+          }
+
+          if (canonicalEventType == CanonicalEventType.expense ||
+              canonicalEventType == CanonicalEventType.cardPurchase ||
+              canonicalEventType == CanonicalEventType.transfer ||
+              canonicalEventType == CanonicalEventType.cardPayment) {
+            try {
+              final settled = await ReminderRepo().settleMatching(
+                amount: parsed.amount,
+                date: parsed.date,
+                title: createdTx.notes,
+                merchant: parsed.merchant,
+                notes: '${createdTx.notes} ${parsed.rawText}',
+                isCreditCardPayment: canonicalEventType == CanonicalEventType.cardPayment,
+                isIncome: false,
+              );
+              if (settled > 0) {
+                AppLogger.i(
+                  '[LiveSmsService] Auto-settled $settled reminder(s) for ${parsed.merchant ?? createdTx.notes} (₹${parsed.amount})',
+                );
+              }
+            } catch (e) {
+              AppLogger.w('[LiveSmsService] reminder settle error: $e');
+            }
+          }
+
+          if (counterpartyAccountId != null &&
+              counterpartyAccountId.isNotEmpty &&
+              merchant != null &&
+              merchant.isNotEmpty) {
+            try {
+              final keyword = MerchantExtractor.extract(merchant);
+              if (keyword.length >= 3) {
+                await MerchantRuleRepo().upsert(
+                  keyword,
+                  counterpartyAccountId,
+                  accountId: accountId,
+                );
+              }
+            } catch (_) {}
+          }
+
           return (
             added: true,
             balanceNote: balanceNote,
@@ -5780,6 +6402,13 @@ class LiveSmsService with WidgetsBindingObserver {
           confidence: 0.0,
         ),
       );
+      await _notifyReviewQueueItem(
+        reviewId: id,
+        amountMinorUnits: (hit.amount * 100).round(),
+        sender: hit.sender,
+        merchant: 'Balance $instrument',
+        reason: reason,
+      );
     } catch (e) {
       AppLogger.w('[LiveSmsService] Could not enqueue balance review: $e');
     }
@@ -6233,12 +6862,6 @@ class LiveSmsService with WidgetsBindingObserver {
         }
       }
 
-      final sameAmount = await TransactionRepo().findByAmountAndDateRange(
-        amount: parsed.amount,
-        from: parsedDateUtc.subtract(const Duration(minutes: 30)),
-        to: parsedDateUtc.add(const Duration(minutes: 30)),
-      );
-
       final normCandidateMerchant = _normalizeMerchantForDedup(parsed.merchant);
       final lowerRawText = parsed.rawText.toLowerCase();
       final isCandidateApp =
@@ -6246,6 +6869,22 @@ class LiveSmsService with WidgetsBindingObserver {
           lowerRawText.contains('google pay') ||
           lowerRawText.contains('phonepe') ||
           lowerRawText.contains('paytm');
+
+      var sameAmount = await TransactionRepo().findByAmountAndDateRange(
+        amount: parsed.amount,
+        from: parsedDateUtc.subtract(const Duration(hours: 24)),
+        to: parsedDateUtc.add(const Duration(hours: 24)),
+      );
+
+      // If no exact 30-minute window match and this is a bank SMS,
+      // also check for unlinked transactions (accountId == null) of the same amount
+      // that may have defaulted to receipt time.
+      if (sameAmount.isEmpty && !isCandidateApp) {
+        final allCandidates = await TransactionRepo().getAll();
+        sameAmount = allCandidates.where((t) {
+          return t.amount == parsed.amount && t.accountId == null;
+        }).toList();
+      }
 
       final candidateType = parsed.isCredit ? 'income' : 'expense';
       for (final t in sameAmount) {
@@ -6304,12 +6943,12 @@ class LiveSmsService with WidgetsBindingObserver {
 
         // Invariant 4: Safe null-merchant handling & cross-source app vs bank SMS matching
         bool matches = false;
-        if (isCrossChannel && diffMinutes <= 15.0) {
+        if (isCrossChannel && diffMinutes <= 1440.0) {
           // Cross-channel: Payment app push vs Bank SMS.
           // In India, Google Pay / PhonePe provides the payee or payer name (e.g. "RAVEENDRAN K" or "Swiggy"),
           // whereas the corresponding bank SMS often omits the merchant name entirely (or uses cryptic UPI ref)
           // but provides the bank account last4 / balance.
-          // Within a 15-minute window for the same amount and direction, this is the same economic event.
+          // Within a 24-hour window for the same amount and direction, this is the same economic event.
           matches = true;
         } else if (isBothApp && diffMinutes <= 30.0) {
           // Multiple syncs of the same active payment notification
@@ -6480,6 +7119,8 @@ class LiveSmsService with WidgetsBindingObserver {
     return null;
   }
 
+
+
   /// Resolves the target card for a credit card bill payment.
   Future<CreditCard?> _resolveTargetCard({
     required ParsedTransaction parsed,
@@ -6497,36 +7138,45 @@ class LiveSmsService with WidgetsBindingObserver {
         lower.contains('debited from a/c') ||
         lower.contains('debited rs');
 
-    // 1. Match by last 4 (only if not a bank account debit)
-    if (!isBankDebit && parsed.last4 != null && parsed.last4!.isNotEmpty) {
-      final match = cards.where((c) => c.last4 == parsed.last4).firstOrNull;
-      if (match != null) return match;
+    // 1. Match by last 4 (either explicit card marker or parsed.last4 if not bank debit)
+    final cardLast4Match = RegExp(
+      r'(?:card|ending|xx)\s*(?:x+|\*+)?(\d{4})',
+      caseSensitive: false,
+    ).firstMatch(body);
+    final cardLast4 = cardLast4Match?.group(1) ?? (!isBankDebit ? parsed.last4 : null);
+    if (cardLast4 != null && cardLast4.isNotEmpty) {
+      final matches = cards.where((c) => c.last4 == cardLast4).toList();
+      if (matches.length > 1) return null; // Ambiguous: multiple matching cards
+      if (matches.length == 1) return matches.first;
+      return null; // Explicit card last4 does not match any known card
     }
 
     // 2. Match by issuer / bank in sender or text
+    final matchingCards = <CreditCard>[];
     for (final card in cards) {
       final bankKw = card.bank.toLowerCase();
       final nameKw = card.name.toLowerCase();
       if ((bankKw.isNotEmpty &&
               (lower.contains(bankKw) || lowerSender.contains(bankKw))) ||
           (nameKw.isNotEmpty && lower.contains(nameKw))) {
-        return card;
+        matchingCards.add(card);
       }
     }
+    if (matchingCards.length == 1) return matchingCards.first;
+    if (matchingCards.length > 1) return null; // Ambiguous: multiple matching cards
 
-    // 2b. If it's a payment to Cred or BBPS, match ICICI or card with largest outstanding balance
-    if (lower.contains('cred') ||
-        lower.contains('bbps') ||
-        lower.contains('dreamplug')) {
-      final icici = cards
+    // 2b. If it's a payment to Cred or BBPS, match ICICI or unique card
+    if (RegExp(r'\b(?:cred|bbps|dreamplug)\b', caseSensitive: false).hasMatch(lower)) {
+      final iciciMatches = cards
           .where(
             (c) =>
                 c.bank.toLowerCase().contains('icici') ||
                 c.name.toLowerCase().contains('icici'),
           )
-          .firstOrNull;
-      if (icici != null) return icici;
-      if (cards.isNotEmpty) return cards.first;
+          .toList();
+      if (iciciMatches.length == 1) return iciciMatches.first;
+      if (cards.length == 1) return cards.first;
+      return null;
     }
 
     // 3. Fallback: create card if we know issuer or last4 and not a bank debit
@@ -6553,6 +7203,8 @@ class LiveSmsService with WidgetsBindingObserver {
     }
     return null;
   }
+
+
 
   /// Looks for a recent bank debit (within 48 hours) with the same amount that safely matches
   /// the bank-side leg of this credit card payment (e.g. UPI transfer to CC / BBPS / CRED).
@@ -6664,6 +7316,8 @@ class LiveSmsService with WidgetsBindingObserver {
     return null;
   }
 
+
+
   /// Synchronizes or settles all credit card due reminders upon receiving a bill payment.
   Future<void> _syncCardReminderOnPayment(
     CreditCard? matchedCard, {
@@ -6743,12 +7397,14 @@ class LiveSmsService with WidgetsBindingObserver {
       if (last4Match != null) {
         final last4 = last4Match.group(1)!;
         final accounts = await AccountRepo().getAll();
-        final acc = accounts.where((a) => a.last4 == last4).firstOrNull;
-        if (acc != null) return acc.id;
+        final matches = accounts.where((a) => a.last4 == last4).toList();
+        if (matches.length == 1) return matches.first.id;
       }
     } catch (_) {}
     return null;
   }
+
+
 
   /// Returns true if message text indicates a loan installment / EMI debit.
   bool _isEmiDebitText(String body) {
@@ -6802,4 +7458,6 @@ class LiveSmsService with WidgetsBindingObserver {
     }
     return null;
   }
+
+
 }

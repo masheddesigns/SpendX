@@ -27,6 +27,7 @@ import '../screens/loans/loan_detail_screen.dart';
 import '../screens/notifications_inbox_screen.dart';
 import '../screens/bank/account_list_screen.dart';
 import '../screens/home/transactions_screen.dart';
+import '../screens/review/review_queue_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../data/repositories/loan_repo.dart';
 import '../data/repositories/review_repo.dart';
@@ -59,7 +60,7 @@ class NotificationServiceV2 {
     try {
       final tzInfo = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
-    } catch (e) {
+    } catch (_) {
       // Fallback — timezone not critical for basic functionality
     }
 
@@ -73,35 +74,37 @@ class NotificationServiceV2 {
       macOS: darwin,
     );
 
-    await _plugin.initialize(
-      settings: settings,
-      onDidReceiveNotificationResponse: _handleNotificationTap,
-      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-    );
+    try {
+      await _plugin.initialize(
+        settings: settings,
+        onDidReceiveNotificationResponse: _handleNotificationTap,
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
 
-    // Create Channels
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            'spendx_channel',
-            'SpendX Notifications',
-            importance: Importance.max,
-          ),
-        );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            'scheduled_channel',
-            'Scheduled Notifications',
-            importance: Importance.high,
-          ),
-        );
+      // Create Channels
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              'spendx_channel',
+              'SpendX Notifications',
+              importance: Importance.max,
+            ),
+          );
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              'scheduled_channel',
+              'Scheduled Notifications',
+              importance: Importance.high,
+            ),
+          );
+    } catch (_) {}
   }
 
   /// Request notification permissions (Android 13+ POST_NOTIFICATIONS and
@@ -516,43 +519,64 @@ class NotificationServiceV2 {
   /// Shows a live-transaction notification that asks the user to file it as
   /// an Expense or an Income, right from the shade. Body tap opens the
   /// Review Queue. [payload] must carry source_type 'live_choice' + review_id.
-  Future<void> showTransactionChoice({
+  /// Returns true if the notification was successfully displayed, false otherwise.
+  Future<bool> showTransactionChoice({
     required String title,
     required String body,
     required String payload,
   }) async {
-    if (!_initialized) await init();
-    final settings = await _settingsService.load();
-    if (settings.toMap()['generalUpdates'] == false) return;
+    try {
+      if (!_initialized) await init();
+      final settings = await _settingsService.load();
+      if (settings.toMap()['generalUpdates'] == false) return false;
 
-    const androidDetails = AndroidNotificationDetails(
-      'spendx_channel',
-      'SpendX Notifications',
-      channelDescription: 'SpendX financial alerts & reminders',
-      icon: '@drawable/ic_notification',
-      importance: Importance.max,
-      priority: Priority.high,
-      actions: <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          liveExpenseAction,
-          'Expense',
-          showsUserInterface: true,
-        ),
-        AndroidNotificationAction(
-          liveIncomeAction,
-          'Income',
-          showsUserInterface: true,
-        ),
-      ],
-    );
+      try {
+        final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        if (androidPlugin != null) {
+          final areEnabled = await androidPlugin.areNotificationsEnabled();
+          if (areEnabled == false) {
+            AppLogger.d('[NotificationServiceV2] Notifications disabled by user/system');
+            return false;
+          }
+        }
+      } catch (_) {
+        // Platform implementation may be uninitialized or unsupported in unit tests / desktop
+      }
 
-    await _plugin.show(
-      id: _allocateEphemeralId(),
-      title: title,
-      body: body,
-      notificationDetails: const NotificationDetails(android: androidDetails),
-      payload: payload,
-    );
+      const androidDetails = AndroidNotificationDetails(
+        'spendx_channel',
+        'SpendX Notifications',
+        channelDescription: 'SpendX financial alerts & reminders',
+        icon: '@drawable/ic_notification',
+        importance: Importance.max,
+        priority: Priority.high,
+        actions: <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            liveExpenseAction,
+            'Expense',
+            showsUserInterface: true,
+          ),
+          AndroidNotificationAction(
+            liveIncomeAction,
+            'Income',
+            showsUserInterface: true,
+          ),
+        ],
+      );
+
+      await _plugin.show(
+        id: _allocateEphemeralId(),
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(android: androidDetails),
+        payload: payload,
+      );
+      return true;
+    } catch (e) {
+      AppLogger.w('[NotificationServiceV2] showTransactionChoice failed: $e');
+      return false;
+    }
   }
 
   /// Finalizes a live-transaction choice: saves the pending review item as an
@@ -663,9 +687,11 @@ class NotificationServiceV2 {
         break;
       case 'sms':
       case 'activity':
+        push(const TransactionListScreen(isFullScreen: true));
+        break;
       case 'review':
       case 'live_choice':
-        push(const TransactionListScreen(isFullScreen: true));
+        push(const ReviewQueueScreen());
         break;
       case 'inbox':
       default:

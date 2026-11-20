@@ -310,7 +310,14 @@ class InboxAuditService {
         }
 
         // Parse message content
-        final classification = SmsImportService.instance.classifyMessage(body, sender);
+        final rawDateMsForParse = raw['date'];
+        DateTime? envelopeTimestamp;
+        if (rawDateMsForParse is num && rawDateMsForParse > 0) {
+          envelopeTimestamp = DateTime.fromMillisecondsSinceEpoch(rawDateMsForParse.toInt());
+        }
+        final classification = SmsImportService.instance.classifyMessage(
+          body, sender, date: envelopeTimestamp,
+        );
         if (classification.upcomingObligation != null ||
             classification.eventType == SmsEventType.billReminder ||
             classification.eventType == SmsEventType.failed) {
@@ -318,20 +325,16 @@ class InboxAuditService {
           continue;
         }
         final parsed = classification.transaction ??
-            TransactionTextParser.parse(body, source: 'audit_inbox');
+            TransactionTextParser.parse(body, source: 'audit_inbox', messageTimestamp: envelopeTimestamp);
 
         if (parsed.amount <= 0) {
           // No actionable monetary value detected
           continue;
         }
 
-        final rawDateMs = raw['date'];
-        DateTime msgDate = now;
-        if (rawDateMs is num && rawDateMs > 0) {
-          msgDate = DateTime.fromMillisecondsSinceEpoch(rawDateMs.toInt());
-        } else {
-          msgDate = parsed.date;
-        }
+        // msgDate: prefer the SMS envelope timestamp (already in envelopeTimestamp);
+        // fall back to the in-text date extracted by TransactionTextParser.
+        final msgDate = envelopeTimestamp ?? parsed.date;
 
         // --- STEP A: Evidence Fingerprint Check ---
         final existingEvidence = await eventRepo.getEvidenceByFingerprint(bodyFp);

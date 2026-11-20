@@ -85,15 +85,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'before being saved.',
             ),
             const _PolicySection(
-              title: 'Bank App Notifications (Optional)',
+              title: 'Bank App & Messaging Notifications (Optional)',
               content:
                   'If you grant Android Notification Access, SpendX reads transaction alerts '
                   'only from an explicit allowlist of banking, UPI, card, and financial apps. '
-                  'Email clients and general messaging apps — including Gmail and WhatsApp — '
-                  'are not monitored. Notification text is processed on-device, is never '
-                  'uploaded, and is not written to logs. Only messages that pass the local '
+                  'When explicitly enabled by you, SpendX can also extract transaction alerts from '
+                  'official WhatsApp banking bots and Gmail financial statement alerts. Personal '
+                  'conversations, family chats, and non-financial emails are strictly dropped and '
+                  'never inspected or stored. Notification text is processed entirely on-device, '
+                  'is never uploaded, and is not written to logs. Only messages that pass the local '
                   'financial filter are retained. You can revoke access at any time in Android '
-                  'Settings or by turning off Bank App Notifications in SpendX.',
+                  'Settings or by turning off these options in SpendX Notification Settings.',
             ),
             const _PolicySection(
               title: 'Share-to-Import',

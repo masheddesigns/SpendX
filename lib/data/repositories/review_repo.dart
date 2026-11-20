@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../domain/finance/finance.dart';
 import '../../models/review_item.dart';
+import '../../services/transaction_text_parser.dart';
 import 'canonical/canonical_event_repository.dart';
 import 'canonical/canonical_review_repository.dart';
 import 'canonical/canonical_transaction_adapter.dart';
@@ -146,27 +147,69 @@ class ReviewRepo {
   }
 
   /// Converts a [ReviewCandidate] domain entity into a [ReviewItem] presentation model.
+  ///
+  /// Rehydration priority:
+  ///   1. Payload contains `{'parsed': {...}}` — use directly (new format from CrossChannelDeduplicationService).
+  ///   2. Payload contains `{'body': '...'}` — re-parse the raw body NOW to extract
+  ///      clean merchant, date, last4, bankName (old format). Never show raw JSON as notes.
+  ///   3. Fallback: construct a minimal ParsedTransaction from the candidate's
+  ///      suggested fields alone.
   static ReviewItem toItem(ReviewCandidate candidate) {
     if (candidate.rawPayload != null && candidate.rawPayload!.isNotEmpty) {
       try {
         final decoded = jsonDecode(candidate.rawPayload!);
-        if (decoded is Map<String, dynamic> && decoded.containsKey('parsed')) {
-          final parsedJson = decoded['parsed'];
-          final parsed = parsedJson is String
-              ? ParsedTransaction.fromJson(parsedJson)
-              : ParsedTransaction.fromJson(jsonEncode(parsedJson));
-          return ReviewItem(
-            id: candidate.id,
-            rawSource: decoded['rawSource'] as String? ?? candidate.sourceType,
-            parsed: parsed,
-            confidence: candidate.confidenceScore,
-            status: candidate.status.name,
-            createdAt: candidate.createdAt,
-          );
+        if (decoded is Map<String, dynamic>) {
+          DateTime? payloadTimestamp;
+          if (decoded.containsKey('timestamp')) {
+            payloadTimestamp = DateTime.tryParse(decoded['timestamp'].toString());
+          }
+
+          // ── New format: payload has a 'parsed' map ──
+          if (decoded.containsKey('parsed')) {
+            final parsedJson = decoded['parsed'];
+            final parsed = parsedJson is String
+                ? ParsedTransaction.fromJson(parsedJson)
+                : ParsedTransaction.fromJson(jsonEncode(parsedJson));
+            return ReviewItem(
+              id: candidate.id,
+              rawSource: decoded['rawSource'] as String? ?? candidate.sourceType,
+              parsed: parsed,
+              confidence: candidate.confidenceScore,
+              status: candidate.status.name,
+              createdAt: payloadTimestamp ?? candidate.createdAt,
+            );
+          }
+
+          // ── Legacy format: payload has only 'body' (no 'parsed') ──
+          // Re-parse the body text so we get correct merchant, date, last4,
+          // bankName. This is a one-time repair — future writes use the new format.
+          if (decoded.containsKey('body')) {
+            final bodyText = decoded['body'] as String? ?? '';
+            final rawSource = decoded['rawSource'] as String? ??
+                decoded['sender'] as String? ??
+                candidate.sourceType;
+            if (bodyText.isNotEmpty) {
+              final reparsed = TransactionTextParser.parse(
+                bodyText,
+                source: candidate.sourceType,
+                // Use the payload/evidence timestamp fallback so the date is correct
+                messageTimestamp: payloadTimestamp ?? candidate.createdAt,
+              );
+              return ReviewItem(
+                id: candidate.id,
+                rawSource: rawSource,
+                parsed: reparsed,
+                confidence: candidate.confidenceScore,
+                status: candidate.status.name,
+                createdAt: payloadTimestamp ?? candidate.createdAt,
+              );
+            }
+          }
         }
       } catch (_) {}
     }
 
+    // ── Minimal fallback: reconstruct from candidate fields ──
     final isCredit = candidate.suggestedEventType == CanonicalEventType.income;
     return ReviewItem(
       id: candidate.id,

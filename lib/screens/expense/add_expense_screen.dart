@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/accounts/providers/account_providers.dart';
 import '../../features/categories/providers/category_providers.dart';
 import '../../features/merchant_rules/providers/merchant_rule_providers.dart';
-import '../../features/transactions/providers/transaction_providers.dart';
+import '../../features/transactions/providers/transaction_providers.dart'
+    hide financialTransactionServiceProvider;
 import '../../core/utils/category_classifier.dart';
 import '../../core/utils/merchant_extractor.dart';
-import '../../data/providers.dart' show cardsProvider;
+import '../../data/providers.dart' show cardsProvider, financialTransactionServiceProvider, invalidateAllFinancialProviders;
 import '../../data/core/tracked_database_task_queue.dart';
 import '../../models/bank_account.dart';
 import '../../models/credit_card.dart';
@@ -16,6 +17,8 @@ import '../../models/category.dart';
 import '../../services/settings_service.dart';
 import '../../services/smart_category_classifier.dart';
 import '../../services/haptic_service.dart';
+import '../../domain/credit/credit_card_service.dart';
+import '../bank/account_list_screen.dart' show resolveAccountDisplayName;
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/app_text_field.dart' as shared;
 import '../../shared/widgets/app_amount_field.dart';
@@ -67,6 +70,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   List<PaymentMethodItem> _availablePaymentMethods = [];
   List<double> _recentAmounts = [];
   String? _selectedPaymentMethodId;
+  String? _destinationPaymentMethodId;
   bool _didExplicitCategorySelection = false;
 
   @override
@@ -88,10 +92,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       _selectedDate = txn.date;
       _selectedCategoryId = txn.categoryId;
       _selectedPaymentMethodId = txn.accountId;
+      _destinationPaymentMethodId = txn.relatedEntityId;
     } else {
-      _selectedType = (widget.initialType == 'credit_card_purchase')
-          ? 'expense'
-          : widget.initialType;
+      if (widget.initialType == 'transfer' || widget.initialType == 'moved') {
+        _selectedType = 'transfer';
+      } else if (widget.initialType == 'credit_card_purchase') {
+        _selectedType = 'expense';
+      } else {
+        _selectedType = widget.initialType;
+      }
       _restoreSmartDefaults();
     }
     _loadInitialData();
@@ -139,7 +148,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ...accounts.map(
           (a) => PaymentMethodItem(
             id: a.id,
-            name: a.name,
+            name: resolveAccountDisplayName(a.name),
             type: 'bank',
             icon: _getAccountIcon(a.accountType),
           ),
@@ -147,7 +156,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ...cards.map(
           (c) => PaymentMethodItem(
             id: c.id,
-            name: '${c.name} ••${c.last4}',
+            name: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card ••${c.last4}'),
             type: 'credit_card',
             icon: _getCardIcon(c.cardType),
           ),
@@ -171,6 +180,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         } else {
           _selectedPaymentMethodId = _availablePaymentMethods.first.id;
         }
+      }
+
+      if (_destinationPaymentMethodId == null && _availablePaymentMethods.length >= 2) {
+        _destinationPaymentMethodId = _availablePaymentMethods
+            .where((m) => m.id != _selectedPaymentMethodId)
+            .firstOrNull
+            ?.id;
       }
 
       final hasSelectedCategory = _availableCategories.any(
@@ -248,7 +264,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   bool get _isValid {
     final amount = double.tryParse(_amountController.text) ?? 0.0;
-    return amount > 0; // Account is optional
+    if (_selectedType == 'transfer') {
+      return amount > 0 &&
+          _selectedPaymentMethodId != null &&
+          _destinationPaymentMethodId != null &&
+          _selectedPaymentMethodId != _destinationPaymentMethodId;
+    }
+    return amount > 0;
   }
 
   bool get _isSpecialNonCategorizedType {
@@ -269,9 +291,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       if (t == 'loan_repayment' || t == 'loan_payment') return 'Edit Loan Repayment';
       if (t == 'loan_disbursement') return 'Edit Loan Disbursement';
       if (t == 'transfer') return 'Edit Transfer';
-      return _selectedType == 'expense' ? 'Edit Expense' : 'Edit Income';
+      return _selectedType == 'expense'
+          ? 'Edit Expense'
+          : (_selectedType == 'transfer' ? 'Edit Transfer' : 'Edit Income');
     }
-    return _selectedType == 'expense' ? 'Add Expense' : 'Add Income';
+    return _selectedType == 'expense'
+        ? 'Add Expense'
+        : (_selectedType == 'transfer' ? 'Move Funds' : 'Add Income');
   }
 
   String get _normalizedType => _selectedType.trim().toLowerCase();
@@ -294,6 +320,69 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         message: 'Amount must be greater than zero',
         isError: true,
       );
+      return;
+    }
+
+    if (_selectedType == 'transfer') {
+      if (_selectedPaymentMethodId == null || _destinationPaymentMethodId == null) {
+        CustomSnackBar.show(
+          context,
+          message: 'Please select both source and destination accounts',
+          isError: true,
+        );
+        return;
+      }
+      if (_selectedPaymentMethodId == _destinationPaymentMethodId) {
+        CustomSnackBar.show(
+          context,
+          message: 'Source and destination cannot be the same account',
+          isError: true,
+        );
+        return;
+      }
+
+      final destMethod = _availablePaymentMethods.where((m) => m.id == _destinationPaymentMethodId).firstOrNull;
+      final isDestCreditCard = destMethod?.type == 'credit_card';
+
+      if (isDestCreditCard) {
+        await CreditCardService().processPayment(
+          cardId: _destinationPaymentMethodId!,
+          paymentAmount: amount,
+          date: _selectedDate,
+          accountId: _selectedPaymentMethodId,
+          note: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : 'Payment to ${destMethod?.name ?? "Credit Card"}',
+        );
+      } else {
+        final tx = Transaction(
+          id: widget.existingTransaction?.id,
+          type: 'transfer',
+          amount: amount,
+          accountId: _selectedPaymentMethodId!,
+          relatedEntityId: _destinationPaymentMethodId!,
+          date: _selectedDate,
+          notes: _notesController.text.trim().isNotEmpty
+              ? _notesController.text.trim()
+              : 'Internal Transfer',
+          userId: 'offline_user',
+          source: 'manual',
+        );
+        if (widget.existingTransaction != null) {
+          await ref.read(updateTransactionProvider)(
+            oldTransaction: widget.existingTransaction!,
+            newTransaction: tx,
+          );
+        } else {
+          await ref.read(financialTransactionServiceProvider).createTransfer(tx);
+        }
+      }
+
+      invalidateAllFinancialProviders(ref);
+      if (mounted) {
+        Navigator.pop(context, true);
+        CustomSnackBar.show(context, message: 'Transfer recorded successfully ✓');
+      }
       return;
     }
 
@@ -481,87 +570,298 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedType = 'expense';
-                  _selectedCategoryId = null;
-                  _selectedPaymentMethodId = null;
-                });
-                _loadInitialData();
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: _selectedType == 'expense'
-                      ? modern_theme.AppTheme.semanticExpense.withValues(alpha: isDark ? 0.30 : 0.20)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  border: _selectedType == 'expense'
-                      ? Border.all(
-                          color: modern_theme.AppTheme.semanticExpense.withValues(alpha: 0.6),
-                          width: 1.0,
-                        )
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'Expense',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _selectedType == 'expense'
-                        ? modern_theme.AppTheme.semanticExpense
-                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                  ),
-                ),
-              ),
-            ),
+          _buildTypeOption(
+            label: 'Spent',
+            type: 'expense',
+            color: modern_theme.AppTheme.semanticExpense,
+            icon: Icons.arrow_upward_rounded,
+            isDark: isDark,
           ),
           const SizedBox(width: 4),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedType = 'income';
-                  _selectedCategoryId = null;
-                  _selectedPaymentMethodId = null;
-                });
-                _loadInitialData();
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: _selectedType == 'income'
-                      ? modern_theme.AppTheme.semanticIncome.withValues(alpha: isDark ? 0.30 : 0.20)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  border: _selectedType == 'income'
-                      ? Border.all(
-                          color: modern_theme.AppTheme.semanticIncome.withValues(alpha: 0.6),
-                          width: 1.0,
-                        )
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'Income',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _selectedType == 'income'
-                        ? modern_theme.AppTheme.semanticIncome
-                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                  ),
-                ),
-              ),
-            ),
+          _buildTypeOption(
+            label: 'Received',
+            type: 'income',
+            color: modern_theme.AppTheme.semanticIncome,
+            icon: Icons.arrow_downward_rounded,
+            isDark: isDark,
+          ),
+          const SizedBox(width: 4),
+          _buildTypeOption(
+            label: 'Moved',
+            type: 'transfer',
+            color: modern_theme.AppTheme.primaryBlue,
+            icon: Icons.swap_horiz_rounded,
+            isDark: isDark,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTypeOption({
+    required String label,
+    required String type,
+    required Color color,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    final isSelected = _selectedType == type;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedType = type;
+            _selectedCategoryId = null;
+          });
+          _loadInitialData();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withValues(alpha: isDark ? 0.30 : 0.20)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: isSelected
+                ? Border.all(
+                    color: color.withValues(alpha: 0.6),
+                    width: 1.0,
+                  )
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: isSelected ? color : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? color : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMovementPresets(bool isDark) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _movementPresetChip('🏧 ATM Withdrawal', () {
+          final cash = _availablePaymentMethods.where((m) => m.id == 'acc_cash_default' || m.name.toLowerCase().contains('cash')).firstOrNull;
+          final bank = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').firstOrNull;
+          if (bank != null && cash != null) {
+            setState(() {
+              _selectedPaymentMethodId = bank.id;
+              _destinationPaymentMethodId = cash.id;
+              if (_notesController.text.isEmpty) _notesController.text = 'ATM Cash Withdrawal';
+            });
+          }
+        }, isDark),
+        _movementPresetChip('💳 Card Bill', () {
+          final card = _availablePaymentMethods.where((m) => m.type == 'credit_card').firstOrNull;
+          final bank = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').firstOrNull;
+          if (bank != null && card != null) {
+            setState(() {
+              _selectedPaymentMethodId = bank.id;
+              _destinationPaymentMethodId = card.id;
+              if (_notesController.text.isEmpty) _notesController.text = 'Credit Card Bill Payment';
+            });
+          }
+        }, isDark),
+        _movementPresetChip('🏦 Bank Transfer', () {
+          final banks = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').toList();
+          if (banks.length >= 2) {
+            setState(() {
+              _selectedPaymentMethodId = banks[0].id;
+              _destinationPaymentMethodId = banks[1].id;
+              if (_notesController.text.isEmpty) _notesController.text = 'Inter-Bank Transfer';
+            });
+          }
+        }, isDark),
+        _movementPresetChip('💵 Cash Deposit', () {
+          final cash = _availablePaymentMethods.where((m) => m.id == 'acc_cash_default' || m.name.toLowerCase().contains('cash')).firstOrNull;
+          final bank = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').firstOrNull;
+          if (bank != null && cash != null) {
+            setState(() {
+              _selectedPaymentMethodId = cash.id;
+              _destinationPaymentMethodId = bank.id;
+              if (_notesController.text.isEmpty) _notesController.text = 'Cash Deposit to Bank';
+            });
+          }
+        }, isDark),
+      ],
+    );
+  }
+
+  Widget _movementPresetChip(String label, VoidCallback onTap, bool isDark) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0x18FFFFFF) : const Color(0x10000000),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+            width: 0.75,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : const Color(0xFF1E293B),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransferSection(bool isDark, Color headerColor) {
+    final fromMethod = _availablePaymentMethods.where((m) => m.id == _selectedPaymentMethodId).firstOrNull;
+    final toMethod = _availablePaymentMethods.where((m) => m.id == _destinationPaymentMethodId).firstOrNull;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Quick Movement Presets',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isDark ? modern_theme.AppTheme.darkTextMuted : modern_theme.AppTheme.lightTextMuted,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildMovementPresets(isDark),
+        const SizedBox(height: 16),
+
+        // Visual Route Diagram Banner
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: modern_theme.AppTheme.primaryBlue.withValues(alpha: isDark ? 0.12 : 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: modern_theme.AppTheme.primaryBlue.withValues(alpha: isDark ? 0.28 : 0.20),
+              width: 0.75,
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        fromMethod?.name ?? 'Select Source',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.arrow_forward_rounded, size: 16, color: modern_theme.AppTheme.primaryBlue),
+                  ),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        toMethod?.name ?? 'Select Destination',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '0 Net Worth Impact • Internal Funds Movement',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+        Text(
+          'From Account (Paying)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        AppPaymentMethodPicker(
+          availableMethods: _availablePaymentMethods.where((m) => m.type != 'credit_card').toList(),
+          selectedMethodId: _selectedPaymentMethodId,
+          activeColor: headerColor,
+          onMethodSelected: (id) => setState(() => _selectedPaymentMethodId = id),
+        ),
+
+        const SizedBox(height: 16),
+        Text(
+          'To Account / Instrument (Receiving)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        AppPaymentMethodPicker(
+          availableMethods: _availablePaymentMethods,
+          selectedMethodId: _destinationPaymentMethodId,
+          activeColor: headerColor,
+          onMethodSelected: (id) => setState(() => _destinationPaymentMethodId = id),
+        ),
+      ],
     );
   }
 
@@ -675,134 +975,136 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               level: SpendXGlassLevel.base,
               borderRadius: BorderRadius.circular(AppRadius.l),
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (!_isSpecialNonCategorizedType) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: _selectedType == 'transfer'
+                  ? _buildTransferSection(isDark, headerColor)
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (!_isSpecialNonCategorizedType) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Category',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                                ),
+                              ),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () async {
+                                  final newCat = await showModalBottomSheet<Category>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) => AddCategorySheet(initialType: _selectedType),
+                                  );
+                                  if (newCat != null) {
+                                    await _loadInitialData();
+                                    setState(() {
+                                      _selectedCategoryId = newCat.id;
+                                      _didExplicitCategorySelection = true;
+                                    });
+                                  }
+                                },
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        size: 16,
+                                        color: modern_theme.AppTheme.primaryBlue,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Add New',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: modern_theme.AppTheme.primaryBlue,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          AppCategoryPicker(
+                            availableCategories: _availableCategories,
+                            selectedCategoryId: _selectedCategoryId,
+                            activeColor: headerColor,
+                            onCategorySelected: (id) => setState(() {
+                              _selectedCategoryId = id;
+                              _didExplicitCategorySelection = true;
+                            }),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.symmetric(vertical: 16),
+                            height: 0.5,
+                            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                          ),
+                        ],
+
                         Text(
-                          'Category',
+                          _isSpecialNonCategorizedType ? 'Paid From Account' : 'Payment Source',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
                           ),
                         ),
-                        InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () async {
-                            final newCat = await showModalBottomSheet<Category>(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => AddCategorySheet(initialType: _selectedType),
-                            );
-                            if (newCat != null) {
-                              await _loadInitialData();
+                        const SizedBox(height: 10),
+                        if (_availablePaymentMethods.isNotEmpty)
+                          AppPaymentMethodPicker(
+                            availableMethods: _availablePaymentMethods,
+                            selectedMethodId: _selectedPaymentMethodId,
+                            activeColor: headerColor,
+                            onMethodSelected: (id) {
                               setState(() {
-                                _selectedCategoryId = newCat.id;
-                                _didExplicitCategorySelection = true;
+                                _selectedPaymentMethodId = id;
                               });
-                            }
-                          },
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            },
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0x14FFFFFF) : const Color(0x33000000),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Icons.add_circle_outline_rounded,
-                                  size: 16,
-                                  color: modern_theme.AppTheme.primaryBlue,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Add New',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: modern_theme.AppTheme.primaryBlue,
+                                Expanded(
+                                  child: Text(
+                                    'No accounts found.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark ? modern_theme.AppTheme.darkTextSecondary : modern_theme.AppTheme.lightTextSecondary,
+                                    ),
                                   ),
+                                ),
+                                SpendXGlassButton(
+                                  variant: SpendXGlassButtonVariant.tonal,
+                                  onPressed: () async {
+                                    final result = await Navigator.push(
+                                      context,
+                                      AppPageRoute(builder: (_) => const AddBankAccountScreen()),
+                                    );
+                                    if (result == true) await _loadInitialData();
+                                  },
+                                  child: const Text('Add Account'),
                                 ),
                               ],
                             ),
                           ),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    AppCategoryPicker(
-                      availableCategories: _availableCategories,
-                      selectedCategoryId: _selectedCategoryId,
-                      activeColor: headerColor,
-                      onCategorySelected: (id) => setState(() {
-                        _selectedCategoryId = id;
-                        _didExplicitCategorySelection = true;
-                      }),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 16),
-                      height: 0.5,
-                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ],
-
-                  Text(
-                    _isSpecialNonCategorizedType ? 'Paid From Account' : 'Payment Source',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_availablePaymentMethods.isNotEmpty)
-                    AppPaymentMethodPicker(
-                      availableMethods: _availablePaymentMethods,
-                      selectedMethodId: _selectedPaymentMethodId,
-                      activeColor: headerColor,
-                      onMethodSelected: (id) {
-                        setState(() {
-                          _selectedPaymentMethodId = id;
-                        });
-                      },
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0x14FFFFFF) : const Color(0x33000000),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'No accounts found.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? modern_theme.AppTheme.darkTextSecondary : modern_theme.AppTheme.lightTextSecondary,
-                              ),
-                            ),
-                          ),
-                          SpendXGlassButton(
-                            variant: SpendXGlassButtonVariant.tonal,
-                            onPressed: () async {
-                              final result = await Navigator.push(
-                                context,
-                                AppPageRoute(builder: (_) => const AddBankAccountScreen()),
-                              );
-                              if (result == true) await _loadInitialData();
-                            },
-                            child: const Text('Add Account'),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
             ),
 
             const SizedBox(height: 16),
@@ -831,8 +1133,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   const SizedBox(height: 16),
                   shared.AppTextField(
                     controller: _notesController,
-                    label: 'Notes (Optional)',
-                    prefix: const Icon(Icons.notes_rounded),
+                    label: _selectedType == 'transfer' ? 'Transfer Note (Optional)' : 'Merchant / Payee Notes (Optional)',
+                    prefix: Icon(_selectedType == 'transfer' ? Icons.swap_horiz_rounded : Icons.notes_rounded),
                   ),
                 ],
               ),
@@ -844,7 +1146,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               variant: SpendXGlassButtonVariant.primary,
               onPressed: _isValid ? _saveTransaction : null,
               child: Text(
-                widget.existingTransaction != null ? 'Update Transaction' : 'Save Transaction',
+                widget.existingTransaction != null
+                    ? 'Update Activity'
+                    : (_selectedType == 'transfer' ? 'Move Funds' : 'Save Activity'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),

@@ -26,6 +26,14 @@ import 'package:spend_x/data/core/tables.dart';
 import 'package:spend_x/features/streak/streak_engine.dart';
 import 'package:spend_x/domain/finance/safe_to_spend.dart';
 import 'package:spend_x/domain/finance/money.dart';
+import 'package:spend_x/domain/finance/finance.dart';
+import 'package:spend_x/services/cross_channel_deduplication_service.dart';
+import 'package:spend_x/data/repositories/review_repo.dart';
+import 'package:spend_x/models/review_item.dart';
+import 'package:spend_x/features/review_queue/providers/review_providers.dart';
+import 'package:spend_x/shared/widgets/glass/spendx_transaction_tile.dart';
+import 'package:spend_x/services/financial_transaction_service.dart';
+import 'package:spend_x/data/repositories/canonical/canonical_review_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -837,11 +845,15 @@ void main() {
 
   group('Defect 25: Cross-Source Payment App vs Bank SMS Deduplication & Balance Ingestion', () {
     test('25a. Google Pay incoming payment followed by Jio Payments Bank SMS deduplicates and updates balance', () async {
-      // 1. Google Pay push notification arrives first
+      // 1. Google Pay push notification arrives first (on 10-Nov-2026)
       const gpaySender = 'APP:com.google.android.apps.nbu.paisa.user:Google Pay';
       const gpayBody = 'RAVEENDRAN K paid you ₹6,000.00';
 
-      final res1 = await LiveSmsService.instance.testProcessBody(gpayBody, sender: gpaySender);
+      final res1 = await LiveSmsService.instance.testProcessBody(
+        gpayBody,
+        sender: gpaySender,
+        messageDate: DateTime(2026, 11, 10, 10, 30),
+      );
       expect(res1.added, true);
       expect(res1.transaction, isNotNull);
       expect(res1.transaction!.amount, 6000.0);
@@ -1242,6 +1254,377 @@ void main() {
       expect(totalRepaid, 63000.0);
       final remainingDue = (91760.35 - totalRepaid).clamp(0.0, 91760.35);
       expect(remainingDue, closeTo(28760.35, 0.01));
+    });
+  });
+
+  group('Remediation: Vivo Audit Defects & Invariants (Section 9)', () {
+    test('1. Apay Wallet debit parsing, clean display title, and structured refId', () {
+      const text = 'Your Apay Wallet balance is debited for INR 87.00. Reference Number is 668881518401';
+      final parsed = TransactionTextParser.parse(text);
+
+      expect(parsed.amount, 87.0);
+      expect(parsed.isCredit, false);
+      expect(parsed.merchant, 'Amazon Pay Wallet');
+      expect(parsed.refId, '668881518401');
+
+      final displayTitle = cleanTransactionDisplayTitle(parsed.merchant!);
+      expect(displayTitle, 'Amazon Pay Wallet');
+      expect(displayTitle, isNot(contains('debited for INR')));
+    });
+
+    test('2. Credit-card repayment acknowledgement parsing (ICICI)', () {
+      const text = 'Payment of Rs 23,551.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System';
+      final parsed = TransactionTextParser.parse(text);
+
+      expect(parsed.amount, 23551.0);
+      expect(parsed.last4, '5007');
+      expect(parsed.merchant, 'ICICI Bank Card Repayment');
+
+      final classification = SmsImportService.instance.classifyMessage(text, 'VM-ICICIB');
+      expect(classification.eventType, SmsEventType.creditCardPayment);
+
+      final displayTitle = cleanTransactionDisplayTitle(text, isCcPayment: true);
+      expect(displayTitle, contains('ICICI Bank'));
+    });
+
+    test('3. Credit-card repayment acknowledgement parsing (HDFC)', () {
+      const text = 'Payment of Rs 31,000.00 has been received on your HDFC Bank Credit Card';
+      final parsed = TransactionTextParser.parse(text);
+
+      expect(parsed.amount, 31000.0);
+      expect(parsed.merchant, 'HDFC Bank Card Repayment');
+
+      final classification = SmsImportService.instance.classifyMessage(text, 'HDFCBK');
+      expect(classification.eventType, SmsEventType.creditCardPayment);
+
+      final displayTitle = cleanTransactionDisplayTitle(text, isCcPayment: true);
+      expect(displayTitle, contains('HDFC Bank'));
+    });
+
+    test('4. PolicyBazaar confirmation receipt deduplicated against card spend', () async {
+      // 1. Process card spend first
+      final cardSpendCandidate = IncomingTransactionCandidate(
+        sourceRecordId: 'SRC:TELEPHONY_SMS:pb_spend_1',
+        sourceChannel: SourceChannel.sms,
+        sender: 'JT-EDGE',
+        body: '₹4515.00 paid from Edge CSB Bank RuPay Credit Card to POLICYBAZAAR on 20-Nov-2026',
+        amountMinorUnits: 451500,
+        direction: PostingDirection.debit,
+        timestamp: DateTime(2026, 11, 20, 13, 14),
+        merchant: 'PolicyBazaar',
+        eventType: CanonicalEventType.cardPurchase,
+      );
+
+      final spendResult = await CrossChannelDeduplicationService()
+          .processWithConflictResolution(candidate: cardSpendCandidate, db: db);
+      expect(spendResult.isNewEventCreated, true);
+
+      // 2. Process merchant confirmation receipt
+      final receiptCandidate = IncomingTransactionCandidate(
+        sourceRecordId: 'SRC:TELEPHONY_SMS:pb_receipt_1',
+        sourceChannel: SourceChannel.sms,
+        sender: 'POLICYBAZAAR',
+        body: 'Hi Sivek K Raveendran, Payment of Rs. 4515 is successful for the purchase of your Twowheeler policy. ... - PolicyBazaar',
+        amountMinorUnits: 451500,
+        direction: PostingDirection.debit,
+        timestamp: DateTime(2026, 11, 20, 13, 14, 30),
+        merchant: 'PolicyBazaar',
+        eventType: CanonicalEventType.expense,
+      );
+
+      final receiptResult = await CrossChannelDeduplicationService()
+          .processWithConflictResolution(candidate: receiptCandidate, db: db);
+
+      // Must be merged as duplicate, NOT create a second expense!
+      expect(receiptResult.isStrongMatchMerged, true);
+      expect(receiptResult.eventId, spendResult.eventId);
+
+      // Verify canonical ledger contains exactly one economic event
+      final events = await db.query(TablesV24.economicEvents);
+      expect(events.length, 1);
+    });
+
+    test('5. Credit-card bill reminder: BOBCARD One', () {
+      const text = 'Your BOBCARD One Credit Card bill of Rs. 2,778.88 is ready. Pay by 05 Dec, 2026';
+      final classification = SmsImportService.instance.classifyMessage(text, 'BOBCARD');
+
+      expect(classification.eventType, SmsEventType.billReminder);
+      expect(classification.transaction, isNull);
+      expect(classification.upcomingObligation, isNotNull);
+      expect(classification.upcomingObligation!.amount, 2778.88);
+      expect(classification.upcomingObligation!.dueDate, DateTime(2026, 12, 5));
+    });
+
+    test('6. Credit-card bill reminder: Edge CSB RuPay', () {
+      const text = 'Your Edge CSB Bank RuPay Credit Card bill for Rs.2640.76 has been generated';
+      final classification = SmsImportService.instance.classifyMessage(text, 'JT-EDGE');
+
+      expect(classification.eventType, SmsEventType.billReminder);
+      expect(classification.transaction, isNull);
+      expect(classification.upcomingObligation, isNotNull);
+      expect(classification.upcomingObligation!.amount, 2640.76);
+    });
+
+    test('7. Credit-card bill reminder: ICICI XX5007 Statement is sent', () {
+      const text = 'ICICI Bank Credit Card XX5007 Statement is sent ... Total of Rs 91,760.35 ... is due by 20-NOV-26';
+      final classification = SmsImportService.instance.classifyMessage(text, 'ICICIB');
+
+      expect(classification.eventType, SmsEventType.billReminder);
+      expect(classification.transaction, isNull);
+      expect(classification.upcomingObligation, isNotNull);
+      expect(classification.upcomingObligation!.amount, 91760.35);
+      expect(classification.upcomingObligation!.dueDate, DateTime(2026, 11, 20));
+      expect(classification.upcomingObligation!.last4, '5007');
+    });
+
+    test('8. Due date vs transaction date separation', () {
+      const text = 'Total of Rs 91,760.35 is due by 20-NOV-26. Transaction on 10-Nov-2026';
+      final txDate = TransactionTextParser.extractDateFromText(text);
+      expect(txDate, isNotNull);
+      // Due date (20-Nov-26) must NOT be picked as transaction date!
+      expect(txDate!.day, 10);
+      expect(txDate.month, 11);
+      expect(txDate.year, 2026);
+    });
+
+    test('9. Unconfigured wallet debit routes to Review Queue with clean title and notes', () async {
+      // Ensure no wallet exists in DB
+      final accounts = await AccountRepo().getAll();
+      expect(accounts.any((a) => a.accountType == 'wallet'), false);
+
+      const body = 'Your Apay Wallet balance is debited for INR 87.00. Reference Number is 668881518401';
+      final res = await LiveSmsService.instance.testProcessBody(
+        body,
+        sender: 'QC-AMAZON',
+        sourceRecordId: 'SRC:TELEPHONY_SMS:apay_test_1',
+      );
+
+      // Must NOT be auto-inserted into transactions
+      expect(res.added, false);
+
+      // Review Queue candidate check
+      final reviewItems = await ReviewRepo().getPending();
+      final item = reviewItems.where((r) => r.parsed.amount == 87.0).firstOrNull;
+      expect(item, isNotNull);
+      expect(item!.parsed.merchant, 'Amazon Pay Wallet');
+      expect(item.parsed.refId, '668881518401');
+
+      final displayTitle = cleanTransactionDisplayTitle(item.parsed.merchant!);
+      expect(displayTitle, 'Amazon Pay Wallet');
+      expect(displayTitle, isNot(contains('{')));
+      expect(displayTitle, isNot(contains('debited for INR')));
+    });
+
+    test('10. Unresolved card payment source bank routes to Review Queue (NOT expense)', () async {
+      // Insert ICICI card
+      final card = CreditCard(
+        id: 'card_icici_5007',
+        name: 'ICICI Bank Credit Card',
+        bank: 'ICICI Bank',
+        last4: '5007',
+        limitAmount: 100000.0,
+        usedAmount: 30000.0,
+      );
+      await CreditRepo().insert(card);
+
+      const body = 'Payment of Rs 23,551.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System';
+      final res = await LiveSmsService.instance.testProcessBody(
+        body,
+        sender: 'VM-ICICIB',
+        sourceRecordId: 'SRC:TELEPHONY_SMS:icici_repay_test_1',
+      );
+
+      expect(res.added, false);
+
+      final reviewItems = await ReviewRepo().getPending();
+      final item = reviewItems.where((r) => r.parsed.amount == 23551.0).firstOrNull;
+      expect(item, isNotNull);
+
+      // Ensure no expense transaction was created on the card
+      final txns = await TransactionRepo().getAll();
+      expect(txns.where((t) => t.amount == 23551.0 && t.type == 'expense').isEmpty, true);
+    });
+
+    test('11. Double-entry postings validation for card repayments', () async {
+      // Create card and bank
+      final card = CreditCard(
+        id: 'card_bob_1',
+        name: 'Bank of Baroda Card',
+        bank: 'Bank of Baroda',
+        last4: '1234',
+        limitAmount: 50000.0,
+        usedAmount: 20000.0,
+      );
+      await CreditRepo().insert(card);
+
+      final bank = BankAccount(
+        id: 'acc_fed_1',
+        name: 'Federal Bank',
+        bank: 'Federal Bank',
+        last4: '8434',
+        accountType: 'savings',
+        balance: 50000.0,
+      );
+      await AccountRepo().insertAccount(bank);
+
+      final repayTx = Transaction(
+        id: 'repay_canonical_1',
+        userId: 'offline_user',
+        amount: 2778.88,
+        type: 'credit_payment',
+        accountId: bank.id,
+        relatedEntityId: card.id,
+        date: DateTime(2026, 11, 20, 13, 18),
+        notes: 'Payment to Bank of Baroda Card',
+        source: 'credit_card_payment',
+      );
+
+      await FinancialTransactionService().createTransaction(repayTx);
+
+      // Verify double-entry canonical postings
+      final postings = await db.query(
+        TablesV24.postings,
+        where: 'economic_event_id = ?',
+        whereArgs: [repayTx.id],
+      );
+
+      expect(postings.length, 2);
+
+      final debitLeg = postings.firstWhere((p) => p['direction'] == 'debit');
+      final creditLeg = postings.firstWhere((p) => p['direction'] == 'credit');
+
+      // Debit leg reduces card liability
+      expect(debitLeg['account_id'], card.id);
+      expect(debitLeg['amount_minor_units'], 277888);
+
+      // Credit leg reduces bank asset
+      expect(creditLeg['account_id'], bank.id);
+      expect(creditLeg['amount_minor_units'], 277888);
+
+      // Sum(Debits) == Sum(Credits)
+      expect(debitLeg['amount_minor_units'], creditLeg['amount_minor_units']);
+
+      // ZERO expense postings
+      final expenseAccounts = await db.query(
+        TablesV24.accounts,
+        where: 'account_type = ?',
+        whereArgs: ['expense'],
+      );
+      final expenseIds = expenseAccounts.map((a) => a['id']).toSet();
+      expect(postings.any((p) => expenseIds.contains(p['account_id'])), false);
+    });
+
+    test('12. Zero postings for bill reminders', () async {
+      final initialEventsCount = (await db.query(TablesV24.economicEvents)).length;
+      final initialPostingsCount = (await db.query(TablesV24.postings)).length;
+      final initialTxnCount = (await TransactionRepo().getAll()).length;
+
+      const billBody = 'Your BOBCARD One Credit Card bill of Rs. 2,778.88 is ready. Pay by 05 Dec, 2026';
+      final res = await LiveSmsService.instance.testProcessBody(
+        billBody,
+        sender: 'BOBCARD',
+        sourceRecordId: 'SRC:TELEPHONY_SMS:bob_reminder_1',
+      );
+
+      expect(res.added, false);
+
+      final finalEventsCount = (await db.query(TablesV24.economicEvents)).length;
+      final finalPostingsCount = (await db.query(TablesV24.postings)).length;
+      final finalTxnCount = (await TransactionRepo().getAll()).length;
+
+      expect(finalEventsCount, initialEventsCount);
+      expect(finalPostingsCount, initialPostingsCount);
+      expect(finalTxnCount, initialTxnCount);
+    });
+  });
+
+  group('Group 9: Comprehensive Remediation for Ingestion, Display, Dates & Account Attribution', () {
+    test('1. Card repayment display title extracts clean bank name without sentence duplication', () {
+      const text = 'Payment of Rs 23,551.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System';
+      final title = cleanTransactionDisplayTitle(text, isCcPayment: true);
+      expect(title, 'Payment to ICICI Bank');
+      expect(title, isNot(contains('Payment of Rs')));
+      expect(title, isNot(contains('{')));
+    });
+
+    test('2. Apay and policy confirmation display titles are completely sanitized', () {
+      const apayText = '{"body":"Your Apay Wallet balance is debited for INR 87.00. Reference Number is 668881518401"}';
+      expect(cleanTransactionDisplayTitle(apayText), 'Amazon Pay Wallet');
+
+      const policyText = 'Hi Sivek K Raveendran, Payment of Rs. 4,515.00 has been received towards policy renewal';
+      expect(cleanTransactionDisplayTitle(policyText), 'Policy Payment');
+
+      const rawSentText = 'Rs. 5000.00 Sent from x3284 on 11-Nov to Merchant';
+      final cleanSent = cleanTransactionDisplayTitle(rawSentText);
+      expect(cleanSent, isNot(contains('Sent from')));
+    });
+
+    test('3. Exact message timestamp is preserved end-to-end even when body lacks printed date', () async {
+      final specificDate = DateTime(2026, 11, 15, 10, 30);
+      const apayBody = 'Your Apay Wallet balance is debited for INR 40.00. Reference Number is 99887766';
+      
+      final parsed = TransactionTextParser.parse(
+        apayBody,
+        source: 'sms',
+        messageTimestamp: specificDate,
+      );
+
+      // Must inherit specificDate, NOT DateTime.now()
+      expect(parsed.date.year, 2026);
+      expect(parsed.date.month, 11);
+      expect(parsed.date.day, 15);
+      expect(parsed.date.hour, 10);
+      expect(parsed.date.minute, 30);
+    });
+
+    test('4. Approving Apay Wallet item from Review Queue auto-links to Amazon Pay Wallet (no unlinked account)', () async {
+      final rRepo = ReviewRepo();
+      final item = ReviewItem(
+        id: 'rev_apay_wallet_link_test',
+        rawSource: 'Your Apay Wallet balance is debited for INR 100.00. Reference Number is apay_ref_test_unique_991823',
+        parsed: ParsedTransaction(
+          amount: 100.0,
+          isCredit: false,
+          rawText: 'Your Apay Wallet balance is debited for INR 100.00. Reference Number is apay_ref_test_unique_991823',
+          date: DateTime(2026, 11, 14, 15, 20),
+          merchant: 'Amazon Pay Wallet',
+          refId: 'apay_ref_test_unique_991823',
+          source: 'sms',
+        ),
+        confidence: 0.85,
+      );
+
+      await rRepo.insert(item);
+      await approveReviewItem(item: item);
+
+      // Verify transaction inserted
+      final txs = await TransactionRepo().getAll();
+      final createdTx = txs.where((t) => t.amount == 100.0 && t.externalRef?.contains('apay_ref_test_unique_991823') == true).firstOrNull;
+      expect(createdTx, isNotNull);
+      expect(createdTx!.accountId, isNotNull);
+
+      // Verify the linked account is the Amazon Pay Wallet, NOT null or sys_suspense_transfer
+      final linkedAccount = await AccountRepo().getById(createdTx.accountId!);
+      expect(linkedAccount, isNotNull);
+      expect(linkedAccount!.name, 'Amazon Pay Wallet');
+      expect(linkedAccount.accountType, 'wallet');
+    });
+
+    test('5. Multi-issuer statements (Kotak, IndusInd, Scapia, RBL, Amex) classified as bill reminders', () {
+      final statements = [
+        'Your Kotak Bank Credit Card statement is generated. Total amount due Rs. 14,500.00 by 12-Dec-2026',
+        'IndusInd Bank Credit Card XX9988 statement is ready. Total due Rs 8,230.00 payable by 18-Dec-2026',
+        'Scapia Federal Credit Card bill for Rs. 5,120.00 has been generated. Due date: 22-Dec-2026',
+        'Your RBL Bank Credit Card statement of Rs. 3,450.00 is due on 25-Dec-2026',
+        'Amex Card ending 1004: Statement is ready. Total of Rs 42,000.00 is due by 30-Dec-2026',
+      ];
+
+      for (final stmt in statements) {
+        final classification = SmsImportService.instance.classifyMessage(stmt, 'BANKCC');
+        expect(classification.eventType, SmsEventType.billReminder, reason: 'Failed for: $stmt');
+        expect(classification.transaction, isNull, reason: 'Must not create transaction for: $stmt');
+        expect(classification.upcomingObligation, isNotNull);
+      }
     });
   });
 }

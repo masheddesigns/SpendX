@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/notification_settings_service.dart';
 import '../../services/live_sms_service.dart';
+import '../../services/settings_service.dart';
+import '../../services/gmail_integration_service.dart';
 import '../../models/notification_settings.dart';
 import '../../widgets/spendx_app_bar.dart';
 import '../../services/notification_service_v2.dart';
@@ -24,6 +26,8 @@ class _NotificationSettingsScreenState
   bool _loading = true;
   bool _liveSmsEnabled = true;
   bool _notifListenerEnabled = false;
+  bool _whatsappEnabled = false;
+  bool _gmailPreviewEnabled = false;
   bool _exactAlarmEnabled = true;
   bool _overlayPermissionEnabled = true;
 
@@ -53,11 +57,17 @@ class _NotificationSettingsScreenState
     final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
     final exactAlarm = await NotificationServiceV2().canScheduleExactAlarms();
     final overlayPerm = await DynamicIslandService.instance.hasOverlayPermission();
+    final waEnabled = SettingsService.instance.whatsappIngestionEnabled;
+    final gmEnabled = SettingsService.instance.gmailPreviewEnabled;
+    await GmailIntegrationService.instance.init();
+
     if (!mounted) return;
     setState(() {
       _settings = settings;
       _liveSmsEnabled = liveSms;
       _notifListenerEnabled = notifListener;
+      _whatsappEnabled = waEnabled;
+      _gmailPreviewEnabled = gmEnabled;
       _exactAlarmEnabled = exactAlarm;
       _overlayPermissionEnabled = overlayPerm;
       _loading = false;
@@ -456,9 +466,8 @@ class _NotificationSettingsScreenState
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Transaction alerts only, from an explicit list of banking, UPI, card and '
-                'finance apps. Email and messaging apps (including Gmail and WhatsApp) are '
-                'never read. Processed on-device.',
+                'Transaction alerts only from allowlisted banking, UPI, and credit card apps. '
+                'Processed on-device.',
                 style: TextStyle(fontSize: 12),
               ),
               value: _notifListenerEnabled,
@@ -467,6 +476,102 @@ class _NotificationSettingsScreenState
                 final enabled = await LiveSmsService.instance.isNotificationListenerEnabled();
                 setState(() => _notifListenerEnabled = enabled);
               },
+            ),
+            const Divider(),
+            SwitchListTile(
+              secondary: Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text(
+                'WhatsApp Banking Alerts',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Extract transactions only from verified bank bots (e.g. HDFC, ICICI, SBI) '
+                'and enabled financial contacts. Personal chats are strictly excluded.',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _whatsappEnabled,
+              onChanged: (v) async {
+                if (v) {
+                  final consent = await _showWhatsAppPrivacyConsentDialog();
+                  if (!consent) return;
+                }
+                setState(() => _whatsappEnabled = v);
+                await SettingsService.instance.setWhatsAppIngestionEnabled(v);
+              },
+            ),
+            if (_whatsappEnabled) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.tune_rounded, size: 16),
+                      label: const Text('Manage Financial Contacts', style: TextStyle(fontSize: 12)),
+                      onPressed: _showWhatsAppContactsSheet,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const Divider(),
+            SwitchListTile(
+              secondary: Icon(
+                Icons.mark_email_unread_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text(
+                'Gmail Transaction Alerts',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Preview fallback for official bank e-statements and card alerts. '
+                'Personal emails are strictly excluded.',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _gmailPreviewEnabled,
+              onChanged: (v) async {
+                setState(() => _gmailPreviewEnabled = v);
+                await SettingsService.instance.setGmailPreviewEnabled(v);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: Icon(
+                Icons.email_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text(
+                'Connect Read-Only Email',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                GmailIntegrationService.instance.isConnected
+                    ? 'Connected: ${GmailIntegrationService.instance.connectedEmail}'
+                    : 'Authorize read-only sync for bank statements, card bills, and refunds.',
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: TextButton(
+                onPressed: () async {
+                  if (GmailIntegrationService.instance.isConnected) {
+                    await GmailIntegrationService.instance.disconnect();
+                  } else {
+                    await GmailIntegrationService.instance.connect();
+                  }
+                  setState(() {});
+                },
+                child: Text(
+                  GmailIntegrationService.instance.isConnected ? 'Disconnect' : 'Connect',
+                  style: TextStyle(
+                    color: GmailIntegrationService.instance.isConnected
+                        ? Colors.red
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
             ),
           ]),
           const SizedBox(height: 24),
@@ -715,4 +820,142 @@ class _NotificationSettingsScreenState
     value: value,
     onChanged: onChanged,
   );
+
+  Future<bool> _showWhatsAppPrivacyConsentDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.security_rounded, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Privacy Guarantee', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'SpendX strictly protects your privacy:\n\n'
+          '• Only incoming messages from official banking bots (e.g. HDFC, ICICI, SBI) '
+          'and financial contacts you enable are inspected.\n'
+          '• Personal conversations, family chats, and group messages are never inspected, '
+          'parsed, or stored.\n'
+          '• All parsing occurs 100% on-device.\n\n'
+          'Do you want to enable WhatsApp banking alerts?',
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Agree & Enable'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _showWhatsAppContactsSheet() {
+    final senders = List<String>.from(SettingsService.instance.whatsappAllowedSenders);
+    final textController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.verified_user_outlined, color: Colors.green),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Allowed Financial Contacts',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Only notifications from contacts matching these names will be inspected for transactions.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: textController,
+                      decoration: const InputDecoration(
+                        hintText: 'Add bank name or contact (e.g. HDFC)',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () async {
+                      final text = textController.text.trim();
+                      if (text.isNotEmpty && !senders.contains(text)) {
+                        setSheetState(() => senders.add(text));
+                        textController.clear();
+                        await SettingsService.instance.setWhatsAppAllowedSenders(senders);
+                      }
+                    },
+                    child: const Text('Add'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SizedBox(
+                  height: 250,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: senders.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    itemBuilder: (_, index) {
+                      final item = senders[index];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.account_balance, size: 20),
+                        title: Text(item, style: const TextStyle(fontSize: 14)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          onPressed: () async {
+                            setSheetState(() => senders.removeAt(index));
+                            await SettingsService.instance.setWhatsAppAllowedSenders(senders);
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

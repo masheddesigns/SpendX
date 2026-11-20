@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:spend_x/services/settings_service.dart';
 import 'package:spend_x/services/notification_service_v2.dart';
+import 'package:spend_x/services/live_sms_service.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
 import 'package:spend_x/screens/onboarding_sms_sync_screen.dart';
-import 'package:spend_x/widgets/app_button.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/glass/spendx_glass_surface.dart';
+import '../shared/widgets/glass/spendx_glass_button.dart';
+import '../theme/app_theme.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -15,7 +19,8 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with WidgetsBindingObserver {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final int _totalPages = 5;
@@ -23,12 +28,49 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // States
   String _selectedCurrency = 'INR';
-  bool _notificationsEnabled = false;
+  bool _smsPermissionGranted = false;
+  bool _notificationListenerEnabled = false;
+  bool _systemNotificationsEnabled = false;
+  bool _batteryOptimizationIgnored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPermissions();
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions();
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    final sms = await Permission.sms.isGranted;
+    final notifs = await Permission.notification.isGranted;
+    final battery = await Permission.ignoreBatteryOptimizations.isGranted;
+    bool listener = false;
+    try {
+      listener = await LiveSmsService.instance.isNotificationListenerEnabled();
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _smsPermissionGranted = sms;
+        _systemNotificationsEnabled = notifs;
+        _notificationListenerEnabled = listener;
+        _batteryOptimizationIgnored = battery;
+      });
+    }
   }
 
   void _nextPage() {
@@ -76,19 +118,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildStepIndicator() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(_totalPages, (index) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.symmetric(horizontal: 4),
-          height: 8,
-          width: _currentPage == index ? 24 : 8,
+          height: 6,
+          width: _currentPage == index ? 24 : 6,
           decoration: BoxDecoration(
             color: _currentPage == index
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outlineVariant,
-            borderRadius: BorderRadius.circular(4),
+                ? AppTheme.primaryBlue
+                : (isDark ? const Color(0x33FFFFFF) : const Color(0x22000000)),
+            borderRadius: BorderRadius.circular(3),
           ),
         );
       }),
@@ -97,7 +140,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F111A) : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Column(
           children: [
@@ -108,7 +154,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   _currentPage > 0
                       ? IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                          icon: Icon(
+                            Icons.arrow_back_rounded,
+                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          ),
                           onPressed: _previousPage,
                         )
                       : const SizedBox(width: 48),
@@ -116,8 +165,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _currentPage < _totalPages - 1
                       ? TextButton(
                           onPressed: _finishOnboarding,
-                          child: Text('Skip',
-                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          child: Text(
+                            'Skip',
+                            style: TextStyle(
+                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         )
                       : const SizedBox(width: 48),
                 ],
@@ -131,25 +185,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   setState(() => _currentPage = index);
                 },
                 children: [
-                  _buildWelcomeScreen(),
-                  _buildCurrencySetupScreen(),
-                  _buildNotificationPermissionScreen(),
-                  _buildBackupExplanationScreen(),
-                  _buildFinishSetupScreen(),
+                  _buildWelcomeScreen(isDark),
+                  _buildCurrencySetupScreen(isDark),
+                  _buildAutomaticIngestionScreen(isDark),
+                  _buildBackupExplanationScreen(isDark),
+                  _buildFinishSetupScreen(isDark),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
               child: SizedBox(
                 width: double.infinity,
-                child: AppButton.secondary(
+                child: SpendXGlassButton(
+                  variant: SpendXGlassButtonVariant.primary,
                   onPressed: _nextPage,
-                  text: _currentPage == 0
-                      ? 'Get Started'
-                      : (_currentPage == _totalPages - 1
-                          ? 'Finish Setup'
-                          : 'Continue'),
+                  child: Text(
+                    _currentPage == 0
+                        ? 'Get Started'
+                        : (_currentPage == _totalPages - 1
+                            ? 'Finish & Launch 🚀'
+                            : 'Continue'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ),
@@ -159,27 +217,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── Welcome ───────────────────────────────────────────
+  // ── 1. Welcome & Core Architecture Sayings ──────────────────
 
-  Widget _buildWelcomeScreen() {
+  Widget _buildWelcomeScreen(bool isDark) {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 32),
-            Container(
-              width: 110,
-              height: 110,
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(32),
+                color: isDark ? const Color(0x1A6366F1) : const Color(0x146366F1),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: AppTheme.primaryBlue.withValues(alpha: 0.35),
+                  width: 1.0,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF23BE62).withValues(alpha: 0.3),
-                    blurRadius: 30,
-                    spreadRadius: 5,
+                    color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.3 : 0.15),
+                    blurRadius: 28,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -188,181 +250,236 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   tag: 'app_logo',
                   child: SvgPicture.asset(
                     'assets/logo.svg',
-                    width: 64,
-                    height: 64,
+                    width: 52,
+                    height: 52,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 40),
-            Text(
-              'Welcome to SpendX',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    letterSpacing: -0.5,
-                  ),
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'SpendX',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Track expenses, manage salary, loans, goals, and more '
-              '— all stored locally on your device.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    height: 1.5,
-                  ),
-              textAlign: TextAlign.center,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'The Autonomous, Double-Entry Financial Engine',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
             ),
-            const SizedBox(height: 40),
-            _buildSmallFeature(Icons.security_rounded, 'Privacy First',
-                'All data stays on your device'),
-            const SizedBox(height: 14),
-            _buildSmallFeature(Icons.cloud_done_rounded, 'Encrypted Backup',
-                'AES-256 encrypted Google Drive sync'),
-            const SizedBox(height: 14),
-            _buildSmallFeature(Icons.auto_awesome_rounded, 'Smart Import',
-                'Share screenshots or text from any payment app'),
-            const SizedBox(height: 14),
-            _buildSmallFeature(Icons.sms_rounded, 'Live SMS Tracking',
-                'Track incoming bank & card SMS automatically'),
-            const SizedBox(height: 14),
-            _buildSmallFeature(Icons.emoji_events_rounded, 'Gamification',
-                'Earn XP, level up, and view Wrapped summaries'),
-          ],
-        ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.shield_rounded,
+            iconColor: AppTheme.semanticIncome,
+            title: '100% On-Device Privacy',
+            description:
+                'Zero external servers, zero telemetry, no accounts required. All financial data, transactions, and rules live purely on your phone.',
+          ),
+          const SizedBox(height: 10),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.balance_rounded,
+            iconColor: AppTheme.primaryBlue,
+            title: 'Canonical Double-Entry Accounting',
+            description:
+                'Bank-grade integrity where Debits always equal Credits. Every transfer and bill payment balances mathematically with integer paise accuracy.',
+          ),
+          const SizedBox(height: 10),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.flight_takeoff_rounded,
+            iconColor: const Color(0xFFF59E0B),
+            title: 'Safe-to-Spend Runway',
+            description:
+                'Dynamic real-time runway that deducts upcoming credit card statements, loan EMIs, and monthly fixed commitments before telling you what you can safely spend.',
+          ),
+          const SizedBox(height: 10),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.security_update_good_rounded,
+            iconColor: const Color(0xFF10B981),
+            title: 'Smart Anti-Fraud Ingestion',
+            description:
+                'Strictly parses alphanumeric TRAI banking headers (e.g. HDFCBK, ICICIB). Personal contacts and OTP verification codes are discarded automatically.',
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSmallFeature(IconData icon, String title, String subtitle) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
+  Widget _buildFeatureCard({
+    required bool isDark,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String description,
+  }) {
+    return SpendXGlassSurface(
+      width: double.infinity,
+      level: SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(AppRadius.m),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: isDark ? 0.20 : 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
           ),
-          child: Icon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
                   style: TextStyle(
-                      fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
-              Text(subtitle,
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-            ],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  // ── Currency ──────────────────────────────────────────
+  // ── 2. Primary Currency Setup ─────────────────────────────
 
-  Widget _buildCurrencySetupScreen() {
+  Widget _buildCurrencySetupScreen(bool isDark) {
     final currencies = [
-      {'code': 'INR', 'symbol': '\u20B9', 'name': 'Indian Rupee'},
+      {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
       {'code': 'USD', 'symbol': '\$', 'name': 'US Dollar'},
-      {'code': 'EUR', 'symbol': '\u20AC', 'name': 'Euro'},
-      {'code': 'GBP', 'symbol': '\u00A3', 'name': 'British Pound'},
-      {'code': 'JPY', 'symbol': '\u00A5', 'name': 'Japanese Yen'},
+      {'code': 'EUR', 'symbol': '€', 'name': 'Euro'},
+      {'code': 'GBP', 'symbol': '£', 'name': 'British Pound'},
+      {'code': 'JPY', 'symbol': '¥', 'name': 'Japanese Yen'},
       {'code': 'AUD', 'symbol': 'A\$', 'name': 'Australian Dollar'},
       {'code': 'CAD', 'symbol': 'C\$', 'name': 'Canadian Dollar'},
-      {'code': 'AED', 'symbol': '\u062F.\u0625', 'name': 'UAE Dirham'},
+      {'code': 'AED', 'symbol': 'د.إ', 'name': 'UAE Dirham'},
       {'code': 'SGD', 'symbol': 'S\$', 'name': 'Singapore Dollar'},
     ];
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 32),
-          Text('Primary Currency',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  )),
-          const SizedBox(height: 8),
-          Text('Select your main currency for all totals.',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 32),
+          Text(
+            'Primary Currency',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Select your primary display currency for account balances, safe-to-spend calculations, and totals.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
+          ),
+          const SizedBox(height: 18),
           Expanded(
-            child: ListView.builder(
+            child: ListView.separated(
               itemCount: currencies.length,
               physics: const BouncingScrollPhysics(),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final c = currencies[index];
                 final isSelected = _selectedCurrency == c['code'];
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: GestureDetector(
+                return SpendXGlassSurface(
+                  width: double.infinity,
+                  level: isSelected ? SpendXGlassLevel.elevated : SpendXGlassLevel.base,
+                  borderRadius: BorderRadius.circular(AppRadius.m),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: InkWell(
                     onTap: () {
                       setState(() => _selectedCurrency = c['code']!);
                       SettingsService.instance.setPrimaryCurrency(c['code']!);
                     },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.15)
-                            : Theme.of(context).colorScheme.surfaceContainer,
-                        border: Border.all(
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.outlineVariant,
-                          width: isSelected ? 2.0 : 1.0,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.surfaceContainerHighest,
-                            child: Text(c['symbol']!,
-                                style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16)),
+                    borderRadius: BorderRadius.circular(AppRadius.m),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected
+                                ? AppTheme.primaryBlue.withValues(alpha: isDark ? 0.3 : 0.15)
+                                : (isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000)),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(c['name']!,
-                                    style: TextStyle(
-                                        fontWeight: isSelected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                        color: Theme.of(context).colorScheme.onSurface,
-                                        fontSize: 15)),
-                                Text(c['code']!,
-                                    style: TextStyle(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-                              ],
+                          alignment: Alignment.center,
+                          child: Text(
+                            c['symbol']!,
+                            style: TextStyle(
+                              color: isSelected ? AppTheme.primaryBlue : (isDark ? Colors.white : Colors.black),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
                             ),
                           ),
-                          if (isSelected)
-                            Icon(Icons.check_circle_rounded,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: 24),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                c['name']!,
+                                style: TextStyle(
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+                              Text(
+                                c['code']!,
+                                style: TextStyle(
+                                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(Icons.check_circle_rounded, color: AppTheme.primaryBlue, size: 22),
+                      ],
                     ),
                   ),
                 );
@@ -374,285 +491,688 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── Notifications ─────────────────────────────────────
+  // ── 3. Automatic Ingestion & Permissions ───────────────────
 
-  Widget _buildNotificationPermissionScreen() {
+  Widget _buildAutomaticIngestionScreen(bool isDark) {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Icon(Icons.notifications_active_rounded,
-                  size: 70, color: Theme.of(context).colorScheme.primary),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Autonomous Ingestion',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
             ),
-            const SizedBox(height: 40),
-            Text('Stay on Track',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            Text(
-              'Get reminders for recurring payments, loan EMIs, salary due dates, '
-              'and weekly/monthly financial summaries.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            _notificationsEnabled
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Text('Notifications enabled',
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                    ],
-                  )
-                : AppButton.secondary(
-                    onPressed: () async {
-                      await NotificationServiceV2().requestPermissions();
-                      setState(() => _notificationsEnabled = true);
-                    },
-                    text: 'Enable Notifications',
-                  ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Backup ────────────────────────────────────────────
-
-  Widget _buildBackupExplanationScreen() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 48),
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(32),
-              ),
-              child: const Icon(Icons.cloud_sync_rounded,
-                  size: 80, color: Colors.amber),
-            ),
-            const SizedBox(height: 40),
-            Text('Your Data, Your Drive',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            Text(
-              'SpendX uses offline-first storage. Backup is optional, encrypted, '
-              'and writes only to your personal Google Drive.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(20),
-                border:
-                    Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: Column(
-                children: [
-                  _benefitRow(
-                      Icons.offline_pin_rounded, 'Works Offline', 'No internet? No problem.'),
-                  Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
-                  _benefitRow(Icons.enhanced_encryption_rounded, 'AES-256 Encrypted',
-                      'Data encrypted before upload'),
-                  Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
-                  _benefitRow(Icons.devices_rounded, 'Multi-Device',
-                      'Sync across phones with same Google account'),
-                  Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
-                  _benefitRow(Icons.restore_page_rounded, 'Easy Recovery',
-                      'Restore everything in one tap'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _benefitRow(IconData icon, String title, String subtitle) {
-    return Row(
-      children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 24),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
-              Text(subtitle,
-                  style:
-                      TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-            ],
           ),
-        ),
-      ],
-    );
-  }
+          const SizedBox(height: 6),
+          Text(
+            'SpendX can capture your transactions instantly using local Android events. Configure your ingestion streams below:',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
+          ),
+          const SizedBox(height: 20),
 
-  // ── Finish ────────────────────────────────────────────
-
-  Widget _buildFinishSetupScreen() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 48.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 48),
-            Stack(
-              alignment: Alignment.center,
+          // 1. Payment App Notification Listener (UPI Push Capture)
+          SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.notifications_active_rounded, color: AppTheme.primaryBlue, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Payment App Notifications',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              _statusPill(_notificationListenerEnabled, isDark),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Instantly captures UPI payments from Google Pay, PhonePe, Paytm, and Cred push notifications in real-time before SMS arrives.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Container(
-                  width: 110,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
+                const SizedBox(height: 14),
+                if (!_notificationListenerEnabled)
+                  SpendXGlassButton(
+                    variant: SpendXGlassButtonVariant.tonal,
+                    onPressed: () async {
+                      await LiveSmsService.instance.openNotificationListenerSettings();
+                      await _checkPermissions();
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.tune_rounded, size: 16, color: AppTheme.primaryBlue),
+                        SizedBox(width: 6),
+                        Text('Enable Notification Listener', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.semanticIncome.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Active: Capturing payments from GPay, PhonePe & Paytm',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Icon(Icons.rocket_launch_rounded,
-                    size: 60, color: Theme.of(context).colorScheme.primary),
               ],
             ),
-            const SizedBox(height: 48),
-            Text("You're all set!",
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    )),
-            const SizedBox(height: 16),
-            Text(
-              'SpendX is ready. Start tracking your finances today.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(20),
-                border:
-                    Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: SwitchListTile(
-                secondary: Icon(Icons.sms_rounded,
-                    color: Theme.of(context).colorScheme.primary),
-                title: const Text('Track bank & card SMS',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text(
-                    'Automatically record incoming transaction messages as they arrive'),
-                value: _smsImportOptIn,
-                onChanged: (v) => setState(() => _smsImportOptIn = v),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(20),
-                border:
-                    Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.tips_and_updates_rounded,
-                          color: Colors.amber[300], size: 20),
-                      const SizedBox(width: 12),
-                      Text('Quick Tips',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)),
-                    ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // 2. Bank & Card SMS Ingestion
+          SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.20 : 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.sms_rounded, color: Color(0xFF10B981), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Bank & Card Transaction SMS',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              _statusPill(_smsPermissionGranted, isDark),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Parses official banking SMS from HDFCBK, ICICIB, SBIINB, etc. to attribute debits, credits, and refunds. Personal contacts and OTPs are completely ignored.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (!_smsPermissionGranted)
+                  SpendXGlassButton(
+                    variant: SpendXGlassButtonVariant.tonal,
+                    onPressed: () async {
+                      await Permission.sms.request();
+                      await _checkPermissions();
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.lock_open_rounded, size: 16, color: Color(0xFF10B981)),
+                        SizedBox(width: 6),
+                        Text('Grant SMS Permission', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.semanticIncome.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Active: Monitoring official bank and card SMS',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  _tipRow('Tap + on Home to add your first transaction'),
-                  const SizedBox(height: 8),
-                  _tipRow('Go to More > Income & Salary to set up salary tracking'),
-                  const SizedBox(height: 8),
-                  _tipRow('Share any CSV/JSON from Notion or Sheets directly to SpendX'),
-                  const SizedBox(height: 8),
-                  _tipRow('Enable auto-backup in Backup & Sync for peace of mind'),
-                ],
-              ),
+              ],
             ),
-          ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // 3. Alerts & Due Date System Notifications
+          SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.20 : 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.alarm_rounded, color: Color(0xFFF59E0B), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Bill Reminders & Runway Alerts',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              _statusPill(_systemNotificationsEnabled, isDark),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Receive proactive warnings for upcoming credit card bill due dates, loan EMI installments, and safe-to-spend runway thresholds.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (!_systemNotificationsEnabled)
+                  SpendXGlassButton(
+                    variant: SpendXGlassButtonVariant.tonal,
+                    onPressed: () async {
+                      await NotificationServiceV2().requestPermissions();
+                      await _checkPermissions();
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.notifications_active_rounded, size: 16, color: Color(0xFFF59E0B)),
+                        SizedBox(width: 6),
+                        Text('Allow System Notifications', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.semanticIncome.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Active: Bill reminders and runway alerts enabled',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // 4. Unrestricted Battery Execution (FuntouchOS / OriginOS / MIUI / HyperOS)
+          SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8B5CF6).withValues(alpha: isDark ? 0.20 : 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.battery_charging_full_rounded, color: Color(0xFF8B5CF6), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Unrestricted Background Battery',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              _statusPill(_batteryOptimizationIgnored, isDark),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Prevents OEM aggressive battery managers (Vivo FuntouchOS, OriginOS, MIUI) from terminating live notification listeners and SMS parsers when the screen is locked.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (!_batteryOptimizationIgnored)
+                  SpendXGlassButton(
+                    variant: SpendXGlassButtonVariant.tonal,
+                    onPressed: () async {
+                      await Permission.ignoreBatteryOptimizations.request();
+                      await _checkPermissions();
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                        SizedBox(width: 6),
+                        Text('Unrestrict Battery Usage', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.semanticIncome.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Active: Unrestricted background execution enabled',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(bool isEnabled, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: isEnabled
+            ? const Color(0x1F10B981)
+            : (isDark ? const Color(0x22FFFFFF) : const Color(0x18000000)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        isEnabled ? 'Active ✓' : 'Setup',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: isEnabled
+              ? AppTheme.semanticIncome
+              : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
         ),
       ),
     );
   }
 
-  Widget _tipRow(String text) {
+  // ── 4. Encrypted Google Drive Backup ───────────────────────
+
+  Widget _buildBackupExplanationScreen(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.15 : 0.10),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                  width: 1.0,
+                ),
+              ),
+              child: const Icon(Icons.cloud_sync_rounded, size: 48, color: Color(0xFFF59E0B)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Your Data, Your Drive',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'SpendX is strictly offline-first. Cloud backup is 100% optional, client-side encrypted, and stores only in your personal Google Drive.',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.45,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.offline_pin_rounded,
+            iconColor: AppTheme.semanticIncome,
+            title: 'Full Offline Autonomy',
+            description: 'No internet connection needed. All ledger postings, calculations, and rules function seamlessly offline.',
+          ),
+          const SizedBox(height: 10),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.enhanced_encryption_rounded,
+            iconColor: AppTheme.primaryBlue,
+            title: 'AES-256 Client-Side Encryption',
+            description: 'Your database snapshot is encrypted on device using your personal passphrase before uploading to Drive.',
+          ),
+          const SizedBox(height: 10),
+
+          _buildFeatureCard(
+            isDark: isDark,
+            icon: Icons.devices_rounded,
+            iconColor: const Color(0xFF6366F1),
+            title: 'Seamless Cross-Device Restore',
+            description: 'Switching phones? Restore your complete double-entry database, rules, and settings in one tap.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 5. Finish & Launch Setup ──────────────────────────────
+
+  Widget _buildFinishSetupScreen(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 16),
+          Center(
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.3)),
+              ),
+              child: const Icon(Icons.rocket_launch_rounded, size: 40, color: AppTheme.primaryBlue),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            "You're All Set!",
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'SpendX is configured and ready to autonomously manage your finances.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+
+          // SMS Initial History Sync Option
+          SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.history_rounded, color: AppTheme.primaryBlue, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Scan Past Banking SMS',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Import past transaction history to automatically reconstruct initial account balances.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: _smsImportOptIn,
+                  activeTrackColor: AppTheme.primaryBlue,
+                  onChanged: (v) => setState(() => _smsImportOptIn = v),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Pro Tips
+          SpendXGlassSurface(
+            width: double.infinity,
+            level: SpendXGlassLevel.base,
+            borderRadius: BorderRadius.circular(AppRadius.l),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.lightbulb_rounded, size: 16, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'PRO TIPS FOR MAXIMUM ACCURACY',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _tipRow(isDark, 'Tap the floating + to manually add an expense, income, or move funds between accounts.'),
+                const SizedBox(height: 8),
+                _tipRow(isDark, 'Check the Review Queue if a transaction needs manual account confirmation.'),
+                const SizedBox(height: 8),
+                _tipRow(isDark, 'Set up Credit Cards and EMIs to enable your real-time Safe-to-Spend runway calculation.'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tipRow(bool isDark, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('\u2022 ', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(
+          '• ',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.primaryBlue,
+          ),
+        ),
         Expanded(
-          child: Text(text,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4)),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.4,
+              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            ),
+          ),
         ),
       ],
     );

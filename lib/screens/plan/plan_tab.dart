@@ -575,13 +575,17 @@ class _FinancialHorizonCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          identity.label.toUpperCase(),
-                          style: TextStyle(
-                            color: identityColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                            letterSpacing: 0.8,
+                        Flexible(
+                          child: Text(
+                            identity.label.toUpperCase(),
+                            style: TextStyle(
+                              color: identityColor,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              letterSpacing: 0.8,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -594,12 +598,16 @@ class _FinancialHorizonCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          'Cashflow Outlook',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                        Flexible(
+                          child: Text(
+                            'Outlook',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -739,7 +747,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                         saveSuggestion != null
                             ? 'Save ${AppFormat.currency(saveSuggestion!.amount)} this month to strengthen runway'
                             : nudges.first.title,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,

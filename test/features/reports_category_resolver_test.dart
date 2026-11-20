@@ -28,5 +28,28 @@ void main() {
       expect(ReportsCategoryResolver.resolve('Office Expense'), 'Office Expense');
       expect(ReportsCategoryResolver.resolve(''), '');
     });
+
+    test('resolves canonical hierarchical account paths and raw UUIDs', () {
+      expect(
+        ReportsCategoryResolver.resolve('Expense:General:Miscellaneous'),
+        'Miscellaneous',
+      );
+      expect(
+        ReportsCategoryResolver.resolve('Expense:General:Refunds'),
+        'Refunds',
+      );
+      expect(
+        ReportsCategoryResolver.resolve('Expense:Financial:Interest'),
+        'Interest',
+      );
+      expect(
+        ReportsCategoryResolver.resolve('sys_exp_misc'),
+        'Miscellaneous',
+      );
+      expect(
+        ReportsCategoryResolver.resolve('7d5cf988-f479-4331-8a42-123456789abc'),
+        'General Expense',
+      );
+    });
   });
 }

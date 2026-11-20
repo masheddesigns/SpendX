@@ -55,7 +55,7 @@ object FinancialSmsFilter {
         "FIMONEY", "JUPITER", "NAVI", "SUPER", "GOOGLE", "GPAY", "PHONEPE",
         "PAYZAPP", "FEDMOBILE", "YONO", "AMAZON", "IDBI", "BOM", "MAHABK",
         "PSB", "ESAF", "JANA", "SURYODAY", "UTKARSH", "IPPB", "LAZYPAY",
-        "SIMPL", "UNI", "SCAPIA", "JAR", "GULLAK", "SAMSUNG", "WHATSAPP", "APP:"
+        "SIMPL", "UNI", "SCAPIA", "JAR", "GULLAK", "SAMSUNG", "WHATSAPP", "APP:", "GMAIL", "EMAIL"
     )
 
     // 5. Monetary amount required: ₹ 500, Rs. 500.00, INR 1,500, 500.00 INR, etc.

@@ -3,13 +3,15 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../core/logging/app_logger.dart';
-import '../data/core/tables_v24.dart';
+import '../data/core/tables.dart';
 import '../data/core/tables_v26.dart';
 import '../data/repositories/canonical/canonical_event_repository.dart';
 import '../data/repositories/canonical/canonical_transaction_adapter.dart';
 import '../data/repositories/refund_allocations_repo.dart';
 import '../domain/finance/economic_event.dart';
 import '../domain/finance/posting.dart';
+import '../models/review_item.dart';
+import 'transaction_text_parser.dart';
 
 /// Origin channel of an incoming transaction alert.
 enum SourceChannel {
@@ -53,6 +55,9 @@ class IncomingTransactionCandidate {
   final String? reversalOfEventId;
   final String? originalPurchaseEventId;
   final int? allocatedAmountMinorUnits;
+  final bool isAmbiguous;
+  final String? ambiguityReason;
+  final String? primaryAccountType;
 
   const IncomingTransactionCandidate({
     required this.sourceRecordId,
@@ -71,6 +76,9 @@ class IncomingTransactionCandidate {
     this.reversalOfEventId,
     this.originalPurchaseEventId,
     this.allocatedAmountMinorUnits,
+    this.isAmbiguous = false,
+    this.ambiguityReason,
+    this.primaryAccountType,
   });
 }
 
@@ -627,6 +635,69 @@ class CrossChannelDeduplicationService {
           continue;
         }
 
+        // ── Merchant Confirmation Duplicate Matching ──
+        // When one message is from the bank/card payment and the other is a merchant confirmation
+        // receipt (e.g. PolicyBazaar confirmation for the same ₹4515 card spend):
+        // If amounts match, timestamps are within window, and merchant identity matches:
+        // They represent the exact same economic transaction!
+        final candidateMerchant = candidate.merchant?.toLowerCase().trim() ?? '';
+        final recentDesc = (recent['description'] as String? ?? '').toLowerCase().trim();
+        final lowerBody = candidate.body.toLowerCase();
+        final isMerchantConfirmationSignal = lowerBody.contains('successful for the purchase') ||
+            lowerBody.contains('purchase of your') ||
+            lowerBody.contains('order placed') ||
+            lowerBody.contains('order confirmed') ||
+            lowerBody.contains('ticket booked') ||
+            lowerBody.contains('booking confirmed') ||
+            (lowerBody.contains('payment of') && (lowerBody.contains('policybazaar') || lowerBody.contains('policy') || lowerBody.contains('swiggy') || lowerBody.contains('zomato') || lowerBody.contains('uber') || lowerBody.contains('irctc')));
+        final isMerchantMatch = candidateMerchant.isNotEmpty &&
+            (candidateMerchant == recentDesc ||
+             (candidateMerchant.contains('policy') && recentDesc.contains('policy')) ||
+             (candidateMerchant.contains('swiggy') && recentDesc.contains('swiggy')) ||
+             (candidateMerchant.contains('zomato') && recentDesc.contains('zomato')) ||
+             (candidateMerchant.contains('irctc') && recentDesc.contains('irctc')) ||
+             (candidateMerchant.contains('uber') && recentDesc.contains('uber')));
+        final isKnownMerchantSender = candidate.sender.toLowerCase().contains('policy') ||
+            candidate.sender.toLowerCase().contains('swiggy') ||
+            candidate.sender.toLowerCase().contains('zomato') ||
+            candidate.sender.toLowerCase().contains('irctc') ||
+            candidate.sender.toLowerCase().contains('uber') ||
+            candidate.sender.toLowerCase().contains('flpkrt') ||
+            recent['sender_address'].toString().toLowerCase().contains('policy');
+
+        if ((isMerchantMatch || isKnownMerchantSender) && (isMerchantConfirmationSignal || isKnownMerchantSender)) {
+          // Exactly one economic event must exist in the canonical ledger!
+          final matchedEventId = recent['economic_event_id'] as String;
+          final evidenceId = const Uuid().v4();
+          final nowStr = DateTime.now().toUtc().toIso8601String();
+
+          await txn.insert(TablesV24.evidence, {
+            'id': evidenceId,
+            'economic_event_id': matchedEventId,
+            'source_type': candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'push',
+            'source_record_id': candidate.sourceRecordId,
+            'extracted_amount_minor_units': candidate.amountMinorUnits,
+            'extracted_timestamp': candidate.timestamp.toUtc().toIso8601String(),
+            'sender_address': candidate.sender,
+            'external_reference': normRef,
+            'body_sha256': CanonicalTransactionAdapter.computeBodyFingerprint(candidate.body),
+            'raw_payload_encrypted': candidate.body,
+            'retention_expires_at': DateTime.now().toUtc().add(const Duration(days: 30)).toIso8601String(),
+            'is_payload_purged': 0,
+            'created_at': nowStr,
+          });
+
+          AppLogger.i(
+            '[CrossChannelDeduplication] Merchant confirmation duplicate matched: linked ${candidate.sourceRecordId} to event $matchedEventId',
+          );
+          return DeduplicationResult(
+            status: DeduplicationStatus.strongMatchMerged,
+            eventId: matchedEventId,
+            evidenceId: evidenceId,
+            sourceRecordId: candidate.sourceRecordId,
+          );
+        }
+
         // Case 2A: One-sided reference on correlation (P14-T24)
         if (candidateHasRef != recentHasRef) {
           AppLogger.w(
@@ -675,6 +746,43 @@ class CrossChannelDeduplicationService {
     // =========================================================================
     // DEFAULT: CREATE AND POST LEGITIMATE NEW ECONOMIC EVENT
     // =========================================================================
+    // Ambiguity / Unresolved Instrument Safety Gate:
+    // If instrument resolution failed or reported ambiguity, route directly to Review Queue.
+    // Zero accounting postings; never silently substitute acc_cash_default for an expected instrument.
+    if (candidate.isAmbiguous) {
+      AppLogger.w(
+        '[CrossChannelDeduplication] Unresolved or ambiguous instrument for ${candidate.sourceRecordId}: routing to Review Queue',
+      );
+      return await _routeToReviewQueue(
+        candidate: candidate,
+        reason: candidate.ambiguityReason ?? 'UNRESOLVED_INSTRUMENT_ATTRIBUTION',
+        txn: txn,
+      );
+    }
+
+    // Exhaustive Event Type Safety Gate:
+    // Only supported canonical event types may proceed to posting.
+    // Unsupported / unexpected event types fail closed to Review Queue.
+    const supportedEventTypes = {
+      CanonicalEventType.expense,
+      CanonicalEventType.income,
+      CanonicalEventType.cardPurchase,
+      CanonicalEventType.cardPayment,
+      CanonicalEventType.transfer,
+      CanonicalEventType.loanRepayment,
+      CanonicalEventType.refund,
+    };
+    if (!supportedEventTypes.contains(candidate.eventType)) {
+      AppLogger.w(
+        '[CrossChannelDeduplication] Unsupported canonical event type (${candidate.eventType}) for ${candidate.sourceRecordId}: failing closed to Review Queue',
+      );
+      return await _routeToReviewQueue(
+        candidate: candidate,
+        reason: 'UNSUPPORTED_EVENT_TYPE',
+        txn: txn,
+      );
+    }
+
     return await _createAndPostNewEvent(
       candidate: candidate,
       reversalOfEventId: candidate.reversalOfEventId,
@@ -891,19 +999,45 @@ class CrossChannelDeduplicationService {
     });
 
     // 2. Insert ReviewCandidate proposal (ZERO postings)
+    // The raw_payload MUST include a 'parsed' key so ReviewRepo.toItem()
+    // can rehydrate a full ParsedTransaction without having to re-parse
+    // the raw body from scratch. This prevents the "{\"body\":\"...\"}" note
+    // bug and the sys_suspense_transfer account bug.
+    final parsed = TransactionTextParser.parse(
+      candidate.body,
+      source: candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'push',
+      messageTimestamp: candidate.timestamp,
+    );
+    final parsedForStorage = ParsedTransaction(
+      amount: parsed.amount > 0 ? parsed.amount : candidate.amountMinorUnits / 100.0,
+      isCredit: candidate.direction == PostingDirection.credit,
+      rawText: candidate.body,
+      date: parsed.date,
+      merchant: parsed.merchant ?? candidate.merchant,
+      refId: parsed.refId,
+      last4: parsed.last4 ?? candidate.accountNumberLast4,
+      bankName: parsed.bankName,
+      method: parsed.method,
+      source: candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'push',
+      confidence: parsed.confidence,
+      merchantSource: parsed.merchantSource,
+      hasDirectionSignal: parsed.hasDirectionSignal,
+    );
     await _insertReviewCandidateRow(
       id: reviewId,
       sourceType: candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'push',
       rawPayload: jsonEncode({
-        'body': candidate.body,
+        'rawSource': candidate.body,
+        'parsed': parsedForStorage.toMap(),
         'sender': candidate.sender,
         'reason': reason,
         'sourceRecordId': candidate.sourceRecordId,
+        'timestamp': candidate.timestamp.toIso8601String(),
       }),
       eventType: candidate.eventType,
       amountMinorUnits: candidate.amountMinorUnits,
       accountId: candidate.accountId,
-      confidenceScore: 0.5,
+      confidenceScore: parsed.confidence.clamp(0.4, 0.95),
       txn: txn,
     );
 
@@ -924,6 +1058,17 @@ class CrossChannelDeduplicationService {
     String? reversalOfEventId,
     required DatabaseExecutor txn,
   }) async {
+    // 0. Refund safety check: A refund requires an original purchase event to allocate against.
+    // If none exists, route directly to Review Queue BEFORE creating any draft event or evidence.
+    final parentEventId = candidate.originalPurchaseEventId ?? reversalOfEventId;
+    if (candidate.eventType == CanonicalEventType.refund && parentEventId == null) {
+      return await _routeToReviewQueue(
+        candidate: candidate,
+        reason: 'REFUND_MISSING_ORIGINAL_PURCHASE',
+        txn: txn,
+      );
+    }
+
     final eventId = const Uuid().v4();
     final evidenceId = const Uuid().v4();
     final nowStr = DateTime.now().toUtc().toIso8601String();
@@ -970,16 +1115,54 @@ class CrossChannelDeduplicationService {
     // 3. Insert Balanced Double-Entry Postings
     // Leg 1: Primary Asset/Liability account
     final primaryAcc = candidate.accountId ?? 'acc_cash_default';
-    await _ensureAccountExists(txn, primaryAcc, 'asset');
+    final existingPrimary = await txn.query(
+      TablesV24.accounts,
+      columns: ['account_type'],
+      where: 'id = ?',
+      whereArgs: [primaryAcc],
+      limit: 1,
+    );
+    final String primaryType = candidate.primaryAccountType ??
+        (existingPrimary.isNotEmpty
+            ? existingPrimary.first['account_type'] as String
+            : (candidate.eventType == CanonicalEventType.cardPurchase ? 'liability' : 'asset'));
+    await _ensureAccountExists(txn, primaryAcc, primaryType);
 
     // Leg 2: Offset category/suspense account
-    final offsetAcc = candidate.counterpartyAccountId ??
-        (isDebit ? TablesV24.sysExpMisc : TablesV24.sysIncMisc);
-    await _ensureAccountExists(
-      txn,
-      offsetAcc,
-      isDebit ? 'expense' : 'income',
-    );
+    final String offsetType;
+    final String defaultOffset;
+    switch (candidate.eventType) {
+      case CanonicalEventType.cardPayment:
+        offsetType = 'liability';
+        defaultOffset = TablesV24.sysSuspenseCard;
+        break;
+      case CanonicalEventType.transfer:
+        offsetType = 'asset';
+        defaultOffset = TablesV24.sysSuspenseTransfer;
+        break;
+      case CanonicalEventType.loanRepayment:
+        offsetType = 'liability';
+        defaultOffset = TablesV24.sysSuspenseLoan;
+        break;
+      case CanonicalEventType.refund:
+        offsetType = 'expense';
+        defaultOffset = TablesV24.sysExpMisc;
+        break;
+      case CanonicalEventType.expense:
+      case CanonicalEventType.cardPurchase:
+        offsetType = 'expense';
+        defaultOffset = TablesV24.sysExpMisc;
+        break;
+      case CanonicalEventType.income:
+        offsetType = 'income';
+        defaultOffset = TablesV24.sysIncMisc;
+        break;
+      default:
+        throw ArgumentError('Unsupported canonical event type: ${candidate.eventType}');
+    }
+
+    final offsetAcc = candidate.counterpartyAccountId ?? defaultOffset;
+    await _ensureAccountExists(txn, offsetAcc, offsetType);
 
     // Debit leg
     await txn.insert(TablesV24.postings, {
@@ -1006,14 +1189,21 @@ class CrossChannelDeduplicationService {
     });
 
     // 4. If this is a refund, insert refund allocation before posting
-    if (candidate.eventType == CanonicalEventType.refund &&
-        candidate.originalPurchaseEventId != null) {
+    if (candidate.eventType == CanonicalEventType.refund) {
+      final parentEventId = candidate.originalPurchaseEventId ?? reversalOfEventId;
+      if (parentEventId == null) {
+        return await _routeToReviewQueue(
+          candidate: candidate,
+          reason: 'REFUND_MISSING_ORIGINAL_PURCHASE',
+          txn: txn,
+        );
+      }
       await _refundRepo.insertAllocation(
         txn: txn,
         allocation: RefundAllocation(
           id: const Uuid().v4(),
           refundEventId: eventId,
-          originalEventId: candidate.originalPurchaseEventId!,
+          originalEventId: parentEventId,
           allocatedAmountMinorUnits: candidate.allocatedAmountMinorUnits ?? candidate.amountMinorUnits,
           createdAt: DateTime.now().toUtc(),
         ),
@@ -1084,6 +1274,22 @@ class CrossChannelDeduplicationService {
       limit: 1,
     );
     if (rows.isEmpty) {
+      String resolvedName = accountId;
+      try {
+        final catRows = await txn.query(
+          Tables.categories,
+          columns: ['name'],
+          where: 'id = ?',
+          whereArgs: [accountId],
+          limit: 1,
+        );
+        if (catRows.isNotEmpty &&
+            catRows.first['name'] != null &&
+            (catRows.first['name'] as String).trim().isNotEmpty) {
+          resolvedName = (catRows.first['name'] as String).trim();
+        }
+      } catch (_) {}
+
       final nowStr = DateTime.now().toUtc().toIso8601String();
       await txn.insert(
         TablesV24.accounts,
@@ -1093,7 +1299,7 @@ class CrossChannelDeduplicationService {
           'subtype': type == 'asset'
               ? 'cash'
               : (type == 'expense' ? 'general' : 'income'),
-          'name': accountId,
+          'name': resolvedName,
           'currency': 'INR',
           'is_active': 1,
           'is_system': 0,

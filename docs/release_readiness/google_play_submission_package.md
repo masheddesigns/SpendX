@@ -1,7 +1,7 @@
 # SpendX — Google Play Distribution Preparation Package
 **Milestone**: Milestone 5.0 — Phase 5C Distribution Qualification  
 **Target Release**: SpendX 1.6.0 (versionCode 16)  
-**Package Name**: `com.mashingdesigns.spend_x`  
+**Package Name**: `com.mashingdesigns.spendx`  
 **Candidate Release AAB SHA-256**: `9d1a7d969c31f8a5846c0c8749ed3c24cf8ab5bfb67667fca776ed7fac7f16cc`  
 **Security Gate**: `G-SEC-01-LOCK` remains **HELD** (Internal test track only; zero public release without explicit security release)
 

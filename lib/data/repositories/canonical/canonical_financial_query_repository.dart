@@ -407,8 +407,9 @@ class CanonicalFinancialQueryRepository {
   }) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final startOverdue = now.subtract(const Duration(days: 14)).toIso8601String();
-    final endWindow = now.add(const Duration(days: 14));
+    final startOverdueDate = today.subtract(const Duration(days: 14));
+    final startOverdue = startOverdueDate.toIso8601String();
+    final endWindow = today.add(const Duration(days: 14, hours: 23, minutes: 59, seconds: 59));
     final endIso = endWindow.toIso8601String();
     double total14d = 0.0;
     final items = <CommitmentItem>[];
@@ -737,12 +738,15 @@ class CanonicalFinancialQueryRepository {
     // 3. Recurring templates due within next 14 days (if not already counted via reminder)
     try {
       final recurringRows = await db.rawQuery('''
-        SELECT name, amount, type, frequency, last_generated, next_generation, is_active
+        SELECT id, name, amount, type, category_id, frequency, interval, day_of_month, day_of_week, last_generated, next_generation, is_active
         FROM ${Tables.recurring_templates}
         WHERE is_active = 1 AND type = 'expense';
       ''');
 
+      final usedTxnIds = <String>{};
+
       for (final t in recurringRows) {
+        final templateId = t['id'] as String?;
         final rawName = (t['name'] as String? ?? '').toLowerCase().trim();
         final cleanName = rawName
             .replaceAll(
@@ -772,24 +776,52 @@ class CanonicalFinancialQueryRepository {
         if (alreadySeen) continue;
 
         final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
-        final freq = t['frequency'] as String? ?? 'monthly';
+        if (amount <= 0) continue;
+
+        final freq = (t['frequency'] as String? ?? 'monthly').toLowerCase();
+        final interval = (t['interval'] as num?)?.toInt() ?? 1;
+        final dayOfMonth = (t['day_of_month'] as num?)?.toInt();
         final startIso = t['next_generation'] as String?;
-        final lastIso = t['last_generated'] as String?;
 
         final startDate = startIso != null ? DateTime.tryParse(startIso) ?? now : now;
-        final lastDate = lastIso != null ? DateTime.tryParse(lastIso) : null;
+        final anchorDay = dayOfMonth ?? startDate.day;
+        final startOverdueDate = DateTime.tryParse(startOverdue) ?? now.subtract(const Duration(days: 14));
 
-        if (_isTemplateDueIn14Days(startDate, lastDate, freq, now, endWindow)) {
-          total14d += amount;
-          items.add(
-            CommitmentItem(
-              title: t['name'] as String? ?? 'Recurring Expense',
-              amount: Money.fromRupees(amount, currency: currency),
-              dueDate: startDate,
-              type: 'recurring',
-              isOverdue: startDate.isBefore(today),
-            ),
+        final occurrences = _getTemplateOccurrences(
+          startDate: startDate,
+          anchorDay: anchorDay,
+          frequency: freq,
+          interval: interval,
+          startOverdue: startOverdueDate,
+          endWindow: endWindow,
+        );
+
+        for (final occDate in occurrences) {
+          final settlement = await _isOccurrenceSettled(
+            db: db,
+            occDate: occDate,
+            amount: amount,
+            templateName: t['name'] as String? ?? '',
+            frequency: freq,
+            usedTxnIds: usedTxnIds,
           );
+
+          if (!settlement.isSettled) {
+            seenCommitments.add('norm:$normName');
+            seenCommitments.add('title:$rawName');
+            total14d += amount;
+            final isOverdue = DateTime(occDate.year, occDate.month, occDate.day).isBefore(today);
+            items.add(
+              CommitmentItem(
+                title: t['name'] as String? ?? 'Recurring Expense',
+                amount: Money.fromRupees(amount, currency: currency),
+                dueDate: occDate,
+                type: 'recurring',
+                id: templateId,
+                isOverdue: isOverdue,
+              ),
+            );
+          }
         }
       }
     } catch (_) {}
@@ -800,46 +832,324 @@ class CanonicalFinancialQueryRepository {
     return (total: Money.fromRupees(total14d, currency: currency), items: items);
   }
 
-  bool _isTemplateDueIn14Days(
-    DateTime startDate,
-    DateTime? lastDate,
-    String frequency,
-    DateTime now,
-    DateTime endWindow,
-  ) {
-    DateTime nextDate = startDate;
-    if (lastDate != null) {
-      nextDate = _calculateNextRecurring(lastDate, frequency);
+  /// Derives candidate occurrence dates for a recurring template falling strictly
+  /// within the evaluation horizon [startOverdue, endWindow].
+  ///
+  /// Fast-forwards past dates to ensure historical start dates are never falsely
+  /// attributed as the due date of a future occurrence.
+  List<DateTime> _getTemplateOccurrences({
+    required DateTime startDate,
+    required int? anchorDay,
+    required String frequency,
+    required int interval,
+    required DateTime startOverdue,
+    required DateTime endWindow,
+  }) {
+    final occurrences = <DateTime>[];
+    DateTime cur = startDate;
+
+    // Fast-forward cur if it is before startOverdue
+    while (cur.isBefore(startOverdue)) {
+      final next = calculateNextRecurringDate(
+        cur,
+        frequency,
+        anchorDay: anchorDay,
+        interval: interval,
+      );
+      if (next.isBefore(cur) || next.isAtSameMomentAs(cur)) {
+        break; // Guard against non-advancing calculation
+      }
+      if (next.isAfter(startOverdue) || next.isAtSameMomentAs(startOverdue)) {
+        cur = next;
+        break;
+      }
+      cur = next;
     }
 
-    while (nextDate.isBefore(now)) {
-      final next = _calculateNextRecurring(nextDate, frequency);
-      if (next.isAtSameMomentAs(nextDate)) break;
-      nextDate = next;
+    // Collect occurrences within [startOverdue, endWindow]
+    int safetyGuard = 0;
+    while (!cur.isAfter(endWindow) && safetyGuard < 100) {
+      safetyGuard++;
+      if (!cur.isBefore(startOverdue)) {
+        occurrences.add(cur);
+      }
+      final next = calculateNextRecurringDate(
+        cur,
+        frequency,
+        anchorDay: anchorDay,
+        interval: interval,
+      );
+      if (next.isBefore(cur) || next.isAtSameMomentAs(cur)) {
+        break;
+      }
+      cur = next;
     }
 
-    return nextDate.isBefore(endWindow) || nextDate.isAtSameMomentAs(endWindow);
+    return occurrences;
   }
 
-  DateTime _calculateNextRecurring(DateTime from, String frequency) {
+  /// Calculates the next recurring date given frequency, interval, and optional anchor day.
+  /// Preserves month-end anchor days (e.g., 31st -> Feb 28 -> Mar 31).
+  static DateTime calculateNextRecurringDate(
+    DateTime from,
+    String frequency, {
+    int? anchorDay,
+    int interval = 1,
+  }) {
+    final step = interval > 0 ? interval : 1;
     switch (frequency) {
       case 'daily':
-        return from.add(const Duration(days: 1));
+        return from.add(Duration(days: step));
       case 'weekly':
-        return from.add(const Duration(days: 7));
+        return from.add(Duration(days: 7 * step));
       case 'monthly':
-        final nextMonth = from.month == 12 ? 1 : from.month + 1;
-        final nextYear = from.month == 12 ? from.year + 1 : from.year;
-        final maxDays = DateTime(nextYear, nextMonth + 1, 0).day;
-        final nextDay = from.day > maxDays ? maxDays : from.day;
-        return DateTime(nextYear, nextMonth, nextDay, from.hour, from.minute);
+        final totalMonths = from.year * 12 + (from.month - 1) + step;
+        final targetYear = totalMonths ~/ 12;
+        final targetMonth = (totalMonths % 12) + 1;
+        final maxDays = DateTime(targetYear, targetMonth + 1, 0).day;
+        final desiredDay = anchorDay ?? from.day;
+        final targetDay = desiredDay > maxDays ? maxDays : (desiredDay < 1 ? 1 : desiredDay);
+        return DateTime(targetYear, targetMonth, targetDay, from.hour, from.minute);
       case 'yearly':
-        final maxDays = DateTime(from.year + 1, from.month + 1, 0).day;
-        final nextDay = from.day > maxDays ? maxDays : from.day;
-        return DateTime(from.year + 1, from.month, nextDay, from.hour, from.minute);
+        final targetYear = from.year + step;
+        final desiredMonth = from.month;
+        final maxDays = DateTime(targetYear, desiredMonth + 1, 0).day;
+        final desiredDay = anchorDay ?? from.day;
+        final targetDay = desiredDay > maxDays ? maxDays : (desiredDay < 1 ? 1 : desiredDay);
+        return DateTime(targetYear, desiredMonth, targetDay, from.hour, from.minute);
       default:
-        return from.add(const Duration(days: 30));
+        return from.add(Duration(days: 30 * step));
     }
+  }
+
+  /// Strict tolerance for reconciling recurring obligations against canonical transactions.
+  /// Exactly ±₹1.00 (100 paise). Any difference exceeding ₹1.00 is strictly rejected.
+  static const double recurringAmountToleranceRupees = 1.00;
+
+  /// For auditing, diagnostics, and testing: checks whether a recurring template occurrence
+  /// is settled by canonical posted transactions, and returns the matched transaction ID.
+  Future<({bool isSettled, String? matchedTxnId})> checkRecurringOccurrenceSettlement({
+    required DatabaseExecutor db,
+    required DateTime occDate,
+    required double amount,
+    required String templateName,
+    required String frequency,
+    Set<String>? usedTxnIds,
+  }) async {
+    return _isOccurrenceSettled(
+      db: db,
+      occDate: occDate,
+      amount: amount,
+      templateName: templateName,
+      frequency: frequency,
+      usedTxnIds: usedTxnIds ?? <String>{},
+    );
+  }
+
+  /// Conservatively reconciles a recurring template occurrence against canonical posted
+  /// transactions (v24 postings & economic events, falling back to legacy transactions).
+  ///
+  /// Criteria:
+  /// 1. Cycle date window (e.g. ±15 days for monthly, ±3 days weekly, ±1 day daily, ±30 days yearly).
+  /// 2. Amount tolerance: strict ±₹1.00 (100 paise). Differences > ₹1.00 are rejected.
+  /// 3. Eligible event types:
+  ///    - Standard expenses: strictly 'expense' or 'credit_purchase'.
+  ///    - Explicit loan/EMI templates: 'expense', 'credit_purchase', or 'loan_payment'.
+  ///    - Non-expense events (transfers, liability_settlement, refunds, reversals) are strictly rejected.
+  /// 4. Double-entry validity:
+  ///    - Must have an expense debit posting (direction = 'debit' and a.account_type = 'expense').
+  ///    - Lifecycle status must be 'posted' (rejects 'draft', 'pending', 'reversed', 'deleted').
+  ///    - Reversals (reversal_of_event_id, corrected_by_event_id, or subsequent posted reversal events) are strictly rejected.
+  /// 5. Single-use matching:
+  ///    - Claims the single best match deterministically (closest date, closest amount, lexical id).
+  ///    - Records candidate ID in [usedTxnIds] so no transaction is ever reused across obligations.
+  Future<({bool isSettled, String? matchedTxnId})> _isOccurrenceSettled({
+    required DatabaseExecutor db,
+    required DateTime occDate,
+    required double amount,
+    required String templateName,
+    required String frequency,
+    required Set<String> usedTxnIds,
+  }) async {
+    final int windowDays;
+    switch (frequency) {
+      case 'daily':
+        windowDays = 1;
+        break;
+      case 'weekly':
+        windowDays = 3;
+        break;
+      case 'yearly':
+        windowDays = 30;
+        break;
+      case 'monthly':
+      default:
+        windowDays = 15;
+        break;
+    }
+
+    final cleanTokens = templateName
+        .toLowerCase()
+        .replaceAll(
+          RegExp(
+            r'\b(subscription|bill|due|premium|autopay|mandate|stocks|health|renewal)\b',
+          ),
+          '',
+        )
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((t) => t.length >= 3)
+        .toSet();
+
+    final isExplicitLoan = templateName.toLowerCase().contains('loan') ||
+        templateName.toLowerCase().contains('emi');
+    final accountFilter = isExplicitLoan
+        ? "((e.event_type IN ('expense', 'credit_purchase') AND a.account_type = 'expense' AND p.direction = 'debit') OR (e.event_type = 'loan_payment' AND a.account_type = 'asset' AND p.direction = 'credit'))"
+        : "(e.event_type IN ('expense', 'credit_purchase') AND a.account_type = 'expense' AND p.direction = 'debit')";
+
+    // 1. Query canonical V24 postings & economic events
+    try {
+      final minPaise = ((amount - recurringAmountToleranceRupees) * 100).round();
+      final maxPaise = ((amount + recurringAmountToleranceRupees) * 100).round();
+      final v24Rows = await db.rawQuery('''
+        SELECT DISTINCT
+          e.id,
+          e.description,
+          e.merchant_normalized,
+          e.timestamp,
+          e.notes,
+          (p.amount_minor_units / 100.0) AS amount
+        FROM ${TablesV24.postings} p
+        JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+        JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+        WHERE e.lifecycle_status = 'posted'
+          AND $accountFilter
+          AND e.reversal_of_event_id IS NULL
+          AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
+          AND e.corrected_by_event_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM ${TablesV24.economicEvents} r
+            WHERE r.reversal_of_event_id = e.id AND r.lifecycle_status = 'posted'
+          )
+          AND p.amount_minor_units BETWEEN ? AND ?;
+      ''', [minPaise, maxPaise]);
+
+      final v24Candidates = <({String id, int diffDays, double diffAmt})>[];
+
+      for (final row in v24Rows) {
+        final evId = row['id'] as String?;
+        if (evId == null || usedTxnIds.contains(evId)) continue;
+
+        int diffDays = 0;
+        final rowTimeStr = row['timestamp'] as String?;
+        if (rowTimeStr != null) {
+          final rowTime = DateTime.tryParse(rowTimeStr);
+          if (rowTime != null) {
+            diffDays = rowTime.difference(occDate).inDays.abs();
+            if (diffDays > windowDays) continue;
+          }
+        }
+
+        final desc = ((row['description'] as String?) ?? '').toLowerCase();
+        final merchant = ((row['merchant_normalized'] as String?) ?? '').toLowerCase();
+        final notes = ((row['notes'] as String?) ?? '').toLowerCase();
+        final fullText = '$desc $merchant $notes';
+
+        final matchesMerchant = ReminderRepo.areMerchantsEquivalent(templateName, fullText) ||
+            cleanTokens.any((t) => fullText.contains(t));
+
+        if (matchesMerchant) {
+          final rowAmt = (row['amount'] as num?)?.toDouble() ?? 0.0;
+          final diffAmt = (rowAmt - amount).abs();
+          if (diffAmt > recurringAmountToleranceRupees + 0.0001) continue;
+          v24Candidates.add((id: evId, diffDays: diffDays, diffAmt: diffAmt));
+        }
+      }
+
+      if (v24Candidates.isNotEmpty) {
+        // Deterministic ranking: closest in days, closest in amount, then lexical ID order
+        v24Candidates.sort((a, b) {
+          final d = a.diffDays.compareTo(b.diffDays);
+          if (d != 0) return d;
+          final m = a.diffAmt.compareTo(b.diffAmt);
+          if (m != 0) return m;
+          return a.id.compareTo(b.id);
+        });
+        final chosenId = v24Candidates.first.id;
+        usedTxnIds.add(chosenId);
+        return (isSettled: true, matchedTxnId: chosenId);
+      }
+    } catch (_) {}
+
+    // 2. Fallback: Query legacy transactions table
+    try {
+      final rows = await db.rawQuery('''
+        SELECT id, amount, notes, date
+        FROM ${Tables.transactions} t
+        WHERE is_deleted = 0
+          AND type = 'expense'
+          AND (related_entity_id IS NULL OR related_entity_id NOT LIKE 'rev_%')
+          AND NOT (substr(notes, 1, 10) = 'REVERSAL: ')
+          AND NOT EXISTS (
+            SELECT 1 FROM ${TablesV24.economicEvents} e
+            WHERE e.id = t.id AND (
+              e.lifecycle_status != 'posted'
+              OR e.reversal_of_event_id IS NOT NULL
+              OR e.corrected_by_event_id IS NOT NULL
+            )
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM ${TablesV24.economicEvents} r
+            WHERE r.reversal_of_event_id = t.id AND r.lifecycle_status = 'posted'
+          )
+          AND amount BETWEEN ? AND ?;
+      ''', [
+        amount - recurringAmountToleranceRupees,
+        amount + recurringAmountToleranceRupees,
+      ]);
+
+      final legacyCandidates = <({String id, int diffDays, double diffAmt})>[];
+
+      for (final tx in rows) {
+        final txId = tx['id'] as String?;
+        if (txId == null || usedTxnIds.contains(txId)) continue;
+
+        int diffDays = 0;
+        final txDateStr = tx['date'] as String?;
+        if (txDateStr != null) {
+          final txDate = DateTime.tryParse(txDateStr);
+          if (txDate != null) {
+            diffDays = txDate.difference(occDate).inDays.abs();
+            if (diffDays > windowDays) continue;
+          }
+        }
+
+        final notes = ((tx['notes'] as String?) ?? '').toLowerCase();
+        final matchesMerchant = ReminderRepo.areMerchantsEquivalent(templateName, notes) ||
+            cleanTokens.any((t) => notes.contains(t));
+
+        if (matchesMerchant) {
+          final rowAmt = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+          final diffAmt = (rowAmt - amount).abs();
+          if (diffAmt > recurringAmountToleranceRupees + 0.0001) continue;
+          legacyCandidates.add((id: txId, diffDays: diffDays, diffAmt: diffAmt));
+        }
+      }
+
+      if (legacyCandidates.isNotEmpty) {
+        legacyCandidates.sort((a, b) {
+          final d = a.diffDays.compareTo(b.diffDays);
+          if (d != 0) return d;
+          final m = a.diffAmt.compareTo(b.diffAmt);
+          if (m != 0) return m;
+          return a.id.compareTo(b.id);
+        });
+        final chosenId = legacyCandidates.first.id;
+        usedTxnIds.add(chosenId);
+        return (isSettled: true, matchedTxnId: chosenId);
+      }
+    } catch (_) {}
+
+    return (isSettled: false, matchedTxnId: null);
   }
 
   /// Calculates total expense spending for a specific category within an optional date range.

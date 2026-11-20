@@ -1,6 +1,7 @@
 package com.mashingdesigns.spend_x
 
 import android.app.Notification
+import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -10,29 +11,102 @@ import java.util.Collections
 import java.util.LinkedHashSet
 
 /**
- * Listens for system notifications posted by banking and UPI payment apps
- * (e.g. Google Pay, PhonePe, Paytm, iMobile, PayZapp, YONO, Jupiter, CRED, etc.)
- * when banks send alerts via push notifications rather than SMS.
- *
- * Captures the notification text and pipes it through the exact same
- * FinancialSmsFilter and LiveSmsService accounting pipeline.
- *
- * Privacy boundary:
- * - Only packages in PAYMENT_PACKAGES are inspected. There is deliberately no
- *   suffix/substring fallback, so arbitrary apps cannot be swept in.
- * - Email clients and general messaging apps (including Gmail and WhatsApp)
- *   are not monitored because their notification streams contain unrelated
- *   personal content.
- * - Notification bodies are never written to logcat. Only package name and a
- *   boolean decision are logged for diagnosis.
- * - Notification Access remains an explicit, user-granted OS permission; the
- *   disclosure text lives in Notification Settings and the Privacy Policy.
+ * Persists and resolves user-configured financial ingestion source settings
+ * (WhatsApp banking alerts, Gmail/email statement alerts, and extra package allowlists).
+ */
+object IngestionConfigStore {
+    private const val PREFS = "spendx_ingestion_config"
+    private const val KEY_WHATSAPP_ENABLED = "whatsapp_enabled"
+    private const val KEY_WHATSAPP_SENDERS = "whatsapp_senders"
+    private const val KEY_GMAIL_ENABLED = "gmail_enabled"
+    private const val KEY_GMAIL_SENDERS = "gmail_senders"
+    private const val KEY_EXTRA_PACKAGES = "extra_packages"
+
+    // Default verified financial banking bots / sender keywords in WhatsApp
+    val DEFAULT_WHATSAPP_SENDERS = setOf(
+        "hdfc", "icici", "sbi", "axis", "kotak", "cred", "onecard", "bob", "pnb",
+        "canara", "union bank", "idfc", "federal", "indusind", "yes bank", "rbl",
+        "standard chartered", "hsbc", "citi", "jupiter", "fi money", "slice",
+        "paytm", "groww", "zerodha", "super.money", "navi", "bajaj"
+    )
+
+    // Default verified financial email senders / alert domains
+    val DEFAULT_GMAIL_SENDERS = setOf(
+        "hdfcbank.net", "icicibank.com", "sbi.co.in", "axisbank.com", "kotak.com",
+        "cred.club", "getonecard.app", "citi.com", "standardchartered.co.in",
+        "federalbank.co.in", "idfcfirstbank.com", "indusind.com", "yesbank.in",
+        "rblbank.com", "alerts", "statements", "e-statement", "transaction alert",
+        "bill desk", "sbicard.com"
+    )
+
+    fun save(
+        context: Context,
+        whatsappEnabled: Boolean,
+        whatsappSenders: List<String>,
+        gmailEnabled: Boolean,
+        gmailSenders: List<String>,
+        extraPackages: List<String>
+    ) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean(KEY_WHATSAPP_ENABLED, whatsappEnabled)
+            .putStringSet(KEY_WHATSAPP_SENDERS, (DEFAULT_WHATSAPP_SENDERS + whatsappSenders.map { s: String -> s.trim().lowercase() }).toSet())
+            .putBoolean(KEY_GMAIL_ENABLED, gmailEnabled)
+            .putStringSet(KEY_GMAIL_SENDERS, (DEFAULT_GMAIL_SENDERS + gmailSenders.map { s: String -> s.trim().lowercase() }).toSet())
+            .putStringSet(KEY_EXTRA_PACKAGES, extraPackages.map { s: String -> s.trim() }.toSet())
+            .apply()
+    }
+
+    fun isWhatsAppEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_WHATSAPP_ENABLED, false)
+    }
+
+    fun getWhatsAppSenders(context: Context): Set<String> {
+        val custom = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_WHATSAPP_SENDERS, null)
+        return custom ?: DEFAULT_WHATSAPP_SENDERS
+    }
+
+    fun isGmailEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_GMAIL_ENABLED, false)
+    }
+
+    fun getGmailSenders(context: Context): Set<String> {
+        val custom = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_GMAIL_SENDERS, null)
+        return custom ?: DEFAULT_GMAIL_SENDERS
+    }
+
+    fun getExtraPackages(context: Context): Set<String> {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getStringSet(KEY_EXTRA_PACKAGES, emptySet<String>()) ?: emptySet<String>()
+    }
+}
+
+/**
+ * Listens for system notifications posted by banking, UPI, card, and financial apps.
+ * Also supports user-enabled WhatsApp banking alerts and Gmail statement notifications
+ * under strict privacy boundaries (only verified financial senders/bots are inspected;
+ * personal messages and casual chats are immediately dropped).
  */
 class BankNotificationListener : NotificationListenerService() {
 
     companion object {
         @Volatile
         var instance: BankNotificationListener? = null
+
+        val WHATSAPP_PACKAGES = setOf(
+            "com.whatsapp",
+            "com.whatsapp.w4b"
+        )
+
+        val EMAIL_PACKAGES = setOf(
+            "com.google.android.gm",
+            "com.microsoft.office.outlook",
+            "com.samsung.android.email.provider"
+        )
 
         private val PROCESSED_KEYS: MutableSet<String> = Collections.synchronizedSet(object : LinkedHashSet<String>() {
             override fun add(element: String): Boolean {
@@ -209,9 +283,18 @@ class BankNotificationListener : NotificationListenerService() {
         try {
             val active = activeNotifications ?: return
             Log.i("SpendX_Notif", "seedActiveNotifications: seeding ${active.size} active notifications into processed set")
+            val extraPkgs = IngestionConfigStore.getExtraPackages(this)
+            val waEnabled = IngestionConfigStore.isWhatsAppEnabled(this)
+            val gmEnabled = IngestionConfigStore.isGmailEnabled(this)
+
             for (sbn in active) {
                 val pkg = sbn.packageName ?: continue
-                if (pkg == packageName || !PAYMENT_PACKAGES.contains(pkg)) continue
+                if (pkg == packageName) continue
+                val isPayment = PAYMENT_PACKAGES.contains(pkg) || extraPkgs.contains(pkg)
+                val isWA = waEnabled && WHATSAPP_PACKAGES.contains(pkg)
+                val isGM = gmEnabled && EMAIL_PACKAGES.contains(pkg)
+                if (!isPayment && !isWA && !isGM) continue
+
                 val sbnKey = sbn.key ?: "${pkg}_${sbn.id}_${sbn.postTime}"
                 val tag = sbn.tag ?: ""
                 val sourceRecordId = "SRC:ANDROID_NOTIF:$pkg:${sbn.id}:$tag:${sbn.postTime}"
@@ -237,13 +320,65 @@ class BankNotificationListener : NotificationListenerService() {
 
         val pkg = sbn.packageName ?: return
 
-        // Ignore SpendX's own notifications and anything outside the explicit allowlist.
-        // This check happens before reading extras so unmonitored notification content is
-        // never parsed, deduplicated, or logged.
+        // Ignore SpendX's own notifications.
         if (pkg == packageName) return
-        if (!PAYMENT_PACKAGES.contains(pkg)) return
+
+        val isPaymentApp = PAYMENT_PACKAGES.contains(pkg) || IngestionConfigStore.getExtraPackages(this).contains(pkg)
+        val isWhatsApp = WHATSAPP_PACKAGES.contains(pkg)
+        val isEmail = EMAIL_PACKAGES.contains(pkg)
+
+        if (!isPaymentApp && !isWhatsApp && !isEmail) {
+            return
+        }
 
         val extras = sbn.notification?.extras ?: return
+
+        // ── 1. WhatsApp Ingestion Adapter (Privacy-Gated) ──
+        if (isWhatsApp) {
+            if (!IngestionConfigStore.isWhatsAppEnabled(this)) {
+                return // User has not explicitly enabled WhatsApp financial ingestion
+            }
+            val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim() ?: ""
+            val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim() ?: ""
+            val lowerTitle = title.lowercase()
+            val lowerSubText = subText.lowercase()
+            val allowedSenders = IngestionConfigStore.getWhatsAppSenders(this)
+
+            val matchesFinancial = allowedSenders.any { sender ->
+                lowerTitle.contains(sender) || lowerSubText.contains(sender)
+            }
+
+            if (!matchesFinancial) {
+                // Strict privacy boundary: Personal chat / unlisted contact -> drop immediately without reading body or logging!
+                return
+            }
+        }
+
+        // ── 2. Email Ingestion Adapter (Privacy-Gated) ──
+        if (isEmail) {
+            if (!IngestionConfigStore.isGmailEnabled(this)) {
+                return // User has not explicitly enabled Email preview ingestion
+            }
+            val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim() ?: ""
+            val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim() ?: ""
+            val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim() ?: ""
+            val lowerTitle = title.lowercase()
+            val lowerSubText = subText.lowercase()
+            val lowerText = text.lowercase()
+            val allowedSenders = IngestionConfigStore.getGmailSenders(this)
+
+            val matchesSender = allowedSenders.any { sender ->
+                lowerTitle.contains(sender) || lowerSubText.contains(sender) || lowerText.contains(sender)
+            }
+            val matchesSubject = lowerTitle.contains("statement") || lowerTitle.contains("transaction") ||
+                lowerTitle.contains("debited") || lowerTitle.contains("credited") || lowerTitle.contains("bill due") ||
+                lowerTitle.contains("alert") || lowerTitle.contains("invoice")
+
+            if (!matchesSender && !matchesSubject) {
+                // Strict privacy boundary: Personal email / unlisted sender -> drop immediately!
+                return
+            }
+        }
 
         val channelId = (sbn.notification?.channelId ?: "").lowercase()
         val tag = (sbn.tag ?: "").lowercase()
@@ -311,6 +446,7 @@ class BankNotificationListener : NotificationListenerService() {
         Log.i("SpendX_Notif", "Financial notification accepted: pkg=$pkg, amountPresent=${amount.isNotBlank()}, isExpense=$isExpense")
 
         // 2. Deliver to Flutter live on UI thread or queue durably before showing notification
+        val postTime = sbn.postTime
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
             // When Flutter engine is running, do NOT show the island from native!
@@ -320,10 +456,10 @@ class BankNotificationListener : NotificationListenerService() {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
                     MainActivity.CHANNEL,
-                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody, pkg, sourceRecordId))
+                ).invokeMethod("onSmsReceived", listOf(senderTitle, fullBody, pkg, sourceRecordId, postTime.toString()))
             }
         } else {
-            val queued = SmsStore.queue(this, senderTitle, fullBody, sourceRecordId)
+            val queued = SmsStore.queue(this, senderTitle, fullBody, sourceRecordId, postTime)
             if (!queued) {
                 Log.e("SpendX_Notif", "CRITICAL: Failed to durably queue notification [$sourceRecordId]. Suppressing overlay.")
                 return

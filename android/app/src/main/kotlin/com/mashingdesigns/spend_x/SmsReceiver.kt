@@ -140,19 +140,19 @@ class SmsReceiver : BroadcastReceiver() {
 
         val engine = FlutterEngineCache.getInstance().get(MainActivity.ENGINE_ID)
         if (engine != null) {
-            // Pass [sender, body, subId, sourceRecordId] so Dart can process live on UI thread.
+            // Pass [sender, body, subId, sourceRecordId, timestampMillis] so Dart can process live on UI thread.
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
                     MainActivity.CHANNEL,
                 ).invokeMethod(
                     "onSmsReceived",
-                    listOf(reassembled.sender, reassembled.fullBody, reassembled.subId.toString(), reassembled.sourceRecordId)
+                    listOf(reassembled.sender, reassembled.fullBody, reassembled.subId.toString(), reassembled.sourceRecordId, reassembled.timestampMillis.toString())
                 )
             }
         } else {
             // App is killed / engine not cached: queue durably before showing overlay
-            val queued = SmsStore.queue(context, reassembled.sender, reassembled.fullBody, reassembled.sourceRecordId)
+            val queued = SmsStore.queue(context, reassembled.sender, reassembled.fullBody, reassembled.sourceRecordId, reassembled.timestampMillis)
             if (!queued) {
                 android.util.Log.e("SmsReceiver", "CRITICAL: Failed to durably queue incoming SMS [${reassembled.sourceRecordId}]. Suppressing notification.")
                 return

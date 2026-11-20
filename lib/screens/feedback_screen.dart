@@ -13,7 +13,7 @@ class FeedbackScreen extends StatelessWidget {
 
   static const _supportEmail = 'mashingdesigns@gmail.com';
   static const _playStoreUrl =
-      'https://play.google.com/store/apps/details?id=com.mashingdesigns.spend_x';
+      'https://play.google.com/store/apps/details?id=com.mashingdesigns.spendx';
 
   Future<void> _rateApp(BuildContext context) async {
     try {

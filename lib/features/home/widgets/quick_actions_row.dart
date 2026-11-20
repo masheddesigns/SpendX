@@ -132,7 +132,7 @@ class QuickActionsRow extends ConsumerWidget {
                   iconData: Icons.swap_horiz_rounded,
                   accentColor: const Color(0xFF4F46E5),
                   isDark: isDark,
-                  onTap: () => _openScreen(context, 'transfer'),
+                  onTap: () => _openScreen(context, 'transfer', ref: ref),
                 ),
               ),
             ],
@@ -289,7 +289,7 @@ class QuickActionsRow extends ConsumerWidget {
     }
   }
 
-  void _openScreen(BuildContext context, String type) {
+  void _openScreen(BuildContext context, String type, {WidgetRef? ref}) {
     HapticService.instance.tap();
     Navigator.push(
       context,

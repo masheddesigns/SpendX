@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../models/category.dart';
 import '../../../models/transaction.dart';
+import '../../../services/transaction_text_parser.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/category_icon_picker.dart';
 import 'spendx_financial_amount.dart';
@@ -85,38 +87,30 @@ class SpendXTransactionTile extends StatelessWidget {
         ? '${foreignMatch.group(1)!.toUpperCase()} ${foreignMatch.group(2)!}'
         : (isAirArabiaForeign ? 'AED 2,508.28' : null);
 
-    var title = transaction.notes.isNotEmpty
-        ? transaction.notes
-        : (isCcPayment
-            ? 'Credit Card Payment'
-            : (category?.name ?? (isTransfer ? 'Transfer' : 'Transaction')));
+    var title = cleanTransactionDisplayTitle(
+      transaction.notes,
+      categoryName: category?.name,
+      isCcPayment: isCcPayment,
+      isTransfer: isTransfer,
+    );
 
-    // Clean any trailing noise from title
-    if (title.toLowerCase().contains('air arabia')) {
-      title = 'Air Arabia';
-    } else {
-      title = title.replaceAll(RegExp(r'[.\s]+avl(?:\s*crd)?\s*limit.*$', caseSensitive: false), '')
-                   .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
-                   .trim();
-      if (title.isEmpty) {
-        title = isCcPayment
-            ? 'Credit Card Payment'
-            : (category?.name ?? (isTransfer ? 'Transfer' : 'Transaction'));
-      }
-    }
+    // Sanitize technical internal suspense IDs in account name
+    final displayAccountName = (accountName == 'sys_suspense_transfer' || accountName?.startsWith('sys_suspense') == true)
+        ? 'Unlinked Account'
+        : accountName;
 
     // Route indicator for internal transfers and card settlements
     String? fromRoute;
     String? toRoute;
     if (isCcPayment || isTransfer) {
-      if (accountName != null && accountName!.contains('→')) {
-        final parts = accountName!.split('→').map((s) => s.trim()).toList();
+      if (displayAccountName != null && displayAccountName.contains('→')) {
+        final parts = displayAccountName.split('→').map((s) => s.trim()).toList();
         if (parts.length >= 2) {
           fromRoute = parts[0];
           toRoute = parts[1];
         }
       } else if (isCcPayment) {
-        fromRoute = (accountName != null && accountName!.isNotEmpty) ? accountName! : 'Bank Account';
+        fromRoute = (displayAccountName != null && displayAccountName.isNotEmpty) ? displayAccountName : 'Bank Account';
         toRoute = 'Credit Card';
       }
     }
@@ -276,10 +270,10 @@ class SpendXTransactionTile extends StatelessWidget {
                       ],
                       Row(
                         children: [
-                          if (accountName != null && accountName!.isNotEmpty && fromRoute == null) ...[
+                          if (displayAccountName != null && displayAccountName.isNotEmpty && fromRoute == null) ...[
                             Flexible(
                               child: Text(
-                                accountName!,
+                                displayAccountName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -401,4 +395,139 @@ class SpendXTransactionTile extends StatelessWidget {
     } catch (_) {}
     return null;
   }
+}
+
+/// Sanitizes raw JSON strings, app package identifiers, and technical metadata
+/// so they never leak into the user-facing transaction title.
+String cleanTransactionDisplayTitle(
+  String rawTitle, {
+  String? categoryName,
+  bool isCcPayment = false,
+  bool isTransfer = false,
+}) {
+  var title = rawTitle.trim();
+
+  // 1. Handle JSON envelopes like {"body":"Your Apay Wallet balance is debi..."}
+  if (title.startsWith('{') || title.startsWith('[')) {
+    try {
+      final decoded = jsonDecode(title);
+      if (decoded is Map) {
+        final m = decoded['merchant']?.toString().trim();
+        final b = decoded['body']?.toString().trim();
+        if (m != null && m.isNotEmpty) {
+          title = m;
+        } else if (b != null && b.isNotEmpty) {
+          final parsed = TransactionTextParser.parse(b);
+          if (parsed.merchant != null && parsed.merchant!.trim().isNotEmpty) {
+            title = parsed.merchant!.trim();
+          } else {
+            title = b;
+          }
+        }
+      }
+    } catch (_) {
+      title = title
+          .replaceAll(RegExp(r'^[{\["\s]*(?:body["\s:]+)?', caseSensitive: false), '')
+          .replaceAll(RegExp(r'["}\]]+$'), '')
+          .trim();
+    }
+  }
+
+  // 1b. Specific merchant / wallet recognitions for raw text fallbacks:
+  final lowerTitle = title.toLowerCase();
+  if (lowerTitle.contains('apay wallet') || lowerTitle.contains('apay balance')) {
+    title = 'Amazon Pay Wallet';
+  } else if (lowerTitle.contains('paytm wallet') || lowerTitle.contains('paytm balance')) {
+    title = 'Paytm Wallet';
+  } else if (lowerTitle.contains('mobikwik')) {
+    title = 'Mobikwik Wallet';
+  } else if (lowerTitle.contains('freecharge')) {
+    title = 'Freecharge Wallet';
+  } else if (lowerTitle.contains('airtel money') || lowerTitle.contains('airtel payments bank')) {
+    title = 'Airtel Money';
+  } else if (lowerTitle.contains('policybazaar') || lowerTitle.contains('policy bazaar')) {
+    title = 'PolicyBazaar';
+  } else if (lowerTitle.contains('niva bupa')) {
+    title = 'Niva Bupa Health Insurance';
+  } else if (lowerTitle.contains('star health')) {
+    title = 'Star Health Insurance';
+  } else if (lowerTitle.contains('policy') && lowerTitle.contains('payment')) {
+    title = 'Policy Payment';
+  } else if (isCcPayment || (lowerTitle.contains('payment') && lowerTitle.contains('received') && (lowerTitle.contains('card') || lowerTitle.contains('crd')))) {
+    final knownBankRegex = RegExp(
+      r'\b(BOBCARD|Edge CSB|CSB Bank|ICICI Bank|ICICI|HDFC Bank|HDFC|SBI Card|SBI|Axis Bank|Axis|Kotak Bank|Kotak|IndusInd Bank|IndusInd|OneCard|Scapia|Federal Bank|RBL Bank|RBL|Amex|American Express|IDFC FIRST|IDFC|Standard Chartered|StanChart|Bank of Baroda|Canara Bank|PNB|Union Bank)\b',
+      caseSensitive: false,
+    );
+    final bankMatch = knownBankRegex.firstMatch(title);
+    if (bankMatch != null) {
+      title = 'Payment to ${bankMatch.group(1)!.trim()}';
+    } else {
+      title = 'Credit Card Repayment';
+    }
+  } else if (lowerTitle.contains('sent from') ||
+      lowerTitle.contains('transferred to') ||
+      lowerTitle.contains('is debited') ||
+      lowerTitle.contains('has been debited') ||
+      lowerTitle.contains('debited for') ||
+      lowerTitle.contains('debited with') ||
+      lowerTitle.contains('debited from') ||
+      lowerTitle.contains('credited with') ||
+      lowerTitle.contains('payment of rs') ||
+      title.startsWith('Hi ') ||
+      title.startsWith('Dear ')) {
+    final parsed = TransactionTextParser.parse(title);
+    if (parsed.merchant != null && parsed.merchant!.trim().isNotEmpty && !parsed.merchant!.toLowerCase().startsWith('hi ')) {
+      title = parsed.merchant!.trim();
+    } else {
+      title = categoryName ?? (isTransfer ? 'Transfer' : (isCcPayment ? 'Card Payment' : 'Payment'));
+    }
+  }
+
+  // 2. Handle app package prefixes like APP:in.amazon.mShop.android.shopping
+  if (title.startsWith('APP:')) {
+    final pkg = title.substring(4).split(':').first.trim();
+    final lowerPkg = pkg.toLowerCase();
+    if (lowerPkg.contains('amazon')) {
+      title = 'Amazon';
+    } else if (lowerPkg.contains('nbu.paisa') || lowerPkg.contains('gpay')) {
+      title = 'Google Pay';
+    } else if (lowerPkg.contains('phonepe')) {
+      title = 'PhonePe';
+    } else if (lowerPkg.contains('paytm')) {
+      title = 'Paytm';
+    } else if (lowerPkg.contains('whatsapp')) {
+      title = 'WhatsApp';
+    } else if (lowerPkg.contains('cred')) {
+      title = 'CRED';
+    } else if (lowerPkg.contains('supermoney')) {
+      title = 'Super.money';
+    } else if (lowerPkg.contains('gmail') || lowerPkg.contains('android.gm')) {
+      title = 'Gmail Alert';
+    } else {
+      final segments = pkg.split('.');
+      final last = segments.isNotEmpty ? segments.last : pkg;
+      title = last.length > 1 ? '${last[0].toUpperCase()}${last.substring(1)}' : 'App Payment';
+    }
+  }
+
+  // 3. Air Arabia normalization
+  if (title.toLowerCase().contains('air arabia')) {
+    title = 'Air Arabia';
+  } else {
+    // 4. Strip trailing noise
+    title = title
+        .replaceAll(RegExp(r'[.\s]+avl(?:\s*crd)?\s*limit.*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'[.\s]+avail(?:able)?\s*bal(?:ance)?.*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
+        .trim();
+  }
+
+  // 5. Fallback if empty
+  if (title.isEmpty) {
+    title = isCcPayment
+        ? 'Credit Card Payment'
+        : (categoryName ?? (isTransfer ? 'Transfer' : 'Transaction'));
+  }
+
+  return title;
 }

@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart';
@@ -20,6 +22,7 @@ import '../shared/widgets/glass/spendx_scaffold.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
 import '../shared/widgets/glass/spendx_glass_button.dart';
 import '../shared/widgets/glass/spendx_glass_sheet.dart';
+import '../shared/widgets/glass/spendx_transaction_tile.dart' show cleanTransactionDisplayTitle;
 import '../theme/app_theme.dart';
 import '../features/transactions/providers/transaction_providers.dart' show deleteTransactionProvider;
 
@@ -79,7 +82,19 @@ class _UnifiedTransactionDetailScreenState
   }
 
   String _extractPeerName(String text) {
+    if (text.isEmpty) return 'Contact';
+    final cleaned = cleanTransactionDisplayTitle(
+      text,
+      categoryName: _cat?.name,
+      isCcPayment: _tx.type == 'credit_payment' || _tx.source == 'credit_card_payment',
+      isTransfer: _tx.type == 'transfer' || _tx.source == 'transfer',
+    );
+    if (cleaned.isNotEmpty && !cleaned.startsWith('{') && !cleaned.contains('debited for')) {
+      return cleaned;
+    }
     var clean = text
+        .replaceAll(RegExp(r'^[{\["\s]*(?:body["\s:]+)?', caseSensitive: false), '')
+        .replaceAll(RegExp(r'["}\]]+$'), '')
         .replaceAll(RegExp(r'^(?:paid to|sent to|transfer to|to|from|received from)\s+', caseSensitive: false), '')
         .replaceAll(RegExp(r'\s+(?:via\s+upi|on\s+upi|upi|ref|ref\s*no|rrn|vpa).*$', caseSensitive: false), '')
         .replaceAll(RegExp(r'@[a-zA-Z0-9.-]+'), '')
@@ -88,6 +103,24 @@ class _UnifiedTransactionDetailScreenState
         .trim();
     if (clean.length > 25) clean = clean.substring(0, 25).trim();
     return clean.isNotEmpty ? TextFormatter.toSmartTitleCase(clean) : 'Contact';
+  }
+
+  String _formatNotesForDisplay(String rawNotes) {
+    final trimmed = rawNotes.trim();
+    if (trimmed.isEmpty) return 'No notes added';
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map) {
+          final m = decoded['merchant']?.toString().trim();
+          final b = decoded['body']?.toString().trim();
+          if (m != null && m.isNotEmpty) return m;
+          if (b != null && b.isNotEmpty) return cleanTransactionDisplayTitle(b);
+        }
+      } catch (_) {}
+      return 'No notes added';
+    }
+    return cleanTransactionDisplayTitle(trimmed);
   }
 
   bool _hasLoanKeywords(String text) {
@@ -562,6 +595,49 @@ class _UnifiedTransactionDetailScreenState
     final fromName = accountMap[_tx.accountId] ?? (_tx.accountId != null ? 'Account' : null);
     final toName = accountMap[_tx.relatedEntityId] ?? (_tx.relatedEntityId != null ? 'Card / Account' : null);
 
+    // Route determination
+    final String sourceLabel;
+    final String sourceName;
+    final IconData sourceIcon;
+    final String destLabel;
+    final String destName;
+    final IconData destIcon;
+    final Color destColor;
+
+    if (isCcPayment) {
+      sourceLabel = 'Paying Account';
+      sourceName = fromName ?? 'Bank Account';
+      sourceIcon = Icons.account_balance_rounded;
+      destLabel = 'Credit Card';
+      destName = toName ?? 'Card Liability';
+      destIcon = Icons.credit_card_rounded;
+      destColor = AppTheme.primaryBlue;
+    } else if (isTransfer) {
+      sourceLabel = 'Source';
+      sourceName = fromName ?? 'Bank Account';
+      sourceIcon = Icons.account_balance_rounded;
+      destLabel = 'Destination';
+      destName = toName ?? 'Account';
+      destIcon = Icons.account_balance_wallet_rounded;
+      destColor = AppTheme.primaryBlue;
+    } else if (isIncome) {
+      sourceLabel = 'Received From';
+      sourceName = _tx.notes.isNotEmpty ? _extractPeerName(_tx.notes) : 'Income Source';
+      sourceIcon = Icons.arrow_downward_rounded;
+      destLabel = 'Credited Into';
+      destName = fromName ?? 'Primary Account';
+      destIcon = Icons.account_balance_rounded;
+      destColor = AppTheme.semanticIncome;
+    } else {
+      sourceLabel = 'Paid Via';
+      sourceName = fromName ?? 'Account / Card';
+      sourceIcon = _tx.source.contains('credit') ? Icons.credit_card_rounded : Icons.account_balance_rounded;
+      destLabel = 'Merchant / Payee';
+      destName = _tx.notes.isNotEmpty ? _extractPeerName(_tx.notes) : (_cat?.name ?? 'Merchant');
+      destIcon = Icons.storefront_rounded;
+      destColor = AppTheme.semanticExpense;
+    }
+
     return SpendXScaffold(
       appBar: SpendXAppBar(
         title: 'Transaction Details',
@@ -571,6 +647,7 @@ class _UnifiedTransactionDetailScreenState
               Icons.edit_outlined,
               color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
             ),
+            tooltip: 'Edit',
             onPressed: _editTransaction,
           ),
           IconButton(
@@ -578,6 +655,7 @@ class _UnifiedTransactionDetailScreenState
               Icons.delete_outline_rounded,
               color: AppTheme.semanticExpense,
             ),
+            tooltip: 'Delete',
             onPressed: _deleteTransaction,
           ),
         ],
@@ -589,8 +667,9 @@ class _UnifiedTransactionDetailScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Hero Amount Card ──────────────────────────
+                  // ── 1. Hero Amount Card (Full Width) ────────────
                   SpendXGlassSurface(
+                    width: double.infinity,
                     level: SpendXGlassLevel.elevated,
                     borderRadius: BorderRadius.circular(AppRadius.l),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -613,7 +692,7 @@ class _UnifiedTransactionDetailScreenState
                             size: 28,
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         Text(
                           '$sign ${AppFormat.currency(_tx.amount.abs())}',
                           style: TextStyle(
@@ -624,32 +703,245 @@ class _UnifiedTransactionDetailScreenState
                             color: amountColor,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
                             color: isDark ? const Color(0x1AFFFFFF) : const Color(0x33000000),
                             borderRadius: BorderRadius.circular(AppRadius.full),
+                            border: Border.all(
+                              color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                              width: 0.75,
+                            ),
                           ),
                           child: Text(
                             isCcPayment
                                 ? 'Credit Card Payment'
                                 : (isTransfer ? 'Transfer' : (_cat?.name ?? 'Uncategorized')),
                             style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
                               color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Net Worth Impact Badge
+                        _buildImpactBadge(isDark, isIncome, isTransfer, isCcPayment),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // ── 2. Visual Transaction Route Diagram ──────────
+                  SpendXGlassSurface(
+                    width: double.infinity,
+                    level: SpendXGlassLevel.base,
+                    borderRadius: BorderRadius.circular(AppRadius.l),
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.alt_route_rounded,
+                              size: 15,
+                              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              isCcPayment
+                                  ? 'BILL SETTLEMENT ROUTE'
+                                  : (isTransfer ? 'INTERNAL MOVEMENT ROUTE' : 'FUNDS FLOW ROUTE'),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.6,
+                                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            // Source Box
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
+                                    width: 0.75,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(sourceIcon, size: 20, color: AppTheme.primaryBlue),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      sourceLabel,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      sourceName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // Direction Arrow & Flow Badge
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.arrow_forward_rounded, size: 20, color: amountColor),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    AppFormat.currency(_tx.amount.abs()),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      fontFeatures: const [FontFeature.tabularFigures()],
+                                      color: amountColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Destination Box
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
+                                    width: 0.75,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(destIcon, size: 20, color: destColor),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      destLabel,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      destName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  // ── 3. Copyable External Reference Card (UTR / RRN) ─
+                  if (_tx.externalRef != null && _tx.externalRef!.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    SpendXGlassSurface(
+                      width: double.infinity,
+                      level: SpendXGlassLevel.base,
+                      borderRadius: BorderRadius.circular(AppRadius.m),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.tag_rounded, size: 18, color: AppTheme.primaryBlue),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'EXTERNAL REF / UTR / RRN',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                SelectableText(
+                                  _tx.externalRef!,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.primaryBlue),
+                            tooltip: 'Copy Reference',
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: _tx.externalRef!));
+                              CustomSnackBar.show(context, message: 'Reference copied to clipboard ✓');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
-                  // ── Grouped Detail Surface ────────────────────
+                  const SizedBox(height: 14),
+
+                  // ── 4. Double-Entry Accounting Ledger Breakdown ──
+                  _buildLedgerBreakdown(isDark, fromName, toName, isIncome, isTransfer, isCcPayment),
+
+                  const SizedBox(height: 14),
+
+                  // ── 5. Grouped Details Surface ───────────────────
                   SpendXGlassSurface(
+                    width: double.infinity,
                     level: SpendXGlassLevel.base,
                     borderRadius: BorderRadius.circular(AppRadius.l),
                     padding: const EdgeInsets.all(16),
@@ -694,20 +986,11 @@ class _UnifiedTransactionDetailScreenState
                             isDark: isDark,
                           ),
                         ],
-                        if (_tx.externalRef != null && _tx.externalRef!.isNotEmpty) ...[
-                          _buildDivider(isDark),
-                          _buildDetailItem(
-                            icon: Icons.tag_rounded,
-                            label: 'Reference / ID',
-                            value: _tx.externalRef!,
-                            isDark: isDark,
-                          ),
-                        ],
                         _buildDivider(isDark),
                         _buildDetailItem(
                           icon: Icons.notes_rounded,
                           label: 'Notes',
-                          value: _tx.notes.isEmpty ? 'No notes added' : _tx.notes,
+                          value: _formatNotesForDisplay(_tx.notes),
                           isDark: isDark,
                         ),
                         _buildDivider(isDark),
@@ -726,6 +1009,7 @@ class _UnifiedTransactionDetailScreenState
                       _creditTxn!.status == 'active') ...[
                     const SizedBox(height: 16),
                     SpendXGlassSurface(
+                      width: double.infinity,
                       level: SpendXGlassLevel.base,
                       borderRadius: BorderRadius.circular(AppRadius.m),
                       padding: const EdgeInsets.all(14),
@@ -800,6 +1084,272 @@ class _UnifiedTransactionDetailScreenState
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildImpactBadge(bool isDark, bool isIncome, bool isTransfer, bool isCcPayment) {
+    final String impactText;
+    final IconData impactIcon;
+    final Color impactColor;
+    final Color impactBg;
+    final Color impactBorder;
+
+    if (isCcPayment || isTransfer) {
+      impactText = 'Net Worth Impact: ${AppFormat.currency(0)} (Neutral • Internal Movement)';
+      impactIcon = Icons.swap_horiz_rounded;
+      impactColor = isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA);
+      impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
+      impactBorder = impactColor.withValues(alpha: isDark ? 0.32 : 0.20);
+    } else if (isIncome) {
+      impactText = 'Net Worth Impact: +${AppFormat.currency(_tx.amount.abs())}';
+      impactIcon = Icons.trending_up_rounded;
+      impactColor = AppTheme.semanticIncome;
+      impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
+      impactBorder = impactColor.withValues(alpha: isDark ? 0.32 : 0.20);
+    } else {
+      impactText = 'Net Worth Impact: -${AppFormat.currency(_tx.amount.abs())}';
+      impactIcon = Icons.trending_down_rounded;
+      impactColor = AppTheme.semanticExpense;
+      impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
+      impactBorder = impactColor.withValues(alpha: isDark ? 0.32 : 0.20);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: impactBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: impactBorder, width: 0.75),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(impactIcon, size: 14, color: impactColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              impactText,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: impactColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLedgerBreakdown(
+    bool isDark,
+    String? fromName,
+    String? toName,
+    bool isIncome,
+    bool isTransfer,
+    bool isCcPayment,
+  ) {
+    final String debitAccount;
+    final String debitType;
+    final String creditAccount;
+    final String creditType;
+
+    if (isCcPayment) {
+      debitAccount = toName ?? 'Credit Card';
+      debitType = 'Liability Decreased (-)';
+      creditAccount = fromName ?? 'Bank Account';
+      creditType = 'Asset Decreased (-)';
+    } else if (isTransfer) {
+      debitAccount = toName ?? 'Destination Account';
+      debitType = 'Asset Increased (+)';
+      creditAccount = fromName ?? 'Source Account';
+      creditType = 'Asset Decreased (-)';
+    } else if (isIncome) {
+      debitAccount = fromName ?? 'Bank Account';
+      debitType = 'Asset Increased (+)';
+      creditAccount = _cat?.name ?? 'Income Category';
+      creditType = 'Revenue (+)';
+    } else {
+      debitAccount = _cat?.name ?? 'Expense Category';
+      debitType = 'Expense Incurred (+)';
+      creditAccount = fromName ?? (_tx.source.contains('credit') ? 'Credit Card' : 'Bank Account');
+      creditType = _tx.source.contains('credit') ? 'Liability Increased (+)' : 'Asset Decreased (-)';
+    }
+
+    return SpendXGlassSurface(
+      width: double.infinity,
+      level: SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(AppRadius.l),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.balance_rounded,
+                size: 15,
+                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'DOUBLE-ENTRY ACCOUNTING',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0x2010B981) : const Color(0x1510B981),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Balanced ✓',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.semanticIncome,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Debit Leg
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0x14FFFFFF) : const Color(0x08000000),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'DR',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primaryBlue,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        debitAccount,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        debitType,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  AppFormat.currency(_tx.amount.abs()),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Credit Leg
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0x14FFFFFF) : const Color(0x08000000),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'CR',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFF59E0B),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        creditAccount,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        creditType,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  AppFormat.currency(_tx.amount.abs()),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
