@@ -44,69 +44,84 @@ class DashboardGreetingHeader extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Minimalist Date with warm indicator
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      dateStr.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.9,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Net Worth Pebble (Minimalist)
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      AppPageRoute(builder: (_) => const NetWorthScreen()),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E2330) : const Color(0xFFEEF2FF),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : const Color(0xFFC7D2FE),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.shield_outlined,
-                          size: 13,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Net · ${AppFormat.compact(netWorth)}',
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          dateStr.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11.5,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF3730A3),
-                            letterSpacing: -0.2,
+                            letterSpacing: 0.9,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
                           ),
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Net Worth Pebble (Minimalist)
+                Semantics(
+                  button: true,
+                  label: 'Net worth: ${AppFormat.currency(netWorth)}',
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          AppPageRoute(builder: (_) => const NetWorthScreen()),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E2330) : const Color(0xFFEEF2FF),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : const Color(0xFFC7D2FE),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.shield_outlined,
+                              size: 13,
+                              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Net · ${AppFormat.compact(netWorth)}',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF3730A3),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

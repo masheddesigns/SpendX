@@ -61,50 +61,63 @@ class DashboardGoalsCard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.savings_outlined,
-                      size: 16,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'SAVINGS GOALS',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.0,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
-                      ),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      AppPageRoute(builder: (_) => const GoalsScreen()),
-                    );
-                  },
+                Flexible(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'All Milestones',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
                       Icon(
-                        Icons.chevron_right_rounded,
-                        size: 15,
+                        Icons.savings_outlined,
+                        size: 16,
                         color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
                       ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'SAVINGS GOALS',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.0,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                          ),
+                        ),
+                      ),
                     ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Semantics(
+                  button: true,
+                  label: 'View all savings goals',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const GoalsScreen()),
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'All Milestones',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 15,
+                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -190,6 +203,8 @@ class DashboardGoalsCard extends ConsumerWidget {
                               children: [
                                 Text(
                                   goal.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
@@ -199,6 +214,8 @@ class DashboardGoalsCard extends ConsumerWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   'Saved: ${AppFormat.currency(saved)} of ${AppFormat.currency(target)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,

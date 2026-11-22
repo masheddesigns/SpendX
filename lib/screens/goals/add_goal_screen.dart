@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/categories/providers/category_providers.dart';
@@ -186,6 +187,9 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                       : _type == GoalType.spendingLimit
                           ? 'e.g. Food Budget'
                           : 'e.g. Clear HDFC Card',
+                  errorText: _titleCtrl.text.isNotEmpty && _titleCtrl.text.trim().isEmpty
+                      ? 'Title cannot be blank'
+                      : null,
                   filled: true,
                   fillColor: cs.surfaceContainer,
                   border: OutlineInputBorder(
@@ -201,12 +205,20 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
               // ── Amount ─────────────────────────────────────────────
               TextField(
                 controller: _amountCtrl,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                ],
                 decoration: InputDecoration(
                   labelText: _type == GoalType.spendingLimit
                       ? 'Monthly limit'
                       : 'Target amount',
                   prefixText: '\u20b9 ',
+                  hintText: '0.00',
+                  errorText: _amountCtrl.text.isNotEmpty &&
+                          (_parsedAmount == null || _parsedAmount! <= 0)
+                      ? 'Amount must be greater than zero'
+                      : null,
                   filled: true,
                   fillColor: cs.surfaceContainer,
                   border: OutlineInputBorder(
@@ -325,25 +337,34 @@ class _DurationChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? cs.primary.withValues(alpha: 0.12)
-              : cs.surfaceContainer,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? cs.primary : cs.outlineVariant,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? cs.primary : cs.onSurfaceVariant,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 13,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label duration',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? cs.primary.withValues(alpha: 0.12)
+                  : cs.surfaceContainer,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? cs.primary : cs.outlineVariant,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? cs.primary : cs.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
           ),
         ),
       ),

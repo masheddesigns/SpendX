@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/lending.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../utils/app_format.dart';
+import '../../shared/widgets/glass/spendx_states.dart';
 import 'package:intl/intl.dart';
 
 class LendingReportScreen extends ConsumerStatefulWidget {
@@ -58,7 +59,7 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
       ),
       body: SafeArea(
         child: lendingState.isLoadingActive && lendingState.isLoadingSettled
-            ? const Center(child: CircularProgressIndicator())
+            ? const SpendXLoadingState(count: 3, itemHeight: 90)
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(

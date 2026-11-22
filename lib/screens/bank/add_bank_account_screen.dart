@@ -301,12 +301,27 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                       controller: _nameCtrl,
                       labelText: _nameLabel,
                       hintText: _nameHint,
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Please enter a name';
+                        }
+                        if (val.trim().length < 2) {
+                          return 'Name must be at least 2 characters';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
                       controller: _bankCtrl,
                       labelText: _bankLabel,
                       hintText: _bankHint,
+                      validator: (val) {
+                        if (!_isInvestment && (val == null || val.trim().isEmpty)) {
+                          return 'Please enter an institution';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 14),
                     Text(

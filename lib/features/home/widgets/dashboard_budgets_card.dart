@@ -61,50 +61,63 @@ class DashboardBudgetsCard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.account_balance_wallet_outlined,
-                      size: 16,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'BUDGETS',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.0,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
-                      ),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      AppPageRoute(builder: (_) => const BudgetManagementScreen()),
-                    );
-                  },
+                Flexible(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Horizons',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                        ),
-                      ),
-                      const SizedBox(width: 2),
                       Icon(
-                        Icons.chevron_right_rounded,
-                        size: 15,
+                        Icons.account_balance_wallet_outlined,
+                        size: 16,
                         color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
                       ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'BUDGETS',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.0,
+                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                          ),
+                        ),
+                      ),
                     ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Semantics(
+                  button: true,
+                  label: 'View all budgets',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const BudgetManagementScreen()),
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Horizons',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 15,
+                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -153,6 +166,8 @@ class DashboardBudgetsCard extends ConsumerWidget {
                               children: [
                                 Text(
                                   item.category.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -162,6 +177,8 @@ class DashboardBudgetsCard extends ConsumerWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   '${AppFormat.currency(spent)} of ${AppFormat.currency(limit)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,

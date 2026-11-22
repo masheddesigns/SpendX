@@ -207,64 +207,75 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E2230) : const Color(0xFFF0ECE4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE4DDD0),
-                            width: 0.8,
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF1E2230) : const Color(0xFFF0ECE4),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE4DDD0),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(0xFFD97706),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Outflow · ${AppFormat.currency(visibleSpent)}',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
+                                        color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF44403C),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (visibleReceived > 0) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0x1E16A34A) : const Color(0xFFDCFCE7),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isDark ? const Color(0x3516A34A) : const Color(0xFFBBF7D0),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '+${AppFormat.currency(visibleReceived)}',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.2,
+                                      color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF15803D),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFFD97706),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Outflow · ${AppFormat.currency(visibleSpent)}',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
-                                color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF44403C),
-                              ),
-                            ),
-                          ],
                         ),
                       ),
-                      if (visibleReceived > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0x1E16A34A) : const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isDark ? const Color(0x3516A34A) : const Color(0xFFBBF7D0),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Text(
-                            '+${AppFormat.currency(visibleReceived)}',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.2,
-                              color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF15803D),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       Text(
                         '${filteredTxns.length} records',
                         style: TextStyle(
@@ -668,32 +679,42 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
         : (isDark ? const Color(0xFF334155) : const Color(0xFF1C1917));
     final effectiveActiveText = activeColor ?? (isDark ? Colors.white : Colors.white);
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? effectiveActiveBg
-              : (isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF)),
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(
-            color: isSelected
-                ? (activeColor ?? (isDark ? Colors.white.withValues(alpha: 0.3) : const Color(0xFF1C1917)))
-                : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8)),
-            width: isSelected ? 1.0 : 0.8,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected
-                ? effectiveActiveText
-                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C)),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$label filter',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? effectiveActiveBg
+                    : (isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF)),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: isSelected
+                      ? (activeColor ?? (isDark ? Colors.white.withValues(alpha: 0.3) : const Color(0xFF1C1917)))
+                      : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8)),
+                  width: isSelected ? 1.0 : 0.8,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? effectiveActiveText
+                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C)),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -712,32 +733,42 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
         : (isDark ? const Color(0xFF334155) : const Color(0xFF0F172A));
     final effectiveActiveText = activeColor ?? (isDark ? Colors.white : Colors.white);
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? effectiveActiveBg
-              : (isDark ? const Color(0x1AFFFFFF) : const Color(0x0A000000)),
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(
-            color: isSelected
-                ? (activeColor ?? (isDark ? Colors.white.withValues(alpha: 0.3) : const Color(0xFF0F172A)))
-                : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0)),
-            width: isSelected ? 1.0 : 0.6,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected
-                ? effectiveActiveText
-                : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$label sub-filter',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? effectiveActiveBg
+                    : (isDark ? const Color(0x1AFFFFFF) : const Color(0x0A000000)),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: isSelected
+                      ? (activeColor ?? (isDark ? Colors.white.withValues(alpha: 0.3) : const Color(0xFF0F172A)))
+                      : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0)),
+                  width: isSelected ? 1.0 : 0.6,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? effectiveActiveText
+                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                ),
+              ),
+            ),
           ),
         ),
       ),

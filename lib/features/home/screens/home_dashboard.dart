@@ -276,21 +276,27 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                             padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
                             child: Row(
                               children: [
-                                Text(
-                                  headerText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8,
-                                    color: isDark
-                                        ? const Color(0xFF94A3B8)
-                                        : const Color(0xFF78716C),
+                                Expanded(
+                                  child: Text(
+                                    headerText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.8,
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF78716C),
+                                    ),
                                   ),
                                 ),
-                                const Spacer(),
+                                const SizedBox(width: 8),
                                 if (groupSpend > 0)
                                   Text(
                                     '−${AppFormat.currency(groupSpend)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,

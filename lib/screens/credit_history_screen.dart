@@ -7,6 +7,7 @@ import '../data/providers.dart';
 import '../utils/app_format.dart';
 import '../widgets/spendx_app_bar.dart';
 import '../widgets/empty_state.dart';
+import '../shared/widgets/glass/spendx_states.dart';
 import '../widgets/transaction_tile.dart';
 import '../models/transaction.dart' as spx;
 
@@ -278,7 +279,7 @@ class _CreditHistoryScreenState extends ConsumerState<CreditHistoryScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const SpendXLoadingState(count: 4, itemHeight: 68)
                 : _filteredTransactions.isEmpty
                 ? EmptyState(
                     icon: Icons.search_off_rounded,

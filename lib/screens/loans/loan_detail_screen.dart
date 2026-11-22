@@ -20,6 +20,7 @@ import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_sheet.dart';
 import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../shared/widgets/glass/spendx_states.dart';
 import '../../widgets/custom_snackbar.dart';
 
 enum LoanDetailAction { deleted }
@@ -270,8 +271,11 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
         ],
       ),
       body: installmentsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('Failed to load loan details')),
+        loading: () => const SpendXLoadingState(count: 3, itemHeight: 90),
+        error: (_, _) => SpendXErrorState(
+          message: 'Unable to load loan installment details. Please try again.',
+          onRetry: () => ref.refresh(loanInstallmentsProvider(widget.loan.id)),
+        ),
         data: (installments) => SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
               child: Column(

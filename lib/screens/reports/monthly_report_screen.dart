@@ -4,6 +4,7 @@ import '../../services/financial_health_service.dart';
 import '../../utils/app_format.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
+import '../../shared/widgets/glass/spendx_states.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 
 class MonthlyReportScreen extends StatefulWidget {
@@ -40,7 +41,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
     return SpendXScaffold(
       appBar: const SpendXAppBar(title: 'Monthly Report'),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SpendXLoadingState(count: 3, itemHeight: 80)
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

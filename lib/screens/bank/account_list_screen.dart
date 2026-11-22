@@ -24,6 +24,7 @@ import 'add_bank_account_screen.dart';
 import '../../services/entity_consolidation_service.dart';
 import '../../services/data_change_bus.dart';
 import '../../services/live_sms_service.dart';
+import '../../shared/widgets/custom_snackbar.dart';
 
 /// Cleanly maps raw database keys or prefix artifacts (e.g. `Asset acc_bank_default`)
 /// to clear, user-facing account labels without mutating underlying database rows
@@ -487,13 +488,11 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                 ref.invalidate(app_data.netWorthSummaryProvider);
                 app_data.invalidateAllFinancialProviders(ref);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(count > 0
-                          ? 'Cleaned & consolidated $count duplicate items.'
-                          : 'All accounts and cards are clean and synced.'),
-                      duration: const Duration(seconds: 2),
-                    ),
+                  CustomSnackBar.show(
+                    context,
+                    message: count > 0
+                        ? 'Cleaned & consolidated $count duplicate items.'
+                        : 'All accounts and cards are clean and synced.',
                   );
                 }
               },
@@ -1768,51 +1767,62 @@ class _CreditCardInstrument extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: const Color(0xFFFBBF24).withValues(alpha: 0.8),
-                            width: 1.0,
-                          ),
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: const Color(0xFFFBBF24).withValues(alpha: 0.8),
+                              width: 1.0,
+                            ),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        (card.bank.isNotEmpty ? card.bank : 'CREDIT CARD')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                          color: Color(0xFF94A3B8),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            (card.bank.isNotEmpty ? card.bank : 'CREDIT CARD')
+                                .toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
                     children: [
                       _buildCardBrandBadge(card.cardType),
                       const SizedBox(width: 4),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          HapticService.instance.tap();
-                          onOptionsTap();
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          child: Icon(
-                            Icons.more_vert_rounded,
-                            size: 18,
-                            color: Color(0xFF94A3B8),
+                      Semantics(
+                        button: true,
+                        label: 'Card options for ${card.name}',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            HapticService.instance.tap();
+                            onOptionsTap();
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            child: Icon(
+                              Icons.more_vert_rounded,
+                              size: 18,
+                              color: Color(0xFF94A3B8),
+                            ),
                           ),
                         ),
                       ),
@@ -1869,63 +1879,80 @@ class _CreditCardInstrument extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                card.usedAmount < -0.05
-                                    ? 'OVERPAID / CREDIT BALANCE'
-                                    : 'OUTSTANDING BALANCE',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.8,
-                                  color: Color(0xFF94A3B8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  card.usedAmount < -0.05
+                                      ? 'OVERPAID / CREDIT BALANCE'
+                                      : 'OUTSTANDING BALANCE',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.8,
+                                    color: Color(0xFF94A3B8),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                card.usedAmount < -0.05
-                                    ? '+${AppFormat.currency(card.usedAmount.abs())}'
-                                    : AppFormat.currency(card.usedAmount.clamp(0.0, double.infinity)),
-                                style: TextStyle(
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w700,
-                                  color: card.usedAmount > 0.05
-                                      ? const Color(0xFFFCA5A5)
-                                      : (card.usedAmount < -0.05
-                                          ? const Color(0xFF34D399)
-                                          : Colors.white),
-                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    card.usedAmount < -0.05
+                                        ? '+${AppFormat.currency(card.usedAmount.abs())}'
+                                        : AppFormat.currency(card.usedAmount.clamp(0.0, double.infinity)),
+                                    style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w700,
+                                      color: card.usedAmount > 0.05
+                                          ? const Color(0xFFFCA5A5)
+                                          : (card.usedAmount < -0.05
+                                              ? const Color(0xFF34D399)
+                                              : Colors.white),
+                                      fontFeatures: const [FontFeature.tabularFigures()],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              const Text(
-                                'AVAILABLE LIMIT',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.8,
-                                  color: Color(0xFF94A3B8),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text(
+                                  'AVAILABLE LIMIT',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.8,
+                                    color: Color(0xFF94A3B8),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                card.limitAmount > 0
-                                    ? AppFormat.currency(card.availableLimit)
-                                    : 'Not set',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                  fontFeatures: [FontFeature.tabularFigures()],
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    card.limitAmount > 0
+                                        ? AppFormat.currency(card.availableLimit)
+                                        : 'Not set',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                      fontFeatures: [FontFeature.tabularFigures()],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),

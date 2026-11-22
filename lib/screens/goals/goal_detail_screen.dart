@@ -19,6 +19,7 @@ import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_dialog.dart';
 import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../shared/widgets/glass/spendx_states.dart';
 
 class GoalDetailScreen extends ConsumerStatefulWidget {
   final Goal goal;
@@ -496,7 +497,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                   ),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const SpendXLoadingState(count: 2, itemHeight: 48),
               error: (_, _) => const SizedBox.shrink(),
             ),
           ],

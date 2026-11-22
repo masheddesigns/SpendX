@@ -10,6 +10,7 @@ import '../services/data_audit_service.dart';
 import '../services/inbox_audit_service.dart';
 import '../widgets/spendx_app_bar.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/glass/spendx_states.dart';
 import 'home/transactions_screen.dart';
 import 'review/review_queue_screen.dart';
 
@@ -77,7 +78,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     return Scaffold(
       appBar: const SpendXAppBar(title: 'Data Health & Diagnostics'),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SpendXLoadingState(count: 3, itemHeight: 100)
           : RefreshIndicator(
               onRefresh: () async {
                 await _loadAll();

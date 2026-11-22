@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/providers.dart';
@@ -130,9 +131,18 @@ class _BudgetManagementScreenState
                 const SizedBox(height: 16),
                 TextField(
                   controller: amountController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
                   decoration: InputDecoration(
                     labelText: 'Monthly Limit',
+                    prefixText: '₹ ',
+                    hintText: '0.00',
+                    errorText: amountController.text.isNotEmpty &&
+                            (double.tryParse(amountController.text) ?? 0) <= 0
+                        ? 'Limit must be greater than zero'
+                        : null,
                     filled: true,
                     fillColor: Theme.of(dialogContext).colorScheme.surfaceContainer,
                     border: OutlineInputBorder(

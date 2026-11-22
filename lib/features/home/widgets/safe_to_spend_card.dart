@@ -282,30 +282,34 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             onTap: calc.commitmentItems.any((c) => c.isOverdue)
                 ? () => _showCommitmentDetails(context, calc.commitmentItems, isDark)
                 : () => _showBreakdownSheet(context, calc, isDark),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  '₹',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF1C1917),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '₹',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF1C1917),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 2),
-                Text(
-                  AppFormat.currency(displayAmount).replaceAll('₹', '').trim(),
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1.0,
-                    color: isDark ? Colors.white : const Color(0xFF1C1917),
+                  const SizedBox(width: 2),
+                  Text(
+                    AppFormat.currency(displayAmount).replaceAll('₹', '').trim(),
+                    style: TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1.0,
+                      color: isDark ? Colors.white : const Color(0xFF1C1917),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
 
