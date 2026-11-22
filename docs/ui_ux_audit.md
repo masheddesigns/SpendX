@@ -154,4 +154,30 @@
 
 ---
 
-*Audit based on static code analysis of `lib/` at commit `fdb28d2`. No runtime/visual inspection performed.*
+---
+
+## Progress Update (commit `9aa566f`)
+
+A follow-up commit addressed several audit findings:
+
+| Area | Before | After | Status |
+|---|---|---|---|
+| `Semantics` widgets | 2 | 6 | 🟡 Partial |
+| `tooltip:` properties | ~? | 37 | 🟡 Partial |
+| Primary FAB with semantics | None | Added to home screen | ✅ Fixed |
+| Theme tokens (adaptive) | Dark-only `AppColors` | Added `textPrimaryOf` etc. + `SpendXThemeContext` extension | 🟡 Infra added, screens not yet migrated |
+| Amount formatter | None | `app_amount_field.dart` improved | 🟡 Partial |
+| Hardcoded `Color(0x)` | 1,218 | 1,218 | ❌ Unchanged |
+| `minimumSize` touch targets | 6 | 6 | ❌ Unchanged |
+| Form `validator:` | 6 | 6 | ❌ Unchanged |
+| `TextOverflow` / `maxLines` | 66 / 62 | 66 / 62 | ❌ Unchanged |
+| `LayoutBuilder` | 5 | 5 | ❌ Unchanged |
+
+### Remaining priority work
+1. **Accessibility (still critical):** 6 Semantics is not enough. Need Semantics on every interactive widget, tooltips on all icon buttons, 48px min touch targets.
+2. **Theme migration:** Adaptive tokens exist but screens still use hardcoded `Color(0x)` and `AppColors` dark aliases. Migrate screen-by-screen.
+3. **Form validation:** Still only 6 validators. Add to add-expense, onboarding, settings.
+4. **Layout safety:** Still 576 Rows vs 278 Expanded. Add Expanded/Flexible and TextOverflow.
+5. **Shared state widgets:** Still no `LoadingView`/`EmptyState`/`ErrorView`.
+
+*Audit based on static code analysis of `lib/` at commit `38e8daa`. No runtime/visual inspection performed.*
