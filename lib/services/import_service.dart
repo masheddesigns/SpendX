@@ -65,7 +65,7 @@ class ImportService {
   }) async {
     try {
       final content = await file.readAsString();
-      final rows = csv_pkg.CsvCodec().decode(content);
+      final rows = csv_pkg.Csv().decode(content);
       if (rows.isEmpty) {
         return 0;
       }

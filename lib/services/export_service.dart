@@ -556,7 +556,7 @@ class ExportService {
   /// Expects columns: Date,Type,Category,Amount,Tags,Source,Notes
   Future<int> importTransactionsFromCsv(File file) async {
     final content = await file.readAsString();
-    final allRows = csv_pkg.CsvCodec().decode(content);
+    final allRows = csv_pkg.Csv().decode(content);
 
     if (allRows.length < 2) return 0;
 

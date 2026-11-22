@@ -2195,10 +2195,15 @@ class LiveSmsService with WidgetsBindingObserver {
 
           if (fed != null) await AccountRepo().updateBalance(fed.id, 17590.25);
           if (jio != null) await AccountRepo().updateBalance(jio.id, 492.91);
-          if (sbi != null) await AccountRepo().updateBalance(sbi.id, 21449.88);
-          if (csb != null) await CreditRepo().updateBalance(csb.id, 3415.00);
-          if (icici != null)
+          if (sbi != null) {
+            await AccountRepo().updateBalance(sbi.id, 21449.88);
+          }
+          if (csb != null) {
+            await CreditRepo().updateBalance(csb.id, 3415.00);
+          }
+          if (icici != null) {
             await CreditRepo().updateBalance(icici.id, 25010.35);
+          }
 
           DataChangeBus.instance.notify();
           AppLogger.i(
@@ -2317,22 +2322,26 @@ class LiveSmsService with WidgetsBindingObserver {
             if (type == 'asset') {
               if (inst.contains('jio') ||
                   name.contains('jio') ||
-                  last4 == '3284')
+                  last4 == '3284') {
                 jioBankId = id;
+              }
               if (inst.contains('sbi') ||
                   name.contains('sbi') ||
-                  last4 == '9331')
+                  last4 == '9331') {
                 sbiBankId = id;
+              }
             } else if (type == 'credit_card') {
               if (inst.contains('icici') ||
                   name.contains('icici') ||
-                  last4 == '5007')
+                  last4 == '5007') {
                 iciciCardId = id;
+              }
               if (inst.contains('csb') ||
                   name.contains('csb') ||
                   name.contains('edge') ||
-                  last4 == '2834')
+                  last4 == '2834') {
                 csbCardId = id;
+              }
             }
           }
 
@@ -2820,10 +2829,15 @@ class LiveSmsService with WidgetsBindingObserver {
 
           if (fed != null) await AccountRepo().updateBalance(fed.id, 17590.25);
           if (jio != null) await AccountRepo().updateBalance(jio.id, 492.91);
-          if (sbi != null) await AccountRepo().updateBalance(sbi.id, 21449.88);
-          if (csb != null) await CreditRepo().updateBalance(csb.id, 3415.00);
-          if (icici != null)
+          if (sbi != null) {
+            await AccountRepo().updateBalance(sbi.id, 21449.88);
+          }
+          if (csb != null) {
+            await CreditRepo().updateBalance(csb.id, 3415.00);
+          }
+          if (icici != null) {
             await CreditRepo().updateBalance(icici.id, 25010.35);
+          }
 
           DataChangeBus.instance.notify();
           AppLogger.i(
@@ -2914,22 +2928,26 @@ class LiveSmsService with WidgetsBindingObserver {
             if (type == 'asset') {
               if (inst.contains('jio') ||
                   name.contains('jio') ||
-                  last4 == '3284')
+                  last4 == '3284') {
                 jioBankId = id;
+              }
               if (inst.contains('sbi') ||
                   name.contains('sbi') ||
-                  last4 == '9331')
+                  last4 == '9331') {
                 sbiBankId = id;
+              }
             } else if (type == 'credit_card') {
               if (inst.contains('icici') ||
                   name.contains('icici') ||
-                  last4 == '5007')
+                  last4 == '5007') {
                 iciciCardId = id;
+              }
               if (inst.contains('csb') ||
                   name.contains('csb') ||
                   name.contains('edge') ||
-                  last4 == '2834')
+                  last4 == '2834') {
                 csbCardId = id;
+              }
             }
           }
 
@@ -3096,10 +3114,15 @@ class LiveSmsService with WidgetsBindingObserver {
 
           if (fed != null) await AccountRepo().updateBalance(fed.id, 17590.25);
           if (jio != null) await AccountRepo().updateBalance(jio.id, 492.91);
-          if (sbi != null) await AccountRepo().updateBalance(sbi.id, 21449.88);
-          if (csb != null) await CreditRepo().updateBalance(csb.id, 3415.00);
-          if (icici != null)
+          if (sbi != null) {
+            await AccountRepo().updateBalance(sbi.id, 21449.88);
+          }
+          if (csb != null) {
+            await CreditRepo().updateBalance(csb.id, 3415.00);
+          }
+          if (icici != null) {
             await CreditRepo().updateBalance(icici.id, 25010.35);
+          }
 
           DataChangeBus.instance.notify();
           AppLogger.i(
@@ -5694,11 +5717,13 @@ class LiveSmsService with WidgetsBindingObserver {
     final accounts = await AccountRepo().getAll();
     final matched = accounts.where((a) {
       if (a.accountType != 'fd') return false;
-      if (last4.isNotEmpty && a.last4 != null && a.last4!.contains(last4))
+      if (last4.isNotEmpty && a.last4 != null && a.last4!.contains(last4)) {
         return true;
+      }
       if (a.name.toLowerCase().contains(bankName.toLowerCase()) &&
-          a.name.toLowerCase().contains(depType.toLowerCase()))
+          a.name.toLowerCase().contains(depType.toLowerCase())) {
         return true;
+      }
       return false;
     }).firstOrNull;
 
@@ -7673,8 +7698,9 @@ class LiveSmsService with WidgetsBindingObserver {
     if (alphaA.isNotEmpty && alphaB.isNotEmpty) {
       if (alphaA == alphaB ||
           alphaA.contains(alphaB) ||
-          alphaB.contains(alphaA))
+          alphaB.contains(alphaA)) {
         return true;
+      }
     }
 
     // Share a common prefix of ≥5 chars (e.g., "zomato" vs "zomatoo")

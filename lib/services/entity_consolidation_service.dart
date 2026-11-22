@@ -643,8 +643,8 @@ class EntityConsolidationService {
               TablesV24.economicEvents,
               {
                 'description': newDesc,
-                if (newCategory != null) 'category_id': newCategory,
-                if (newType != null) 'event_type': newType,
+                'category_id': ?newCategory,
+                'event_type': ?newType,
               },
               where: 'id = ?',
               whereArgs: [id],
@@ -700,8 +700,8 @@ class EntityConsolidationService {
               {
                 'notes': newNotes,
                 'note': newNotes,
-                if (newCategoryId != null) 'category_id': newCategoryId,
-                if (newType != null) 'type': newType,
+                'category_id': ?newCategoryId,
+                'type': ?newType,
               },
               where: 'id = ?',
               whereArgs: [id],

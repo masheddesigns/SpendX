@@ -104,7 +104,7 @@ class _AutomaticIngestionScreenState
                         : const Color(0xFFF59E0B),
                     trailing: Switch.adaptive(
                       value: status.isNotificationListenerEnabled,
-                      activeColor: const Color(0xFF6366F1),
+                      activeTrackColor: const Color(0xFF6366F1),
                       onChanged: (v) async {
                         await LiveSmsService.instance
                             .openNotificationListenerSettings();
@@ -142,7 +142,7 @@ class _AutomaticIngestionScreenState
                             : const Color(0xFFF59E0B),
                     trailing: Switch.adaptive(
                       value: status.isLiveSmsEnabled,
-                      activeColor: const Color(0xFF0EA5E9),
+                      activeTrackColor: const Color(0xFF0EA5E9),
                       onChanged: (v) async {
                         await LiveSmsService.instance.setEnabled(v);
                         if (v && !status.hasSmsPermission) {
@@ -227,7 +227,7 @@ class _AutomaticIngestionScreenState
                         : const Color(0xFF94A3B8),
                     trailing: Switch.adaptive(
                       value: status.isWhatsAppEnabled,
-                      activeColor: const Color(0xFF22C55E),
+                      activeTrackColor: const Color(0xFF22C55E),
                       onChanged: (v) async {
                         await SettingsService.instance
                             .setWhatsAppIngestionEnabled(v);
@@ -253,7 +253,7 @@ class _AutomaticIngestionScreenState
                         : const Color(0xFF94A3B8),
                     trailing: Switch.adaptive(
                       value: status.isGmailNotificationEnabled,
-                      activeColor: const Color(0xFFEA4335),
+                      activeTrackColor: const Color(0xFFEA4335),
                       onChanged: (v) async {
                         await SettingsService.instance.setGmailPreviewEnabled(v);
                         await ref
@@ -288,7 +288,7 @@ class _AutomaticIngestionScreenState
                                         setState(() => _isSyncingGmail = true);
                                         try {
                                           final res = await GmailIntegrationService.instance.syncFinancialEmails();
-                                          if (mounted) {
+                                          if (context.mounted) {
                                             if (res.error != null) {
                                               CustomSnackBar.show(context, message: 'Gmail sync: ${res.error}');
                                             } else {
@@ -299,11 +299,11 @@ class _AutomaticIngestionScreenState
                                             }
                                           }
                                         } catch (e) {
-                                          if (mounted) {
+                                          if (context.mounted) {
                                             CustomSnackBar.show(context, message: 'Sync error: $e');
                                           }
                                         } finally {
-                                          if (mounted) {
+                                          if (context.mounted) {
                                             setState(() => _isSyncingGmail = false);
                                             ref.read(ingestionStatusProvider.notifier).refresh();
                                           }
@@ -331,7 +331,7 @@ class _AutomaticIngestionScreenState
                         : TextButton(
                             onPressed: () async {
                               final connected = await GmailIntegrationService.instance.connect();
-                              if (connected && mounted) {
+                              if (connected && context.mounted) {
                                 CustomSnackBar.show(context, message: 'Connected Gmail for read-only statement sync.');
                               }
                               await ref.read(ingestionStatusProvider.notifier).refresh();
@@ -395,7 +395,7 @@ class _AutomaticIngestionScreenState
                                     final audit = await InboxAuditService
                                         .instance
                                         .runAudit();
-                                    if (mounted) {
+                                    if (context.mounted) {
                                       CustomSnackBar.show(
                                         context,
                                         message:
@@ -403,14 +403,14 @@ class _AutomaticIngestionScreenState
                                       );
                                     }
                                   } catch (e) {
-                                    if (mounted) {
+                                    if (context.mounted) {
                                       CustomSnackBar.show(
                                         context,
                                         message: 'Scan error: $e',
                                       );
                                     }
                                   } finally {
-                                    if (mounted) {
+                                    if (context.mounted) {
                                       setState(() => _isAuditing = false);
                                       ref
                                           .read(ingestionStatusProvider.notifier)

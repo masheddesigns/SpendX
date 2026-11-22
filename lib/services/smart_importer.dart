@@ -538,7 +538,7 @@ class SmartImporter {
 
   List<List<String>> _parseCsv(String content) {
     final separator = _detectSeparator(content);
-    final decoded = csv_pkg.CsvCodec(fieldDelimiter: separator).decode(content);
+    final decoded = csv_pkg.Csv(fieldDelimiter: separator).decode(content);
     return decoded.map((row) => row.map((e) => e.toString()).toList()).toList();
   }
 
