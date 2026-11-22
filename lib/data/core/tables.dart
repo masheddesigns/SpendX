@@ -58,6 +58,7 @@ class Tables {
       category_id TEXT,
       account_id TEXT,
       date TEXT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'INR',
       note TEXT,
       notes TEXT,
       tags TEXT,

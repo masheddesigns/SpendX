@@ -452,6 +452,17 @@ class AppDatabase {
       await _migrateToV26(db);
     }
     await _executeCreateQueries(db);
+
+    // Backfill: ensure legacy `transactions.currency` column exists on databases
+    // that predate the v1.0.3+4 schema change (Transaction.toMap now writes
+    // 'currency'). Idempotent — silently ignored when the column is present.
+    try {
+      await db.execute(
+        "ALTER TABLE transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'INR'",
+      );
+    } catch (_) {
+      // Column already exists — idempotent.
+    }
   }
 
   /// Applies all schema migrations to an already-open database WITHOUT running

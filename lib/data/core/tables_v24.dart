@@ -137,6 +137,7 @@ class TablesV24 {
       extracted_timestamp TEXT NOT NULL,
       sender_address TEXT,
       external_reference TEXT,
+      source_record_id TEXT,
       body_sha256 TEXT NOT NULL,
       raw_payload_encrypted TEXT,
       retention_expires_at TEXT,

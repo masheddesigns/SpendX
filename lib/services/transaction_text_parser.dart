@@ -127,7 +127,7 @@ class TransactionTextParser {
 
   /// Lightweight in-process cache for repeated identical shares.
   /// Bounded at 50 entries with FIFO eviction + per-entry TTL.
-  static final Map<int, _CacheEntry> _parseCache = {};
+  static final Map<String, _CacheEntry> _parseCache = {};
   static const _maxParseCacheSize = 50;
 
   /// Parse [text] with merchant memory lookup. Use this from production
@@ -174,10 +174,7 @@ class TransactionTextParser {
     // stored entries — no explicit clear ever needed.
     // messageTimestamp epoch millis folded in so callers with different
     // envelope times produce distinct entries rather than serving stale dates.
-    final cacheKey = Object.hash(
-      _parserVersion, text, source, learnedMerchant,
-      messageTimestamp?.millisecondsSinceEpoch,
-    );
+    final cacheKey = '$_parserVersion|$text|$source|$learnedMerchant|${messageTimestamp?.millisecondsSinceEpoch}';
     final cached = _parseCache[cacheKey];
     if (cached != null) {
       // TTL check — drop stale entries even if key still matches.
@@ -828,7 +825,7 @@ class TransactionTextParser {
   );
 
   static final _refundPatterns = RegExp(
-    r'\b(?:refund(?:ed)?|revers(?:al|ed)|cashback|chargeback|money\s+refunded)\b',
+    r'\b(?:refund(?:ed)?|revers(?:al|ed)|chargeback|money\s+refunded)\b',
     caseSensitive: false,
   );
 
@@ -1382,7 +1379,7 @@ class TransactionTextParser {
     RegExp(r'\b(?:from|to|in|via)?\s*[xX*.\-]+(\d{4,5})\b', caseSensitive: false),
     // 5. Account markers: "a/c ending 1234", "account 1234"
     RegExp(
-      r'(?:a/c|acct|account)\s*(?:no\.?|num(?:ber)?|ending(?:\s+(?:in|with))?)?[\s:*\-.()xX]*(\d{3,6})\b',
+      r'(?:a/c|acct|account)\s*(?:no\.?|num(?:ber)?|ending(?:\s+(?:in|with))?)?[\s:*\-.()xX\d]*?(\d{4})\b',
       caseSensitive: false,
     ),
   ];

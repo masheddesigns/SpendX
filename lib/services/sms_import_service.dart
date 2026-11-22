@@ -1210,13 +1210,20 @@ class SmsImportService {
     r'(?:'
     r'refund\s+of\s+.*?(?:credited\s+to|received\s+on)\s+.*?(?:credit\s*card|card|onecard|bobcard)|'
     r'credited\s+to\s+.*?(?:credit\s*card|card\s*ending|onecard|bobcard).*?(?:refund|reversal|cashback|waiver)|'
-    r'(?:reversal|cashback|surcharge\s*waiver|fuel\s*surcharge|fee\s*reversal|waiver)\s+of\s+.*?(?:credited\s+to|on\s+your\s+card|card\s*ending|credited\s+on)'
+    r'(?:reversal|surcharge\s*waiver|fuel\s*surcharge|fee\s*reversal|waiver)\s+of\s+.*?(?:credited\s+to|on\s+your\s+card|card\s*ending|credited\s+on)'
     r')',
     caseSensitive: false,
   );
 
   /// Returns true if text indicates a credit card bill payment confirmation.
   static bool _isCreditCardPaymentText(String lower, [String sender = '']) {
+    // A bank-account UPI debit (e.g. "paid from your ... Bank A/C ... to <merchant> via UPI")
+    // is an expense, not a credit-card bill payment — even if the bank name (Jupiter, etc.)
+    // appears in the trailing signature.
+    if (RegExp(r'\b(?:a/c|account)\s+[x*0-9]{3,}\b.*\bvia\s+upi\b', caseSensitive: false).hasMatch(lower)) {
+      return false;
+    }
+
     // If paid/spent from a credit card to a merchant, this is an outbound purchase, not a bill repayment towards the card!
     if (RegExp(r'\b(?:paid|spent|charged)\s+from\s+(?:your\s+)?[a-z0-9 ._-]*?credit\s*card\s+to\b', caseSensitive: false).hasMatch(lower) ||
         lower.contains('from your edge csb bank rupay credit card to') ||
@@ -2547,7 +2554,7 @@ class SmsImportService {
     // e.g. "Your Edge CSB Bank RuPay Credit Card bill for Rs.2640.76 has been generated"
     // e.g. "ICICI Bank Credit Card XX5007 Statement is sent ... Total of Rs 91,760.35 ... is due by 20-NOV-26"
     // e.g. "Your HDFC Credit Card bill of Rs.25000.00 is due on 2026-10-21"
-    if (_isCreditCardBillText(lower)) {
+    if (_isCreditCardBillText(lower) && !_isCardSpendCandidate(lower)) {
       final totalDueMatch = RegExp(
         r'(?:total\s*(?:amount\s*)?due|total\s+of|statement\s+for)[^\d₹]*?(?:rs\.?|inr|₹)?\s*([\d,]+(?:\.\d+)?)',
         caseSensitive: false,
