@@ -53,7 +53,7 @@ void main() {
     Future<Database> createInitializedDb(String path) async {
       final db = await openDatabase(
         path,
-        version: 24,
+        version: 26,
         onConfigure: (db) async {
           await db.execute('PRAGMA foreign_keys = ON;');
         },

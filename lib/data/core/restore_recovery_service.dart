@@ -701,6 +701,13 @@ class RestoreRecoveryService {
       }
     }
 
+    if (masterKey == null && await activeFile.exists() && (await activeFile.length()) > 0) {
+      if (!DatabaseEncryptionMigrationService.isPlaintextSqliteFile(activePath)) {
+        await DatabaseAccessGate.instance.closeAdmissionAndDrain();
+        throw KeyLossFatalException(activePath);
+      }
+    }
+
     // 2. Interrupted temporary journal write handling
     if (await journalTmpFile.exists()) {
       await _executeWithExclusiveLock((lockToken) async {

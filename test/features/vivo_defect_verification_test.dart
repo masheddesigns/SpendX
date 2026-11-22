@@ -561,7 +561,10 @@ void main() {
       expect(res1.added, isTrue);
 
       const bankSender = 'VM-FEDBNK';
-      const bankBody = 'Rs 250 debited from A/c XX1234 to Chai Point on 10-Nov UPI/431528123456';
+      final now = DateTime.now();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final dateStr = '${now.day}-${months[now.month - 1]}';
+      final bankBody = 'Rs 250 debited from A/c XX1234 to Chai Point on $dateStr UPI/431528123456';
 
       final res2 = await LiveSmsService.instance.testProcessBody(bankBody, sender: bankSender);
       // Must be deduplicated (not added again as a second transaction)

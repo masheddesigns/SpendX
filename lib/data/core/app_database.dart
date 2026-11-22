@@ -244,7 +244,7 @@ class AppDatabase {
       if (DatabaseAccessGate.instance.isOpen) {
         await DatabaseAccessGate.instance.ensureNativeLeaseAcquired();
       }
-      return _gatedDatabase = DatabaseAccessGate.instance.wrapDatabase(db);
+      return _gatedDatabase ??= DatabaseAccessGate.instance.wrapDatabase(db);
     } catch (e) {
       _initState = AppDatabaseInitState.initializationFailed;
       _initFuture = null;
@@ -349,7 +349,9 @@ class AppDatabase {
           onOpen: (db) async {
             await db.execute(TablesV24.createEconomicEventsUniqueReversalIndex);
             if (DatabaseAccessGate.instance.isOpen) {
-              await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+              if (DatabaseAccessGate.instance.isOpen) {
+      await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+    }
             }
             await BackupFileService.cleanOrphanedStagingDirectories();
           },
@@ -381,7 +383,9 @@ class AppDatabase {
       onOpen: (db) async {
         await ReversalIndexCompatibilityService.ensureReversalIndex(db);
         if (DatabaseAccessGate.instance.isOpen) {
-          await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+          if (DatabaseAccessGate.instance.isOpen) {
+      await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+    }
         }
         await BackupFileService.cleanOrphanedStagingDirectories();
       },
@@ -397,7 +401,9 @@ class AppDatabase {
     await TablesV25.createAllV25(db);
     await TablesV25.installTriggers(db);
     await TablesV26.createAllV26(db);
-    await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+    if (DatabaseAccessGate.instance.isOpen) {
+      await EvidencePruningService.instance.pruneExpiredEvidence(executor: db);
+    }
   }
 
   @visibleForTesting

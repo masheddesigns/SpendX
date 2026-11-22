@@ -1376,7 +1376,10 @@ class TransactionTextParser {
       caseSensitive: false,
     ),
     // 4. Masked prefixes: "XX1234", "**1234", "...1234", "from x3284", "x3284"
-    RegExp(r'\b(?:from|to|in|via)?\s*[xX*.\-]+(\d{4,5})\b', caseSensitive: false),
+    RegExp(
+      r'\b(?:from|to|in|via)?\s*(?:[xX]+|\*{2,}|\.{2,})[\s\-]*(\d{4,5})\b',
+      caseSensitive: false,
+    ),
     // 5. Account markers: "a/c ending 1234", "account 1234"
     RegExp(
       r'(?:a/c|acct|account)\s*(?:no\.?|num(?:ber)?|ending(?:\s+(?:in|with))?)?[\s:*\-.()xX\d]*?(\d{4})\b',

@@ -147,8 +147,6 @@ void main() {
         expect(bal.minorUnits, 1000000); // ₹10,000.00 restored
 
         // 3. Stale update attempt on deleted transaction
-        // EXPECTED FOR SECURE/CORRECT LEDGER: should reject or return 0, maintaining balance at ₹10,000.00
-        // ACTUAL BEHAVIOR (DEF-502): update() succeeds, creates a 2nd reversal (adding another ₹1,000), then posts replacement
         final staleUpdateTx = expTx.copyWith(amount: 1500.0);
         final updateResult = await transactionRepo.update(staleUpdateTx);
 
@@ -159,17 +157,11 @@ void main() {
 
         bal = await canonicalAccountRepo.getDerivedBalance('acc_bank_p1_2');
 
-        print('=== DEF-502 (Stale Update after Delete) ===');
-        print('updateResult: $updateResult');
-        print('reversals count for tx_p1_2: ${reversals.length}');
-        print('Final bank balance (minor units): ${bal.minorUnits} (Expected ₹8,500.00 = 850000, Actual: ${bal.minorUnits})');
-
-        // Confirm defect presence:
-        // Because update did NOT check if tx_p1_2 was already reversed, it posted a 2nd reversal!
-        // ₹10,000 (after delete) + ₹1,000 (2nd reversal) - ₹1,500 (replacement) = ₹9,500 (950000 minor units)!
-        // ₹1,000 phantom drift!
-        expect(reversals.length, 2, reason: 'DEF-502 confirmed: 2 reversals exist for tx_p1_2');
-        expect(bal.minorUnits, 950000, reason: 'DEF-502 confirmed: Bank balance suffered ₹1,000 upward drift!');
+        // FIXED DEF-502: Update on deleted transaction is rejected (returns 0)
+        // No duplicate reversal is created, bank balance preserved
+        expect(updateResult, 0);
+        expect(reversals.length, 1, reason: 'FIXED DEF-502: Only 1 reversal exists for tx_p1_2');
+        expect(bal.minorUnits, 1000000, reason: 'FIXED DEF-502: Bank balance preserved at ₹10,000.00');
       });
 
       test('1.3 Updating an already-reversed transaction (Second update on original ID) reproduces drift', () async {
@@ -203,7 +195,7 @@ void main() {
         expect(bal.minorUnits, 750000); // ₹7,500.00
 
         // Edit 2: attempt to update using original tx_p1_3 reference instead of replacement
-        await transactionRepo.update(expTx.copyWith(amount: 3000.0));
+        final res2 = await transactionRepo.update(expTx.copyWith(amount: 3000.0));
         bal = await canonicalAccountRepo.getDerivedBalance('acc_bank_p1_3');
 
         final reversals = await db.rawQuery(
@@ -211,15 +203,10 @@ void main() {
           ['tx_p1_3'],
         );
 
-        print('=== DEF-502 (Double update on original ID) ===');
-        print('reversals count for tx_p1_3: ${reversals.length}');
-        print('Bank balance: ${bal.minorUnits}');
-
-        // Without guard, a second reversal was created for tx_p1_3!
-        // ₹7,500 + ₹2,000 (duplicate reversal) - ₹3,000 = ₹6,500 (650000 minor units).
-        // Correct balance should be ₹7,000 (if properly chained or rejected).
-        expect(reversals.length, 2);
-        expect(bal.minorUnits, 650000);
+        // FIXED DEF-502: Second update on original ID rejected, no duplicate reversal
+        expect(res2, 0);
+        expect(reversals.length, 1);
+        expect(bal.minorUnits, 750000);
       });
 
       test('1.4 Concurrent update requests against the same original event', () async {
@@ -247,8 +234,6 @@ void main() {
         );
         await transactionRepo.insert(expTx);
 
-        // Scenario A: Exact simultaneous calls collide on timestamp-based ID or race
-        // Scenario B: Rapid successive update calls (5ms apart) race and both commit reversals
         final res1 = await transactionRepo.update(expTx.copyWith(amount: 2200.0));
         await Future.delayed(const Duration(milliseconds: 10));
         final res2 = await transactionRepo.update(expTx.copyWith(amount: 2400.0));
@@ -260,13 +245,8 @@ void main() {
 
         final bal = await canonicalAccountRepo.getDerivedBalance('acc_bank_p1_4');
 
-        print('=== DEF-502 (Rapid Concurrent/Successive Updates) ===');
-        print('Update 1 result: $res1, Update 2 result: $res2');
-        print('Reversals created for tx_p1_4: ${reversals.length}');
-        print('Bank balance: ${bal.minorUnits}');
-
-        // Both succeeded because there is no reversal_of guard in update()!
-        expect(reversals.length, 2);
+        // FIXED DEF-502: Only 1 reversal committed for original event tx_p1_4
+        expect(reversals.length, 1);
       });
     });
 
@@ -335,15 +315,13 @@ void main() {
         print('BANK BALANCE: ${bankBal.minorUnits} (₹50,000.00 = 5000000)');
         print('NET WORTH:    ${netWorth.minorUnits}');
 
-        // DEF-501 Confirmed:
-        // October expense remains 4000.0 because the credit posting occurred in November!
-        // But October txn_count is 0 because NOT EXISTS checks all time!
-        expect(octStatsAfter['expense'], 4000.0, reason: 'October still shows +₹4,000.00 expense');
-        expect(octStatsAfter['txn_count'], 0, reason: 'October shows 0 transactions despite ₹4,000.00 expense!');
+        // FIXED DEF-501:
+        // Prior month expense becomes 0.0, current month unaffected (0.0)
+        expect(octStatsAfter['expense'], 0.0, reason: 'October shows 0.0 expense');
+        expect(octStatsAfter['txn_count'], 0);
         expect(octStatsAfter['biggest_expense'], 0.0);
 
-        // November shows negative expense -₹4,000.00!
-        expect(novStatsAfter['expense'], -4000.0, reason: 'November registers negative ₹4,000.00 expense!');
+        expect(novStatsAfter['expense'], 0.0, reason: 'November shows 0.0 expense');
         expect(novStatsAfter['txn_count'], 0);
 
         // Bank balance and net worth are restored across all time
@@ -462,8 +440,7 @@ void main() {
         expect(catExp.minorUnits, 0);        // ₹0.00
 
         // 5. Fourth refund attempt: ₹1,000.00 (Exceeds original purchase!)
-        // EXPECTED FOR SECURE/CORRECT LEDGER: Should throw or reject, keeping bank at ₹20,000.00 and category at ₹0.00
-        // ACTUAL BEHAVIOR (DEF-503): System accepts it unconditionally!
+        // FIXED DEF-503: Refund ceiling validation throws ArgumentError
         final ref4Excess = spx.Transaction(
           id: 'tx_p3_ref4_excess',
           userId: 'user_1',
@@ -475,18 +452,16 @@ void main() {
           date: now.add(const Duration(hours: 4)),
           notes: 'Excess refund',
         );
-        await transactionRepo.insert(ref4Excess);
+        expect(
+          () => transactionRepo.insert(ref4Excess),
+          throwsArgumentError,
+        );
 
         bankBal = await canonicalAccountRepo.getDerivedBalance('acc_bank_p3');
         catExp = await canonicalQueryRepo.getCategorySpending('cat_electronics');
 
-        print('=== DEF-503 (Excess Refund Results) ===');
-        print('Bank balance after excess refund: ${bankBal.minorUnits} (Expected max: 2000000 = ₹20,000.00, Actual: ${bankBal.minorUnits})');
-        print('Category electronics net spending: ${catExp.minorUnits} (Expected min: 0, Actual: ${catExp.minorUnits})');
-
-        // Confirmed DEF-503: The system created a ₹1,000 surplus in the bank and negative ₹1,000 expense
-        expect(bankBal.minorUnits, 2100000, reason: 'DEF-503 confirmed: Bank artificially inflated beyond baseline!');
-        expect(catExp.minorUnits, -100000, reason: 'DEF-503 confirmed: Category spending became negative!');
+        expect(bankBal.minorUnits, 2000000, reason: 'FIXED DEF-503: Bank balance preserved at ₹20,000.00');
+        expect(catExp.minorUnits, 0, reason: 'FIXED DEF-503: Category spending preserved at ₹0.00');
       });
 
       test('3.2 Duplicate refund insertion test', () async {
@@ -608,42 +583,20 @@ void main() {
         );
 
         // 3. Insert Reversal 2 targeting the SAME orig_event_def504
-        // DEF-504: In the absence of a unique constraint on reversal_of_event_id,
-        // this second reversal successfully commits at the database level!
-        await db.insert(TablesV24.economicEvents, {
-          'id': 'rev_event_2',
-          'event_type': 'adjustment',
-          'lifecycle_status': 'draft',
-          'timestamp': nowStr,
-          'currency': 'INR',
-          'description': 'REVERSAL: orig_event_def504 duplicate',
-          'reversal_of_event_id': 'orig_event_def504',
-          'created_at': nowStr,
-          'updated_at': nowStr,
-        });
-        await db.insert(TablesV24.postings, {
-          'id': 'p_rev2_1',
-          'economic_event_id': 'rev_event_2',
-          'account_id': TablesV24.sysExpMisc,
-          'direction': 'credit',
-          'amount_minor_units': 100000,
-          'currency': 'INR',
-          'created_at': nowStr,
-        });
-        await db.insert(TablesV24.postings, {
-          'id': 'p_rev2_2',
-          'economic_event_id': 'rev_event_2',
-          'account_id': TablesV24.sysSuspenseTransfer,
-          'direction': 'debit',
-          'amount_minor_units': 100000,
-          'currency': 'INR',
-          'created_at': nowStr,
-        });
-        await db.update(
-          TablesV24.economicEvents,
-          {'lifecycle_status': 'posted'},
-          where: 'id = ?',
-          whereArgs: ['rev_event_2'],
+        // FIXED DEF-504: Partial unique index rejects second reversal
+        expect(
+          () => db.insert(TablesV24.economicEvents, {
+            'id': 'rev_event_2',
+            'event_type': 'adjustment',
+            'lifecycle_status': 'draft',
+            'timestamp': nowStr,
+            'currency': 'INR',
+            'description': 'REVERSAL: orig_event_def504 duplicate',
+            'reversal_of_event_id': 'orig_event_def504',
+            'created_at': nowStr,
+            'updated_at': nowStr,
+          }),
+          throwsA(isA<DatabaseException>()),
         );
 
         final reversals = await db.rawQuery(
@@ -651,25 +604,16 @@ void main() {
           ['orig_event_def504'],
         );
 
-        print('=== DEF-504 (Database-level multi-reversal proof) ===');
-        print('Committed reversals count for orig_event_def504: ${reversals.length}');
-        for (final r in reversals) {
-          print('  - Reversal ID: ${r['id']}');
-        }
-
-        // Confirmed DEF-504: Both reversals are committed in the database
-        expect(reversals.length, 2, reason: 'DEF-504 confirmed: SQLite permits multiple reversals for one event');
+        // Confirmed FIXED DEF-504: Only 1 reversal committed
+        expect(reversals.length, 1, reason: 'FIXED DEF-504: UNIQUE constraint prevents duplicate reversals');
       });
 
       test('4.2 Verify partial unique index prevents duplicate reversals cleanly', () async {
-        // Test compatibility of:
-        // CREATE UNIQUE INDEX idx_events_unique_reversal ON economic_events(reversal_of_event_id)
-        // WHERE reversal_of_event_id IS NOT NULL;
         final nowStr = DateTime(2026, 11, 1, 10, 0).toIso8601String();
 
-        // Create the partial unique index
+        // Ensure partial unique index exists
         await db.execute('''
-          CREATE UNIQUE INDEX idx_events_unique_reversal
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_events_unique_reversal
           ON ${TablesV24.economicEvents}(reversal_of_event_id)
           WHERE reversal_of_event_id IS NOT NULL;
         ''');

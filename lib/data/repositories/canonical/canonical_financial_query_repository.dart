@@ -37,33 +37,25 @@ class CanonicalFinancialQueryRepository {
   }
 
   /// Calculates total net asset value across all active non-system asset accounts.
-  /// Gross assets include all accounts with non-negative balance.
-  /// Overdrawn accounts (negative balance) are treated as overdraft liabilities.
+  /// Calculates total net asset value across all active non-system asset accounts.
   Future<Money> getTotalAssets({Transaction? txn, String currency = 'INR'}) async {
     final db = await _getExecutor(txn);
     final result = await db.rawQuery('''
       SELECT COALESCE(
         SUM(
-          CASE WHEN account_balance > 0 THEN account_balance ELSE 0 END
+          CASE
+            WHEN p.direction = 'debit' THEN p.amount_minor_units
+            ELSE -p.amount_minor_units
+          END
         ), 0
       ) AS total_assets
-      FROM (
-        SELECT p.account_id,
-          SUM(
-            CASE
-              WHEN p.direction = 'debit' THEN p.amount_minor_units
-              ELSE -p.amount_minor_units
-            END
-          ) AS account_balance
-        FROM ${TablesV24.postings} p
-        JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-        JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-        WHERE a.account_type = 'asset'
-          AND a.is_system = 0
-          AND a.is_active = 1
-          AND e.lifecycle_status = 'posted'
-        GROUP BY p.account_id
-      );
+      FROM ${TablesV24.postings} p
+      JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+      JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+      WHERE a.account_type = 'asset'
+        AND a.is_system = 0
+        AND a.is_active = 1
+        AND e.lifecycle_status = 'posted';
     ''');
 
     final amount = (result.first['total_assets'] as num?)?.toInt() ?? 0;
@@ -77,26 +69,19 @@ class CanonicalFinancialQueryRepository {
     final result = await db.rawQuery('''
       SELECT COALESCE(
         SUM(
-          CASE WHEN account_liability > 0 THEN account_liability ELSE 0 END
+          CASE
+            WHEN p.direction = 'credit' THEN p.amount_minor_units
+            ELSE -p.amount_minor_units
+          END
         ), 0
       ) AS total_liabilities
-      FROM (
-        SELECT p.account_id,
-          SUM(
-            CASE
-              WHEN p.direction = 'credit' THEN p.amount_minor_units
-              ELSE -p.amount_minor_units
-            END
-          ) AS account_liability
-        FROM ${TablesV24.postings} p
-        JOIN ${TablesV24.accounts} a ON p.account_id = a.id
-        JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-        WHERE a.account_type = 'liability'
-          AND a.is_system = 0
-          AND a.is_active = 1
-          AND e.lifecycle_status = 'posted'
-        GROUP BY p.account_id
-      );
+      FROM ${TablesV24.postings} p
+      JOIN ${TablesV24.accounts} a ON p.account_id = a.id
+      JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+      WHERE a.account_type = 'liability'
+        AND a.is_system = 0
+        AND a.is_active = 1
+        AND e.lifecycle_status = 'posted';
     ''');
 
     final amount = (result.first['total_liabilities'] as num?)?.toInt() ?? 0;
@@ -502,22 +487,20 @@ class CanonicalFinancialQueryRepository {
                 continue;
               }
 
-              // Check payments within the last 45 days
-              final minPayDateUtc = now.subtract(const Duration(days: 45)).toUtc().toIso8601String();
+              // Check payments within the current statement cycle (up to 30 days before due date)
+              final minPayDateUtc = dueDate.subtract(const Duration(days: 30)).toUtc().toIso8601String();
               final maxPayDateUtc = dueDate.add(const Duration(days: 30)).toUtc().toIso8601String();
-              final minPayDateLocal = now.subtract(const Duration(days: 45)).toIso8601String();
+              final minPayDateLocal = dueDate.subtract(const Duration(days: 30)).toIso8601String();
               final maxPayDateLocal = dueDate.add(const Duration(days: 30)).toIso8601String();
 
               try {
                 final v24Pay = await db.rawQuery('''
-                  SELECT COALESCE(SUM(
-                    CASE WHEN p.direction = 'debit' THEN p.amount_minor_units
-                         ELSE -p.amount_minor_units END
-                  ), 0) AS total_minor
+                  SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
                   FROM ${TablesV24.postings} p
                   JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
                   WHERE e.lifecycle_status = 'posted'
                     AND p.account_id = ?
+                    AND p.direction = 'debit'
                     AND e.reversal_of_event_id IS NULL
                     AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
                     AND e.timestamp >= ? AND e.timestamp <= ?;
@@ -676,59 +659,64 @@ class CanonicalFinancialQueryRepository {
         }
 
         if (nextDue.isBefore(endWindow) || nextDue.isAtSameMomentAs(endWindow)) {
-          // Check if statement balance has already been paid
-          final lastStmt = card.lastStatementBalance;
-          if (lastStmt > 0.01) {
-            final minPayDateUtc = now.subtract(const Duration(days: 45)).toUtc().toIso8601String();
-            final maxPayDateUtc = nextDue.add(const Duration(days: 30)).toUtc().toIso8601String();
-            final minPayDateLocal = now.subtract(const Duration(days: 45)).toIso8601String();
-            final maxPayDateLocal = nextDue.add(const Duration(days: 30)).toIso8601String();
-
+          // Check if statement balance or current outstanding has already been paid
+          final hasStatement = card.lastStatementBalance > 0.01;
+          final effectiveDue = hasStatement
+              ? card.lastStatementBalance
+              : card.outstanding;
+          if (effectiveDue > 0.01) {
             double totalPaid = 0.0;
-            try {
-              final v24Pay = await db.rawQuery('''
-                SELECT COALESCE(SUM(
-                  CASE WHEN p.direction = 'debit' THEN p.amount_minor_units
-                       ELSE -p.amount_minor_units END
-                ), 0) AS total_minor
-                FROM ${TablesV24.postings} p
-                JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
-                WHERE e.lifecycle_status = 'posted'
-                  AND p.account_id = ?
-                  AND e.reversal_of_event_id IS NULL
-                  AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
-                  AND e.timestamp >= ? AND e.timestamp <= ?;
-              ''', [
-                card.id,
-                minPayDateUtc,
-                maxPayDateUtc,
-              ]);
-              totalPaid = ((v24Pay.first['total_minor'] as num?)?.toDouble() ?? 0.0) / 100.0;
-            } catch (_) {}
+            if (hasStatement) {
+              final minPayDateUtc = nextDue.subtract(const Duration(days: 30)).toUtc().toIso8601String();
+              final maxPayDateUtc = nextDue.add(const Duration(days: 30)).toUtc().toIso8601String();
+              final minPayDateLocal = nextDue.subtract(const Duration(days: 30)).toIso8601String();
+              final maxPayDateLocal = nextDue.add(const Duration(days: 30)).toIso8601String();
 
-            if (totalPaid <= 0.0) {
               try {
-                final payResult = await db.rawQuery('''
-                  SELECT COALESCE(SUM(amount), 0) AS total_paid
-                  FROM ${Tables.transactions}
-                  WHERE is_deleted = 0
-                    AND (related_entity_id = ? OR account_id = ? OR notes LIKE ? OR notes LIKE ? OR notes LIKE ?)
-                    AND (type = 'credit_payment' OR source = 'credit_card_payment' OR type = 'transfer' OR notes LIKE '%credit%' OR notes LIKE '%card%' OR notes LIKE '%bill%')
-                    AND date >= ? AND date <= ?;
+                final v24Pay = await db.rawQuery('''
+                  SELECT COALESCE(SUM(p.amount_minor_units), 0) AS total_minor
+                  FROM ${TablesV24.postings} p
+                  JOIN ${TablesV24.economicEvents} e ON p.economic_event_id = e.id
+                  WHERE e.lifecycle_status = 'posted'
+                    AND p.account_id = ?
+                    AND p.direction = 'debit'
+                    AND e.reversal_of_event_id IS NULL
+                    AND NOT (substr(e.description, 1, 10) = 'REVERSAL: ')
+                    AND e.timestamp >= ? AND e.timestamp <= ?;
                 ''', [
                   card.id,
-                  card.id,
-                  '%${card.bank}%',
-                  '%${card.name}%',
-                  '%card payment%',
-                  minPayDateLocal,
-                  maxPayDateLocal,
+                  minPayDateUtc,
+                  maxPayDateUtc,
                 ]);
-                totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+                totalPaid = ((v24Pay.first['total_minor'] as num?)?.toDouble() ?? 0.0) / 100.0;
               } catch (_) {}
+
+              if (totalPaid <= 0.0) {
+                try {
+                  final payResult = await db.rawQuery('''
+                    SELECT COALESCE(SUM(amount), 0) AS total_paid
+                    FROM ${Tables.transactions}
+                    WHERE is_deleted = 0
+                      AND (related_entity_id = ? OR account_id = ? OR notes LIKE ? OR notes LIKE ? OR notes LIKE ?)
+                      AND (type = 'credit_payment' OR source = 'credit_card_payment' OR type = 'transfer' OR notes LIKE '%credit%' OR notes LIKE '%card%' OR notes LIKE '%bill%')
+                      AND date >= ? AND date <= ?;
+                  ''', [
+                    card.id,
+                    card.id,
+                    '%${card.bank}%',
+                    '%${card.name}%',
+                    '%card payment%',
+                    minPayDateLocal,
+                    maxPayDateLocal,
+                  ]);
+                  totalPaid = (payResult.first['total_paid'] as num?)?.toDouble() ?? 0.0;
+                } catch (_) {}
+              }
             }
 
-            final remaining = (lastStmt - totalPaid).clamp(0.0, lastStmt);
+            final remaining = hasStatement
+                ? (effectiveDue - totalPaid).clamp(0.0, effectiveDue)
+                : effectiveDue;
             seenCommitments.add('card:${card.id}');
             if (remaining > 0.01) {
               total14d += remaining;

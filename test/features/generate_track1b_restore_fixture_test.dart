@@ -48,7 +48,7 @@ void main() {
 
     final db = await openDatabase(
       dbPath,
-      version: 24,
+      version: BackupManifest.currentSchemaVersion,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
@@ -97,7 +97,7 @@ void main() {
         limitAmount: 100000.0,
         usedAmount: 0.0,
         billingDay: 1,
-        dueDay: 20,
+        dueDay: DateTime.now().add(const Duration(days: 5)).day,
       ),
     );
 
@@ -249,7 +249,7 @@ void main() {
     expect(manifest.debitTotal, equals(manifest.creditTotal));
     expect(manifest.debitTotal, greaterThan(0));
     expect(manifest.formatVersion, equals(2));
-    expect(manifest.schemaVersion, equals(24));
+    expect(manifest.schemaVersion, equals(BackupManifest.currentSchemaVersion));
     expect(await packageFile.exists(), isTrue);
 
     // 7. Verify package integrity via extractPackage & validateStagedDatabase

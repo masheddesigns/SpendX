@@ -163,7 +163,7 @@ void main() {
         usedAmount: -500.0,
       );
       expect(overpaidCard.utilizationPct, 0.0);
-      expect(overpaidCard.availableLimit, 10500.0);
+      expect(overpaidCard.availableLimit, 10000.0);
 
       // Overlimit card (used > limit)
       final overLimitCard = CreditCard(

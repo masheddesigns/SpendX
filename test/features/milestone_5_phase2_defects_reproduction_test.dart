@@ -156,25 +156,8 @@ void main() {
         // and NOT project the reversal posting as a legitimate 'payment'.
         final history = await creditRepo.getTransactions('card_505_2');
 
-        // DEFECT OBSERVED:
-        // 1. Both original purchase AND reversal event are returned (length == 2).
-        expect(history.length, 2, reason: 'DEF-505 Defect: getTransactions returns both events');
-
-        final originalEntry = history.firstWhere((t) => t.id == 'tx_p505_2');
-        final reversalEntry = history.firstWhere((t) => t.id != 'tx_p505_2');
-
-        // 2. Original purchase remains visible with status 'active' (not 'reversed')
-        expect(originalEntry.status, 'active', reason: 'DEF-505 Defect: Original remains active');
-        expect(originalEntry.type, 'purchase');
-
-        // 3. Reversal event is ALSO projected as a 'purchase' with status 'active'!
-        // Because eventType is 'credit_purchase', getTransactions matches the first branch
-        // (eventType == 'credit_purchase') without checking reversal_of_event_id or direction!
-        expect(reversalEntry.type, 'purchase',
-            reason: 'DEF-505 Defect: Reversal projected as duplicate active purchase in transaction history');
-        expect(reversalEntry.status, 'active');
-        expect(reversalEntry.amount, 2000.0);
-        expect(reversalEntry.note, contains('REVERSAL:'));
+        // FIXED: Deleted purchase and reversal are suppressed from active history
+        expect(history.length, 0, reason: 'FIXED DEF-505: getTransactions excludes deleted/reversed events');
       });
     });
 
@@ -351,10 +334,9 @@ void main() {
           (r) => (r['raw_payload_encrypted'] as String? ?? '').contains('DISB_REF_001'),
         );
 
-        // DEFECT OBSERVED:
-        // The indexed column `external_reference` is NULL because CanonicalLoanAdapter never sets it!
-        expect(disbEvidence['external_reference'], isNull,
-            reason: 'DEF-507 Defect: indexed column external_reference is unpopulated');
+        // FIXED: The indexed column `external_reference` is properly populated
+        expect(disbEvidence['external_reference'], 'DISB_REF_001',
+            reason: 'FIXED DEF-507: indexed column external_reference is populated');
       });
 
       test('2. Reproduction: Encrypted evidence causes duplicate externalRef check to fail silently', () async {
@@ -392,11 +374,6 @@ void main() {
           whereArgs: ['%TXN_ENC_123%'],
         );
 
-        // DEFECT REPRODUCTION:
-        // Attempt to submit the DUPLICATE disbursement with externalRef 'TXN_ENC_123' again!
-        // Expected Invariant: Must throw AccountingInvariantException('Duplicate loan transaction...').
-        // Actual Behavior: Because _checkDuplicateExternalRef runs SQL LIKE on raw_payload_encrypted,
-        // it fails to match ciphertext, count returns 0, and the duplicate is ACCEPTED!
         bool duplicateAccepted = false;
         try {
           await loanRepo.recordDisbursement(
@@ -411,13 +388,13 @@ void main() {
           duplicateAccepted = false;
         }
 
-        expect(duplicateAccepted, isTrue,
-            reason: 'DEF-507 Defect: Duplicate disbursement accepted due to encrypted payload search failure');
+        expect(duplicateAccepted, isFalse,
+            reason: 'FIXED DEF-507: Duplicate disbursement rejected via external_reference column');
 
-        // Confirm derived loan liability doubled the disbursement (+50,000 twice on top of 500,000 opening)
+        // Confirm derived loan liability reflects only single disbursement (500k opening + 50k)
         final balance = await loanRepo.getDerivedBalance('loan_507_2');
-        expect(balance.toRupees, 600000.0,
-            reason: 'DEF-507 Defect: Duplicate disbursement accepted into ledger (500k opening + 50k x 2)');
+        expect(balance.toRupees, 550000.0,
+            reason: 'FIXED DEF-507: Exactly one disbursement accepted into ledger (500k opening + 50k)');
       });
     });
 

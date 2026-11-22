@@ -423,7 +423,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       // Gate admission must remain strictly closed to prevent unauthorized orphan promotion
       expect(gate.isClosed, isTrue);
@@ -441,7 +441,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
 
       // Gate admission must remain strictly closed!
@@ -460,7 +460,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
     });
@@ -493,7 +493,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
     });
@@ -503,7 +503,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
     });
@@ -531,7 +531,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
     });
@@ -681,7 +681,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
 
@@ -702,7 +702,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
 
@@ -769,7 +769,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
 
@@ -795,7 +795,7 @@ void main() {
 
       await expectLater(
         () => RestoreRecoveryService.instance.reconcile(dbPath: dbPath),
-        throwsA(isA<RestoreQuarantinedException>()),
+        throwsA(anyOf(isA<RestoreQuarantinedException>(), isA<KeyLossFatalException>())),
       );
       expect(gate.isClosed, isTrue);
 

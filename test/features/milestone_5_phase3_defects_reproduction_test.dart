@@ -379,8 +379,8 @@ void main() {
             from: localFrom,
             to: localTo,
           );
-          expect(queryResult.isEmpty, isTrue,
-              reason: 'REPRODUCED DEF-512: Local timezone mismatch causes findByAmountAndDateRange to return empty results');
+          expect(queryResult.isNotEmpty, isTrue,
+              reason: 'FIXED DEF-512: Local timezone query matches UTC stored transactions');
         }
       });
 

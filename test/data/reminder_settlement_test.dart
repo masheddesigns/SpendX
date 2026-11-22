@@ -37,26 +37,7 @@ void main() {
         next_trigger_at INTEGER
       );
     ''');
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${Tables.transactions} (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        type TEXT NOT NULL,
-        category_id TEXT,
-        account_id TEXT,
-        amount REAL NOT NULL,
-        date TEXT NOT NULL,
-        notes TEXT,
-        tags TEXT,
-        source TEXT,
-        related_entity_id TEXT,
-        external_ref TEXT,
-        location TEXT,
-        is_deleted INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    ''');
+    await db.execute(Tables.createTransactions);
     repo = ReminderRepo(database: db);
   });
 
@@ -93,7 +74,8 @@ void main() {
     });
 
     test('rolls forward recurring monthly subscription upon expense match', () async {
-      final dueDate = DateTime(2026, 10, 15);
+      final now = DateTime.now();
+      final dueDate = DateTime(now.year, now.month, 15 > now.day ? 15 : now.day + 1);
       await repo.insertGlobalReminder(
         Reminder(
           id: 'sub_netflix',
@@ -108,7 +90,7 @@ void main() {
 
       final settled = await repo.settleMatching(
         amount: 199.0,
-        date: DateTime(2026, 10, 15),
+        date: dueDate,
         notes: 'Netflix monthly charge',
       );
 
@@ -117,10 +99,10 @@ void main() {
       expect(r, isNotNull);
       expect(r!.isDone, isFalse);
       expect(r.recordStatus, ReminderRecordStatus.pending);
-      // Rolled forward to November 15
-      expect(r.dueDate!.month, 11);
-      expect(r.dueDate!.day, 15);
-      expect(r.dueDate!.year, 2026);
+      // Rolled forward by 1 month
+      final expectedMonth = (dueDate.month % 12) + 1;
+      expect(r.dueDate!.month, expectedMonth);
+      expect(r.dueDate!.day, dueDate.day);
     });
 
     test('settles credit card due reminder upon full card payment', () async {
@@ -211,27 +193,6 @@ void main() {
     test('reconcileWithExistingTransactions marks past paid credit card bill as completed', () async {
       final now = DateTime.now();
       // 1. Existing transaction in DB: ₹25,000 paid to HDFC credit card 10 days ago
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS ${Tables.transactions} (
-          id TEXT PRIMARY KEY,
-          user_id TEXT,
-          type TEXT NOT NULL,
-          category_id TEXT,
-          account_id TEXT,
-          amount REAL NOT NULL,
-          date TEXT NOT NULL,
-          notes TEXT,
-          tags TEXT,
-          source TEXT,
-          related_entity_id TEXT,
-          external_ref TEXT,
-          location TEXT,
-          is_deleted INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
-      ''');
-
       await db.insert(Tables.transactions, {
         'id': 'tx_pay_hdfc_25k',
         'user_id': 'offline_user',

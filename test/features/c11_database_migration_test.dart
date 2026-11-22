@@ -708,6 +708,7 @@ void main() {
         dbPath,
         password: blobKey,
       );
+      await encDb.execute('PRAGMA user_version = 26;');
 
       // Create backup package from encrypted database
       final backupFile = File(join(tempDir.path, 'encrypted_test.spendx'));

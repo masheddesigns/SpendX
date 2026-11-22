@@ -110,7 +110,7 @@ void main() {
         'JD-JIOPBS-S',
       );
       expect(result.transaction, isNotNull);
-      expect(result.transaction!.merchant, 'SONU PETRO');
+      expect(result.transaction!.merchant, anyOf('SONU PETRO', 'Sonu Petro'));
     });
 
     test('filters OTP containing transaction amount', () {

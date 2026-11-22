@@ -246,7 +246,9 @@ class LoanService {
 
     final loan = await _loanRepo.getLoanById(inst.loanId);
     if (loan != null) {
-        final newPaid = loan.paidAmount + inst.principalComponent;
+        final newPaid = isManual
+            ? (loan.paidAmount + inst.principalComponent)
+            : (loan.paidAmount >= inst.principalComponent ? loan.paidAmount : loan.paidAmount + inst.principalComponent);
         String newStatus = loan.loanStatus;
         if (newPaid >= loan.principalAmount) {
             newStatus = 'closed';

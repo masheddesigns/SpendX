@@ -5888,19 +5888,23 @@ class LiveSmsService with WidgetsBindingObserver {
           if (matchedCard == null) {
             isAmbiguous = true;
             ambiguityReason = 'UNRESOLVED_TARGET_CARD';
-          } else {
-            // Target credit card liability is verified and resolved!
-            if (payingBankId == null) {
-              final accounts = await AccountRepo().getAll();
-              final bankAccounts =
-                  accounts.where((a) => a.isAsset && a.accountType != 'wallet').toList();
-              if (bankAccounts.length == 1) {
-                payingBankId = bankAccounts.first.id;
-                accountId = payingBankId;
-              }
+          } else if (payingBankId == null) {
+            final accounts = await AccountRepo().getAll();
+            final bankAccounts =
+                accounts.where((a) => a.isAsset && a.accountType != 'wallet').toList();
+            if (bankAccounts.length == 1) {
+              payingBankId = bankAccounts.first.id;
+              accountId = payingBankId;
+              isAmbiguous = false;
+              ambiguityReason = null;
+            } else if (bankAccounts.length > 1) {
+              isAmbiguous = true;
+              ambiguityReason = 'UNRESOLVED_PAYING_BANK';
+            } else {
+              isAmbiguous = false;
+              ambiguityReason = null;
             }
-            // A verified credit card payment confirmation to a known card liability
-            // is NEVER an ambiguous transaction! It can safely post with accountId (paying bank or suspense).
+          } else {
             isAmbiguous = false;
             ambiguityReason = null;
           }
@@ -6433,7 +6437,7 @@ class LiveSmsService with WidgetsBindingObserver {
               emiNote = 'EMI Payment towards ${matchedLoan.name}';
             } else {
               type = parsed.isCredit ? 'income' : 'expense';
-              source = 'sms';
+              source = sender.startsWith('APP:') ? 'notification' : 'sms';
               relatedEntityId = null;
             }
           }
@@ -6460,15 +6464,17 @@ class LiveSmsService with WidgetsBindingObserver {
 
           final externalRef =
               parsed.refId ??
-              computeSyntheticReference(
-                date: parsed.date,
-                amount: parsed.amount,
-                isCcPayment: false,
-              );
+              (sender.startsWith('APP:')
+                  ? 'live_app|${parsed.date.millisecondsSinceEpoch}|${parsed.amount.toStringAsFixed(2)}'
+                  : computeSyntheticReference(
+                      date: parsed.date,
+                      amount: parsed.amount,
+                      isCcPayment: false,
+                    ));
 
           final effectiveSource = (instrument.instrumentType == 'credit_card')
               ? 'credit_card_purchase'
-              : source;
+              : (sender.startsWith('APP:') ? 'notification' : source);
 
           final tx = Transaction(
             amount: parsed.amount,
@@ -6481,7 +6487,7 @@ class LiveSmsService with WidgetsBindingObserver {
             notes: notes,
             source: effectiveSource,
             externalRef: externalRef,
-            rawPayload: parsed.rawText,
+            rawPayload: sender.startsWith('APP:') ? '$sender: ${parsed.rawText}' : parsed.rawText,
           );
 
           // Create transaction in canonical double-entry ledger
@@ -7535,11 +7541,9 @@ class LiveSmsService with WidgetsBindingObserver {
       final candidateType = parsed.isCredit ? 'income' : 'expense';
       for (final t in sameAmount) {
         final isExistingApp =
-            (t.externalRef != null && t.externalRef!.contains('_app_')) ||
+            (t.externalRef != null && (t.externalRef!.contains('_app_') || t.externalRef!.startsWith('live_app'))) ||
             (t.rawPayload != null && t.rawPayload!.startsWith('APP:')) ||
-            (t.notes.isNotEmpty &&
-                (t.externalRef == null ||
-                    t.externalRef!.startsWith('live_sms')));
+            (t.source == 'notification' || t.source == 'app');
 
         // Invariant 1: Account identity check
         // If candidate account is known and existing transaction account is known,
@@ -7558,7 +7562,7 @@ class LiveSmsService with WidgetsBindingObserver {
         // and they differ, they are distinct transactions.
         if (parsed.refId != null &&
             t.externalRef != null &&
-            !t.externalRef!.startsWith('live_sms') &&
+            !t.externalRef!.startsWith('live_') &&
             parsed.refId!.trim() != t.externalRef!.trim()) {
           continue;
         }
@@ -8148,16 +8152,29 @@ class LiveSmsService with WidgetsBindingObserver {
       }
 
       // 2. If sole bank account exists and message is a bank debit
-      if (bankAccounts.length == 1) {
+      final lower = body.toLowerCase();
+      final isBankDebit = lower.contains('debited') ||
+          lower.contains('withdrawn') ||
+          lower.contains('dr to') ||
+          lower.contains('paid from') ||
+          lower.contains('transferred from');
+      if (bankAccounts.length == 1 && isBankDebit) {
         return bankAccounts.first.id;
       }
 
-      // 3. Match unique bank name among bank accounts
-      final lower = body.toLowerCase();
-      final matchingBanks = bankAccounts.where((a) =>
-          lower.contains(a.bank.toLowerCase()) ||
-          lower.contains(a.name.toLowerCase())
-      ).toList();
+      // 3. Match unique bank name among bank accounts when indicated as the source/debit bank
+      final matchingBanks = bankAccounts.where((a) {
+        final bName = a.bank.toLowerCase().trim();
+        if (bName.isEmpty) return false;
+        final escaped = RegExp.escape(bName);
+        final pattern = RegExp(
+          r'(?:from|debited\s+from|dr\s+(?:to|from)|via|through)\s+(?:(?:your|the)\s+)?' +
+              escaped +
+              r'(?:\s+bank)?(?!\s*(?:credit\s*card|crd\s*card|card|onecard|bobcard))',
+          caseSensitive: false,
+        );
+        return pattern.hasMatch(lower);
+      }).toList();
       if (matchingBanks.length == 1) {
         return matchingBanks.first.id;
       }

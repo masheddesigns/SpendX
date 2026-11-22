@@ -101,12 +101,12 @@ void main() {
       );
       SpendXDatabaseKeyManager.setTestInstance(keyManagerA);
 
-      // 2. Initialize Database A with Schema v24 and real financial transactions
+      // 2. Initialize Database A with Schema v26 and real financial transactions
       final dbAPath = join(tempDir.path, 'deviceA_spendx.db');
       final dbA = await factory.openEncryptedDatabase(
         dbAPath,
         password: blobKeyA,
-        version: 24,
+        version: 26,
         onCreate: (d, v) async {
           await Tables.createAll(d);
           await TablesV24.createAllV24(d);

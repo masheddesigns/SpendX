@@ -384,8 +384,10 @@ class SmsImportService {
     }
 
     // 1.5. Detect upcoming financial obligations (e-mandates, subscriptions, scheduled debits, bill dues)
+    // Never hijack confirmed refunds or CC payment confirmations that report a revised balance/due.
+    final isCcPaymentCandidate = _isCreditCardPaymentText(lower, sender);
     final upcoming = detectUpcomingObligation(body, sender, smsDate: date);
-    if (upcoming != null) {
+    if (upcoming != null && !isRefund && !isCcPaymentCandidate) {
       final balance = getBalance();
       return SmsClassification(
         balance: balance,
@@ -434,7 +436,6 @@ class SmsImportService {
 
     // 2. Hard reject non-transaction / promotional / telecom / weather / service messages.
     // Exception: Do not reject credit card payment confirmations, refunds, bills, or spends.
-    final isCcPaymentCandidate = _isCreditCardPaymentText(lower, sender);
     final isCcBillCandidate = _isCreditCardBillText(lower);
     final isCcSpend = _isCardSpendCandidate(lower);
     if (!isCcPaymentCandidate &&

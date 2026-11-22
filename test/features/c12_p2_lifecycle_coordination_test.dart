@@ -268,7 +268,7 @@ void main() {
       // 1. Create backup package
       final (pkgFile, manifest) = await BackupService.instance.createBackupPackage();
       expect(await pkgFile.exists(), isTrue);
-      expect(manifest.schemaVersion, 24);
+      expect(manifest.schemaVersion, 26);
 
       // 2. Verify replacement callback is invoked on restore
       bool replacementNotified = false;

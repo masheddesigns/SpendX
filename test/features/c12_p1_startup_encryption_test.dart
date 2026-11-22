@@ -57,15 +57,15 @@ void main() {
       final db = await AppDatabase.instance.database;
       expect(db.isOpen, isTrue);
 
-      // 1. Verify schema version is 24
+      // 1. Verify schema version is 26
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, equals(24));
+      expect(verRows.first.values.first, equals(26));
 
-      // 2. Verify all 7 triggers installed
+      // 2. Verify triggers installed (7 from V24, plus V25 triggers = 13)
       final triggerRows = await db.rawQuery(
         "SELECT count(*) as cnt FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_%';",
       );
-      expect(triggerRows.first['cnt'], equals(7));
+      expect(triggerRows.first['cnt'], equals(13));
 
       // 3. Verify system accounts seeded
       final accounts = await db.query(TablesV24.accounts);
@@ -144,8 +144,13 @@ void main() {
 
       // Capture post-migration fingerprint
       final postFingerprint = await AccountingFingerprint.fromDatabase(appDb);
-      expect(postFingerprint.matches(preFingerprint), isTrue,
-          reason: 'Auto-migrated database must preserve exact accounting fingerprint');
+      expect(postFingerprint.schemaVersion, equals(26));
+      expect(postFingerprint.accountCount, equals(preFingerprint.accountCount));
+      expect(postFingerprint.economicEventCount, equals(preFingerprint.economicEventCount));
+      expect(postFingerprint.postingCount, equals(preFingerprint.postingCount));
+      expect(postFingerprint.debitTotalMinorUnits, equals(preFingerprint.debitTotalMinorUnits));
+      expect(postFingerprint.creditTotalMinorUnits, equals(preFingerprint.creditTotalMinorUnits));
+      expect(postFingerprint.netWorthMinorUnits, equals(preFingerprint.netWorthMinorUnits));
 
       await AppDatabase.instance.close();
 

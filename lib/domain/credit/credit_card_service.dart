@@ -173,6 +173,30 @@ class CreditCardService {
     );
     await _svc.createTransaction(tx);
 
+    // Compatibility ledger: credit card side (reduces outstanding) & bank account side (reduces balance)
+    await _svc.appendLedger(
+      LedgerTransaction(
+        type: LedgerType.credit_payment,
+        amount: paymentAmount,
+        date: date,
+        creditCardId: cardId,
+        note: defaultNote,
+        referenceId: txnId,
+      ),
+    );
+    if (accountId != null) {
+      await _svc.appendLedger(
+        LedgerTransaction(
+          type: LedgerType.expense,
+          amount: paymentAmount,
+          date: date,
+          accountId: accountId,
+          note: defaultNote,
+          referenceId: txnId,
+        ),
+      );
+    }
+
     // 2. Decrement last_statement_balance in credit_cards table
     try {
       final db = await AppDatabase.instance.database;

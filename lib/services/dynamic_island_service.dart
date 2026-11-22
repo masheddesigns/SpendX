@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'sms_live_channel_bridge.dart';
 
 class DynamicIslandEvent {
   final String amount;
@@ -19,7 +20,21 @@ class DynamicIslandEvent {
 /// Dynamic Island service - decommissioned per user request to eliminate
 /// overlay crashes, WindowManager bugs, and notification listener interference.
 class DynamicIslandService {
-  DynamicIslandService._();
+  DynamicIslandService._() {
+    SmsLiveChannelBridge.instance.registerIslandCardClickHandler((args) {
+      if (args != null) {
+        final event = DynamicIslandEvent(
+          amount: args['amount']?.toString() ?? '',
+          isExpense: args['isExpense'] == true,
+          title: args['title']?.toString() ?? 'SpendX',
+          subtitle: args['subtitle']?.toString() ?? '',
+          timestamp: DateTime.now(),
+        );
+        _controller.add(event);
+        _cardClickController.add(event);
+      }
+    });
+  }
   static final DynamicIslandService instance = DynamicIslandService._();
 
   final _controller = StreamController<DynamicIslandEvent>.broadcast();
@@ -38,6 +53,13 @@ class DynamicIslandService {
     String title = 'SpendX',
     String subtitle = '',
   }) async {
-    // Intentionally no-op to eliminate intrusive and buggy overlays
+    final event = DynamicIslandEvent(
+      amount: amount,
+      isExpense: isExpense,
+      title: title,
+      subtitle: subtitle,
+      timestamp: DateTime.now(),
+    );
+    _controller.add(event);
   }
 }

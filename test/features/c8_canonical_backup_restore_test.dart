@@ -79,7 +79,7 @@ void main() {
   Future<void> initDatabase(String path) async {
     db = await openDatabase(
       path,
-      version: 24,
+      version: 26,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
@@ -239,7 +239,7 @@ void main() {
       final emptyDbPath = join(tempDir.path, 'empty.db');
       final emptyDb = await openDatabase(
         emptyDbPath,
-        version: 24,
+        version: 26,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON;'),
       );
       await Tables.createAll(emptyDb);
@@ -263,7 +263,7 @@ void main() {
 
       // Restore over a fresh target
       final targetPath = join(tempDir.path, 'target_empty.db');
-      final targetDb = await openDatabase(targetPath, version: 24);
+      final targetDb = await openDatabase(targetPath, version: 26);
 
       final success = await BackupService.instance.restoreFromFile(
         pkg,
@@ -277,7 +277,7 @@ void main() {
           .first
           .values
           .first;
-      expect(ver, 24);
+      expect(ver, 26);
       await reopened.close();
       await emptyDb.close();
     });
@@ -1061,7 +1061,7 @@ void main() {
 
     test('22. Foreign-key constraint violation in staging DB triggers validation error', () async {
       final badDbPath = join(tempDir.path, 'bad_fk.db');
-      final badDb = await openDatabase(badDbPath, version: 24);
+      final badDb = await openDatabase(badDbPath, version: 26);
       await Tables.createAll(badDb);
       await TablesV24.createAllV24(badDb);
       // Disable foreign keys temporarily to inject orphaned posting
@@ -1098,7 +1098,7 @@ void main() {
 
     test('23. Unbalanced postings in staging DB triggers immediate rejection', () async {
       final badDbPath = join(tempDir.path, 'bad_balance.db');
-      final badDb = await openDatabase(badDbPath, version: 24);
+      final badDb = await openDatabase(badDbPath, version: 26);
       await Tables.createAll(badDb);
       await TablesV24.createAllV24(badDb);
       await TablesV24.seedSystemAccounts(badDb);
@@ -1165,7 +1165,7 @@ void main() {
 
     test('24. Non-positive posting amount (amount <= 0) rejected', () async {
       final badDbPath = join(tempDir.path, 'zero_post.db');
-      final badDb = await openDatabase(badDbPath, version: 24);
+      final badDb = await openDatabase(badDbPath, version: 26);
       await Tables.createAll(badDb);
       await TablesV24.createAllV24(badDb);
       await TablesV24.seedSystemAccounts(badDb);

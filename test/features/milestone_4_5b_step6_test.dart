@@ -644,7 +644,7 @@ void main() {
       );
 
       // Create valid schema without triggers first so we can seed unbalanced data
-      await invalidDb.execute('PRAGMA user_version = 24;');
+      await invalidDb.execute('PRAGMA user_version = 26;');
       await TablesV24.createAllV24(invalidDb);
       await TablesV24.seedSystemAccounts(invalidDb);
 

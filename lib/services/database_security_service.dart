@@ -361,6 +361,7 @@ class DatabaseSecurityService {
     int preDebitTotal = 0;
     int preCreditTotal = 0;
     int triggerCount = 0;
+    int schemaVer = 24;
 
     final Database plainDb = await openDatabase(
       sourcePlainDb.path,
@@ -385,12 +386,13 @@ class DatabaseSecurityService {
         );
       }
 
-      // Verify Schema v24
+      // Verify Schema v24..v26
       final verRows = await plainDb.rawQuery('PRAGMA user_version;');
       final version = verRows.first.values.first as int? ?? 0;
-      if (version != 24) {
+      schemaVer = version;
+      if (version < 24 || version > 26) {
         throw DatabaseMigrationRollbackException(
-          'Source database schema version is $version, expected 24.',
+          'Source database schema version is $version, expected 24..26.',
         );
       }
 
@@ -513,7 +515,7 @@ class DatabaseSecurityService {
 
       return DatabaseMigrationReport(
         success: true,
-        schemaVersion: 24,
+        schemaVersion: schemaVer,
         activeTriggersCount: triggerCount,
         preMigrationCounts: preCounts,
         postMigrationCounts: preCounts,

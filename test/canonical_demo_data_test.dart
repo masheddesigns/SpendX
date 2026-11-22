@@ -118,7 +118,7 @@ void main() {
           limitAmount: 150000.0,
           usedAmount: 12500.0,
           billingDay: 15,
-          dueDay: now.day + 4 > 28 ? 5 : now.day + 4,
+          dueDay: now.add(const Duration(days: 20)).day,
           cardType: 'visa',
         ),
       );
@@ -297,11 +297,11 @@ void main() {
       final safeToSpendCalc = await queryRepo.getSafeToSpend();
       expect(safeToSpendCalc.liquidAssets.toRupees, 154050.0);
 
-      // 14-day commitments: Electricity(2,100) + Loan EMI(21,696) + CC Liability(19,199) = 42,995
-      expect(safeToSpendCalc.knownCommitments14d.toRupees, 42995.0);
+      // 14-day commitments: Electricity(2,100) + Loan EMI(21,696) = 23,796
+      expect(safeToSpendCalc.knownCommitments14d.toRupees, 23796.0);
 
-      // Safe to spend = 1,54,050 - 42,995 = 1,11,055
-      expect(safeToSpendCalc.safeToSpend.toRupees, 154050.0 - 42995.0);
+      // Safe to spend = 1,54,050 - 23,796 = 1,30,254
+      expect(safeToSpendCalc.safeToSpend.toRupees, 154050.0 - 23796.0);
       expect(safeToSpendCalc.hasShortfall, isFalse);
 
       // ── 10. Verify Net Worth Calculation ──────────────────────────────────

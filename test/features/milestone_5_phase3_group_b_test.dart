@@ -609,7 +609,7 @@ void main() {
       });
 
       test('C.7: Heuristic deduplication with changed timestamp and no UTR', () async {
-        const smsOriginal = 'Debited Rs. 180.00 from A/c **1234 on 10-OCT-26 via UPI to STARBUCKS. Bal: Rs. 42000.00 - HDFC Bank';
+        const smsOriginal = 'Debited Rs. 180.00 from A/c **1234 via UPI to STARBUCKS. Bal: Rs. 42000.00 - HDFC Bank';
         LiveSmsService.instance.addLiveBufferForTesting('AD-HDFCBK-T', smsOriginal);
         await LiveSmsService.instance.flushLiveBufferForTesting();
 

@@ -1211,8 +1211,15 @@ void main() {
         final bank = BankAccount(name: 'Canara Bank', bank: 'Canara', last4: '5555', balance: 50000.0);
         final bankId = await accountRepo.insertAccount(bank);
 
-        // Step 2: Start with a credit-card liability of ₹20,000.
-        final card = CreditCard(name: 'ICICI Coral', bank: 'ICICI Bank', last4: '5007', limitAmount: 100000.0, usedAmount: 20000.0);
+        // Step 2: Start with a credit-card liability of ₹20,000 due within 5 days.
+        final card = CreditCard(
+          name: 'ICICI Coral',
+          bank: 'ICICI Bank',
+          last4: '5007',
+          limitAmount: 100000.0,
+          usedAmount: 20000.0,
+          dueDay: DateTime.now().add(const Duration(days: 5)).day,
+        );
         final cardId = await creditRepo.insert(card);
 
         // Initial net worth calculation: Assets (50,000) - Liabilities (20,000) = ₹30,000

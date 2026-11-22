@@ -63,7 +63,7 @@ void main() {
   Future<void> initDatabase(String path) async {
     db = await openDatabase(
       path,
-      version: 24,
+      version: 26,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
@@ -307,7 +307,7 @@ void main() {
         );
 
         expect(report.success, isTrue);
-        expect(report.schemaVersion, equals(24));
+        expect(report.schemaVersion, equals(26));
         expect(report.parityVerified, isTrue);
         expect(await destEncFile.exists(), isTrue);
         expect(await DatabaseSecurityService.instance.isEncryptedDatabase(destEncFile), isTrue);
@@ -334,7 +334,7 @@ void main() {
         final verifyDb = await openDatabase(decFile.path);
         try {
           final verRes = await verifyDb.rawQuery('PRAGMA user_version;');
-          expect(verRes.first.values.first, equals(24));
+          expect(verRes.first.values.first, equals(26));
 
           final triggerRows = await verifyDb.rawQuery(
             "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'trg_%';",
@@ -1185,7 +1185,7 @@ void main() {
         final metrics = await CanonicalBackupValidator.computeDatabaseMetrics(db);
         final legacyManifest = BackupManifest(
           formatVersion: 2,
-          schemaVersion: 24,
+          schemaVersion: BackupManifest.currentSchemaVersion,
           appVersion: '1.0.0',
           appName: 'SpendX',
           createdAt: DateTime.now().toUtc(),

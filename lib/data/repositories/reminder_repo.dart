@@ -334,8 +334,7 @@ class ReminderRepo {
 
         if (matchedCard != null) {
           if (matchedCard.lastStatementBalance <= 0.01 ||
-              matchedCard.outstanding <= 0.01 ||
-              (isPastDue && matchedCard.outstanding < rAmt)) {
+              (isPastDue && (matchedCard.outstanding <= 0.01 || matchedCard.outstanding < rAmt))) {
             matched = true;
           }
         }

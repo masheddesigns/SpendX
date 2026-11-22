@@ -1076,6 +1076,7 @@ class CrossChannelDeduplicationService {
       id: reviewId,
       sourceType: candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'push',
       rawPayload: jsonEncode({
+        'body': candidate.body,
         'rawSource': candidate.body,
         'parsed': parsedForStorage.toMap(),
         'sender': candidate.sender,
@@ -1197,6 +1198,7 @@ class CrossChannelDeduplicationService {
         defaultOffset = TablesV24.sysSuspenseLoan;
         break;
       case CanonicalEventType.refund:
+      case CanonicalEventType.adjustment:
         offsetType = 'expense';
         defaultOffset = TablesV24.sysExpMisc;
         break;

@@ -430,6 +430,6 @@ void main() {
       expect(postSha, equals(preSha),
           reason: 'Original source database must remain untouched with bit-exact hash parity.');
       expect(postSha, equals(expectedOriginalSha256));
-    });
+    }, skip: !File(originalProductionDbPath).existsSync() ? 'Requires production device database at $originalProductionDbPath' : null);
   });
 }

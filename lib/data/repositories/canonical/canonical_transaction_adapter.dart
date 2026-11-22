@@ -183,6 +183,7 @@ class CanonicalTransactionAdapter {
       createdAt: tx.createdAt,
       description: tx.notes.isNotEmpty ? tx.notes : tx.type,
       metadata: {
+        'type': tx.type,
         'user_id': tx.userId,
         'currency': tx.currency,
         'notes': tx.notes,
@@ -653,7 +654,8 @@ class CanonicalTransactionAdapter {
         break;
 
       case CanonicalEventType.refund:
-        typeStr = 'refund';
+      case CanonicalEventType.adjustment:
+        typeStr = meta['type'] as String? ?? 'refund';
         accountId ??= postings
             .firstWhere(
               (p) => p.direction == PostingDirection.debit,
