@@ -459,7 +459,7 @@ void main() {
       // Restored database is usable through the gate
       final db = await AppDatabase.instance.database;
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, 24);
+      expect(verRows.first.values.first, 26);
 
       DataChangeBus.instance.removeListener(busListener);
       DatabaseLifecycleCoordinator.instance.removeDatabaseReplacementListener(lifecycleListener);
@@ -523,7 +523,7 @@ void main() {
 
       final db = await AppDatabase.instance.database;
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, 24);
+      expect(verRows.first.values.first, 26);
     });
 
     test('7.10: Destructive boundary failure: Replacement rename failure and rollback', () async {
@@ -540,7 +540,7 @@ void main() {
 
       final db = await AppDatabase.instance.database;
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, 24);
+      expect(verRows.first.values.first, 26);
     });
 
     test('7.11: Destructive boundary failure: Reopen failure and rollback', () async {
@@ -557,7 +557,7 @@ void main() {
 
       final db = await AppDatabase.instance.database;
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, 24);
+      expect(verRows.first.values.first, 26);
     });
 
     test('7.12: Destructive boundary failure: Integrity validation failure and rollback', () async {
@@ -574,7 +574,7 @@ void main() {
 
       final db = await AppDatabase.instance.database;
       final verRows = await db.rawQuery('PRAGMA user_version;');
-      expect(verRows.first.values.first, 24);
+      expect(verRows.first.values.first, 26);
     });
 
     test('7.13: Ambiguous recovery and quarantine (gate remains CLOSED, artifacts preserved)', () async {
@@ -752,7 +752,7 @@ void main() {
       final db = await AppDatabase.instance.database;
       expect(db, isA<GatedDatabase>());
       final rows = await db.rawQuery('PRAGMA user_version;');
-      expect(rows.first.values.first, 24);
+      expect(rows.first.values.first, 26);
     });
 
     // =========================================================================
@@ -828,7 +828,7 @@ void main() {
       expect(gate.isOpen, isTrue);
       final db = await AppDatabase.instance.database;
       final rows = await db.rawQuery('PRAGMA user_version;');
-      expect(rows.first.values.first, 24);
+      expect(rows.first.values.first, 26);
     });
 
     test('7.21: .pre_restore_backup preserved until validation; cleanup only on success', () async {
@@ -855,7 +855,7 @@ void main() {
       expect(gate.isOpen, isTrue);
       final db = await AppDatabase.instance.database;
       final rows = await db.rawQuery('PRAGMA user_version;');
-      expect(rows.first.values.first, 24);
+      expect(rows.first.values.first, 26);
 
       // Confirm no leftover rollback file once rollback has completed cleanly.
       // (Rollback renames or copies the file to the active path; .pre_restore_backup should be gone.)

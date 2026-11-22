@@ -66,7 +66,7 @@ class InvalidBackupPasswordException extends BackupException {
 /// Manifest structure packaged inside every `.spendx` backup archive.
 class BackupManifest {
   static const int currentFormatVersion = 2;
-  static const int currentSchemaVersion = 24;
+  static const int currentSchemaVersion = 26;
 
   final int formatVersion;
   final int schemaVersion;

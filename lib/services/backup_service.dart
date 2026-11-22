@@ -1065,7 +1065,7 @@ class BackupService {
           TablesV24.postings,
         ],
       );
-      if (rollbackValidation.userVersion != 24) {
+      if (rollbackValidation.userVersion != 26) {
         throw StateError(
           'Rolled-back database has invalid user_version: ${rollbackValidation.userVersion}',
         );
@@ -1226,7 +1226,7 @@ class BackupService {
       final verRows = await testOpen.rawQuery('PRAGMA user_version;');
       final ver = verRows.first.values.first as int? ?? 0;
       await testOpen.close();
-      if (ver != 24) {
+      if (ver != 26) {
         throw StateError('Restored target database has invalid version: $ver');
       }
 
@@ -1276,7 +1276,7 @@ class BackupService {
         final verRows = await rollbackOpen.rawQuery('PRAGMA user_version;');
         final ver = verRows.first.values.first as int? ?? 0;
         await rollbackOpen.close();
-        if (ver != 24) {
+        if (ver != 26) {
           throw StateError('Rolled-back custom database has invalid user_version: $ver');
         }
 

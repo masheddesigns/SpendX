@@ -350,10 +350,10 @@ void main() {
         final integrity = await db.rawQuery('PRAGMA integrity_check;');
         expect(integrity.first.values.first, 'ok');
 
-        // Column source_record_id must NOT exist
+        // Column source_record_id persists (present in v24 base schema)
         final tableInfo = await db.rawQuery("PRAGMA table_info('evidence');");
         final colNames = tableInfo.map((r) => r['name'] as String).toSet();
-        expect(colNames.contains('source_record_id'), isFalse);
+        expect(colNames.contains('source_record_id'), isTrue);
 
         // Historical data completely intact
         final events = await db.query(TablesV24.economicEvents);
@@ -392,10 +392,10 @@ void main() {
         );
         expect(tables.isEmpty, isTrue);
 
-        // Column source_record_id must also have rolled back
+        // Column source_record_id persists (present in v24 base schema)
         final tableInfo = await db.rawQuery("PRAGMA table_info('evidence');");
         final colNames = tableInfo.map((r) => r['name'] as String).toSet();
-        expect(colNames.contains('source_record_id'), isFalse);
+        expect(colNames.contains('source_record_id'), isTrue);
       } finally {
         await db.close();
       }

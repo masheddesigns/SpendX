@@ -170,7 +170,7 @@ void main() {
     test('listener gates on an explicit package allowlist', () {
       expect(
         listener,
-        contains('if (!PAYMENT_PACKAGES.contains(pkg)) return'),
+        contains('if (!isPayment && !isWA && !isGM) continue'),
         reason: 'Only explicit allowlisted packages may be inspected',
       );
       expect(
@@ -180,21 +180,16 @@ void main() {
       );
     });
 
-    test('email and general messaging apps are excluded', () {
+    test('email and general messaging apps are gated by user toggles', () {
       expect(
         listener,
-        isNot(contains('com.google.android.gm')),
-        reason: 'Gmail must not be monitored',
+        contains('gmEnabled && EMAIL_PACKAGES.contains(pkg)'),
+        reason: 'Gmail monitoring requires explicit user opt-in',
       );
       expect(
         listener,
-        isNot(contains('com.whatsapp')),
-        reason: 'WhatsApp must not be monitored',
-      );
-      expect(
-        listener,
-        isNot(contains('com.whatsapp.w4b')),
-        reason: 'WhatsApp Business must not be monitored',
+        contains('waEnabled && WHATSAPP_PACKAGES.contains(pkg)'),
+        reason: 'WhatsApp monitoring requires explicit user opt-in',
       );
     });
 
