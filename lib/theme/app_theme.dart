@@ -163,6 +163,43 @@ class AppColors {
   static const Color primaryText = AppTheme.darkTextPrimary;
   static const Color secondaryText = AppTheme.darkTextSecondary;
   static const Color mutedText = AppTheme.darkTextMuted;
+
+  // Adaptive theme-aware resolvers
+  static Color textPrimaryOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? AppTheme.darkTextPrimary
+          : AppTheme.lightTextPrimary;
+
+  static Color textSecondaryOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? AppTheme.darkTextSecondary
+          : AppTheme.lightTextSecondary;
+
+  static Color textMutedOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? AppTheme.darkTextMuted
+          : AppTheme.lightTextMuted;
+
+  static Color surfaceOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? AppTheme.darkSurface
+          : AppTheme.lightSurface;
+
+  static Color borderOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? AppTheme.darkBorder
+          : AppTheme.lightBorder;
+}
+
+/// Ergonomic context extension for unified theme access across widgets
+extension SpendXThemeContext on BuildContext {
+  bool get isDark => Theme.of(this).brightness == Brightness.dark;
+  Color get textPrimary => isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
+  Color get textSecondary => isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary;
+  Color get textMuted => isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted;
+  Color get surfaceColor => isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
+  Color get canvasColor => isDark ? AppTheme.darkCanvas : AppTheme.lightCanvas;
+  Color get borderColor => isDark ? AppTheme.darkBorder : AppTheme.lightBorder;
 }
 
 /// Controlled dark theme for full-screen immersive experiences.

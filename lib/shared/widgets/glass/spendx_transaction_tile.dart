@@ -111,8 +111,14 @@ class SpendXTransactionTile extends StatelessWidget {
       }
     }
 
-    return Material(
-      color: Colors.transparent,
+    final semanticLabel = '$title, ${isExpense ? "expense" : isIncome ? "income" : "transfer"}, ${AppFormat.currency(transaction.amount)}${displayAccountName != null && displayAccountName.isNotEmpty ? ", $displayAccountName" : ""}, ${DateFormat('d MMMM').format(transaction.date)}';
+
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         splashColor: isDark
@@ -376,6 +382,7 @@ class SpendXTransactionTile extends StatelessWidget {
             ),
         ],
       ),
+    ),
     ),
   );
 }

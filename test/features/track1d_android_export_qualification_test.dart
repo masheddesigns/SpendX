@@ -64,7 +64,7 @@ Future<void> _createSchema(Database db) async {
     await db.execute(sql);
   }
   await TablesV24.seedSystemAccounts(db);
-  await db.execute('PRAGMA user_version = 24;');
+  await db.execute('PRAGMA user_version = 26;');
 }
 
 void main() {
@@ -111,7 +111,7 @@ void main() {
     final dbPath = p.join(tempDir.path, 'source_test.db');
     final db = await openDatabase(
       dbPath,
-      version: 24,
+      version: 26,
       onCreate: (db, version) async {
         await _createSchema(db);
       },
@@ -175,7 +175,7 @@ void main() {
     final dbPath = p.join(tempDir.path, 'source_validity.db');
     final db = await openDatabase(
       dbPath,
-      version: 24,
+      version: 26,
       onCreate: (db, version) async {
         await _createSchema(db);
       },
@@ -235,7 +235,7 @@ void main() {
     final sourceDbPath = p.join(tempDir.path, 'source_populated.db');
     final sourceDb = await openDatabase(
       sourceDbPath,
-      version: 24,
+      version: 26,
       onCreate: (db, version) async {
         await _createSchema(db);
       },
@@ -329,14 +329,14 @@ void main() {
       packageFile: exportedFile,
       stagingDir: extractDir,
     );
-    expect(staged.manifest.schemaVersion, equals(24));
+    expect(staged.manifest.schemaVersion, equals(26));
     expect(staged.manifest.databaseSha256, equals(manifest.databaseSha256));
 
     // 4. Restore into fresh target DB
     final targetDbPath = p.join(tempDir.path, 'target_restored.db');
     final targetDb = await openDatabase(
       targetDbPath,
-      version: 24,
+      version: 26,
       onCreate: (db, version) async {
         await _createSchema(db);
       },

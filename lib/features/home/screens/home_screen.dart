@@ -7,11 +7,7 @@ import '../../../screens/home/transactions_screen.dart';
 import '../../../screens/more/more_screen.dart';
 import '../../../screens/plan/plan_tab.dart';
 import '../../../services/haptic_service.dart';
-import '../../../services/entity_consolidation_service.dart';
 import '../../../services/notification_service_v2.dart';
-import '../../../features/accounts/providers/account_providers.dart';
-import '../../../features/liabilities/providers/liabilities_providers.dart';
-import '../../../data/providers.dart' as app_data;
 import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../../theme/app_theme.dart';
@@ -130,39 +126,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 actions: [
                   if (_currentIndex == 1)
                     IconButton(
-                      icon: const Icon(Icons.add_rounded),
-                      tooltip: 'Add Transaction',
+                      icon: const Icon(Icons.search_rounded),
+                      tooltip: 'Search Transactions',
                       onPressed: () => Navigator.push(
                         context,
                         AppPageRoute(
-                          builder: (_) =>
-                              const AddExpenseScreen(initialType: 'expense'),
+                          builder: (_) => const TransactionListScreen(isFullScreen: true),
                         ),
                       ),
-                    ),
-                  if (_currentIndex == 2)
-                    IconButton(
-                      icon: const Icon(Icons.auto_fix_high_rounded),
-                      tooltip: 'Consolidate & Deduplicate',
-                      onPressed: () async {
-                        HapticService.instance.medium();
-                        final count = await EntityConsolidationService.instance.consolidate();
-                        ref.invalidate(accountsProvider);
-                        ref.invalidate(creditCardsProvider);
-                        ref.invalidate(loansProvider);
-                        ref.invalidate(app_data.netWorthSummaryProvider);
-                        app_data.invalidateAllFinancialProviders(ref);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(count > 0
-                                  ? 'Cleaned & consolidated $count duplicate items.'
-                                  : 'All accounts and cards are clean and synced.'),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
                     ),
                 ],
               ),
@@ -170,6 +141,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           index: _currentIndex,
           children: _tabs,
         ),
+        floatingActionButton: Semantics(
+          button: true,
+          label: 'Add Transaction',
+          child: FloatingActionButton(
+            heroTag: 'spendx_primary_fab',
+            elevation: 4,
+            backgroundColor: AppTheme.primaryBlue,
+            foregroundColor: Colors.white,
+            shape: const CircleBorder(),
+            tooltip: 'Add Transaction',
+            onPressed: () {
+              HapticService.instance.medium();
+              Navigator.push(
+                context,
+                AppPageRoute(
+                  builder: (_) => const AddExpenseScreen(initialType: 'expense'),
+                ),
+              );
+            },
+            child: const Icon(Icons.add_rounded, size: 28),
+          ),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         bottomNavigationBar: SpendXGlassNavigation(
           selectedIndex: _currentIndex,
           onItemSelected: _onTabSelected,

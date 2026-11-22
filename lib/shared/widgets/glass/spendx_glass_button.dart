@@ -175,63 +175,71 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
 
     final isEnabled = widget.onPressed != null && !widget.isLoading;
 
-    return AnimatedBuilder(
-      animation: _scaleAnimation,
-      builder: (context, child) => Transform.scale(
-        scale: _scaleAnimation.value,
-        child: child,
-      ),
-      child: GestureDetector(
-        onTapDown: isEnabled ? _handleTapDown : null,
-        onTapUp: isEnabled ? _handleTapUp : null,
-        onTapCancel: isEnabled ? _handleTapCancel : null,
-        onTap: isEnabled
-            ? () {
-                HapticFeedback.lightImpact();
-                widget.onPressed!();
-              }
-            : null,
-        child: SpendXGlassSurface(
-          level: SpendXGlassLevel.interactive,
-          width: widget.width,
-          height: widget.height,
-          borderRadius: radius,
-          color: isEnabled ? tintColor : tintColor.withValues(alpha: 0.3),
-          border: border,
-          padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Center(
-            child: widget.isLoading
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(textColor),
-                    ),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (widget.icon != null) ...[
-                        Icon(widget.icon, size: 16, color: textColor),
-                        const SizedBox(width: 5),
-                      ],
-                      Flexible(
-                        child: DefaultTextStyle(
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: textColor,
-                            letterSpacing: -0.1,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          child: widget.child,
+    return Semantics(
+      button: true,
+      enabled: isEnabled,
+      focusable: isEnabled,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        child: AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) => Transform.scale(
+            scale: _scaleAnimation.value,
+            child: child,
+          ),
+          child: GestureDetector(
+            onTapDown: isEnabled ? _handleTapDown : null,
+            onTapUp: isEnabled ? _handleTapUp : null,
+            onTapCancel: isEnabled ? _handleTapCancel : null,
+            onTap: isEnabled
+                ? () {
+                    HapticFeedback.lightImpact();
+                    widget.onPressed!();
+                  }
+                : null,
+            child: SpendXGlassSurface(
+              level: SpendXGlassLevel.interactive,
+              width: widget.width,
+              height: widget.height,
+              borderRadius: radius,
+              color: isEnabled ? tintColor : tintColor.withValues(alpha: 0.3),
+              border: border,
+              padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Center(
+                child: widget.isLoading
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(textColor),
                         ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (widget.icon != null) ...[
+                            Icon(widget.icon, size: 16, color: textColor),
+                            const SizedBox(width: 5),
+                          ],
+                          Flexible(
+                            child: DefaultTextStyle(
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                                letterSpacing: -0.1,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              child: widget.child,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+              ),
+            ),
           ),
         ),
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/settings_service.dart';
 
 class AppAmountField extends StatelessWidget {
@@ -28,41 +29,70 @@ class AppAmountField extends StatelessWidget {
         ? const Color(0x2EFFFFFF)
         : const Color(0x1F000000);
 
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      onChanged: onChanged,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(
-        fontSize: 28,
-        fontWeight: FontWeight.w700,
-        fontFeatures: const [FontFeature.tabularFigures()],
-        letterSpacing: -0.5,
-        color: effectiveColor,
-      ),
-      decoration: InputDecoration(
-        prefixText: '${SettingsService.instance.currencySymbol} ',
-        prefixStyle: TextStyle(
+    return Semantics(
+      textField: true,
+      label: 'Transaction Amount',
+      child: TextFormField(
+        controller: controller,
+        focusNode: focusNode,
+        onChanged: onChanged,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+        ],
+        style: TextStyle(
           fontSize: 28,
           fontWeight: FontWeight.w700,
           fontFeatures: const [FontFeature.tabularFigures()],
           letterSpacing: -0.5,
           color: effectiveColor,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-        filled: true,
-        fillColor: fillColor,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16.0),
-          borderSide: BorderSide(color: borderColor, width: 0.75),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16.0),
-          borderSide: BorderSide(color: borderColor, width: 0.75),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16.0),
-          borderSide: BorderSide(color: effectiveColor, width: 1.5),
+        decoration: InputDecoration(
+          prefixText: '${SettingsService.instance.currencySymbol} ',
+          prefixStyle: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+            letterSpacing: -0.5,
+            color: effectiveColor,
+          ),
+          hintText: '0.00',
+          hintStyle: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+            letterSpacing: -0.5,
+            color: effectiveColor.withValues(alpha: 0.35),
+          ),
+          suffixIcon: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              if (value.text.isEmpty) return const SizedBox.shrink();
+              return IconButton(
+                icon: const Icon(Icons.clear_rounded, size: 20),
+                tooltip: 'Clear amount',
+                onPressed: () {
+                  controller.clear();
+                  onChanged?.call('');
+                },
+              );
+            },
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          filled: true,
+          fillColor: fillColor,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16.0),
+            borderSide: BorderSide(color: borderColor, width: 0.75),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16.0),
+            borderSide: BorderSide(color: borderColor, width: 0.75),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16.0),
+            borderSide: BorderSide(color: effectiveColor, width: 1.5),
+          ),
         ),
       ),
     );
