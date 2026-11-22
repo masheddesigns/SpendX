@@ -8,6 +8,7 @@ class Transaction {
   final String? categoryId; // Allow nullable for transfers
   final String? accountId;
   final double amount;
+  final String currency;
   final DateTime date;
   final String notes;
   final List<String> tags; // Stored as JSON string in DB
@@ -28,6 +29,7 @@ class Transaction {
     this.categoryId,
     this.accountId,
     required this.amount,
+    this.currency = 'INR',
     required this.date,
     this.notes = '',
     this.tags = const [],
@@ -52,6 +54,7 @@ class Transaction {
       'category_id': categoryId,
       'account_id': accountId,
       'amount': amount,
+      'currency': currency,
       'date': date.toIso8601String(),
       'notes': notes,
       'tags': jsonEncode(tags), // Serialize tags to string
@@ -73,6 +76,7 @@ class Transaction {
       categoryId: map['category_id'] as String?,
       accountId: map['account_id'] as String? ?? map['related_entity_id'] as String?,
       amount: (map['amount'] as num).toDouble(),
+      currency: map['currency'] as String? ?? 'INR',
       date: DateTime.parse(map['date'] as String).toLocal(),
       notes: map['notes'] as String? ?? map['note'] as String? ?? '',
       tags: _parseTags(map['tags']),
@@ -129,6 +133,7 @@ class Transaction {
     String? categoryId,
     String? accountId,
     double? amount,
+    String? currency,
     DateTime? date,
     String? notes,
     List<String>? tags,
@@ -149,6 +154,7 @@ class Transaction {
       categoryId: categoryId ?? this.categoryId,
       accountId: accountId ?? this.accountId,
       amount: amount ?? this.amount,
+      currency: currency ?? this.currency,
       date: date ?? this.date,
       notes: notes ?? this.notes,
       tags: tags ?? this.tags,

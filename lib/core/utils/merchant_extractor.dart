@@ -11,7 +11,20 @@ class MerchantExtractor {
     'date', 'time', 'aapke', 'apne', 'apna', 'se', 'ka', 'ki', 'ke',
     'hai', 'hua', 'gaya', 'kiya', 'mein', 'number', 'num', 'id', 'request',
     'successfully', 'successful', 'completed', 'processed', 'done',
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+    'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+    'mon', 'monday', 'tue', 'tuesday', 'wed', 'wednesday', 'thu', 'thursday', 'fri', 'friday', 'sat', 'saturday', 'sun', 'sunday',
+    'call', 'tollfree', 'dispute', 'block', 'sms', 'otp', 'code', 'pin', 'atm', 'cdm',
   };
+
+  static bool isDateOrNoise(String candidate) {
+    final lower = candidate.toLowerCase().trim();
+    if (_stop.contains(lower)) return true;
+    if (RegExp(r'^\d{1,2}[-/\s]|\d{4}[-/\s]|[-/\s]\d{2,4}$').hasMatch(lower)) return true;
+    if (RegExp(r'^\d{1,2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{0,4}$').hasMatch(lower)) return true;
+    if (RegExp(r'^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[-/\s]?\d{0,4}$').hasMatch(lower)) return true;
+    return false;
+  }
 
   // Ordered by specificity — most specific patterns first
   static final _patterns = [
@@ -54,10 +67,11 @@ class MerchantExtractor {
       final match = pattern.firstMatch(lower);
       if (match != null) {
         final candidate = _clean(match.group(1)!);
-        // Exclude purely numeric strings or single characters
+        // Exclude purely numeric strings, single characters, dates or noise
         if (candidate.isNotEmpty &&
             candidate.length >= 2 &&
-            !RegExp(r'^\d+$').hasMatch(candidate)) {
+            !RegExp(r'^\d+$').hasMatch(candidate) &&
+            !isDateOrNoise(candidate)) {
           return _titleCase(candidate);
         }
       }
@@ -70,13 +84,16 @@ class MerchantExtractor {
             token.isEmpty ||
             _stop.contains(token) ||
             token.length < 3 ||
-            RegExp(r'^\d+$').hasMatch(token),
+            RegExp(r'^\d+$').hasMatch(token) ||
+            isDateOrNoise(token),
       );
 
     tokens.sort((a, b) => b.length.compareTo(a.length));
     if (tokens.isNotEmpty) {
       final fallback = _clean(tokens.first);
-      if (fallback.length >= 3 && !RegExp(r'^\d+$').hasMatch(fallback)) {
+      if (fallback.length >= 3 &&
+          !RegExp(r'^\d+$').hasMatch(fallback) &&
+          !isDateOrNoise(fallback)) {
         return _titleCase(fallback);
       }
     }

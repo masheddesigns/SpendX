@@ -464,9 +464,7 @@ class BankNotificationListener : NotificationListenerService() {
                 Log.e("SpendX_Notif", "CRITICAL: Failed to durably queue notification [$sourceRecordId]. Suppressing overlay.")
                 return
             }
-            if (amount.isNotBlank()) {
-                DynamicIslandOverlayService.show(this, "SpendX", amount, isExpense, displaySender)
-            }
+            // Overlay suppressed per user request
         }
     }
 }

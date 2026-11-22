@@ -58,6 +58,7 @@ class IncomingTransactionCandidate {
   final bool isAmbiguous;
   final String? ambiguityReason;
   final String? primaryAccountType;
+  final String currency;
 
   const IncomingTransactionCandidate({
     required this.sourceRecordId,
@@ -67,6 +68,7 @@ class IncomingTransactionCandidate {
     required this.amountMinorUnits,
     required this.direction,
     required this.timestamp,
+    this.currency = 'INR',
     this.externalReference,
     this.accountNumberLast4,
     this.accountId,
@@ -331,6 +333,53 @@ class CrossChannelDeduplicationService {
               txn: txn,
             );
           } else {
+            // Check if this is an inter-account transfer between two distinct user accounts
+            // (e.g. IMPS/UPI transfer between Jio Bank and Federal Bank)
+            final candidateAccId = candidate.accountId;
+            final matchedPostings = await txn.query(
+              TablesV24.postings,
+              where: 'economic_event_id = ?',
+              whereArgs: [matchedEventId],
+            );
+            String? matchedAccId;
+            for (final p in matchedPostings) {
+              final accId = p['account_id'] as String;
+              if (!accId.startsWith('sys_')) {
+                matchedAccId = accId;
+                break;
+              }
+            }
+
+            if (candidateAccId != null &&
+                matchedAccId != null &&
+                candidateAccId != matchedAccId) {
+              // Inter-account transfer! Post as a linked Transfer event balancing both user asset accounts
+              final transferCandidate = IncomingTransactionCandidate(
+                sourceRecordId: candidate.sourceRecordId,
+                sourceChannel: candidate.sourceChannel,
+                sender: candidate.sender,
+                body: candidate.body,
+                amountMinorUnits: candidate.amountMinorUnits,
+                direction: candidate.direction,
+                timestamp: candidate.timestamp,
+                externalReference: candidate.externalReference,
+                accountId: candidateAccId,
+                counterpartyAccountId: matchedAccId,
+                merchant: 'Transfer to ${candidate.merchant ?? "Self"}',
+                eventType: CanonicalEventType.transfer,
+                reversalOfEventId: matchedEventId,
+              );
+
+              AppLogger.i(
+                '[CrossChannelDeduplication] Successfully linked inter-account transfer from $matchedAccId to $candidateAccId on ref $normRef',
+              );
+              return await _createAndPostNewEvent(
+                candidate: transferCandidate,
+                reversalOfEventId: matchedEventId,
+                txn: txn,
+              );
+            }
+
             // Unrelated credit/debit sharing reference without refund semantics (P14-T26, P14-T31)
             AppLogger.w(
               '[CrossChannelDeduplication] Direction mismatch on reference $normRef without refund semantics',
@@ -1088,7 +1137,7 @@ class CrossChannelDeduplicationService {
       'lifecycle_status': 'draft',
       'reversal_of_event_id': reversalOfEventId,
       'timestamp': candidate.timestamp.toUtc().toIso8601String(),
-      'currency': 'INR',
+      'currency': candidate.currency,
       'description': candidate.merchant ?? (candidate.sender.isNotEmpty ? candidate.sender : 'Transaction'),
       'notes': jsonEncode({'source_record_id': candidate.sourceRecordId}),
       'created_at': nowStr,
@@ -1114,7 +1163,10 @@ class CrossChannelDeduplicationService {
 
     // 3. Insert Balanced Double-Entry Postings
     // Leg 1: Primary Asset/Liability account
-    final primaryAcc = candidate.accountId ?? 'acc_cash_default';
+    final primaryAcc = candidate.accountId ??
+        (candidate.eventType == CanonicalEventType.cardPayment
+            ? TablesV24.sysSuspenseTransfer
+            : 'acc_cash_default');
     final existingPrimary = await txn.query(
       TablesV24.accounts,
       columns: ['account_type'],
@@ -1172,7 +1224,7 @@ class CrossChannelDeduplicationService {
       'sequence_number': 1,
       'direction': 'debit',
       'amount_minor_units': candidate.amountMinorUnits,
-      'currency': 'INR',
+      'currency': candidate.currency,
       'created_at': nowStr,
     });
 
@@ -1184,7 +1236,7 @@ class CrossChannelDeduplicationService {
       'sequence_number': 2,
       'direction': 'credit',
       'amount_minor_units': candidate.amountMinorUnits,
-      'currency': 'INR',
+      'currency': candidate.currency,
       'created_at': nowStr,
     });
 

@@ -216,7 +216,9 @@ class TransactionTextParser {
     // Two-pass amount extraction:
     //   1. Currency-prefixed (₹/Rs/INR + digits) — high confidence
     //   2. Naked-number fallback for app screenshots that omit the symbol
-    double amount = _extractAmount(repaired) ?? 0.0;
+    final (extractedAmt, extractedCurrency) = _extractAmountWithCurrency(repaired);
+    double amount = extractedAmt ?? 0.0;
+    String currency = extractedCurrency;
     bool amountFromFallback = false;
     if (amount == 0) {
       final fallback = _extractAmountFallback(repaired);
@@ -300,12 +302,48 @@ class TransactionTextParser {
     // ── Date resolution ─────────────────────────────────────────────
     // Priority: (1) date in message body → (2) SMS envelope timestamp
     // → (3) DateTime.now() as last resort.
-    // This guarantees transactions land on the actual calendar day
-    // the transaction happened, not when SpendX processed the alert.
-    final txDate = extractDateFromText(text) ?? messageTimestamp ?? DateTime.now();
+    // If the message body date does not specify hours/minutes (e.g. "on 21-Nov-2026"),
+    // preserve the parsed calendar day (Y-M-D) while inheriting the exact
+    // time-of-day (H:M:S) from [messageTimestamp] or [DateTime.now()] so that transactions
+    // never display as midnight (12:00 AM).
+    final extractedDate = extractDateFromText(text);
+    final fallbackTime = messageTimestamp ?? DateTime.now();
+    final DateTime txDate;
+    if (extractedDate != null) {
+      if (extractedDate.hour == 0 && extractedDate.minute == 0 && extractedDate.second == 0) {
+        final timeMatch = RegExp(
+          r'\b(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?\b',
+          caseSensitive: false,
+        ).firstMatch(text);
+        if (timeMatch != null) {
+          int h = int.parse(timeMatch.group(1)!);
+          final m = int.parse(timeMatch.group(2)!);
+          final s = int.tryParse(timeMatch.group(3) ?? '') ?? 0;
+          final amPm = timeMatch.group(4)?.toLowerCase();
+          if (amPm == 'pm' && h < 12) h += 12;
+          if (amPm == 'am' && h == 12) h = 0;
+          txDate = DateTime(extractedDate.year, extractedDate.month, extractedDate.day, h, m, s);
+        } else {
+          txDate = DateTime(
+            extractedDate.year,
+            extractedDate.month,
+            extractedDate.day,
+            fallbackTime.hour,
+            fallbackTime.minute,
+            fallbackTime.second,
+            fallbackTime.millisecond,
+          );
+        }
+      } else {
+        txDate = extractedDate;
+      }
+    } else {
+      txDate = fallbackTime;
+    }
 
     final result = ParsedTransaction(
       amount: amount,
+      currency: currency,
       isCredit: isCredit,
       rawText: text,
       date: txDate,
@@ -471,6 +509,11 @@ class TransactionTextParser {
       r'[^0-9]{0,30}?(?:₹|Rs\.?|INR)\s*([0-9,]+(?:\.\d{1,2})?)',
       caseSensitive: false,
     ),
+    // Currency-less bank wording: "debited by 7291.17", "credited with 50.00", "debited by 513.00"
+    RegExp(
+      r'(?:debited|credited|transferred)\s+(?:by|with|for)\s+([0-9,]+(?:\.\d{1,2})?)\b',
+      caseSensitive: false,
+    ),
     RegExp(
       r'(?:debited|credited|paid|received|sent|spent|charged|deducted)'
       r'[^0-9]{0,30}?(?:USD|EUR|GBP|AED|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
@@ -498,7 +541,7 @@ class TransactionTextParser {
     caseSensitive: false,
   );
 
-  static double? _extractAmount(String text) {
+  static (double?, String) _extractAmountWithCurrency(String text) {
     for (final p in _amountPatterns) {
       for (final m in p.allMatches(text)) {
         final prefixStart = (m.start - 40).clamp(0, text.length);
@@ -508,11 +551,34 @@ class TransactionTextParser {
         }
         final raw = m.group(1)!.replaceAll(',', '');
         final value = double.tryParse(raw);
-        if (value != null && value > 0) return value;
+        if (value != null && value > 0) {
+          final matchedText = m.group(0) ?? '';
+          final upper = matchedText.toUpperCase();
+          String cur = 'INR';
+          if (upper.contains('AED')) {
+            cur = 'AED';
+          } else if (upper.contains('USD')) {
+            cur = 'USD';
+          } else if (upper.contains('EUR')) {
+            cur = 'EUR';
+          } else if (upper.contains('GBP')) {
+            cur = 'GBP';
+          } else if (upper.contains('SGD')) {
+            cur = 'SGD';
+          } else if (upper.contains('CAD')) {
+            cur = 'CAD';
+          } else if (upper.contains('AUD')) {
+            cur = 'AUD';
+          }
+          return (value, cur);
+        }
       }
     }
-    return null;
+    return (null, 'INR');
   }
+
+  static double? extractAmount(String text) =>
+      _extractAmountWithCurrency(text).$1;
 
   // ── Naked-number fallback extractor ───────────────────────────────
   //
@@ -741,9 +807,10 @@ class TransactionTextParser {
   static final _failurePatterns = RegExp(
     r'\b(?:failed|declined|cancelled|canceled|unsuccessful|'
     r'transaction\s+failed|payment\s+failed|insufficient\s+balance|'
-    r'could\s+not\s+be\s+processed|unable\s+to\s+process|timed?\s*out|'
+    r'could\s+not\s+(?:be\s+)?process(?:ed)?|unable\s+to\s+process|failed\s+to\s+process|timed?\s*out|'
+    r'not\s+processed|could\s+not\s+go\s+through|payment\s+declined|'
     r'expired|limit\s+exceeded|exceeded\s+limit|insufficient\s+funds|'
-    r'low\s+balance|payment\s+declined|reversed\s+within|refunded\s+within|'
+    r'low\s+balance|reversed\s+within|refunded\s+within|'
     r'will\s+be\s+(?:refunded|reversed)|incorrect\s+(?:pin|otp|cvv|credentials))\b',
     caseSensitive: false,
   );
@@ -901,9 +968,14 @@ class TransactionTextParser {
       r'(?:^|:\s*)([A-Za-z0-9 .&-]{2,40})\s+(?:paid|sent)\s+you\b',
       caseSensitive: false,
     ),
-    // "paid to MERCHANT", "sent to MERCHANT", "debited via UPI to MERCHANT"
+    // "paid to MERCHANT", "sent to MERCHANT", "debited via UPI to MERCHANT", "trf to MERCHANT"
     RegExp(
-      r'(?:paid|sent|transferred|debited)\s+(?:via\s+upi\s+)?to\s+([A-Za-z0-9 .&@_-]{2,40})',
+      r'(?:paid|sent|transferred|transfer|debited|trf)\s+(?:via\s+upi\s+)?to\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "Info: VPS*MERCHANT", "Info: POS*MERCHANT", "Info: UPI/<rrn>/MERCHANT", "Info: IMPS/<rrn>/MERCHANT", "Info: NEFT/<utr>/MERCHANT"
+    RegExp(
+      r'\binfo\s*:\s*(?:vps\*|pos\*|bil\*|bil\/|inb\*|ach\*|ecs\*|nach\*|upi\/(?:(?:cr|dr|p2a|p2m|p2p|rev)\/)?(?:\d+|[a-zA-Z0-9]+)\/|(?:imps|neft|rtgs)\/(?:\d+|[a-zA-Z0-9]+)\/)\s*([A-Za-z0-9 .&@_-]{2,40})',
       caseSensitive: false,
     ),
     // "debited towards MERCHANT", "paid towards MERCHANT"
@@ -911,7 +983,36 @@ class TransactionTextParser {
       r'(?:paid|sent|transferred|debited)\s+(?:towards|for)\s+([A-Za-z0-9 .&@_-]{2,40})',
       caseSensitive: false,
     ),
-    // "spent on MERCHANT", "spent at MERCHANT", "used at MERCHANT"
+    // "spent ... on card/ac ... at/to/for MERCHANT" (e.g. "Spent Rs. 500 on HDFC Bank Card 1234 at SWIGGY")
+    RegExp(
+      r'(?:spent|debited|charged|used|paid)\s+[^.!\n]*?\b(?:on|from|with|using)\s+[^.!\n]*?(?:card|a\/c|acct|account|ending|xx|\*{2,})\s*[^.!\n]*?\b(?:at|to|towards|for)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "using ... card/ac ... at/to/for MERCHANT" (e.g. "using your ICICI Bank Credit Card ending XX1002 for Rs. 2,499.00 at RELIANCE DIGITAL")
+    RegExp(
+      r'(?:using|with|via)\s+[^.!\n]*?(?:card|credit card|debit card|a\/c|ending)\s+[^.!\n]*?\bat\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "payment to MERCHANT of/for Rs X"
+    RegExp(
+      r'\bpayment\s+to\s+([A-Za-z0-9 .&@_-]{2,40})\s+(?:of|for|amount)\b',
+      caseSensitive: false,
+    ),
+    // "swiped at/in MERCHANT", "used at/in MERCHANT"
+    RegExp(
+      r'\b(?:swiped|used)\s+(?:at|in)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "transaction of ... at MERCHANT" / "txn ... at MERCHANT"
+    RegExp(
+      r'(?:transaction|txn)\s+(?:of\s+.*?)?\bat\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
+    // "spent on MERCHANT", "spent at MERCHANT", "used at MERCHANT", "spent ... at MERCHANT"
+    RegExp(
+      r'(?:spent|debited|charged|used)\s+[^.!\n]*?\b(?:at|to|towards|on)\s+([A-Za-z0-9 .&@_-]{2,40})',
+      caseSensitive: false,
+    ),
     RegExp(
       r'(?:spent|used)\s+(?:at|on)\s+([A-Za-z0-9 .&@_-]{2,40})',
       caseSensitive: false,
@@ -926,14 +1027,17 @@ class TransactionTextParser {
       r'\btowards\s+([A-Za-z0-9 .&@_-]{2,40})',
       caseSensitive: false,
     ),
-    // "to MERCHANT" (with capital first letter)
-    RegExp(r'\bto\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
+    // "to MERCHANT"
+    RegExp(r'\bto\s+([A-Za-z0-9 .&-]{2,40})', caseSensitive: false),
     // "at MERCHANT"
-    RegExp(r'\bat\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
-    // "on MERCHANT" (e.g. "spent on Myntra")
-    RegExp(r'\bon\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
+    RegExp(r'\bat\s+([A-Za-z0-9 .&-]{2,40})', caseSensitive: false),
+    // "on MERCHANT" (e.g. "spent on Myntra") — negative lookahead ensures dates (e.g. "on 21-Nov-2026", "on 04-Oct-26") are never matched
+    RegExp(
+      r'\bon\s+(?!\d{1,2}[-/\s](?:[A-Za-z]{3}|\d{1,2})|\d{1,2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{4}-\d{2}-\d{2})([A-Za-z0-9 .&-]{2,40})',
+      caseSensitive: false,
+    ),
     // "received from MERCHANT", "from MERCHANT"
-    RegExp(r'\bfrom\s+([A-Z][A-Za-z0-9 .&-]{1,40})'),
+    RegExp(r'\bfrom\s+([A-Za-z0-9 .&-]{2,40})', caseSensitive: false),
   ];
 
   /// Words that should never be treated as a merchant.
@@ -942,6 +1046,16 @@ class TransactionTextParser {
     'payment', 'your', 'the', 'a', 'an', 'on', 'for', 'via', 'using',
     'credit', 'debit', 'rupay', 'visa', 'mastercard', 'edge', 'my', 'his', 'her',
     'rs', 'inr', 'towards', 'debited', 'credited', 'emi', 'loan', 'with', 'from',
+    'dispute', 'disputes', 'disputing', 'chargeback', 'click', 'block', 'reissue',
+    'info', 'alert', 'dear', 'customer', 'user', 'member', 'cardmember',
+    'statement', 'bill', 'due', 'overdue', 'balance', 'available', 'limit',
+    'successful', 'successfully', 'failed', 'declined', 'cancelled', 'reversed',
+    'refunded', 'cashback', 'reward', 'rewards', 'points', 'otp', 'mandate',
+    'autopay', 'standing', 'instruction', 'queries', 'query', 'support', 'care',
+    'call', 'tollfree', 'not', 'you', 'if', 'services', 'other',
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+    'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+    'mon', 'monday', 'tue', 'tuesday', 'wed', 'wednesday', 'thu', 'thursday', 'fri', 'friday', 'sat', 'saturday', 'sun', 'sunday',
   };
 
   /// Returns (normalizedMerchant, source).
@@ -968,16 +1082,40 @@ class TransactionTextParser {
       return ('Mobikwik Wallet', 'wallet_signal');
     }
 
+    // 0a. ATM Cash withdrawal signal:
+    // e.g. "Rs 5,000.00 withdrawn from HDFC Bank Card ending 1234 at HDFC ATM on 20-NOV-24"
+    // e.g. "Dear SBI User, your A/C 1234 has been debited by Rs.2000.00 on 21Nov24 at STATE BANK ATM. Avl Bal Rs: ..."
+    // e.g. "Cash withdrawal of Rs 1000 from A/C XX1234"
+    // e.g. "Info: ATM*CASH WDL"
+    if (RegExp(r'\b(?:atm|cash\s*wdl|cash\s*withdrawal|nfs\s*\*?\s*atm)\b', caseSensitive: false).hasMatch(lower) ||
+        (lower.contains('withdrawn') && !lower.contains('pos') && (lower.contains('a/c') || lower.contains('account') || lower.contains('card') || lower.contains('atm')))) {
+      return ('ATM Cash Withdrawal', 'atm_signal');
+    }
+
     // 0b. Credit Card bill payment / repayment receipt:
     // "Payment of Rs 23,551.00 has been received on your ICICI Bank Credit Card XX5007 through Bharat Bill Payment System"
     // "DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 2000.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 6366"
+    // "We have received payment of Rs 2,500.00 towards your OneCard ending 2510. Limit restored."
+    // "Auto-debit of INR 12,000.00 towards your Credit Card ending with 6366 was successful"
+    if ((lower.contains('received') || lower.contains('payment') || lower.contains('auto-debit') || lower.contains('autodebit')) &&
+        (lower.contains('towards your onecard') ||
+         lower.contains('towards onecard') ||
+         lower.contains('against your onecard') ||
+         lower.contains('for your onecard') ||
+         lower.contains('on your onecard'))) {
+      return ('OneCard Card Repayment', 'card_payment_receipt');
+    }
+
     final ccPaymentMatch = RegExp(
-      r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|settled|successful)\s+(?:on|towards|for)\s+(?:your\s+)?([A-Za-z0-9 ]+?)\s*(?:credit\s*card|card)',
+      r'(?:payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|settled|successful)|(?:received|credited|settled)\s+(?:a\s+)?payment(?:\s+of\s+.*?)?|(?:auto[- ]?debit|standing\s+instruction)(?:\s+of\s+.*?)?)\s+(?:on|towards|for)\s+(?:your\s+)?([A-Za-z0-9 ]*?)\s*(?:credit\s*card|card)\b',
       caseSensitive: false,
     ).firstMatch(text);
     if (ccPaymentMatch != null) {
       final cardBank = ccPaymentMatch.group(1)!.trim();
-      return ('$cardBank Card Repayment', 'card_payment_receipt');
+      final merchantName = cardBank.isEmpty
+          ? 'Credit Card Repayment'
+          : '$cardBank Card Repayment';
+      return (merchantName, 'card_payment_receipt');
     }
 
     // 0c. PolicyBazaar confirmation receipt:
@@ -986,8 +1124,22 @@ class TransactionTextParser {
       return ('PolicyBazaar', 'merchant_confirmation');
     }
 
+    // 0d. Strip trailing channel sign-offs and support footers before merchant resolution
+    // e.g. "Thank you for using Jupiter", "Thanks for using the Jupiter App", "To raise an issue, call..."
+    var cleanText = text
+        .replaceAll(
+          RegExp(r'\b(?:thanks|thank\s+you)\s+for\s+using\s+(?:the\s+)?[a-zA-Z0-9 ._-]+(?:\s+app)?\.?', caseSensitive: false),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'\bto\s+raise\s+an\s+issue\b.*$', caseSensitive: false),
+          '',
+        )
+        .trim();
+    final cleanLower = cleanText.toLowerCase();
+
     // 1. Dictionary match — strongest. Bypasses noisy regex entirely.
-    final known = MerchantNormalizer.lookupCanonical(lower);
+    final known = MerchantNormalizer.lookupCanonical(cleanLower);
     if (known != null) {
       return (known, 'body_strong');
     }
@@ -995,30 +1147,57 @@ class TransactionTextParser {
     // 2. Keyword pattern — explicit "paid to X" / "received from X"
     // 3. Bare-preposition fallback — "to X" / "at X"
     for (var i = 0; i < _merchantPatterns.length; i++) {
-      final m = _merchantPatterns[i].firstMatch(text);
+      final m = _merchantPatterns[i].firstMatch(cleanText);
       if (m == null) continue;
       var merchant = m.group(1)!.trim();
       merchant = merchant
           .replaceAll(
-            RegExp(r'(?:[.\s]+|\s+)(?:on|via|ref|upi|using|w\.?e\.?f|dated|bank|bal(?:ance)?|avl(?:ailable)?(?:\s*(?:crd\s*)?limit)?|limit|crd|total\s*due|not\s+you|call|has\s+been|debited|credited).*$',
+            RegExp(r'(?:[.\s]+|\s+)(?:on|via|ref|upi|using|with|w\.?e\.?f|dated|bank|bal(?:ance)?|avl(?:ailable)?(?:\s*(?:crd\s*)?limit)?|limit|crd|total\s*due|min\s*due|to\s+dispute|to\s+block|block|not\s+you|if\s+not|report|reward(?:\s*points)?|call|help|queries|query|support|care|has\s+been|debited|credited|order\s*(?:id|no)|https?://).*$',
                 caseSensitive: false),
             '',
           )
           .replaceAll(RegExp(r'@[a-zA-Z0-9.-]+$'), '')
+          .replaceAll(RegExp(r'\.(?:payu|rzp|juspay|billdesk|bbps|paytm|freecharge|mobikwik|axis|icici|hdfc|sbi|okaxis|okhdfcbank|okicici|oksbi)$', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\/(?:fd|upi|cr|dr)$', caseSensitive: false), '')
+          .replaceAll(RegExp(r'^(?:vps\*|pos\*|pos\s+|bil\*|bil\/|bill\/|inb\*|inb\/|ach\*|ach\/|nach\*|nach\/|ecs\*|ecs\/|nfs\*|ecom\*|pur\*|upi\/(?:(?:cr|dr)\/)?(?:\d+|[a-zA-Z0-9]+)\/|\*+)', caseSensitive: false), '')
           .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
           .trim();
       if (merchant.isEmpty || merchant.length < 2) continue;
       final firstWord = merchant.split(' ').first.toLowerCase();
       if (_merchantStopWords.contains(firstWord) ||
-          RegExp(r'^x+\d+$', caseSensitive: false).hasMatch(firstWord)) {
+          RegExp(r'^x+\d+$', caseSensitive: false).hasMatch(firstWord) ||
+          RegExp(r'^\+?\d+$').hasMatch(merchant) ||
+          RegExp(r'^\+?\d+$').hasMatch(firstWord)) {
+        continue;
+      }
+      // Reject dates falsely captured as merchants (e.g. "21-Nov-2026", "04-Oct-26", "21-Nov-2026 Info", "17Nov26")
+      if (RegExp(
+            r'^\d{1,2}[-/\s](?:[A-Za-z]{3}|\d{1,2})[-/\s]\d{2,4}(?:\s+info)?$|^\d{1,2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\d{2,4}$|^\d{4}-\d{2}-\d{2}$',
+            caseSensitive: false,
+          ).hasMatch(merchant) ||
+          RegExp(
+            r'^\d{1,2}[-/\s](?:[A-Za-z]{3}|\d{1,2})[-/\s]\d{2,4}\b',
+            caseSensitive: false,
+          ).hasMatch(firstWord)) {
         continue;
       }
       // Reject OCR garbage candidates outright — better to return null
       // than poison the merchant memory with phrases like
       // "Cc Ordered Successfully Order Id".
       if (_isNoisyMerchant(merchant)) continue;
+      // Filter out SMS sender headers (e.g. AD-HDFCBK-S, JD-JIOPBS-S, JX-POLBAZ-S)
+      if (RegExp(r'^[A-Za-z]{2}-[A-Za-z0-9]{3,8}-[A-Za-z]$', caseSensitive: false).hasMatch(merchant) ||
+          RegExp(r'^[A-Za-z0-9]{3,8}-[A-Za-z]$', caseSensitive: false).hasMatch(merchant)) {
+        continue;
+      }
+      final norm = _normalizeMerchant(merchant);
+      final dictMatch = MerchantNormalizer.lookupCanonical(norm.toLowerCase()) ??
+          MerchantNormalizer.lookupCanonical(merchant.toLowerCase());
+      if (dictMatch != null) {
+        return (dictMatch, 'body_strong');
+      }
       final src = (i == 0 || i == 1 || i == 4) ? 'keyword' : 'fallback';
-      return (_normalizeMerchant(merchant), src);
+      return (norm, src);
     }
     return (null, null);
   }
@@ -1037,12 +1216,54 @@ class TransactionTextParser {
     caseSensitive: false,
   );
 
+  /// Suffixes appended by Indian POS / payment gateways indicating city and ISO state/country code
+  /// (e.g. "MALAPPURAM KLIN", "GURUGRAM HRIN", "GURGOAN dlIN", "MUMBAI MHIN").
+  static final _gatewayLocationSuffixes = RegExp(
+    r'\s+(?:[A-Za-z\s]+ )?(?:MALAPPURAM|GURUGRAM|GURGAON|MUMBAI|DELHI|NEW DELHI|BENGALURU|BANGALORE|CHENNAI|HYDERABAD|KOLKATA|PUNE|AHMEDABAD|JAIPUR|LUCKNOW|KOCHI|COCHIN|CALICUT|KOZHIKODE|TRIVANDRUM|THIRUVANANTHAPURAM|COIMBATORE|MADURAI|NOIDA|FARIDABAD|GHAZIABAD|THANE|NAVI MUMBAI)\s+(?:KL|HR|DL|MH|KA|TN|TS|WB|UP|GJ|RJ|PB|MP|AP|CH|GA|BR|JH|OR|AS|UK)IN\b|\b[A-Za-z]{2,20}\s+[a-z]{2}IN\b',
+    caseSensitive: false,
+  );
+
   static String _normalizeMerchant(String raw) {
     var cleaned = raw
+        .replaceAll(_gatewayLocationSuffixes, '')
         .replaceAll(_legalSuffixes, '')
         .replaceAll(_trailingPuncRe, '') // trailing punctuation
         .replaceAll(_whitespaceRe, ' ') // collapse whitespace
         .trim();
+
+    // Strip trailing security & disclaimer phrases:
+    // "Not you? Call 1800...", "If not u? call...", "Call 1800...", "If not you...", "For other services..."
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:if\s+)?not\s+(?:you|u)\b.*$', caseSensitive: false),
+      '',
+    );
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*call\s*[-0-9\s].*$', caseSensitive: false),
+      '',
+    );
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*for\s+other\s+services.*$', caseSensitive: false),
+      '',
+    );
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*-\s*[A-Za-z\s]+$', caseSensitive: false),
+      '',
+    ).trim();
+
+    // Clean trailing single isolated lowercase letter from UPI truncation (e.g. "Hotel arya b" -> "Hotel arya")
+    // Keep uppercase initials intact (e.g. "Raveendran K", "AFNAS P")
+    if (RegExp(r'\s+[a-z]$').hasMatch(cleaned)) {
+      cleaned = cleaned.substring(0, cleaned.length - 2).trim();
+    }
+
+    final lowerCleaned = cleaned.toLowerCase();
+    if (lowerCleaned == 'amazon pay b' || lowerCleaned == 'amazon pay c' || lowerCleaned == 'amazon pay india') {
+      return 'Amazon Pay';
+    }
+    if (lowerCleaned == 'city fuel st') {
+      return 'City Fuel Station';
+    }
+
     if (cleaned.isEmpty) return raw.trim();
     return cleaned
         .split(' ')
@@ -1142,10 +1363,26 @@ class TransactionTextParser {
   // ── Account last 4 ────────────────────────────────────────────────
 
   static final _last4Patterns = <RegExp>[
-    RegExp(r'\bx{1,6}(\d{4})\b', caseSensitive: false),
-    RegExp(r'\*{2,}(\d{4})\b'),
+    // 1. Full masked card numbers: e.g. 5424XXXXXXXX2510, 5424********2510, 4512-XXXX-XXXX-6366, 5334 **** **** 2510
     RegExp(
-      r'(?:a/c|acct|account|card|ending(?:\s+with|\s+in)?)\s*[^\d]{0,12}(\d{4})\b',
+      r'\b(?:\d{4}[\s\-]*(?:[xX*]{4}[\s\-]*){1,3}|[xX*]{4}[\s\-]+[xX*]{4}[\s\-]+)(\d{4,5})\b',
+    ),
+    RegExp(r'\b\d{4}[xX*]{4,12}(\d{4,5})\b'),
+    // 2. Explicit card markers: "card ending in 1234", "card no: **1234", "credit card 1234", "card ...1234"
+    RegExp(
+      r'(?:credit\s*card|debit\s*card|crd\s*card|card|crd|onecard|bobcard)\s*(?:no\.?|num(?:ber)?|ending(?:\s+(?:in|with))?|with)?[\s:*\-.()xX]*(\d{4,5})\b',
+      caseSensitive: false,
+    ),
+    // 3. Generic "ending in / with": "ending in 1234", "ending with **1234", "ending ...1234"
+    RegExp(
+      r'\bending(?:\s+(?:in|with))?[\s:*\-.()xX]*(\d{4,5})\b',
+      caseSensitive: false,
+    ),
+    // 4. Masked prefixes: "XX1234", "**1234", "...1234", "from x3284", "x3284"
+    RegExp(r'\b(?:from|to|in|via)?\s*[xX*.\-]+(\d{4,5})\b', caseSensitive: false),
+    // 5. Account markers: "a/c ending 1234", "account 1234"
+    RegExp(
+      r'(?:a/c|acct|account)\s*(?:no\.?|num(?:ber)?|ending(?:\s+(?:in|with))?)?[\s:*\-.()xX]*(\d{3,6})\b',
       caseSensitive: false,
     ),
   ];
@@ -1179,6 +1416,9 @@ class TransactionTextParser {
     'rbl': 'RBL',
     'idfc': 'IDFC',
     'jio payments bank': 'Jio',
+    'jiopbs': 'Jio',
+    'jpbl': 'Jio',
+    'jio': 'Jio',
     'onecard': 'OneCard',
     'bobcard': 'BOBCARD',
     'csb bank': 'CSB Bank',

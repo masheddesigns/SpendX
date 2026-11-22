@@ -10,6 +10,7 @@ import 'canonical/canonical_account_adapter.dart';
 import 'canonical/canonical_account_repository.dart';
 import 'canonical/canonical_event_repository.dart';
 import 'canonical/canonical_opening_balance_repository.dart';
+import '../../services/data_change_bus.dart';
 
 /// Account Repository for SpendX.
 ///
@@ -150,17 +151,34 @@ class AccountRepo {
     if (rows.isEmpty) return;
 
     final accountName = rows.first['name'] as String;
+    if (messageDate != null) {
+      final newerRecs = await database.rawQuery('''
+        SELECT id FROM ${TablesV24.openingBalanceReconciliations}
+        WHERE account_id = ? AND created_at > ?
+        LIMIT 1
+      ''', [id, messageDate.toUtc().toIso8601String()]);
+      if (newerRecs.isNotEmpty) {
+        // Skip stale historical balance overwrite: a newer balance checkpoint was already established.
+        return;
+      }
+    }
+
     final currentBalance = await _canonicalAccountRepo.getDerivedBalance(id);
+    final asOfBalance = messageDate != null
+        ? await _canonicalAccountRepo.getDerivedBalance(id, asOf: messageDate)
+        : currentBalance;
     final targetBalance = Money.fromRupees(balance);
 
-    if (currentBalance == targetBalance) return;
+    if ((asOfBalance.toRupees - balance).abs() < 0.01) return;
 
     final rec = CanonicalAccountAdapter.createReconciliationRecords(
       accountId: id,
       accountName: accountName,
-      currentBalance: currentBalance,
+      currentBalance: asOfBalance,
       targetBalance: targetBalance,
-      reason: 'Balance update/reconciliation',
+      reason: messageDate != null
+          ? 'Balance statement as of ${messageDate.toIso8601String()}'
+          : 'Balance update/reconciliation',
       provenance: 'sms_balance_update',
       timestamp: messageDate,
     );
@@ -174,6 +192,7 @@ class AccountRepo {
       );
       final recRepo = CanonicalOpeningBalanceRepository(executor: database);
       await recRepo.saveReconciliation(rec.reconciliation);
+      DataChangeBus.instance.notify();
     }
   }
 

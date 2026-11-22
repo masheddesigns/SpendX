@@ -21,7 +21,9 @@ import '../widgets/category_spending_card.dart';
 import '../widgets/dashboard_budgets_card.dart';
 import '../widgets/dashboard_goals_card.dart';
 import '../widgets/dashboard_greeting_header.dart';
+import '../widgets/home_alerts_section.dart';
 import '../widgets/home_review_indicator.dart';
+import '../../ingestion/providers/ingestion_providers.dart';
 import '../widgets/monthly_pulse_card.dart';
 import '../widgets/quick_actions_row.dart';
 import '../widgets/safe_to_spend_card.dart';
@@ -119,6 +121,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
         ref.invalidate(reviewQueueProvider);
         ref.invalidate(evaluateStreakProvider);
         ref.invalidate(transactionCategoryMapProvider);
+        ref.invalidate(ingestionStatusProvider);
         await ref.read(paginatedTransactionsProvider.notifier).refresh();
         SyncActivityService.instance.complete(
           title: 'Ledger Refreshed',
@@ -130,6 +133,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
         slivers: [
           // ── Mindful Atmospheric Header ───────────────────
           const SliverToBoxAdapter(child: DashboardGreetingHeader()),
+
+          // ── Mindful Alert Section (Ingestion attention & financial alerts) ──
+          const SliverToBoxAdapter(child: HomeAlertsSection()),
 
           // ── Pending Review Queue Indicator ──────────────────
           const SliverToBoxAdapter(child: HomeReviewIndicator()),

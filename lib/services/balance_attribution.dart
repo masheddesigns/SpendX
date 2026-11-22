@@ -273,8 +273,18 @@ class BalanceAttribution {
   static String? _normaliseLast4(String? value) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty || trimmed == '0000') return null;
-    return trimmed;
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 4) {
+      return digits.substring(digits.length - 4);
+    }
+    return digits.isNotEmpty ? digits : null;
   }
+
+  static bool issuerMatches(
+    String keyword,
+    String bank,
+    String name,
+  ) => _issuerMatches(keyword, bank, name);
 
   static bool _issuerMatches(
     String keyword,
@@ -283,18 +293,20 @@ class BalanceAttribution {
   ) {
     final haystack = '$bank $name'.toLowerCase();
     if (haystack.trim().isEmpty) return false;
-    if (haystack.contains(keyword)) return true;
-    for (final alias in _issuerAliases[keyword] ?? const <String>[]) {
+    final kw = keyword.toLowerCase().trim();
+    if (haystack.contains(kw)) return true;
+    for (final alias in _issuerAliases[kw] ?? const <String>[]) {
       if (haystack.contains(alias)) return true;
     }
     // Bank sender ids are often compact (`jiopbs`, `hdfcbk`, `icicib`), so a
     // known issuer token embedded in the keyword may be the only evidence.
     for (final entry in _issuerAliases.entries) {
       if (entry.key.length < 3) continue;
-      if (!keyword.contains(entry.key)) continue;
-      if (haystack.contains(entry.key)) return true;
-      for (final alias in entry.value) {
-        if (haystack.contains(alias)) return true;
+      if (kw.contains(entry.key) || entry.key.contains(kw)) {
+        if (haystack.contains(entry.key)) return true;
+        for (final alias in entry.value) {
+          if (haystack.contains(alias)) return true;
+        }
       }
     }
     return false;
@@ -302,24 +314,59 @@ class BalanceAttribution {
 
   static const Map<String, List<String>> _issuerAliases = {
     'fed': ['federal'],
-    'federal': ['federal'],
-    'sbi': ['state bank', 'sbi'],
-    'jio': ['jio'],
-    'bob': ['bank of baroda', 'baroda'],
-    'onecard': ['onecard', 'one card'],
+    'federal': ['federal', 'fed'],
+    'scapia': ['scapia', 'scapia federal'],
+    'fi': ['fi', 'fi money', 'fi federal'],
+    'sbi': ['state bank', 'sbi', 'sbi card', 'sbicard', 'sbicrd'],
+    'sbicard': ['sbi card', 'sbicard', 'sbi', 'state bank'],
+    'jio': ['jio', 'jiopbs', 'jpbl', 'jio payments', 'jio payments bank', 'jiofinance'],
+    'jpbl': ['jio', 'jiopbs', 'jpbl', 'jio payments', 'jio payments bank', 'jiofinance'],
+    'jiopbs': ['jio', 'jiopbs', 'jpbl', 'jio payments', 'jio payments bank', 'jiofinance'],
+    'jiofinance': ['jio', 'jiopbs', 'jpbl', 'jio payments', 'jio payments bank', 'jiofinance'],
+    'bob': ['bank of baroda', 'baroda', 'bobcard', 'bobone', 'onecard', 'one card', 'fpl'],
+    'bobcard': ['bobcard', 'bank of baroda', 'baroda', 'bobone', 'onecard', 'one card', 'fpl'],
+    'onecard': ['onecard', 'one card', 'bobone', 'fpl', 'one credit card', 'bobcard', 'bob', 'bank of baroda', 'baroda'],
     'amex': ['american express', 'amex'],
-    'hdfc': ['hdfc'],
-    'icici': ['icici'],
-    'axis': ['axis'],
-    'kotak': ['kotak'],
-    'idfc': ['idfc'],
-    'indusind': ['indusind', 'indus ind'],
-    'yes': ['yes bank'],
-    'csb': ['csb'],
-    'rbl': ['rbl'],
+    'hdfc': ['hdfc', 'hdfcbk'],
+    'tataneu': ['tata neu', 'tataneu', 'tataneu hdfc'],
+    'icici': ['icici', 'icicib'],
+    'axis': ['axis', 'axisbk', 'utibank'],
+    'kiwi': ['kiwi', 'kiwi axis'],
+    'kotak': ['kotak', 'kotak mahindra', 'kmbl', '811'],
+    'idfc': ['idfc', 'idfc first', 'idfcfirst'],
+    'indusind': ['indusind', 'indus ind', 'indus'],
+    'yes': ['yes bank', 'yes'],
+    'csb': ['csb', 'csb bank', 'jupiter', 'jtedge', 'edge csb', 'jupiter edge'],
+    'jupiter': ['jupiter', 'jtedge', 'edge csb', 'jupiter edge', 'csb', 'csb bank'],
+    'rbl': ['rbl', 'ratnakar'],
     'pnb': ['punjab national', 'pnb'],
     'canara': ['canara'],
     'union': ['union bank'],
-    'au': ['au small finance', 'au bank'],
+    'au': ['au small finance', 'au bank', 'au'],
+    'scb': ['standard chartered', 'scb', 'stanc', 'stanchart'],
+    'hsbc': ['hsbc', 'hongkong and shanghai'],
+    'sbm': ['sbm', 'state bank of mauritius'],
+    'sib': ['south indian', 'sib'],
+    'supermoney': ['supermoney', 'super.money', 'supercard'],
+    'slice': ['slice', 'sliceit'],
+    'uni': ['uni', 'uni card', 'unicard'],
+    'bajaj': ['bajaj', 'bajaj finserv', 'bajaj rbl', 'bajaj dbs'],
+    'dbs': ['dbs', 'digibank', 'bajaj dbs'],
+    'idbi': ['idbi', 'idbi bank'],
+    'citi': ['citi', 'citibank'],
+    'bandhan': ['bandhan', 'bandhan bank'],
+    'airtel': ['airtel', 'airtel axis'],
+    'swiggy': ['swiggy', 'swiggy hdfc'],
+    'flipkart': ['flipkart', 'flipkart axis', 'fkrt axis'],
+    'amazon': ['amazon pay', 'amazon pay icici', 'apay icici', 'apay'],
+    'zomato': ['zomato', 'zomato rbl', 'edition card'],
+    'makemytrip': ['makemytrip', 'makemytrip icici'],
+    'irctc': ['irctc', 'irctc sbi', 'irctc bob', 'irctc hdfc'],
+    'paytm': ['paytm', 'paytm hdfc', 'paytm sbi', 'ppbl'],
+    'hpcl': ['hpcl', 'hpcl icici', 'hpcl bob', 'hpcl idfc'],
+    'bpcl': ['bpcl', 'bpcl sbi', 'bpcl octane'],
+    'iocl': ['iocl', 'indianoil', 'indianoil axis', 'indianoil kotak', 'indianoil rbl'],
+    'indigo': ['indigo', '6e rewards', 'ka-ching', 'indigo hdfc', 'indigo kotak'],
+    'vistara': ['vistara', 'club vistara', 'vistara sbi', 'vistara axis', 'vistara idfc'],
   };
 }

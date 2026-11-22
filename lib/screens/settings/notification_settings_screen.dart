@@ -10,6 +10,8 @@ import '../../services/notification_service_v2.dart';
 import '../../services/reminder_service.dart';
 import '../../services/dynamic_island_service.dart';
 import '../../widgets/custom_snackbar.dart';
+import '../../shared/widgets/app_page_route.dart';
+import 'automatic_ingestion_screen.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -101,6 +103,72 @@ class _NotificationSettingsScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF6366F1).withValues(alpha: 0.15),
+                  const Color(0xFF6366F1).withValues(alpha: 0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+              ),
+            ),
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  AppPageRoute(
+                    builder: (_) => const AutomaticIngestionScreen(),
+                  ),
+                ).then((_) => _loadSettings());
+              },
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.bolt_rounded,
+                      color: Color(0xFF6366F1),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Automatic Ingestion Hub',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Real-time bank SMS, UPI app notifications & ledger sync',
+                          style: TextStyle(fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFF6366F1),
+                  ),
+                ],
+              ),
+            ),
+          ),
           if (!_exactAlarmEnabled) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 16),
@@ -206,174 +274,7 @@ class _NotificationSettingsScreenState
               ),
             ),
           ],
-          _sectionLabel('DYNAMIC ISLAND & ORIGIN ISLAND'),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome,
-                        color: Color(0xFF818CF8),
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Dynamic Island HUD',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Animates live expense & income notch pill around camera hole',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                if (!_overlayPermissionEnabled) ...[
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          color: Theme.of(context).colorScheme.error,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Overlay permission required to display floating pill outside the app.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context).colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            await DynamicIslandService.instance.requestOverlayPermission();
-                            final updated = await DynamicIslandService.instance.hasOverlayPermission();
-                            if (mounted) setState(() => _overlayPermissionEnabled = updated);
-                          },
-                          child: const Text('Grant'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF43F5E),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () {
-                          DynamicIslandService.instance.show(
-                            amount: '371.52',
-                            isExpense: true,
-                            subtitle: 'District • CSB Card',
-                          );
-                        },
-                        icon: const Icon(Icons.arrow_outward_rounded, size: 16),
-                        label: const FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text('Test Expense', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () {
-                          DynamicIslandService.instance.show(
-                            amount: '25,000.00',
-                            isExpense: false,
-                            subtitle: 'Salary • Federal Bank',
-                          );
-                        },
-                        icon: const Icon(Icons.south_west_rounded, size: 16),
-                        label: const FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text('Test Income', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () {
-                      CustomSnackBar.show(
-                        context,
-                        message: '⏳ Press Home! Dynamic Island will trigger over your screen in 3s...',
-                      );
-                      Future.delayed(const Duration(seconds: 3), () {
-                        DynamicIslandService.instance.show(
-                          amount: '371.52',
-                          isExpense: true,
-                          subtitle: 'District • CSB Card',
-                        );
-                      });
-                    },
-                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                    label: const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('Test Outside App (Press Home in 3s)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+
           _sectionLabel('GLOBAL'),
           _card([
             ListTile(

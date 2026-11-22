@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/utils/merchant_normalizer.dart';
+import '../data/core/tables_v24.dart';
 import '../data/repositories/transaction_repo.dart';
 import '../utils/app_format.dart';
+import 'sms_import_service.dart';
 
 /// Severity levels for audit issues.
 enum AuditSeverity { low, medium, high }
@@ -75,37 +77,41 @@ class DataAuditService {
 
   /// Get dismissed transaction IDs, pruning expired entries (>30 days).
   Future<Set<String>> _getDismissedIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final dismissed = prefs.getStringList('audit_dismissed') ?? [];
-    final timestamps = prefs.getStringList('audit_dismissed_ts') ?? [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dismissed = prefs.getStringList('audit_dismissed') ?? [];
+      final timestamps = prefs.getStringList('audit_dismissed_ts') ?? [];
 
-    if (dismissed.isEmpty) return {};
+      if (dismissed.isEmpty) return {};
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    const expiryMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+      final now = DateTime.now().millisecondsSinceEpoch;
+      const expiryMs = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-    final validIds = <String>{};
-    final prunedIds = <String>[];
-    final prunedTs = <String>[];
+      final validIds = <String>{};
+      final prunedIds = <String>[];
+      final prunedTs = <String>[];
 
-    for (int i = 0; i < dismissed.length; i++) {
-      final ts = i < timestamps.length
-          ? int.tryParse(timestamps[i]) ?? 0
-          : 0;
-      if (now - ts < expiryMs) {
-        validIds.add(dismissed[i]);
-        prunedIds.add(dismissed[i]);
-        prunedTs.add(timestamps.length > i ? timestamps[i] : '0');
+      for (int i = 0; i < dismissed.length; i++) {
+        final ts = i < timestamps.length
+            ? int.tryParse(timestamps[i]) ?? 0
+            : 0;
+        if (now - ts < expiryMs) {
+          validIds.add(dismissed[i]);
+          prunedIds.add(dismissed[i]);
+          prunedTs.add(timestamps.length > i ? timestamps[i] : '0');
+        }
       }
-    }
 
-    // Prune expired entries from storage
-    if (prunedIds.length != dismissed.length) {
-      await prefs.setStringList('audit_dismissed', prunedIds);
-      await prefs.setStringList('audit_dismissed_ts', prunedTs);
-    }
+      // Prune expired entries from storage
+      if (prunedIds.length != dismissed.length) {
+        await prefs.setStringList('audit_dismissed', prunedIds);
+        await prefs.setStringList('audit_dismissed_ts', prunedTs);
+      }
 
-    return validIds;
+      return validIds;
+    } catch (_) {
+      return {};
+    }
   }
 
   /// Run all audit checks. Uses 5-minute cache.
@@ -127,8 +133,19 @@ class DataAuditService {
     final totalCount = allTxns.length;
 
     // ── 1. Uncategorized (ratio-based severity) ───────────
+    // Note: Internal transfers, credit card settlements, and loan movements
+    // are balance-sheet shifts, NOT P&L expenses/incomes, so they are not uncategorized.
     final uncategorized = allTxns
-        .where((t) => t.categoryId == null || t.categoryId!.isEmpty)
+        .where((t) =>
+            (t.isExpenseType || t.isIncomeType) &&
+            !t.isTransferType &&
+            t.type != 'credit_payment' &&
+            t.type != 'loan_repayment' &&
+            (t.categoryId == null ||
+             t.categoryId!.isEmpty ||
+             t.categoryId == TablesV24.sysExpMisc ||
+             t.categoryId == 'exp_misc' ||
+             t.categoryId == 'uncategorized'))
         .toList();
     if (uncategorized.isNotEmpty) {
       final ratio = uncategorized.length / totalCount;
@@ -189,8 +206,42 @@ class DataAuditService {
           final a = recentTxns[group[gi]];
           final b = recentTxns[group[gj]];
 
+          // Transactions with different types (income vs expense vs transfer) are never duplicates
+          if (a.type != b.type) continue;
+
+          // Transactions on different accounts are distinct transactions
+          if (a.accountId != null &&
+              b.accountId != null &&
+              a.accountId!.isNotEmpty &&
+              b.accountId!.isNotEmpty &&
+              a.accountId != b.accountId) {
+            continue;
+          }
+
           final timeDiff = a.date.difference(b.date).inMinutes.abs();
           if (timeDiff > 10) continue; // max window
+
+          // If both messages report running balances and they differ, they are provably distinct transactions
+          final balA = SmsImportService.instance.classifyMessage(
+            a.rawPayload != null && a.rawPayload!.isNotEmpty ? a.rawPayload! : a.notes,
+            '',
+          ).balance;
+          final balB = SmsImportService.instance.classifyMessage(
+            b.rawPayload != null && b.rawPayload!.isNotEmpty ? b.rawPayload! : b.notes,
+            '',
+          ).balance;
+          if (balA != null && balB != null && (balA.amount - balB.amount).abs() >= 0.01) {
+            continue;
+          }
+
+          // If both have distinct non-empty external references (e.g. UTR / ref IDs), they are provably distinct transactions
+          if (a.externalRef != null &&
+              b.externalRef != null &&
+              a.externalRef!.isNotEmpty &&
+              b.externalRef!.isNotEmpty &&
+              a.externalRef != b.externalRef) {
+            continue;
+          }
 
           final noteA = MerchantNormalizer.normalize(a.notes);
           final noteB = MerchantNormalizer.normalize(b.notes);
@@ -203,7 +254,13 @@ class DataAuditService {
           final differentSource = a.source != b.source;
           final crossSourceWindow = differentSource && timeDiff <= 10;
 
-          if (merchantMatch || timeDiff <= 2 || crossSourceWindow) {
+          // Don't flag as duplicate if merchants are completely distinct
+          final bothHaveMerchants = noteA.isNotEmpty && noteB.isNotEmpty;
+          if (bothHaveMerchants && !merchantMatch) {
+            continue;
+          }
+
+          if (merchantMatch || (crossSourceWindow && timeDiff <= 5)) {
             dupeIds.add(a.id);
             dupeIds.add(b.id);
           }

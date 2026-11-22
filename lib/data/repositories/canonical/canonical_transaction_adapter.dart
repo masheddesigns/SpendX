@@ -184,6 +184,7 @@ class CanonicalTransactionAdapter {
       description: tx.notes.isNotEmpty ? tx.notes : tx.type,
       metadata: {
         'user_id': tx.userId,
+        'currency': tx.currency,
         'notes': tx.notes,
         'tags': tx.tags,
         'source': tx.source,
@@ -771,6 +772,10 @@ class CanonicalTransactionAdapter {
       categoryId: categoryId,
       accountId: accountId,
       amount: amountRupees,
+      currency: (meta['currency'] as String?) ??
+          (postings.isNotEmpty && postings.first.amount.currency.isNotEmpty
+              ? postings.first.amount.currency
+              : 'INR'),
       date: event.occurredAt.toLocal(),
       notes: meta['notes'] as String? ?? event.description,
       tags: tags,

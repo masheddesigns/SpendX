@@ -693,16 +693,48 @@ class _UnifiedTransactionDetailScreenState
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Text(
-                          '$sign ${AppFormat.currency(_tx.amount.abs())}',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                            letterSpacing: -0.8,
-                            color: amountColor,
-                          ),
-                        ),
+                        () {
+                          final forex = AppFormat.extractForexDetails(_tx.notes, _tx.rawPayload);
+                          final amtStr = forex != null
+                              ? '$sign ${forex.formattedForeignAmount}'
+                              : '$sign ${AppFormat.currency(_tx.amount.abs())}';
+                          return Column(
+                            children: [
+                              Text(
+                                amtStr,
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w700,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  letterSpacing: -0.8,
+                                  color: amountColor,
+                                ),
+                              ),
+                              if (forex != null) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.20 : 0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.35 : 0.25),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '≈ ${AppFormat.currency(forex.estimatedInr)} • (${forex.rateDisplay})',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        }(),
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -734,145 +766,158 @@ class _UnifiedTransactionDetailScreenState
 
                   const SizedBox(height: 14),
 
-                  // ── 2. Visual Transaction Route Diagram ──────────
-                  SpendXGlassSurface(
-                    width: double.infinity,
-                    level: SpendXGlassLevel.base,
-                    borderRadius: BorderRadius.circular(AppRadius.l),
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                  () {
+                    final forexDetails = AppFormat.extractForexDetails(_tx.notes, _tx.rawPayload);
+                    return Column(
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.alt_route_rounded,
-                              size: 15,
-                              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isCcPayment
-                                  ? 'BILL SETTLEMENT ROUTE'
-                                  : (isTransfer ? 'INTERNAL MOVEMENT ROUTE' : 'FUNDS FLOW ROUTE'),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
-                                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            // Source Box
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
-                                    width: 0.75,
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(sourceIcon, size: 20, color: AppTheme.primaryBlue),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      sourceLabel,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      sourceName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Direction Arrow & Flow Badge
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: Column(
+                        // ── 2. Visual Transaction Route Diagram ──────────
+                        SpendXGlassSurface(
+                          width: double.infinity,
+                          level: SpendXGlassLevel.base,
+                          borderRadius: BorderRadius.circular(AppRadius.l),
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
                                 children: [
-                                  Icon(Icons.arrow_forward_rounded, size: 20, color: amountColor),
-                                  const SizedBox(height: 2),
+                                  Icon(
+                                    Icons.alt_route_rounded,
+                                    size: 15,
+                                    color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                                  ),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    AppFormat.currency(_tx.amount.abs()),
+                                    isCcPayment
+                                        ? 'BILL SETTLEMENT ROUTE'
+                                        : (isTransfer ? 'INTERNAL MOVEMENT ROUTE' : 'FUNDS FLOW ROUTE'),
                                     style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      fontFeatures: const [FontFeature.tabularFigures()],
-                                      color: amountColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.6,
+                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                            // Destination Box
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
-                                    width: 0.75,
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  // Source Box
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
+                                          width: 0.75,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Icon(sourceIcon, size: 20, color: AppTheme.primaryBlue),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            sourceLabel,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            sourceName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(destIcon, size: 20, color: destColor),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      destLabel,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                  // Direction Arrow & Flow Badge
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: Column(
+                                      children: [
+                                        Icon(Icons.arrow_forward_rounded, size: 20, color: amountColor),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          forexDetails != null ? forexDetails.formattedForeignAmount : AppFormat.currency(_tx.amount.abs()),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                            color: amountColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Destination Box
+                                  Expanded(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
+                                          width: 0.75,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Icon(destIcon, size: 20, color: destColor),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            destLabel,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            destName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      destName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+
+                        // Dedicated Forex Currency & Conversion Rate Card
+                        if (forexDetails != null) ...[
+                          const SizedBox(height: 14),
+                          _buildForexCard(isDark, forexDetails),
+                        ],
                       ],
-                    ),
-                  ),
+                    );
+                  }(),
 
                   // ── 3. Copyable External Reference Card (UTR / RRN) ─
                   if (_tx.externalRef != null && _tx.externalRef!.isNotEmpty) ...[
@@ -1094,7 +1139,16 @@ class _UnifiedTransactionDetailScreenState
     final Color impactBg;
     final Color impactBorder;
 
-    if (isCcPayment || isTransfer) {
+    final forex = AppFormat.extractForexDetails(_tx.notes, _tx.rawPayload);
+
+    if (forex != null) {
+      final signStr = isIncome ? '+' : '-';
+      impactText = 'Net Worth Impact: $signStr${forex.formattedForeignAmount} (≈ ${AppFormat.currency(forex.estimatedInr)})';
+      impactIcon = isIncome ? Icons.trending_up_rounded : Icons.trending_down_rounded;
+      impactColor = isIncome ? AppTheme.semanticIncome : AppTheme.semanticExpense;
+      impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
+      impactBorder = impactColor.withValues(alpha: isDark ? 0.32 : 0.20);
+    } else if (isCcPayment || isTransfer) {
       impactText = 'Net Worth Impact: ${AppFormat.currency(0)} (Neutral • Internal Movement)';
       impactIcon = Icons.swap_horiz_rounded;
       impactColor = isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA);
@@ -1150,6 +1204,7 @@ class _UnifiedTransactionDetailScreenState
     bool isTransfer,
     bool isCcPayment,
   ) {
+    final forex = AppFormat.extractForexDetails(_tx.notes, _tx.rawPayload);
     final String debitAccount;
     final String debitType;
     final String creditAccount;
@@ -1275,7 +1330,7 @@ class _UnifiedTransactionDetailScreenState
                   ),
                 ),
                 Text(
-                  AppFormat.currency(_tx.amount.abs()),
+                  forex != null ? forex.formattedForeignAmount : AppFormat.currency(_tx.amount.abs()),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -1337,7 +1392,7 @@ class _UnifiedTransactionDetailScreenState
                   ),
                 ),
                 Text(
-                  AppFormat.currency(_tx.amount.abs()),
+                  forex != null ? forex.formattedForeignAmount : AppFormat.currency(_tx.amount.abs()),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -1346,6 +1401,186 @@ class _UnifiedTransactionDetailScreenState
                   ),
                 ),
               ],
+            ),
+          ),
+          if (forex != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0x1038BDF8) : const Color(0x0C0284C7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 13, color: Color(0xFF0284C7)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Base ledger equivalent: ≈ ${AppFormat.currency(forex.estimatedInr)} (${forex.rateDisplay})',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForexCard(bool isDark, ForexDetails forex) {
+    return SpendXGlassSurface(
+      width: double.infinity,
+      level: SpendXGlassLevel.base,
+      borderRadius: BorderRadius.circular(AppRadius.l),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.22 : 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.currency_exchange_rounded, size: 19, color: Color(0xFF0284C7)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FOREX & CONVERSION RATE',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${forex.currencyName} (${forex.currencyCode})',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.20 : 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.40 : 0.25),
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  forex.rateDisplay,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0284C7),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0x14FFFFFF) : const Color(0x06000000),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0),
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ORIGINAL SPEND',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        forex.formattedForeignAmount,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 16,
+                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'ESTIMATED INR',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        AppFormat.currency(forex.estimatedInr),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF16A34A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '• Conversion calculated using standard indicative exchange rates.\n• Final billing on your card statement will reflect the bank settlement rate and may include a 1.5% - 3.5% forex markup.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.45,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
           ),
         ],

@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../services/settings_service.dart';
+import '../../services/app_update_service.dart';
+import '../../services/haptic_service.dart';
 import '../../widgets/spendx_app_bar.dart';
 
 import 'category_management_screen.dart';
@@ -214,14 +216,28 @@ class AppSettingsScreen extends StatelessWidget {
             FutureBuilder<PackageInfo>(
               future: PackageInfo.fromPlatform(),
               builder: (context, snapshot) {
-                final version = snapshot.data?.version ?? '1.5.0';
-                return _SettingsTile(
-                  icon: Icons.info_outline_rounded,
-                  iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
-                  title: 'About SpendX',
-                  subtitle: 'Version $version',
-                  onTap: () => Navigator.push(context,
-                      AppPageRoute(builder: (_) => const AboutScreen())),
+                final version = snapshot.data?.version ?? '1.0.2';
+                final build = snapshot.data?.buildNumber ?? '4';
+                return Column(
+                  children: [
+                    _SettingsTile(
+                      icon: Icons.system_update_rounded,
+                      iconColor: const Color(0xFF6366F1),
+                      title: 'Check for Updates',
+                      subtitle: 'Version $version ($build) • Google Play Store',
+                      onTap: () => _checkForUpdates(context),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.info_outline_rounded,
+                      iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                      title: 'About SpendX',
+                      subtitle: 'Version $version (Build $build)',
+                      onTap: () => Navigator.push(
+                        context,
+                        AppPageRoute(builder: (_) => const AboutScreen()),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -230,6 +246,61 @@ class AppSettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    HapticService.instance.tap();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Checking Google Play for updates...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    final result = await AppUpdateService.instance.checkForUpdate();
+    if (!context.mounted) return;
+
+    if (result.isUpdateAvailable) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.system_update_rounded, color: Color(0xFF6366F1)),
+              SizedBox(width: 10),
+              Text('Update Available'),
+            ],
+          ),
+          content: Text(
+            'A new version of SpendX is available on Google Play.\n\nCurrent: ${result.displayVersion}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Later'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: const Text('Update Now'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                AppUpdateService.instance.startUpdateFlow();
+              },
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('SpendX is up to date (${result.displayVersion})'),
+          action: SnackBarAction(
+            label: 'Play Store',
+            onPressed: () => AppUpdateService.instance.openPlayStore(),
+          ),
+        ),
+      );
+    }
   }
 }
 

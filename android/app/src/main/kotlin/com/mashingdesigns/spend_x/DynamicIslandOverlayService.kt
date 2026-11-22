@@ -127,6 +127,17 @@ object DynamicIslandOverlayService {
         isExpense: Boolean,
         subtitle: String = "SpendX"
     ) {
+        // Decommissioned per user request to eliminate overlay bugs and crashes
+        return
+    }
+
+    private fun _unusedShow(
+        context: Context,
+        title: String,
+        amount: String,
+        isExpense: Boolean,
+        subtitle: String = "SpendX"
+    ) {
         if (amount.isBlank()) {
             android.util.Log.w("DynamicIsland", "Suppressing overlay: blank amount")
             return

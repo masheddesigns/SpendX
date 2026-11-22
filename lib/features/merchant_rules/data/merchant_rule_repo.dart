@@ -111,6 +111,43 @@ class MerchantRuleRepo {
     return res.map((e) => MerchantRule.fromMap(e)).toList();
   }
 
+  static bool isValidKeyword(String kw) {
+    final lower = kw.trim().toLowerCase();
+    if (lower.length < 3) return false;
+    if (RegExp(r'^\d+$').hasMatch(lower)) return false;
+    // Dates
+    if (RegExp(r'\d{1,2}[-/\s]|\d{4}[-/\s]|[-/\s]\d{2,4}').hasMatch(lower)) return false;
+    if (RegExp(r'\d{1,2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)').hasMatch(lower)) return false;
+    const invalidWords = {
+      'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+      'january', 'february', 'march', 'april', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+      'mon', 'monday', 'tue', 'tuesday', 'wed', 'wednesday', 'thu', 'thursday', 'fri', 'friday', 'sat', 'saturday', 'sun', 'sunday',
+      'info', 'alert', 'bank', 'account', 'card', 'payment', 'transaction', 'due', 'statement', 'bal', 'balance', 'available',
+      'debited', 'credited', 'upi', 'neft', 'imps', 'rtgs', 'call', 'dispute', 'block',
+    };
+    if (invalidWords.contains(lower)) return false;
+    return true;
+  }
+
+  /// Purges corrupted date, month, or noise keywords learned erroneously from historical bugs.
+  Future<int> purgeInvalidKeywords() async {
+    final db = await _database;
+    final all = await db.query(Tables.merchantRules);
+    int purged = 0;
+    for (final row in all) {
+      final id = row['id'] as String;
+      final kw = row['keyword'] as String? ?? '';
+      if (!isValidKeyword(kw)) {
+        await db.delete(Tables.merchantRules, where: 'id = ?', whereArgs: [id]);
+        purged++;
+      }
+    }
+    if (purged > 0) {
+      debugPrint('[MerchantRuleRepo] Purged $purged invalid merchant rules.');
+    }
+    return purged;
+  }
+
   // ── Write ───────────────────────────────────────────────────────────
 
   /// Insert or update a merchant rule.
@@ -121,7 +158,7 @@ class MerchantRuleRepo {
     String? accountId,
   }) async {
     final normalized = keyword.trim().toLowerCase();
-    if (normalized.length < 3) return;
+    if (!isValidKeyword(normalized)) return;
 
     final existing = await getByKeyword(normalized);
     final now = DateTime.now().toIso8601String();

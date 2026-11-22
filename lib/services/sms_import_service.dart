@@ -541,6 +541,48 @@ class SmsImportService {
       return SmsClassification(balance: balance, eventType: SmsEventType.failed);
     }
 
+    // Merchant receipt / order confirmation without bank or card account:
+    // e.g. "Payment of Rs. 4515 is successful for the purchase of your Twowheeler policy. - PolicyBazaar"
+    // e.g. "Hurray! You are heading to the cinema. Your booking ... of Rs. 371.52 is confirmed"
+    // e.g. "Your order has been placed successfully - Swiggy / Zomato / Amazon / Flipkart / Blinkit / Zepto"
+    // These confirm the purchase from the merchant's end, but the financial debit was already
+    // (or will be) sent by the bank / card issuer. If there is NO bank account / card last4 in the text,
+    // do not create an independent unlinked transaction!
+    final hasNoAccountOrCard = (parsed.last4 == null || parsed.last4!.isEmpty) &&
+        (parsed.bankName == null || parsed.bankName!.isEmpty);
+    final isMerchantReceiptWithoutAccount = hasNoAccountOrCard &&
+        !isBank &&
+        (lower.contains('for the purchase of') ||
+         (lower.contains('booking') && (lower.contains('confirmed') || lower.contains('successful'))) ||
+         lower.contains('order placed') ||
+         lower.contains('order confirmed') ||
+         lower.contains('order has been placed') ||
+         lower.contains('order is confirmed') ||
+         lower.contains('ticket booked') ||
+         lower.contains('ticket confirmed') ||
+         lower.contains('ride confirmed') ||
+         lower.contains('trip is complete') ||
+         (lower.contains('recharge') && lower.contains('successful')) ||
+         (lower.contains('policy') && (lower.contains('successful') || lower.contains('received'))) ||
+         sender.toLowerCase().contains('polbaz') ||
+         sender.toLowerCase().contains('dstrkt') ||
+         sender.toLowerCase().contains('swiggy') ||
+         sender.toLowerCase().contains('zomato') ||
+         sender.toLowerCase().contains('blinkit') ||
+         sender.toLowerCase().contains('zepto') ||
+         sender.toLowerCase().contains('amzn') ||
+         sender.toLowerCase().contains('flpkrt') ||
+         sender.toLowerCase().contains('myntra') ||
+         sender.toLowerCase().contains('makemy') ||
+         sender.toLowerCase().contains('goibi') ||
+         sender.toLowerCase().contains('irctc') ||
+         sender.toLowerCase().contains('redbus') ||
+         sender.toLowerCase().contains('bkms') ||
+         sender.toLowerCase().contains('policybazaar'));
+    if (isMerchantReceiptWithoutAccount && !isCcPaymentCandidate && !isRefund) {
+      return SmsClassification(balance: balance, eventType: SmsEventType.infoOnly);
+    }
+
     var merchant = parsed.merchant;
     if (merchant == null || merchant.isEmpty) {
       merchant = _merchantFromUpi(body);
@@ -614,7 +656,12 @@ class SmsImportService {
     ).hasMatch(lower);
 
     final isBankDebitToCcService = !isCardSpend && !parsed.isCredit && RegExp(
-      r'\b(?:cred\s*club|via\s+upi\s+to\s+cred|to\s+cred|pz\s*hdfc\s*cc|billdesk\s*cc|bbps\s*cc)\b',
+      r'\b(?:cred\s*club|via\s+upi\s+to\s+cred|to\s+cred|pz\s*hdfc\s*cc|billdesk\s*cc|bbps\s*cc|'
+      r'(?:via\s+upi\s+)?to\s+(?:onecard|jupiter|cred|cred\s*club|bbps|cheq|scapia|kiwi|supercard|mobikwik|freecharge|payzapp|slice|uni|dreamplug|dreamplug\s+technologies)|'
+      r'(?:via\s+upi\s+to|to)\s+(?:bobcard|sbi\s*card|hdfc\s*card|icici\s*card|axis\s*card|kotak\s*card|rbl\s*card|indusind\s*card|au\s*card|yes\s*card)|'
+      r'(?:to|towards|vpa|at)\s*(?:cc\.|ccpay\.|card\.|billpay\.|autopay\.)[a-z0-9._-]+@[a-z]+|'
+      r'(?:to|towards)\s+[a-z0-9._-]+@(?:sbicard|icicibank|axisbank|hdfcbank)|'
+      r'towards\s+(?:your\s+)?[a-z0-9 ._-]*?(?:credit\s*card|card\s*bill|cc\s*bill|card\s*payment))\b',
       caseSensitive: false,
     ).hasMatch(lower);
 
@@ -663,6 +710,10 @@ class SmsImportService {
             ? _bankDisplayName(_bankKeyword(sender, lower))
             : null);
 
+    final effectiveLast4 = (isCcPayment || isCardSpend || _isCreditCardRefundText(lower))
+        ? (extractCardLast4(body) ?? parsed.last4 ?? _last4(body))
+        : (parsed.last4 ?? _last4(body));
+
     final effective = ParsedTransaction(
       amount: parsed.amount,
       isCredit: effectiveIsCredit,
@@ -670,7 +721,7 @@ class SmsImportService {
       date: parsed.date,
       merchant: merchant,
       refId: parsed.refId,
-      last4: parsed.last4 ?? _last4(body),
+      last4: effectiveLast4,
       bankName: effectiveBankName,
       method: (isCcPayment || isCardSpend || _isCreditCardRefundText(lower))
           ? 'card'
@@ -1088,6 +1139,7 @@ class SmsImportService {
     r'\b(?:available\s*balance|avail\.?\s*bal(?:ance)?|current\s*balance|'
     r'account\s*balance|your\s*balance|closing\s*balance|'
     r'updated\s*balance|new\s*bal(?:ance)?|balance|bal\.?)\b'
+    r'(?!\s*(?:is|has\s+been|was)?\s*(?:debited|credited|charged|refunded|paid|transferred))'
     r'.*?'
     r'(?:(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|(?:is|of|:)\s*([\d,]+(?:\.\d+)?))',
     caseSensitive: false,
@@ -1127,15 +1179,25 @@ class SmsImportService {
   /// - "Payment towards your card was successful"
   static final RegExp _ccPaymentRe = RegExp(
     r'(?:'
-    r'(?:thank\s+you\s+for\s+)?(?:payment\s+of|paying|paid)\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|card|onecard|bobcard)|'
-    r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|processed|cleared|settled|successful)\s+(?:on|towards|for|to)\s+.*?(?:credit\s*card|card\s*ending|card\s*xx|sbi\s*card|onecard|bobcard)|'
-    r'(?:payment|bill\s+payment)\s+(?:of\s+.*?)?(?:towards|for)\s+.*?(?:credit\s*card|card\s*ending|sbi\s*card|onecard|bobcard).*?(?:was\s+successful|is\s+successful|received|processed|completed|settled|credited)|'
-    r'payment\s+(?:received|towards)\s+.*?(?:credit\s*card|card\s*ending|sbi\s*card|onecard|bobcard)|'
+    r'received\s+payment\s+against\s+(?:your\s+)?(?:[a-z0-9 ]+?\s+)?(?:credit\s*card|card|onecard|bobcard)|'
+    r'we\s+have\s+received\s+(?:payment\s+of\s+.*?)?(?:towards|for|on)\s+.*?(?:credit\s*card|card|onecard|bobcard)|'
+    r'(?:thank\s+you\s+for\s+)?(?:payment\s+of|paying|paid)\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|card|onecard|bobcard|jupiter|scapia|kiwi|tataneu|supercard)|'
+    r'payment\s+(?:of\s+.*?)?(?:has\s+been\s+)?(?:received|credited|processed|cleared|settled|successful)\s+(?:on|towards|for|to)\s+.*?(?:credit\s*card|card\s*ending|card\s*xx|sbi\s*card|onecard|bobcard|jupiter|scapia|kiwi|tataneu|supercard)|'
+    r'payment\s+(?:of\s+.*?)?received\s+(?:on|towards|for)\s+.*?(?:credit\s*card|card|onecard|bobcard|jupiter|scapia|kiwi|tataneu|supercard)|'
+    r'(?:payment|bill\s+payment)\s+(?:of\s+.*?)?(?:towards|for)\s+.*?(?:credit\s*card|card\s*ending|sbi\s*card|onecard|bobcard|jupiter|scapia|kiwi|tataneu|supercard).*?(?:was\s+successful|is\s+successful|received|processed|completed|settled|credited)|'
+    r'payment\s+(?:received|towards)\s+.*?(?:credit\s*card|card\s*ending|sbi\s*card|onecard|bobcard|jupiter|scapia|kiwi|tataneu|supercard)|'
     r'received\s+on\s+your\s+(?:[A-Za-z0-9]+\s+)?credit\s+card|'
     r'payment\s+towards\s+credit\s+card\s+is\s+successful|'
+    r'auto[- ]debit\s+of\s+.*?(?:towards|for)\s+.*?(?:credit\s*card|card|onecard|bobcard).*?(?:successful|processed|executed)|'
+    r'(?:standing\s+instruction|si)\s+(?:of\s+.*?)?(?:for|towards)\s+.*?(?:credit\s*card|card|onecard|bobcard)|'
+    r'your\s+card\s+.*?\s*has\s+been\s+credited\s+with\s+(?:payment\s+of|rs|inr|₹)|'
+    r'payment\s+of\s+.*?(?:against|for)\s+your\s+.*?(?:credit\s*card|card|onecard|bobcard)\s+is\s+(?:received|credited|processed)|'
     r'bill\s+payment\s+of\s+.*?(?:received|successful|completed|credited\s+to\s+.*?(?:card|cc))|'
-    r'debited\s+from\s+[a-z0-9 ._-]*?(?:a/c|account|bank)\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment)|'
-    r'paid\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending)'
+    r'debited\s+from\s+[a-z0-9 ._-]*?(?:a/c|account|bank)\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|onecard|bobcard|jupiter|cred|cheq|scapia|kiwi|mobikwik|freecharge|payzapp|slice|uni|dreamplug)|'
+    r'debited\s+.*?(?:via\s+upi\s+to|to)\s+(?:onecard|bobcard|jupiter|cred|cred\s*club|bbps|cheq|scapia|kiwi|supercard|mobikwik|freecharge|payzapp|slice|uni|dreamplug)\b|'
+    r'debited\s+.*?(?:to|towards)\s+(?:cc\.|ccpay\.|card\.|billpay\.)[a-z0-9._-]+@[a-z]+|'
+    r'debited\s+.*?(?:to|towards)\s+[a-z0-9._-]+@(?:sbicard|icicibank|axisbank|hdfcbank)|'
+    r'paid\s+.*?(?:towards|for|to)\s+.*?(?:credit\s*card|sbi\s*card|card\s*payment|bill\s*payment|card\s*ending|onecard|bobcard|jupiter|scapia|kiwi|supercard|cheq|slice|uni)'
     r')',
     caseSensitive: false,
   );
@@ -1146,9 +1208,9 @@ class SmsImportService {
   /// - "credited to your ... Card ... for reversal of transaction"
   static final RegExp _ccRefundRe = RegExp(
     r'(?:'
-    r'refund\s+of\s+.*?(?:credited\s+to|received\s+on)\s+.*?(?:credit\s*card|card)|'
-    r'credited\s+to\s+.*?(?:credit\s*card|card\s*ending).*?(?:refund|reversal)|'
-    r'reversal\s+of\s+.*?(?:credited\s+to|card\s*ending)'
+    r'refund\s+of\s+.*?(?:credited\s+to|received\s+on)\s+.*?(?:credit\s*card|card|onecard|bobcard)|'
+    r'credited\s+to\s+.*?(?:credit\s*card|card\s*ending|onecard|bobcard).*?(?:refund|reversal|cashback|waiver)|'
+    r'(?:reversal|cashback|surcharge\s*waiver|fuel\s*surcharge|fee\s*reversal|waiver)\s+of\s+.*?(?:credited\s+to|on\s+your\s+card|card\s*ending|credited\s+on)'
     r')',
     caseSensitive: false,
   );
@@ -1183,6 +1245,16 @@ class SmsImportService {
         lower.contains('csb card') ||
         lower.contains('edge card') ||
         lower.contains('rupay credit') ||
+        lower.contains('scapia') ||
+        lower.contains('kiwi') ||
+        lower.contains('tataneu') ||
+        lower.contains('tata neu') ||
+        lower.contains('supercard') ||
+        lower.contains('supermoney') ||
+        lower.contains('slice') ||
+        lower.contains('uni card') ||
+        lower.contains('flipkart axis') ||
+        lower.contains('amazon pay icici') ||
         sender.toLowerCase().contains('crd') ||
         sender.toLowerCase().contains('jtedge');
 
@@ -1234,9 +1306,27 @@ class SmsImportService {
   /// Returns true if text indicates a credit card refund or reversal.
   static bool _isCreditCardRefundText(String lower) {
     if (_ccRefundRe.hasMatch(lower)) return true;
-    final hasCard = lower.contains('credit card') || lower.contains('card ending') || lower.contains('card xx');
-    final hasRefund = lower.contains('refund') || lower.contains('reversal');
-    final hasCredit = lower.contains('credited') || lower.contains('received');
+    final hasCard = lower.contains('credit card') ||
+        lower.contains('card ending') ||
+        lower.contains('card xx') ||
+        lower.contains('card no') ||
+        lower.contains('onecard') ||
+        lower.contains('bobcard') ||
+        lower.contains('sbi card') ||
+        lower.contains('amex') ||
+        RegExp(r'\b(?:card)\s+\d{4,5}\b', caseSensitive: false).hasMatch(lower);
+    final hasRefund = lower.contains('refund') ||
+        lower.contains('reversal') ||
+        lower.contains('reversed') ||
+        lower.contains('surcharge waiver') ||
+        lower.contains('fuel surcharge') ||
+        lower.contains('fee reversal') ||
+        lower.contains('waiver') ||
+        lower.contains('cashback');
+    final hasCredit = lower.contains('credited') ||
+        lower.contains('received') ||
+        lower.contains('processed') ||
+        lower.contains('waived');
     return hasCard && hasRefund && hasCredit;
   }
 
@@ -1297,7 +1387,8 @@ class SmsImportService {
         lower.contains('amex card') ||
         lower.contains('idfc card') ||
         lower.contains('statement generated') ||
-        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|kotak\s+card|indusind\s+card|scapia\s+card|rbl\s+card|amex\s+card|idfc\s+card|card)\s+\d{4}\b', caseSensitive: false).hasMatch(lower);
+        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|kotak\s+card|indusind\s+card|scapia\s+card|rbl\s+card|amex\s+card|idfc\s+card|card)\s+\d{4,5}\b', caseSensitive: false).hasMatch(lower) ||
+        RegExp(r'\b\d{4}[xX*.\s-]{4,14}\d{4,5}\b').hasMatch(lower);
     final hasBillSignal = _creditDueRe.hasMatch(lower) ||
         lower.contains('total due') ||
         lower.contains('amount due') ||
@@ -1332,9 +1423,21 @@ class SmsImportService {
         lower.contains('dreamplug') ||
         lower.contains('tataneu') ||
         lower.contains('tata neu') ||
-        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|card)\s+\d{4}\b', caseSensitive: false).hasMatch(lower);
+        lower.contains('onecard') ||
+        lower.contains('bobcard') ||
+        lower.contains('scapia') ||
+        lower.contains('supercard') ||
+        lower.contains('kiwi') ||
+        lower.contains('amex') ||
+        lower.contains('american express') ||
+        lower.contains('swiggy hdfc') ||
+        lower.contains('flipkart axis') ||
+        lower.contains('amazon pay icici') ||
+        lower.contains('airtel axis') ||
+        RegExp(r'\b(?:bank\s+card|hdfc\s+card|sbi\s+card|icici\s+card|axis\s+card|kotak\s+card|indusind\s+card|idfc\s+card|rbl\s+card|au\s+card|card)\s+\d{4,5}\b', caseSensitive: false).hasMatch(lower) ||
+        RegExp(r'\b\d{4}[xX*.\s-]{4,14}\d{4,5}\b').hasMatch(lower);
     final hasSpendVerb = RegExp(
-      r'\b(?:spent|paid|charged|debited|used\s+for|transaction\s+of)\b',
+      r'\b(?:spent|paid|charged|debited|used|swiped|transaction\s+of|txn\s+of)\b',
       caseSensitive: false,
     ).hasMatch(lower);
     return hasCardSignal && hasSpendVerb;
@@ -1344,6 +1447,7 @@ class SmsImportService {
   // Generic "available balance" or "current balance" belongs to bank accounts, NEVER wallets.
   static final RegExp _walletBalanceRe = RegExp(
     r'(?:(?:paytm\s+)?wallet\s*(?:avail(?:able)?\s*)?balance|amazon\s*pay\s*(?:wallet\s*)?balance|upi\s*lite\s*balance|rwallet\s*balance)\b'
+    r'(?!\s*(?:is|has\s+been|was)?\s*(?:debited|credited|charged|refunded|paid|transferred))'
     r'\s*(?:is|of|:|-)?\s*'
     r'(?:(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?))',
     caseSensitive: false,
@@ -1397,6 +1501,10 @@ class SmsImportService {
     r'feedback|survey|rate us|rate your|review us|'
     r'traded value|contract note|demat|depository|cdsl|nsdl|national stock exchange|bse ltd|'
     r'imd|ksdma|ndma|weather|forecast|thunderstorm|'
+    r'working at home|work from home|part[- ]time job|daily task|task job|absentinthe|'
+    r'api\.whatsapp\.com|wa\.me/|t\.me/|'
+    r'salary.*(?:passed|approved|released).*whatsapp|'
+    r'parimatch|1xbet|lotus365|stake\.com|crypto freebet|deposit.*usdt|'
     r'റീചാർജ്|കാലഹരണപ്പെട്ടു|പ്ലാൻ|ജിയോ|ഡാറ്റ|ഫീഡ്‌ബാക്ക്|ഇടിമിന്നൽ|മഴ|കാറ്റ്|'
     r'report spam|TRAI DND',
     caseSensitive: false,
@@ -1763,18 +1871,24 @@ class SmsImportService {
     // the trailing "Bal Rs X" on transaction messages.
     final bankBalance = _bankBalanceRe.firstMatch(body);
     if (bankBalance != null) {
-      final raw = bankBalance.group(1) ?? bankBalance.group(2) ?? '';
-      final amount = _parseAmount(raw);
-      if (amount > 0 &&
-          (bankKeyword != null || _last4(body) != null || _isBankSender(sender))) {
-        return BalanceHit(
-          kind: BalanceKind.bank,
-          amount: amount,
-          last4: _last4(body),
-          bankKeyword: bankKeyword,
-          sender: sender,
-          body: body,
-        );
+      final matchedText = bankBalance.group(0)?.toLowerCase() ?? '';
+      if (!matchedText.contains('debited') &&
+          !matchedText.contains('credited') &&
+          !matchedText.contains('transferred') &&
+          !matchedText.contains('paid')) {
+        final raw = bankBalance.group(1) ?? bankBalance.group(2) ?? '';
+        final amount = _parseAmount(raw);
+        if (amount > 0 &&
+            (bankKeyword != null || _last4(body) != null || _isBankSender(sender))) {
+          return BalanceHit(
+            kind: BalanceKind.bank,
+            amount: amount,
+            last4: _last4(body),
+            bankKeyword: bankKeyword,
+            sender: sender,
+            body: body,
+          );
+        }
       }
     }
 
@@ -2399,6 +2513,35 @@ class SmsImportService {
       );
     }
 
+    // 5.5. Loan EMI Due & Scheduled Installment Notices:
+    // e.g. "Dear Customer, EMI of Rs. 15,000 for your Loan A/C ending 4567 is due on 05-Dec-2026. Please maintain sufficient balance."
+    // e.g. "Your EMI for Car Loan account 1234 of Rs 12,500 is due on 10/11/2026"
+    final isLoanEmi = RegExp(r'\b(?:emi\s+of|emi\s+for|loan\s+emi|your\s+emi|emi\s+is\s+due)\b', caseSensitive: false).hasMatch(lower) &&
+        (lower.contains('due') || lower.contains('scheduled') || lower.contains('maintain sufficient balance') || lower.contains('is payable'));
+    if (isLoanEmi) {
+      final amtMatch = RegExp(r'(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)', caseSensitive: false).firstMatch(body);
+      final amount = amtMatch != null ? _parseAmount(amtMatch.group(1)!) : 0.0;
+      final dueDate = _extractDueDate(body) ?? smsDate ?? DateTime.now();
+      final last4 = _last4(body);
+      final bankKeyword = _bankKeyword(sender, lower);
+      final title = bankKeyword != null
+          ? '${_bankDisplayName(bankKeyword)} Loan EMI'
+          : 'Loan EMI';
+      return UpcomingObligationHit(
+        title: title,
+        amount: amount,
+        dueDate: dueDate,
+        merchant: title,
+        last4: last4,
+        bankKeyword: bankKeyword,
+        reminderType: ReminderType.loan,
+        isMandate: true,
+        sender: sender,
+        body: body,
+        smsDate: smsDate,
+      );
+    }
+
     // 6. Standalone Credit Card Bill Due & Statement Ready Notices:
     // e.g. "Your BOBCARD One Credit Card bill of Rs. 2,778.88 is ready. Pay by 05 Dec, 2026"
     // e.g. "Your Edge CSB Bank RuPay Credit Card bill for Rs.2640.76 has been generated"
@@ -2427,12 +2570,20 @@ class SmsImportService {
         bank = 'BOBCARD';
       } else if (lower.contains('edge csb') || lower.contains('csb')) {
         bank = 'Edge CSB Bank';
-      } else if (lower.contains('icici')) {
+      } else if (lower.contains('icici') || lower.contains('amazon pay icici')) {
         bank = 'ICICI Bank';
+      } else if (lower.contains('tataneu') || lower.contains('tata neu')) {
+        bank = 'Tata Neu HDFC';
+      } else if (lower.contains('swiggy hdfc')) {
+        bank = 'Swiggy HDFC';
       } else if (lower.contains('hdfc')) {
         bank = 'HDFC Bank';
       } else if (lower.contains('sbi')) {
         bank = 'SBI Card';
+      } else if (lower.contains('flipkart axis')) {
+        bank = 'Flipkart Axis Bank';
+      } else if (lower.contains('kiwi')) {
+        bank = 'Kiwi Axis Bank';
       } else if (lower.contains('axis')) {
         bank = 'Axis Bank';
       } else if (lower.contains('onecard')) {
@@ -2443,6 +2594,8 @@ class SmsImportService {
         bank = 'IndusInd Bank';
       } else if (lower.contains('scapia')) {
         bank = 'Federal Bank Scapia';
+      } else if (lower.contains('fi money') || lower.contains('fi federal')) {
+        bank = 'Fi Federal Bank';
       } else if (lower.contains('rbl')) {
         bank = 'RBL Bank';
       } else if (lower.contains('amex') || lower.contains('american express')) {
@@ -2451,6 +2604,14 @@ class SmsImportService {
         bank = 'IDFC FIRST Bank';
       } else if (lower.contains('standard chartered') || lower.contains('stanchart')) {
         bank = 'Standard Chartered';
+      } else if (lower.contains('hsbc')) {
+        bank = 'HSBC';
+      } else if (lower.contains('au small finance') || lower.contains('au bank')) {
+        bank = 'AU Small Finance Bank';
+      } else if (lower.contains('yes bank') || lower.contains('yes')) {
+        bank = 'Yes Bank';
+      } else if (lower.contains('supercard') || lower.contains('super.money')) {
+        bank = 'SuperCard';
       } else {
         final bankM = RegExp(r'([A-Za-z0-9]+)\s+credit\s+card', caseSensitive: false).firstMatch(body);
         if (bankM != null) bank = bankM.group(1)!.trim();
@@ -2605,6 +2766,7 @@ class SmsImportService {
       if (appRef.contains('paytm')) return 'paytm';
       if (appRef.contains('amazon')) return 'amazon';
       if (appRef.contains('aubank')) return 'aubank';
+      if (appRef.contains('jio') || appRef.contains('jpbl') || appRef.contains('jiofinance')) return 'jpbl';
     }
 
     // 0. Co-branded fintech / aggregator sender mapping with body priority:
@@ -2634,18 +2796,23 @@ class SmsImportService {
         senderLower.contains('bajaj') ||
         senderLower.contains('fampay') ||
         senderLower.contains('cred') ||
-        senderLower.contains('cheq');
+        senderLower.contains('cheq') ||
+        senderLower.contains('jfs') ||
+        senderLower.contains('jio') ||
+        senderLower.contains('jpbl');
 
     if (isFintechSender) {
       // If body mentions a bank (e.g. "Your HDFC Credit Card bill..."),
       // body bank MUST ALWAYS override the third-party / fintech sender!
       for (final bank in [
+        'jio payments bank', 'jio payments', 'jpbl', 'jiopbs',
         'hdfc', 'axis', 'icici', 'sbi', 'federal', 'fedmobile',
         'kotak', 'bobcard', 'onecard', 'au bank', 'idfc', 'indusind',
         'canara', 'bank of baroda', 'bob', 'yes bank', 'rbl', 'csb',
         'scb', 'standard chartered', 'hsbc', 'dbs', 'amex', 'american express'
       ]) {
         if (lower.contains(bank)) {
+          if (bank.contains('jio') || bank == 'jpbl' || bank == 'jiopbs') return 'jpbl';
           return bank.replaceAll(' ', '');
         }
       }
@@ -2713,62 +2880,121 @@ class SmsImportService {
       if (l == 'app' || l == 'com' || l == 'in' || l == 'org' || l == 'net') continue;
       if (bankNames.containsKey(l)) return l;
     }
+
+    // Fallback: check trailing signature or explicit bank mentions in the body (lower)
+    if (lower.contains('- jpbl') || lower.contains('-jpbl') || lower.contains('jpbl') || lower.contains('jiopbs')) return 'jpbl';
+    if (lower.contains('federal bank') || lower.contains('- fedbnk') || lower.contains('-fedbnk')) return 'fedbnk';
+    if (lower.contains('- sbi') || lower.contains('-sbi') || lower.contains('state bank')) return 'sbi';
+    if (lower.contains('hdfc')) return 'hdfc';
+    if (lower.contains('icici')) return 'icici';
+    if (lower.contains('axis')) return 'axisbk';
+    if (lower.contains('kotak')) return 'kotak';
+    if (lower.contains('onecard') || lower.contains('bobcard') || lower.contains('bobone')) return 'onecrd';
+    if (lower.contains('jupiter') || lower.contains('csb bank') || lower.contains('jtedge')) return 'csb';
+    if (lower.contains('canara') || lower.contains('cnrb')) return 'canbnk';
+    if (lower.contains('pnb') || lower.contains('punjab national')) return 'pnb';
+    if (lower.contains('idfc')) return 'idfcfb';
+    if (lower.contains('aubank') || lower.contains('au small')) return 'aubank';
+    if (lower.contains('indusind')) return 'indus';
     return null;
   }
 
   static const bankNames = <String, String>{
     'cbssbi': 'State Bank of India',
     'sbiinb': 'State Bank of India',
+    'sbiupi': 'State Bank of India',
+    'sbipay': 'State Bank of India',
+    'sbisec': 'State Bank of India',
     'sbi': 'State Bank of India',
     'sbicrd': 'SBI Cards',
     'sbiyono': 'State Bank of India',
     'yono': 'State Bank of India',
     'fedbnk': 'Federal Bank',
     'fedmobile': 'Federal Bank',
+    'fedupi': 'Federal Bank',
+    'fedbk': 'Federal Bank',
     'federal': 'Federal Bank',
     'axsbk': 'Axis Bank',
     'axisbk': 'Axis Bank',
     'axis': 'Axis Bank',
+    'axiscc': 'Axis Bank Credit Card',
+    'axispay': 'Axis Bank',
     'axns': 'Axis Bank',
     'icicib': 'ICICI Bank',
     'icicit': 'ICICI Bank',
     'icici': 'ICICI Bank',
+    'icicic': 'ICICI Bank Credit Card',
     'imobile': 'ICICI Bank',
     'hdfcbk': 'HDFC Bank',
     'hdfcbn': 'HDFC Bank',
     'hdfc': 'HDFC Bank',
+    'hdfccc': 'HDFC Bank Credit Card',
+    'hdfcsec': 'HDFC Bank',
+    'hdfcpay': 'HDFC Bank',
     'payzapp': 'HDFC Bank',
     'kotakb': 'Kotak Mahindra Bank',
     'kotak': 'Kotak Mahindra Bank',
+    'kotakc': 'Kotak Mahindra Credit Card',
+    'kotakm': 'Kotak Mahindra Bank',
+    'kmbl': 'Kotak Mahindra Bank',
     'jiopbs': 'Jio Payments Bank',
+    'jpbl': 'Jio Payments Bank',
     'jiofbr': 'Jio Payments Bank',
     'onecrd': 'OneCard (BOBCARD)',
     'onecard': 'OneCard (BOBCARD)',
     'bobcrd': 'BOBCARD',
+    'bobcard': 'BOBCARD',
     'csb': 'CSB Bank',
     'jtedge': 'Jupiter (CSB Bank)',
+    'jupiter': 'Jupiter (CSB Bank)',
+    'scapia': 'Scapia (Federal Bank)',
+    'tataneu': 'Tata Neu (HDFC Bank)',
+    'tnbpay': 'Tata Neu (HDFC Bank)',
+    'cheq': 'Cheq',
+    'chqapp': 'Cheq',
+    'cred': 'CRED',
+    'credcl': 'CRED',
     'yesbk': 'YES Bank',
     'yesbank': 'YES Bank',
+    'yescrd': 'YES Bank Credit Card',
+    'yespay': 'YES Bank',
     'pnb': 'Punjab National Bank',
+    'pnbupi': 'Punjab National Bank',
+    'pnbcrd': 'Punjab National Bank Credit Card',
     'idbib': 'IDBI Bank',
     'idfcfb': 'IDFC First Bank',
+    'idfcbk': 'IDFC First Bank',
+    'idfccc': 'IDFC First Credit Card',
     'indus': 'IndusInd Bank',
+    'indusc': 'IndusInd Credit Card',
     'aubnk': 'AU Small Finance Bank',
     'aubank': 'AU Small Finance Bank',
     'canbnk': 'Canara Bank',
+    'canbk': 'Canara Bank',
+    'canpay': 'Canara Bank',
     'bob': 'Bank of Baroda',
+    'baroda': 'Bank of Baroda',
+    'barodb': 'Bank of Baroda',
+    'bobtxm': 'Bank of Baroda',
+    'bobibk': 'Bank of Baroda',
     'union': 'Union Bank of India',
+    'ubionl': 'Union Bank of India',
+    'ubibnk': 'Union Bank of India',
     'indbnk': 'Indian Bank',
+    'alldbk': 'Indian Bank',
     'cbin': 'Central Bank of India',
+    'cbipay': 'Central Bank of India',
     'psb': 'Punjab & Sind Bank',
     'uco': 'UCO Bank',
     'iob': 'Indian Overseas Bank',
+    'iobpay': 'Indian Overseas Bank',
     'kvb': 'Karur Vysya Bank',
     'cub': 'City Union Bank',
     'sib': 'South Indian Bank',
     'kbl': 'Karnataka Bank',
     'tmb': 'Tamilnad Mercantile Bank',
     'bandhan': 'Bandhan Bank',
+    'bdhnbk': 'Bandhan Bank',
     // International & Private Banks
     'scb': 'Standard Chartered',
     'scbl': 'Standard Chartered',
@@ -2803,10 +3029,18 @@ class SmsImportService {
     'kiwi': 'Kiwi (Axis Bank)',
     'bajaj': 'Bajaj Finserv',
     'bajajf': 'Bajaj Finserv',
+    'supermoney': 'Super.money',
+    'supercard': 'Super.money',
+    'sprmny': 'Super.money',
     'postpe': 'PostPe',
     'fampay': 'FamPay',
     'airtel': 'Airtel Payments Bank',
+    'apbl': 'Airtel Payments Bank',
     'paytm': 'Paytm Payments Bank',
+    'ppbl': 'Paytm Payments Bank',
+    'ippb': 'India Post Payments Bank',
+    'finopb': 'Fino Payments Bank',
+    'nsdlpb': 'NSDL Payments Bank',
     'mobikwik': 'MobiKwik',
     'freecharge': 'Freecharge',
     // Digital wallets
@@ -2825,7 +3059,78 @@ class SmsImportService {
 
   String _bankDisplayName(String? code) => bankDisplayName(code);
 
+  /// Extracts the card ending digits (4 or 5 digits, e.g. for Amex) from text,
+  /// properly handling full masked card numbers (e.g. 5424XXXXXXXX2510, 5424********2510,
+  /// 4512-XXXX-XXXX-6366, 5334 **** **** 2510), explicit card phrases,
+  /// and differentiating from bank account numbers.
+  static String? extractCardLast4(String text) {
+    // 1. Full masked card numbers: e.g. 5424XXXXXXXX2510, 5424********2510, 4512-XXXX-XXXX-6366, 5334 **** **** 2510
+    final maskedFullMatch = RegExp(
+      r'\b(?:\d{4}[\s\-]*(?:[xX*]{4}[\s\-]*){1,3}|[xX*]{4}[\s\-]+[xX*]{4}[\s\-]+)(\d{4,5})\b',
+    ).firstMatch(text);
+    if (maskedFullMatch != null) {
+      return maskedFullMatch.group(1);
+    }
+    final compactMasked = RegExp(
+      r'\b\d{4}[xX*]{4,12}(\d{4,5})\b',
+    ).firstMatch(text);
+    if (compactMasked != null) {
+      return compactMasked.group(1);
+    }
+
+    // 2. Explicit card ending / no markers:
+    // e.g. "Card ending in 2510", "Card ending with 2510", "Card no: **2510", "Credit Card XX2510", "Card ...2510", "Card (XX2510)"
+    final explicitCardMatch = RegExp(
+      r'(?:credit\s*card|debit\s*card|crd\s*card|card|crd|onecard|bobcard|supercard|amex)\s*(?:no\.?|num(?:ber)?|ending(?:\s+(?:in|with))?|with)?[\s:*\-.()xX]*(\d{4,5})\b',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (explicitCardMatch != null) {
+      return explicitCardMatch.group(1);
+    }
+
+    return null;
+  }
+
+  /// Extracts the paying/debiting bank account digits from text,
+  /// avoiding confusion with credit card numbers in repayment messages.
+  static String? extractBankAccountLast4(String text) {
+    final m = RegExp(
+      r'(?:from\s+(?:a\/c|account|bank)|(?:a\/c|acct|account)\s*(?:no\.?|number|ending(?:\s+(?:in|with))?)?)[\s:*\-.()xX]*(\d{3,6})\b',
+      caseSensitive: false,
+    ).firstMatch(text);
+    return m?.group(1);
+  }
+
   String? _last4(String body) {
+    final lower = body.toLowerCase();
+    if (_isCardSpendCandidate(lower) || _isCreditCardPaymentText(lower) || _isCreditCardBillText(lower)) {
+      final cardEnding = extractCardLast4(body);
+      if (cardEnding != null && cardEnding.isNotEmpty) return cardEnding;
+    }
+
+    // Full masked card or account check
+    final maskedMatch = RegExp(
+      r'\b(?:\d{4}[\s\-]*(?:[xX*]{4}[\s\-]*){1,3}|[xX*]{4}[\s\-]+[xX*]{4}[\s\-]+|\d{4}[xX*]{4,12})(\d{4,5})\b',
+    ).firstMatch(body);
+    if (maskedMatch != null) {
+      return maskedMatch.group(1);
+    }
+
+    // Explicit account / card match
+    final explicitMatch = RegExp(
+      r'(?:credit\s*card|debit\s*card|crd|card|a\/c|acct|account|ending(?:\s+(?:in|with))?)\s*(?:no\.?|num(?:ber)?)?[\s:*\-.()xX]*(\d{3,6})\b',
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (explicitMatch != null) {
+      return explicitMatch.group(1);
+    }
+
+    // Standalone masked prefix
+    final maskedPrefix = RegExp(r'\b[xX*.\-]{2,}(\d{3,6})\b').firstMatch(body);
+    if (maskedPrefix != null) {
+      return maskedPrefix.group(1);
+    }
+
     final m = _last4Re.firstMatch(body);
     if (m == null) return null;
     final digits = m.group(1) ?? m.group(2);
@@ -2853,6 +3158,22 @@ class SmsImportService {
       final amt = _parseAmount(m.group(1)!);
       if (amt > 0) return amt;
     }
+
+    // Currency-less bank wording: "debited by 7291.17", "credited with 50.00", "debited by 513.00"
+    final curlessMatches = RegExp(
+      r'(?:debited|credited|transferred)\s+(?:by|with|for)\s+([0-9,]+(?:\.\d{1,2})?)\b',
+      caseSensitive: false,
+    ).allMatches(body);
+    for (final m in curlessMatches) {
+      final prefixStart = (m.start - 40).clamp(0, body.length);
+      final prefix = body.substring(prefixStart, m.start).trim();
+      if (_limitOrBalancePrefixRe.hasMatch(prefix)) {
+        continue;
+      }
+      final amt = _parseAmount(m.group(1)!);
+      if (amt > 0) return amt;
+    }
+
     return null;
   }
 

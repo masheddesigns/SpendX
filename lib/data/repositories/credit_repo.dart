@@ -216,6 +216,15 @@ class CreditRepo {
     await _runInTransaction(database, (txn) async {
       await CanonicalCreditAdapter.ensureSystemAccountsExist(txn);
 
+      if (statementClosingDate != null) {
+        final newerRecs = await txn.rawQuery('''
+          SELECT id FROM ${TablesV24.openingBalanceReconciliations}
+          WHERE account_id = ? AND created_at > ?
+          LIMIT 1
+        ''', [cardId, statementClosingDate.toUtc().toIso8601String()]);
+        if (newerRecs.isNotEmpty) return;
+      }
+
       final currentLiability = await _getAccountRepo(txn).getDerivedBalance(
         cardId,
         txn: txn,

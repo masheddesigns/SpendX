@@ -33,12 +33,19 @@ import '../data/repositories/loan_repo.dart';
 import '../data/repositories/review_repo.dart';
 import '../features/review_queue/providers/review_providers.dart';
 import '../models/loan.dart';
+import '../screens/transaction_detail_screen.dart';
 
 class NotificationServiceV2 {
   static final NotificationServiceV2 _instance = NotificationServiceV2._();
   factory NotificationServiceV2() => _instance;
 
   NotificationServiceV2._();
+
+  /// Notification ID reserved for the consolidated review queue summary alert.
+  static const int reviewQueueSummaryId = 98888;
+
+  /// Holds cold-start notification response when app is launched from a notification tap.
+  static NotificationResponse? _pendingLaunchResponse;
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -48,6 +55,17 @@ class NotificationServiceV2 {
   int _nextEphemeralId = 400000;
 
   bool _initialized = false;
+
+  /// Checks if cold-start launch was triggered by a notification and routes to the target screen.
+  Future<void> checkAndRoutePendingLaunchNotification() async {
+    final response = _pendingLaunchResponse;
+    if (response != null) {
+      _pendingLaunchResponse = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleNotificationTap(response);
+      });
+    }
+  }
 
   Future<void> init() async {
     if (_initialized) return;
@@ -80,6 +98,18 @@ class NotificationServiceV2 {
         onDidReceiveNotificationResponse: _handleNotificationTap,
         onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
+
+      // Inspect whether cold-start was triggered by notification tap
+      try {
+        final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+        if (launchDetails != null &&
+            launchDetails.didNotificationLaunchApp &&
+            launchDetails.notificationResponse != null) {
+          _pendingLaunchResponse = launchDetails.notificationResponse;
+        }
+      } catch (e) {
+        AppLogger.w('Failed to get notification launch details: $e');
+      }
 
       // Create Channels
       await _plugin
@@ -631,10 +661,16 @@ class NotificationServiceV2 {
         return;
       }
       final decoded = jsonDecode(payload);
+      final sourceType = (decoded['source_type'] ?? '').toString();
+      final sourceId = (decoded['source_id'] ??
+              decoded['transaction_id'] ??
+              decoded['review_id'] ??
+              '')
+          .toString();
       unawaited(
         handleNotificationNavigation(
-          decoded['source_type'] ?? '',
-          decoded['source_id'] ?? '',
+          sourceType,
+          sourceId,
         ),
       );
     } catch (e) {
@@ -685,8 +721,18 @@ class NotificationServiceV2 {
       case 'balances':
         push(const AccountListScreen());
         break;
+      case 'transaction':
+      case 'txn':
       case 'sms':
       case 'activity':
+        // Deep-link directly into the individual transaction detail screen when ID is provided
+        if (sourceId.isNotEmpty) {
+          final tx = await TransactionRepo().getById(sourceId);
+          if (tx != null) {
+            push(UnifiedTransactionDetailScreen(transaction: tx));
+            break;
+          }
+        }
         push(const TransactionListScreen(isFullScreen: true));
         break;
       case 'review':

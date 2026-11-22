@@ -18,6 +18,7 @@ import '../shared/widgets/undo_snackbar_listener.dart';
 import '../features/liabilities/providers/liabilities_providers.dart'
     show lendingProvider;
 import 'bank/add_bank_account_screen.dart';
+import 'bank/account_detail_screen.dart';
 import 'net_worth/net_worth_report_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../shared/widgets/glass/spendx_scaffold.dart';
@@ -158,6 +159,23 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     final totalAssets = summaryAsync.valueOrNull?.assets ?? 0.0;
     final totalLiabilities = summaryAsync.valueOrNull?.liabilities ?? 0.0;
 
+    final liquidAccounts = accounts
+        .where((a) =>
+            a.isAsset &&
+            !const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf']
+                .contains(a.accountType))
+        .toList();
+    final investmentAccounts = accounts
+        .where((a) =>
+            a.isAsset &&
+            const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf']
+                .contains(a.accountType))
+        .toList();
+    final totalLiquid =
+        liquidAccounts.fold<double>(0.0, (s, a) => s + a.balance);
+    final totalInvestments =
+        investmentAccounts.fold<double>(0.0, (s, a) => s + a.balance);
+
     listenForUndoSnackbars(
       ref,
       context,
@@ -238,11 +256,16 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               // ─── Liquid Glass Solvency Hero ───
               SliverToBoxAdapter(child: _buildNetWorthHero()),
 
-              // ─── Assets Section ───
+              // ─── Investments Guiding Banner ───
+              SliverToBoxAdapter(
+                child: _buildInvestmentsGuidanceCard(context),
+              ),
+
+              // ─── Liquid Cash & Bank Accounts ───
               SliverToBoxAdapter(
                 child: _buildSectionHeader(
-                  'Liquid Assets',
-                  totalAssets,
+                  'Liquid Accounts & Cash',
+                  totalLiquid,
                   AppTheme.semanticIncome,
                   isAsset: true,
                 ),
@@ -250,22 +273,56 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
 
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _buildAccountTile(
-                    accounts.where((a) => a.isAsset).toList()[i],
-                  ),
-                  childCount: accounts.where((a) => a.isAsset).length,
+                  (ctx, i) => _buildAccountTile(liquidAccounts[i]),
+                  childCount: liquidAccounts.length,
                 ),
               ),
 
-              if (accounts.where((a) => a.isAsset).isEmpty)
+              if (liquidAccounts.isEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 12,
+                      vertical: 8,
                     ),
                     child: Text(
-                      'No accounts added yet. Tap + to add an account.',
+                      'No liquid accounts added yet. Tap + to add bank or cash.',
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+
+              // ─── Investments & Wealth Portfolio ───
+              SliverToBoxAdapter(
+                child: _buildSectionHeader(
+                  'Investments & Portfolio',
+                  totalInvestments,
+                  const Color(0xFF6366F1),
+                  isAsset: true,
+                ),
+              ),
+
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => _buildAccountTile(investmentAccounts[i]),
+                  childCount: investmentAccounts.length,
+                ),
+              ),
+
+              if (investmentAccounts.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'No investment accounts tracked. Tap "+ Mutual Funds" or "+ Stocks" above to track your portfolio value.',
                       style: TextStyle(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? AppTheme.darkTextMuted
@@ -684,20 +741,234 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         ),
       );
 
+  Widget _buildInvestmentsGuidanceCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final hasInvestments = accounts.any((a) =>
+        a.isAsset &&
+        const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf']
+            .contains(a.accountType));
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [
+                  const Color(0xFF1E1B4B).withValues(alpha: 0.6),
+                  const Color(0xFF0F172A).withValues(alpha: 0.8),
+                ]
+              : [const Color(0xFFEEF2FF), const Color(0xFFF8FAFC)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.auto_graph_rounded,
+                  size: 20,
+                  color: Color(0xFF818CF8),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasInvestments ? 'Your Investment Portfolio' : 'Complete Your Net Worth',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasInvestments
+                          ? 'Track & update current market values for stocks, mutual funds & gold'
+                          : 'Bank SMS only covers cash. Add your stocks, mutual funds, EPF & gold to track your true wealth.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: isDark
+                            ? AppTheme.darkTextMuted
+                            : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildQuickAddPill(
+                context,
+                label: 'Mutual Funds',
+                icon: Icons.pie_chart_outline_rounded,
+                type: 'mutual_fund',
+                color: const Color(0xFFEC4899),
+              ),
+              _buildQuickAddPill(
+                context,
+                label: 'Stocks',
+                icon: Icons.trending_up_rounded,
+                type: 'stock',
+                color: const Color(0xFF10B981),
+              ),
+              _buildQuickAddPill(
+                context,
+                label: 'Gold',
+                icon: Icons.monetization_on_outlined,
+                type: 'gold',
+                color: const Color(0xFFF59E0B),
+              ),
+              _buildQuickAddPill(
+                context,
+                label: 'EPF / PPF',
+                icon: Icons.savings_outlined,
+                type: 'ppf',
+                color: const Color(0xFF06B6D4),
+              ),
+              _buildQuickAddPill(
+                context,
+                label: 'Real Estate',
+                icon: Icons.home_work_outlined,
+                type: 'real_estate',
+                color: const Color(0xFF6366F1),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAddPill(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required String type,
+    required Color color,
+  }) {
+    return InkWell(
+      onTap: () async {
+        final res = await Navigator.push(
+          context,
+          AppPageRoute(
+            builder: (_) => AddBankAccountScreen(
+              initialType: type,
+            ),
+          ),
+        );
+        if (res == true) {
+          _refreshData();
+        }
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Text(
+              '+ $label',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAccountTile(BankAccount a) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final displayName = resolveAccountDisplayName(a.name);
     final isCash = a.id == 'acc_cash_default' ||
         a.accountType.toLowerCase().contains('cash') ||
         a.name.toLowerCase().contains('cash');
-    final iconData = isCash
-        ? Icons.payments_rounded
-        : (a.accountType == 'current'
-            ? Icons.business_center_rounded
-            : Icons.account_balance_rounded);
+
+    IconData iconData;
+    Color tileColor;
+    switch (a.accountType) {
+      case 'stock':
+        iconData = Icons.trending_up_rounded;
+        tileColor = const Color(0xFF10B981);
+        break;
+      case 'mutual_fund':
+        iconData = Icons.pie_chart_rounded;
+        tileColor = const Color(0xFFEC4899);
+        break;
+      case 'gold':
+        iconData = Icons.monetization_on_rounded;
+        tileColor = const Color(0xFFF59E0B);
+        break;
+      case 'ppf':
+        iconData = Icons.savings_rounded;
+        tileColor = const Color(0xFF06B6D4);
+        break;
+      case 'real_estate':
+        iconData = Icons.home_work_rounded;
+        tileColor = const Color(0xFF6366F1);
+        break;
+      case 'fd':
+        iconData = Icons.lock_clock_rounded;
+        tileColor = const Color(0xFFF59E0B);
+        break;
+      case 'cash':
+        iconData = Icons.payments_rounded;
+        tileColor = AppTheme.semanticIncome;
+        break;
+      case 'wallet':
+        iconData = Icons.account_balance_wallet_rounded;
+        tileColor = const Color(0xFF8B5CF6);
+        break;
+      case 'current':
+        iconData = Icons.business_center_rounded;
+        tileColor = const Color(0xFF3B82F6);
+        break;
+      default:
+        iconData = isCash ? Icons.payments_rounded : Icons.account_balance_rounded;
+        tileColor = isCash ? AppTheme.semanticIncome : AppTheme.primaryBlue;
+    }
+
     final bankName = isCash
         ? 'Physical Cash'
-        : (a.bank == 'acc_cash_default' ? 'Bank Account' : TextFormatter.toSmartTitleCase(a.bank));
+        : (['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf'].contains(a.accountType)
+            ? (a.bank.isNotEmpty && a.bank != a.name ? TextFormatter.toSmartTitleCase(a.bank) : 'Portfolio Asset')
+            : (a.bank == 'acc_cash_default' ? 'Bank Account' : TextFormatter.toSmartTitleCase(a.bank)));
+
+    final isInvestment = const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf'].contains(a.accountType);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -707,6 +978,16 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         borderRadius: BorderRadius.circular(AppRadius.m),
         padding: const EdgeInsets.all(14),
         child: InkWell(
+          onTap: () {
+            if (isInvestment) {
+              _showUpdateAssetValuationSheet(a);
+            } else {
+              Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => AccountDetailScreen(account: a)),
+              );
+            }
+          },
           onLongPress: () => _showAccountMenu(a),
           borderRadius: BorderRadius.circular(AppRadius.m),
           child: Row(
@@ -715,14 +996,12 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: isCash
-                      ? AppTheme.semanticIncome.withValues(alpha: isDark ? 0.20 : 0.12)
-                      : AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                  color: tileColor.withValues(alpha: isDark ? 0.20 : 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   iconData,
-                  color: isCash ? AppTheme.semanticIncome : AppTheme.primaryBlue,
+                  color: tileColor,
                   size: 20,
                 ),
               ),
@@ -754,18 +1033,42 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   ],
                 ),
               ),
-              Text(
-                a.balance < 0
-                    ? 'Overdrawn: ${AppFormat.currency(a.balance.abs())}'
-                    : AppFormat.currency(a.balance),
-                style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: a.balance < 0
-                      ? const Color(0xFFD97706)
-                      : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    a.balance < 0
+                        ? 'Overdrawn: ${AppFormat.currency(a.balance.abs())}'
+                        : AppFormat.currency(a.balance),
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: a.balance < 0
+                          ? const Color(0xFFD97706)
+                          : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                    ),
+                  ),
+                  if (isInvestment) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined, size: 10.5, color: tileColor),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Update',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: tileColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -931,7 +1234,269 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       ),
     );
   }
+  void _showUpdateAssetValuationSheet(BankAccount a) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ctrl = TextEditingController(
+      text: a.balance == a.balance.roundToDouble()
+          ? a.balance.toStringAsFixed(0)
+          : a.balance.toStringAsFixed(2),
+    );
+    final initialBalance = a.balance;
+
+    Color assetColor;
+    IconData assetIcon;
+    switch (a.accountType) {
+      case 'stock':
+        assetIcon = Icons.trending_up_rounded;
+        assetColor = const Color(0xFF10B981);
+        break;
+      case 'mutual_fund':
+        assetIcon = Icons.pie_chart_rounded;
+        assetColor = const Color(0xFFEC4899);
+        break;
+      case 'gold':
+        assetIcon = Icons.monetization_on_rounded;
+        assetColor = const Color(0xFFF59E0B);
+        break;
+      case 'ppf':
+        assetIcon = Icons.savings_rounded;
+        assetColor = const Color(0xFF06B6D4);
+        break;
+      case 'real_estate':
+        assetIcon = Icons.home_work_rounded;
+        assetColor = const Color(0xFF6366F1);
+        break;
+      default:
+        assetIcon = Icons.account_balance_rounded;
+        assetColor = AppTheme.primaryBlue;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final enteredVal = double.tryParse(ctrl.text.trim()) ?? initialBalance;
+            final diff = enteredVal - initialBalance;
+            final isDiffNonZero = diff.abs() >= 0.01;
+            final isPositive = diff > 0;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E222D) : Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 20,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: assetColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(assetIcon, color: assetColor, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                resolveAccountDisplayName(a.name),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${TextFormatter.toSmartTitleCase(a.accountType)} • Current: ${AppFormat.currency(initialBalance)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.more_vert_rounded),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showAccountMenu(a);
+                          },
+                          tooltip: 'More options',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'UPDATED PORTFOLIO VALUATION',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: ctrl,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                      decoration: InputDecoration(
+                        prefixText: '₹ ',
+                        prefixStyle: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: assetColor,
+                        ),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF141822) : const Color(0xFFF1F5F9),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                      onChanged: (_) => setSheetState(() {}),
+                    ),
+                    if (isDiffNonZero) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(
+                            isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                            size: 16,
+                            color: isPositive ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${isPositive ? '+' : '-'}${AppFormat.currency(diff.abs())} change from previous',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isPositive ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'Quick Adjustments',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final delta in [5000.0, 10000.0, 25000.0, 50000.0, 100000.0])
+                          InkWell(
+                            onTap: () {
+                              final curr = double.tryParse(ctrl.text.trim()) ?? initialBalance;
+                              final next = curr + delta;
+                              ctrl.text = next == next.roundToDouble()
+                                  ? next.toStringAsFixed(0)
+                                  : next.toStringAsFixed(2);
+                              setSheetState(() {});
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0x1AFFFFFF) : const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                '+₹${(delta / 1000).toStringAsFixed(0)}k',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    SpendXGlassButton(
+                      variant: SpendXGlassButtonVariant.primary,
+                      onPressed: () async {
+                        final parsed = double.tryParse(ctrl.text.trim());
+                        if (parsed == null || parsed < 0) return;
+                        Navigator.pop(ctx);
+                        await ref.read(accountRepoProvider).updateBalance(a.id, parsed);
+                        await ref.read(accountsProvider.notifier).refresh();
+                        _refreshData();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Updated ${a.name} valuation to ${AppFormat.currency(parsed)}'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Update Valuation'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showAccountMenu(BankAccount a) {
+    final isInvestment = const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf'].contains(a.accountType);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -942,12 +1507,24 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 16),
+          if (isInvestment)
+            ListTile(
+              leading: Icon(
+                Icons.auto_graph_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: const Text('Update Valuation'),
+              onTap: () {
+                Navigator.pop(context);
+                _showUpdateAssetValuationSheet(a);
+              },
+            ),
           ListTile(
             leading: Icon(
               Icons.edit,
               color: Theme.of(context).colorScheme.primary,
             ),
-            title: const Text('Edit Account'),
+            title: Text(isInvestment ? 'Edit Asset Details' : 'Edit Account'),
             onTap: () async {
               Navigator.pop(context);
               final res = await Navigator.push(
@@ -965,7 +1542,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               color: Theme.of(context).colorScheme.error,
             ),
             title: Text(
-              'Delete',
+              isInvestment ? 'Delete Asset' : 'Delete',
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
                 decoration: TextDecoration.none,

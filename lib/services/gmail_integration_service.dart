@@ -43,6 +43,12 @@ class GmailIntegrationService {
   bool get isConnected => _connectedEmail != null && _connectedEmail!.isNotEmpty;
   String? get connectedEmail => _connectedEmail;
 
+  Future<DateTime?> getLastSyncTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt(_lastSyncTimestampKey);
+    return ms != null ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
+  }
+
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _connectedEmail = prefs.getString(_connectedEmailKey);
@@ -187,7 +193,7 @@ class GmailIntegrationService {
           final sourceRecordId = 'SRC:EMAIL:GMAIL:$id';
           final cleanSender = sender.isNotEmpty ? 'APP:com.google.android.gm:$sender' : 'APP:com.google.android.gm:Gmail';
 
-          final outcome = await LiveSmsService.instance.testProcessBody(
+          final outcome = await LiveSmsService.instance.ingestExternalMessage(
             fullContent,
             sender: cleanSender,
             messageDate: messageDate,

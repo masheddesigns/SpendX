@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../core/utils/category_resolver.dart';
+import '../data/repositories/transaction_repo.dart';
 import '../features/review_queue/providers/review_providers.dart';
 import '../services/data_audit_service.dart';
 import '../services/inbox_audit_service.dart';
@@ -385,7 +387,8 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                         context,
                         AppPageRoute(builder: (_) => const ReviewQueueScreen()),
                       );
-                      _loadAll();
+                      await _loadAll();
+                      await _runInboxScan();
                     },
                     icon: const Icon(Icons.rate_review_rounded, size: 16),
                     label: Text('Review in Queue (${result.missedCount})'),
@@ -513,9 +516,40 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
           ...issues.map((issue) => _IssueCard(
                 issue: issue,
                 onFix: () => _handleFix(issue),
+                onAutoCategorize: issue.type == 'uncategorized'
+                    ? () => _autoCategorizeAll(issue.transactionIds)
+                    : null,
               )),
       ],
     );
+  }
+
+  Future<void> _autoCategorizeAll(List<String> transactionIds) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final txRepo = TransactionRepo();
+    int resolved = 0;
+    for (final id in transactionIds) {
+      final tx = await txRepo.getById(id);
+      if (tx == null || (tx.categoryId != null && tx.categoryId!.isNotEmpty)) continue;
+      final resolution = await resolveCategoryForText(
+        rawText: tx.rawPayload ?? tx.notes,
+        merchant: tx.notes,
+        type: tx.type,
+      );
+      if (resolution.id != null && resolution.id!.isNotEmpty) {
+        await txRepo.update(tx.copyWith(categoryId: resolution.id));
+        resolved++;
+      }
+    }
+    await _loadAll();
+    if (mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Auto-categorized $resolved transaction${resolved == 1 ? '' : 's'} with smart memory!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _handleFix(AuditIssue issue) {
@@ -544,7 +578,8 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
 class _IssueCard extends StatelessWidget {
   final AuditIssue issue;
   final VoidCallback? onFix;
-  const _IssueCard({required this.issue, this.onFix});
+  final VoidCallback? onAutoCategorize;
+  const _IssueCard({required this.issue, this.onFix, this.onAutoCategorize});
 
   (IconData, Color) _typeVisuals(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -642,6 +677,22 @@ class _IssueCard extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
+                    if (onAutoCategorize != null) ...[
+                      FilledButton.tonalIcon(
+                        onPressed: onAutoCategorize,
+                        icon: const Icon(Icons.auto_fix_high_rounded, size: 13),
+                        label: const Text('Auto-Fix All'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                          visualDensity: VisualDensity.compact,
+                          textStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                     if (onFix != null)
                       TextButton.icon(
                         onPressed: onFix,

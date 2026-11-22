@@ -17,6 +17,8 @@ import '../review/review_queue_screen.dart';
 import '../settings/backup_hub_screen.dart';
 import '../settings/app_settings_screen.dart';
 import '../smart_import_screen.dart';
+import '../settings/automatic_ingestion_screen.dart';
+import '../../features/ingestion/providers/ingestion_providers.dart';
 import '../../features/wrapped/screens/wrapped_screen.dart';
 import '../../features/review_queue/providers/review_providers.dart';
 
@@ -35,6 +37,8 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final alertCount = ref.watch(activeAlertsProvider).valueOrNull?.length ?? 0;
     final reviewCount = ref.watch(reviewQueueCountProvider).valueOrNull ?? 0;
+    final ingestionStatus = ref.watch(ingestionStatusProvider).valueOrNull ??
+        const AutomaticIngestionStatus();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return CustomScrollView(
@@ -55,6 +59,24 @@ class MoreScreen extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  _MoreGlassRow(
+                    icon: Icons.bolt_rounded,
+                    iconColor: const Color(0xFF6366F1),
+                    title: 'Automatic Ingestion',
+                    subtitle: ingestionStatus.isFullyActive
+                        ? (ingestionStatus.todayIngestedCount > 0
+                            ? '${ingestionStatus.todayIngestedCount} transaction${ingestionStatus.todayIngestedCount == 1 ? '' : 's'} auto-captured today'
+                            : 'Listening for Bank SMS & App Notifications')
+                        : 'Setup needed — Tap to enable real-time tracking',
+                    badgeText: ingestionStatus.isFullyActive ? 'Active' : 'Setup',
+                    badgeColor: ingestionStatus.isFullyActive
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFFF59E0B),
+                    isDark: isDark,
+                    onTap: () =>
+                        _push(context, const AutomaticIngestionScreen()),
+                  ),
+                  _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.auto_awesome_rounded,
                     iconColor: AppTheme.primaryBlue,
@@ -252,6 +274,7 @@ class _MoreGlassRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final int? badgeCount;
+  final String? badgeText;
   final Color? badgeColor;
   final bool isDark;
   final VoidCallback onTap;
@@ -262,6 +285,7 @@ class _MoreGlassRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.badgeCount,
+    this.badgeText,
     this.badgeColor,
     required this.isDark,
     required this.onTap,
@@ -326,8 +350,29 @@ class _MoreGlassRow extends StatelessWidget {
               ),
             ),
 
-            // Optional Badge Pill or Chevron
-            if (badgeCount != null) ...[
+            // Optional Badge Text Pill, Badge Count, or Chevron
+            if (badgeText != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.25 : 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  border: Border.all(
+                    color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.5 : 0.3),
+                    width: 0.5,
+                  ),
+                ),
+                child: Text(
+                  badgeText!,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: badgeColor ?? AppTheme.primaryBlue,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ] else if (badgeCount != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                 decoration: BoxDecoration(

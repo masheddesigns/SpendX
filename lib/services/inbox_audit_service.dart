@@ -285,14 +285,18 @@ class InboxAuditService {
       final reviewRepo = ReviewRepo();
       final txRepo = TransactionRepo();
 
-      // Cache existing review candidate fingerprints/texts to avoid duplicate candidate creations
-      final existingPendingReviews = await reviewRepo.getPending();
-      final pendingFingerprints = <String>{};
-      for (final r in existingPendingReviews) {
-        final fp = CanonicalTransactionAdapter.computeBodyFingerprint(
-          r.parsed.rawText.isNotEmpty ? r.parsed.rawText : r.rawSource,
-        );
-        pendingFingerprints.add(fp);
+      // Cache ALL existing review candidate fingerprints (pending, approved, or rejected)
+      // to avoid re-flagging messages that the user or engine already handled.
+      final db = await AppDatabase.instance.database;
+      final allCandidateRows = await db.rawQuery('''
+        SELECT raw_payload FROM ${TablesV24.reviewCandidates}
+      ''');
+      final knownCandidateFingerprints = <String>{};
+      for (final row in allCandidateRows) {
+        final payload = row['raw_payload']?.toString() ?? '';
+        if (payload.isNotEmpty) {
+          knownCandidateFingerprints.add(CanonicalTransactionAdapter.computeBodyFingerprint(payload));
+        }
       }
 
       for (final raw in combinedMessages) {
@@ -343,9 +347,9 @@ class InboxAuditService {
           continue;
         }
 
-        // --- STEP B: Pending Review Candidates Check ---
-        if (pendingFingerprints.contains(bodyFp)) {
-          // Already in review queue awaiting user confirmation
+        // --- STEP B: Existing Review Candidates Check ---
+        if (knownCandidateFingerprints.contains(bodyFp)) {
+          // Already in review queue or previously confirmed/rejected
           capturedCount++;
           continue;
         }
@@ -415,7 +419,7 @@ class InboxAuditService {
           );
 
           await reviewRepo.insert(item);
-          pendingFingerprints.add(bodyFp);
+          knownCandidateFingerprints.add(bodyFp);
         }
 
         missedList.add(MissedInboxItem(
@@ -489,6 +493,16 @@ class InboxAuditService {
       return false;
     }
 
+    // 1.5. Reject PRAN / NPS / pension contribution notifications (informational scheme credits)
+    if (lower.contains('pran') ||
+        lower.contains('nps') ||
+        lower.contains('atal pension') ||
+        (lower.contains('contribution of') && lower.contains('pran')) ||
+        sender.toUpperCase().contains('NPS') ||
+        sender.toUpperCase().contains('PTNNPS')) {
+      return false;
+    }
+
     // 2. Reject upcoming bill reminders and due notices (they are obligations, not completed transactions)
     if (RegExp(
       r'\b(?:bill\s*due|due\s*date|payment\s*due|bill\s*generated|minimum\s*amount\s*due|total\s*amount\s*due|'
@@ -499,11 +513,13 @@ class InboxAuditService {
       return false;
     }
 
-    // 3. Reject marketing promotions, offers, scratch cards, discounts
+    // 3. Reject marketing promotions, offers, scratch cards, discounts, and phishing job/salary scam broadcasts
     if (RegExp(
       r'\b(?:scratch\s*card|win\s*up\s*to|earn\s*up\s*to|cashback\s*offer|flat\s*.*?\s*off|'
       r'apply\s*now|claim\s*now|invite\s*friends|special\s*offer|limited\s*period\s*offer|'
-      r'congratulations!|pre-?approved\s*loan|increase\s*your\s*limit)\b',
+      r'congratulations!|pre-?approved\s*loan|increase\s*your\s*limit|'
+      r'working\s+at\s+home|work\s+from\s+home|part[- ]time\s+job|api\.whatsapp\.com|wa\.me|t\.me|'
+      r'parimatch|1xbet|lotus365|stake\.com|crypto\s+freebet|deposit\s+.*usdt)\b',
       caseSensitive: false,
     ).hasMatch(lower)) {
       return false;

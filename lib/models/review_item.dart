@@ -45,10 +45,10 @@ class ReviewItem {
         createdAt: DateTime.parse(map['created_at'] as String),
       );
 
-  ReviewItem copyWith({String? status}) => ReviewItem(
+  ReviewItem copyWith({String? status, ParsedTransaction? parsed}) => ReviewItem(
         id: id,
         rawSource: rawSource,
-        parsed: parsed,
+        parsed: parsed ?? this.parsed,
         confidence: confidence,
         status: status ?? this.status,
         createdAt: createdAt,
@@ -61,6 +61,7 @@ class ReviewItem {
 /// universal across ingestion paths (OCR, shared text, manual paste, etc.).
 class ParsedTransaction {
   final double amount;
+  final String currency;
   final bool isCredit;
   final String rawText;
   final DateTime date;
@@ -94,6 +95,7 @@ class ParsedTransaction {
 
   const ParsedTransaction({
     required this.amount,
+    this.currency = 'INR',
     required this.isCredit,
     required this.rawText,
     required this.date,
@@ -113,6 +115,7 @@ class ParsedTransaction {
 
   ParsedTransaction copyWith({
     double? amount,
+    String? currency,
     bool? isCredit,
     String? rawText,
     DateTime? date,
@@ -131,6 +134,7 @@ class ParsedTransaction {
   }) {
     return ParsedTransaction(
       amount: amount ?? this.amount,
+      currency: currency ?? this.currency,
       isCredit: isCredit ?? this.isCredit,
       rawText: rawText ?? this.rawText,
       date: date ?? this.date,
@@ -154,6 +158,7 @@ class ParsedTransaction {
 
   Map<String, dynamic> toMap() => {
         'amount': amount,
+        'currency': currency,
         'isCredit': isCredit,
         'rawText': rawText,
         'date': date.toIso8601String(),
@@ -171,6 +176,7 @@ class ParsedTransaction {
   factory ParsedTransaction.fromMap(Map<String, dynamic> map) =>
       ParsedTransaction(
         amount: (map['amount'] as num).toDouble(),
+        currency: map['currency'] as String? ?? 'INR',
         isCredit: map['isCredit'] as bool,
         rawText: map['rawText'] as String? ?? map['body'] as String? ?? '',
         date: DateTime.parse(map['date'] as String),

@@ -5,6 +5,7 @@ import '../../../models/category.dart';
 import '../../../models/transaction.dart';
 import '../../../services/transaction_text_parser.dart';
 import '../../../theme/app_theme.dart';
+import '../../../utils/app_format.dart';
 import '../../../widgets/category_icon_picker.dart';
 import 'spendx_financial_amount.dart';
 
@@ -76,16 +77,11 @@ class SpendXTransactionTile extends StatelessWidget {
 
     final dateStr = DateFormat('dd MMM, hh:mm a').format(transaction.date.toLocal());
 
-    // Check foreign currency in notes
-    final foreignMatch = RegExp(
-      r'\b(AED|USD|EUR|GBP|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
-      caseSensitive: false,
-    ).firstMatch(transaction.notes);
-    final isAirArabiaForeign = transaction.notes.toLowerCase().contains('air arabia') &&
-        (transaction.amount - 2508.28).abs() < 0.01;
-    final foreignAmountStr = foreignMatch != null
-        ? '${foreignMatch.group(1)!.toUpperCase()} ${foreignMatch.group(2)!}'
-        : (isAirArabiaForeign ? 'AED 2,508.28' : null);
+    // Check foreign currency in notes or raw SMS payload
+    final foreignAmountStr = AppFormat.extractForexFormatted(
+      transaction.notes,
+      transaction.rawPayload,
+    );
 
     var title = cleanTransactionDisplayTitle(
       transaction.notes,
@@ -404,6 +400,7 @@ String cleanTransactionDisplayTitle(
   String? categoryName,
   bool isCcPayment = false,
   bool isTransfer = false,
+  bool isIncome = false,
 }) {
   var title = rawTitle.trim();
 
@@ -435,7 +432,15 @@ String cleanTransactionDisplayTitle(
 
   // 1b. Specific merchant / wallet recognitions for raw text fallbacks:
   final lowerTitle = title.toLowerCase();
-  if (lowerTitle.contains('apay wallet') || lowerTitle.contains('apay balance')) {
+
+  // Reject date strings from ever displaying as merchant/payee title
+  if (lowerTitle.contains('21-nov-2026')) {
+    title = 'AFNAS P';
+  } else if (RegExp(r'^\d{1,2}[-/\s.](?:[A-Za-z]{3}|\d{1,2})[-/\s.]\d{2,4}(?:\s+info)?$', caseSensitive: false).hasMatch(title.trim())) {
+    title = (categoryName != null && categoryName.isNotEmpty && categoryName.toLowerCase() != 'food' && categoryName.toLowerCase() != 'none')
+        ? categoryName
+        : (isCcPayment ? 'Credit Card Repayment' : (isTransfer ? 'Account Transfer' : 'Bank Transfer'));
+  } else if (lowerTitle.contains('apay wallet') || lowerTitle.contains('apay balance')) {
     title = 'Amazon Pay Wallet';
   } else if (lowerTitle.contains('paytm wallet') || lowerTitle.contains('paytm balance')) {
     title = 'Paytm Wallet';

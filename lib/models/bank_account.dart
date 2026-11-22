@@ -50,6 +50,10 @@ class BankAccount {
         return 'trending_up';
       case 'mutual_fund':
         return 'pie_chart';
+      case 'gold':
+        return 'monetization_on';
+      case 'real_estate':
+        return 'home_work';
       default:
         return 'account_balance';
     }
@@ -70,9 +74,13 @@ class BankAccount {
       case 'ppf':
         return '#06B6D4';
       case 'stock':
-        return '#EF4444';
+        return '#10B981';
       case 'mutual_fund':
         return '#EC4899';
+      case 'gold':
+        return '#EAB308';
+      case 'real_estate':
+        return '#6366F1';
       default:
         return '#10B981';
     }

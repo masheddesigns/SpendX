@@ -14,6 +14,7 @@ import '../services/recurring_engine.dart';
 import '../services/settings_service.dart';
 import '../services/snapshot_trigger.dart';
 import '../services/spending_insights_service.dart';
+import '../services/entity_consolidation_service.dart';
 import '../data/core/tracked_database_task_queue.dart';
 import '../features/home/screens/home_screen.dart';
 import 'onboarding_screen.dart';
@@ -189,6 +190,15 @@ class _SplashScreenState extends State<SplashScreen>
       TrackedDatabaseTaskQueue.instance.runTracked(
         'snapshot_daily_networth',
         () => SnapshotTrigger.instance.onAppOpen(),
+      );
+
+      // Startup financial entity consolidation & self-healing (tracked background task)
+      TrackedDatabaseTaskQueue.instance.runTracked(
+        'startup_entity_consolidation',
+        () => EntityConsolidationService.instance.consolidate(),
+        onError: (e, st) {
+          debugPrint('⚠️ Entity consolidation error (non-fatal): $e');
+        },
       );
 
       _initWorkDone = true;

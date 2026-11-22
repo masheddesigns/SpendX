@@ -37,10 +37,12 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     {'key': 'savings', 'label': 'Savings'},
     {'key': 'current', 'label': 'Current'},
     {'key': 'fd', 'label': 'Fixed Deposit'},
-    {'key': 'ppf', 'label': 'PPF'},
-    {'key': 'wallet', 'label': 'Wallet'},
-    {'key': 'stock', 'label': 'Stocks'},
-    {'key': 'mutual_fund', 'label': 'Mutual Fund'},
+    {'key': 'stock', 'label': 'Stocks / Equity'},
+    {'key': 'mutual_fund', 'label': 'Mutual Funds'},
+    {'key': 'gold', 'label': 'Gold / Sovereign'},
+    {'key': 'ppf', 'label': 'PPF / EPF / NPS'},
+    {'key': 'real_estate', 'label': 'Real Estate'},
+    {'key': 'wallet', 'label': 'Digital Wallet'},
   ];
 
   @override
@@ -70,10 +72,13 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final bankText = _bankCtrl.text.trim().isEmpty && _isInvestment
+        ? _nameCtrl.text.trim()
+        : _bankCtrl.text.trim();
     final account = BankAccount(
       id: widget.existing?.id,
       name: TextFormatter.normalizeName(_nameCtrl.text),
-      bank: TextFormatter.normalizeName(_bankCtrl.text),
+      bank: TextFormatter.normalizeName(bankText),
       accountType: _accountType,
       balance: double.parse(_balanceCtrl.text.trim()),
       color: BankAccount.colorForType(_accountType),
@@ -144,10 +149,101 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     }
   }
 
+  bool get _isInvestment =>
+      const ['stock', 'mutual_fund', 'gold', 'ppf', 'real_estate']
+          .contains(_accountType);
+
+  String get _title {
+    if (widget.existing != null) {
+      return _isInvestment ? 'Edit Asset' : 'Edit Account';
+    }
+    switch (_accountType) {
+      case 'stock':
+        return 'Add Stocks & Equity';
+      case 'mutual_fund':
+        return 'Add Mutual Funds';
+      case 'gold':
+        return 'Add Gold & Metals';
+      case 'ppf':
+        return 'Add EPF / PPF / NPS';
+      case 'real_estate':
+        return 'Add Real Estate';
+      default:
+        return 'Add Account';
+    }
+  }
+
+  String get _nameLabel {
+    switch (_accountType) {
+      case 'stock':
+        return 'Portfolio / Broker Name';
+      case 'mutual_fund':
+        return 'Fund or Platform Name';
+      case 'gold':
+        return 'Asset Description';
+      case 'ppf':
+        return 'Retirement Account';
+      case 'real_estate':
+        return 'Property Name';
+      default:
+        return 'Account Name';
+    }
+  }
+
+  String get _nameHint {
+    switch (_accountType) {
+      case 'stock':
+        return 'e.g. Zerodha Kite, Angel One, US Stocks';
+      case 'mutual_fund':
+        return 'e.g. Groww Mutual Funds, Coin SIP';
+      case 'gold':
+        return 'e.g. Sovereign Gold Bonds, 24K Physical';
+      case 'ppf':
+        return 'e.g. EPFO Provident Fund, SBI PPF';
+      case 'real_estate':
+        return 'e.g. 2BHK Apartment, Residential Plot';
+      default:
+        return 'e.g. SBI Savings, HDFC Salary';
+    }
+  }
+
+  String get _bankLabel {
+    switch (_accountType) {
+      case 'stock':
+        return 'Broker / Depository';
+      case 'mutual_fund':
+        return 'Platform / AMC';
+      case 'gold':
+        return 'Held at / Issuer';
+      case 'ppf':
+        return 'Institution';
+      case 'real_estate':
+        return 'Location / Builder';
+      default:
+        return 'Bank / Institution';
+    }
+  }
+
+  String get _bankHint {
+    switch (_accountType) {
+      case 'stock':
+        return 'e.g. Zerodha, Upstox, Groww';
+      case 'mutual_fund':
+        return 'e.g. Groww, Nippon India, SBI MF';
+      case 'gold':
+        return 'e.g. RBI SGB, Home Locker, Tanishq';
+      case 'ppf':
+        return 'e.g. EPFO, SBI, Post Office';
+      case 'real_estate':
+        return 'e.g. Bangalore, Prestige';
+      default:
+        return 'e.g. SBI, HDFC, ICICI';
+    }
+  }
+
   bool get _isValid {
     if (_nameCtrl.text.trim().isEmpty) return false;
-    if (_bankCtrl.text.trim().isEmpty) return false;
-    // Balance can be 0 or negative for some accounts, but let's require a valid number entry
+    if (!_isInvestment && _bankCtrl.text.trim().isEmpty) return false;
     if (_balanceCtrl.text.trim().isEmpty) return false;
     return true;
   }
@@ -158,7 +254,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
-        title: widget.existing == null ? 'Add Account' : 'Edit Account',
+        title: _title,
         actions: widget.existing == null
             ? null
             : [
@@ -193,7 +289,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Account Details',
+                      _isInvestment ? 'Asset & Valuation Details' : 'Account Details',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -203,16 +299,18 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                     const SizedBox(height: 12),
                     AppTextField(
                       controller: _nameCtrl,
-                      hintText: 'e.g. SBI Savings, Zerodha Stocks',
+                      labelText: _nameLabel,
+                      hintText: _nameHint,
                     ),
                     const SizedBox(height: 14),
                     AppTextField(
                       controller: _bankCtrl,
-                      hintText: 'e.g. SBI, HDFC, Zerodha',
+                      labelText: _bankLabel,
+                      hintText: _bankHint,
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      'Initial Balance',
+                      _isInvestment ? 'Current Valuation' : 'Initial Balance',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -221,6 +319,16 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                     ),
                     const SizedBox(height: 6),
                     AppAmountField(controller: _balanceCtrl),
+                    if (_isInvestment) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Tip: You can update this valuation anytime in the Net Worth screen.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -358,7 +466,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                 child: SpendXGlassButton(
                   variant: SpendXGlassButtonVariant.primary,
                   onPressed: _isValid ? _save : null,
-                  child: const Text('Save Account'),
+                  child: Text(_isInvestment ? 'Save Asset' : 'Save Account'),
                 ),
               ),
             ],

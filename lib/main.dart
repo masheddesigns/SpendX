@@ -17,8 +17,6 @@ import 'data/core/tracked_database_task_queue.dart';
 import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
 import 'core/config/app_env.dart';
-import 'shared/widgets/dynamic_island_hud.dart';
-import 'services/dynamic_island_service.dart';
 import 'services/sms_live_channel_bridge.dart';
 
 Future<void>? appInitFuture;
@@ -64,11 +62,6 @@ void main() {
         AppLogger.e('NotificationService init failed', e, st);
       }
 
-      try {
-        DynamicIslandService.instance;
-      } catch (e, st) {
-        AppLogger.e('DynamicIslandService init failed', e, st);
-      }
 
       if (AppEnv.enableDebugTools) {
         try {
@@ -177,7 +170,7 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: settings.themeMode,
-      builder: (context, child) => DynamicIslandHUD(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => child ?? const SizedBox.shrink(),
       home: const SplashScreen(),
     );
   }

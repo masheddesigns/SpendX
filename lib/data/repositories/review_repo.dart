@@ -60,7 +60,8 @@ class ReviewRepo {
     final bodyText = item.parsed.rawText.isNotEmpty
         ? item.parsed.rawText
         : item.rawSource;
-    final fingerprint = CanonicalTransactionAdapter.computeSha256(bodyText);
+    final fingerprint =
+        CanonicalTransactionAdapter.computeBodyFingerprint(bodyText);
 
     final evidence = Evidence(
       id: const Uuid().v4(),

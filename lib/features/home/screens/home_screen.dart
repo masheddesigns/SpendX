@@ -8,6 +8,7 @@ import '../../../screens/more/more_screen.dart';
 import '../../../screens/plan/plan_tab.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/entity_consolidation_service.dart';
+import '../../../services/notification_service_v2.dart';
 import '../../../features/accounts/providers/account_providers.dart';
 import '../../../features/liabilities/providers/liabilities_providers.dart';
 import '../../../data/providers.dart' as app_data;
@@ -15,7 +16,6 @@ import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/spendx_glass.dart';
 import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
-import '../../../widgets/top_notch_activity_bar.dart';
 import 'home_dashboard.dart';
 
 /// SpendX 2.0 Primary Navigation Shell with Liquid Glass Navigation Bar.
@@ -85,6 +85,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     Future.microtask(() {
       ref.read(evaluateStreakProvider.future);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationServiceV2().checkAndRoutePendingLaunchNotification();
     });
   }
 
@@ -163,21 +166,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                 ],
               ),
-        body: Stack(
-          children: [
-            IndexedStack(
-              index: _currentIndex,
-              children: _tabs,
-            ),
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                child: TopNotchActivityBar(),
-              ),
-            ),
-          ],
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _tabs,
         ),
         bottomNavigationBar: SpendXGlassNavigation(
           selectedIndex: _currentIndex,

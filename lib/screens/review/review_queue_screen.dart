@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/utils/category_classifier.dart';
 import '../../features/review_queue/providers/review_providers.dart';
 import '../../models/review_item.dart';
 import '../../services/retention_events.dart';
@@ -598,6 +599,11 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
 
               if (parsed.merchant != null && parsed.merchant!.isNotEmpty)
                 _fieldRow(context, Icons.store, 'Merchant', parsed.merchant!),
+              if (CategoryClassifier.detect(
+                text: '${parsed.rawText} ${parsed.merchant ?? ''}',
+                type: parsed.isCredit ? 'income' : 'expense',
+              ) case final detectedCat?)
+                _fieldRow(context, Icons.category_outlined, 'Category', detectedCat),
               if (parsed.bankName != null)
                 _fieldRow(context, Icons.account_balance, 'Bank',
                     parsed.bankName!),
@@ -627,7 +633,18 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
               const SizedBox(height: 12),
 
               // Quick-fix chips for common rejection reasons
-              if (!widget.isSelectionMode)
+              if (!widget.isSelectionMode) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    'Dismiss if not an expense:',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -642,7 +659,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                         () => _rejectWithReason('other')),
                   ],
                 ),
-              if (!widget.isSelectionMode) const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
 
               // Actions
               if (!widget.isSelectionMode)

@@ -10,6 +10,12 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
+    <!-- Mark hardware features as optional so tablets, Chromebooks, and non-cellular devices can install SpendX -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony.sms" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <!-- Required only for the non-Vivo WindowManager overlay (TYPE_APPLICATION_OVERLAY).
          Vivo/iQOO devices use the native Origin Island notification path instead. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

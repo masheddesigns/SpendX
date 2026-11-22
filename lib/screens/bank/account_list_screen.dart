@@ -19,9 +19,11 @@ import '../credit_card_screen.dart';
 import '../lending/lending_screen.dart';
 import '../loans/loans_screen.dart';
 import '../net_worth_screen.dart';
+import 'account_detail_screen.dart';
 import 'add_bank_account_screen.dart';
 import '../../services/entity_consolidation_service.dart';
 import '../../services/data_change_bus.dart';
+import '../../services/live_sms_service.dart';
 
 /// Cleanly maps raw database keys or prefix artifacts (e.g. `Asset acc_bank_default`)
 /// to clear, user-facing account labels without mutating underlying database rows
@@ -142,6 +144,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
     Widget content = RefreshIndicator(
       onRefresh: () async {
         await EntityConsolidationService.instance.consolidate();
+        await LiveSmsService.instance.syncUpcomingObligationsFromInbox();
         ref.invalidate(accountsProvider);
         ref.invalidate(creditCardsProvider);
         ref.invalidate(loansProvider);
@@ -262,7 +265,15 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                         account: acc,
                         showDivider: !isLast,
                         isDark: isDark,
-                        onTap: () => _openEditAccount(context, ref, acc),
+                        onTap: () {
+                          HapticService.instance.tap();
+                          Navigator.push(
+                            context,
+                            AppPageRoute(
+                              builder: (_) => AccountDetailScreen(account: acc),
+                            ),
+                          );
+                        },
                         onOptionsTap: () => _showAccountOptionsSheet(context, ref, acc),
                       );
                     }),
@@ -619,6 +630,21 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.receipt_long_rounded),
+                title: const Text('View Account Activity'),
+                contentPadding: EdgeInsets.zero,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  HapticService.instance.tap();
+                  Navigator.push(
+                    context,
+                    AppPageRoute(
+                      builder: (_) => AccountDetailScreen(account: account),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Edit Account'),
@@ -1321,9 +1347,27 @@ class _AccountsActionHub extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: _ActionPillButton(
+              icon: Icons.trending_up_rounded,
+              iconColor: const Color(0xFF10B981),
+              label: '+ Invest',
+              isDark: isDark,
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  AppPageRoute(
+                    builder: (_) =>
+                        const AddBankAccountScreen(initialType: 'mutual_fund'),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ActionPillButton(
               icon: Icons.handshake_outlined,
               iconColor: const Color(0xFFD97706),
-              label: 'Peer Lending',
+              label: 'Lending',
               isDark: isDark,
               onTap: onOpenLending,
             ),
