@@ -160,7 +160,7 @@ Future<void> _seedDatabase(Database db) async {
     await db.execute(sql);
   }
   await TablesV24.seedSystemAccounts(db);
-  await db.execute('PRAGMA user_version = 24;');
+  await db.execute('PRAGMA user_version = 26;');
 
   await db.insert('bank_accounts', {
     'id': 'acc_sbi_1234',
@@ -229,7 +229,7 @@ void main() {
       final archive = Archive();
       final manifest = BackupManifest(
         formatVersion: 2,
-        schemaVersion: 24,
+        schemaVersion: 26,
         appVersion: '2.0.0',
         appName: 'SpendX',
         createdAt: DateTime.now().toUtc(),
@@ -274,7 +274,7 @@ void main() {
 
       final manifest = BackupManifest(
         formatVersion: 2,
-        schemaVersion: 24,
+        schemaVersion: 26,
         appVersion: '2.0.0',
         appName: 'SpendX',
         createdAt: DateTime.now().toUtc(),
@@ -325,7 +325,7 @@ void main() {
 
       final manifest = BackupManifest(
         formatVersion: 2,
-        schemaVersion: 24,
+        schemaVersion: 26,
         appVersion: '2.0.0',
         appName: 'SpendX',
         createdAt: DateTime.now().toUtc(),
@@ -382,7 +382,7 @@ void main() {
           dbFile: File(p.join(tempDir.path, 'nonexistent_source.db')),
           manifest: BackupManifest(
             formatVersion: 2,
-            schemaVersion: 24,
+            schemaVersion: 26,
             appVersion: '2.0.0',
             appName: 'SpendX',
             createdAt: DateTime.now().toUtc(),

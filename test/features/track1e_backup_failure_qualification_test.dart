@@ -22,7 +22,7 @@ Future<void> _seedDatabase(Database db) async {
     await db.execute(sql);
   }
   await TablesV24.seedSystemAccounts(db);
-  await db.execute('PRAGMA user_version = 24;');
+  await db.execute('PRAGMA user_version = 26;');
 
   await db.insert('bank_accounts', {
     'id': 'acc_sbi_1234',
@@ -117,7 +117,7 @@ void main() {
       final noDbArchive = Archive();
       final manifestJson = jsonEncode({
         'format_version': 2,
-        'schema_version': 24,
+        'schema_version': 26,
         'app_version': '2.0.0',
         'database_sha256': 'dummy',
         'is_encrypted': false,
@@ -148,7 +148,7 @@ void main() {
       final archive = Archive();
       final manifestJson = jsonEncode({
         'format_version': 2,
-        'schema_version': 24,
+        'schema_version': 26,
         'app_version': '2.0.0',
         'database_sha256': forgedSha256,
         'is_encrypted': false,
@@ -182,7 +182,7 @@ void main() {
       final dbPath = p.join(tempDir.path, 'source_enc.db');
       final db = await openDatabase(
         dbPath,
-        version: 24,
+        version: 26,
         onCreate: (db, ver) => _seedDatabase(db),
       );
 
@@ -226,7 +226,7 @@ void main() {
       final activeDbPath = p.join(tempDir.path, 'active_live.db');
       final activeDb = await openDatabase(
         activeDbPath,
-        version: 24,
+        version: 26,
         onCreate: (db, ver) => _seedDatabase(db),
       );
       await activeDb.close();
@@ -258,7 +258,7 @@ void main() {
       final activeDbPath = p.join(tempDir.path, 'rollback_test.db');
       final activeDb = await openDatabase(
         activeDbPath,
-        version: 24,
+        version: 26,
         onCreate: (db, ver) => _seedDatabase(db),
       );
 
@@ -297,7 +297,7 @@ void main() {
       final dbPath = p.join(tempDir.path, 'privacy_test.db');
       final db = await openDatabase(
         dbPath,
-        version: 24,
+        version: 26,
         onCreate: (db, ver) => _seedDatabase(db),
       );
 
@@ -355,7 +355,7 @@ void main() {
       final dbPath = p.join(tempDir.path, 'repeat_test.db');
       final db = await openDatabase(
         dbPath,
-        version: 24,
+        version: 26,
         onCreate: (db, ver) => _seedDatabase(db),
       );
 
