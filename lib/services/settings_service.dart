@@ -21,6 +21,7 @@ class SettingsService extends ChangeNotifier {
   static const String _lastCloudProviderKey = 'last_cloud_provider';
   static const String _reminderSoundKey = 'reminder_sound';
   static const String _enableAiChatKey = 'enable_ai_chat';
+  static const String _geminiApiKeyKey = 'gemini_api_key';
   static const String _enableAiReportKey = 'enable_ai_report';
   static const String _disableIncomeKey = 'settings_disable_income';
   static const String _lastBackupTimeKey = 'last_backup_time';
@@ -784,6 +785,21 @@ class SettingsService extends ChangeNotifier {
     await _prefs.setStringList(_extraIngestionPackagesKey, packages);
     notifyListeners();
     await syncIngestionSettingsToNative();
+  }
+
+  /// User-supplied Gemini API key. Stored in SharedPreferences (not encrypted);
+  /// users are responsible for their own key. Empty means "use build-time key
+  /// or none" (AI features disabled).
+  String get geminiApiKey => _prefs.getString(_geminiApiKeyKey) ?? '';
+
+  Future<void> setGeminiApiKey(String key) async {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) {
+      await _prefs.remove(_geminiApiKeyKey);
+    } else {
+      await _prefs.setString(_geminiApiKeyKey, trimmed);
+    }
+    notifyListeners();
   }
 
   Future<void> syncIngestionSettingsToNative() async {

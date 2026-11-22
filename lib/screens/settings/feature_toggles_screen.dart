@@ -148,11 +148,94 @@ class FeatureTogglesScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
+
+                _ApiKeyTile(settings: settings),
                 const SizedBox(height: 40),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ApiKeyTile extends StatelessWidget {
+  final SettingsService settings;
+  const _ApiKeyTile({required this.settings});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasKey = settings.geminiApiKey.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.key_rounded,
+              color: Theme.of(context).colorScheme.primary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Gemini API Key',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface)),
+                const SizedBox(height: 2),
+                Text(
+                  hasKey
+                      ? 'Configured. AI features enabled.'
+                      : 'Not set. AI features disabled in release builds.',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final controller =
+                  TextEditingController(text: settings.geminiApiKey);
+              final result = await showDialog<String>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Gemini API Key'),
+                  content: TextField(
+                    controller: controller,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Paste your Google AI Studio key',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, controller.text),
+                      child: const Text('Save'),
+                    ),
+                  ],
+                ),
+              );
+              if (result != null) {
+                await settings.setGeminiApiKey(result);
+              }
+            },
+            child: Text(hasKey ? 'Change' : 'Set'),
+          ),
+        ],
       ),
     );
   }

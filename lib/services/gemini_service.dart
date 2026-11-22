@@ -1,4 +1,5 @@
 import '../core/logging/app_logger.dart';
+import 'settings_service.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -12,12 +13,20 @@ class GeminiService {
   bool _initialized = false;
   
   String get _apiKey {
+    // 1. User-supplied key (Settings) — highest priority, lets users enable AI
+    //    in release builds without bundling secrets.
+    try {
+      final userKey = SettingsService.instance.geminiApiKey;
+      if (userKey.isNotEmpty) return userKey;
+    } catch (_) {}
+    // 2. .env (local dev).
     try {
       if (dotenv.isInitialized) {
         final key = dotenv.env['GEMINI_API_KEY'];
         if (key != null && key.isNotEmpty) return key;
       }
     } catch (_) {}
+    // 3. Compile-time define.
     const defineKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
     if (defineKey.isNotEmpty) return defineKey;
     return '';
