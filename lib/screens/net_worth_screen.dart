@@ -156,7 +156,6 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     final accounts = accountsAsync.valueOrNull ?? const <BankAccount>[];
     final cards = cardsAsync.valueOrNull ?? const <CreditCard>[];
     final loans = loansAsync.valueOrNull ?? const <Loan>[];
-    final totalAssets = summaryAsync.valueOrNull?.assets ?? 0.0;
     final totalLiabilities = summaryAsync.valueOrNull?.liabilities ?? 0.0;
 
     final liquidAccounts = accounts

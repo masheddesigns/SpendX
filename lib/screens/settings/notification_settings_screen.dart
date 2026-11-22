@@ -8,7 +8,7 @@ import '../../models/notification_settings.dart';
 import '../../widgets/spendx_app_bar.dart';
 import '../../services/notification_service_v2.dart';
 import '../../services/reminder_service.dart';
-import '../../services/dynamic_island_service.dart';
+
 import '../../widgets/custom_snackbar.dart';
 import '../../shared/widgets/app_page_route.dart';
 import 'automatic_ingestion_screen.dart';
@@ -32,7 +32,6 @@ class _NotificationSettingsScreenState
   bool _whatsappEnabled = false;
   bool _gmailPreviewEnabled = false;
   bool _exactAlarmEnabled = true;
-  bool _overlayPermissionEnabled = true;
   bool _batteryOptimizationIgnored = false;
 
   @override
@@ -60,7 +59,6 @@ class _NotificationSettingsScreenState
     final liveSms = await LiveSmsService.instance.enabled;
     final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
     final exactAlarm = await NotificationServiceV2().canScheduleExactAlarms();
-    final overlayPerm = await DynamicIslandService.instance.hasOverlayPermission();
     final battery = await Permission.ignoreBatteryOptimizations.isGranted;
     final waEnabled = SettingsService.instance.whatsappIngestionEnabled;
     final gmEnabled = SettingsService.instance.gmailPreviewEnabled;
@@ -74,7 +72,6 @@ class _NotificationSettingsScreenState
       _whatsappEnabled = waEnabled;
       _gmailPreviewEnabled = gmEnabled;
       _exactAlarmEnabled = exactAlarm;
-      _overlayPermissionEnabled = overlayPerm;
       _batteryOptimizationIgnored = battery;
       _loading = false;
     });

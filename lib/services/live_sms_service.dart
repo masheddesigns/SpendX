@@ -28,7 +28,7 @@ import '../domain/finance/finance.dart';
 import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/card_statement.dart';
-import 'dynamic_island_service.dart';
+
 import 'sms_live_channel_bridge.dart';
 import '../models/credit_card.dart';
 import '../models/loan.dart';

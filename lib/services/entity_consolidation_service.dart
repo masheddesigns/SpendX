@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
-import '../core/utils/merchant_extractor.dart';
 import '../data/core/app_database.dart';
 import '../data/core/tables.dart';
 import '../data/repositories/account_repo.dart';
@@ -9,7 +8,6 @@ import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
 import '../core/logging/app_logger.dart';
-import 'transaction_text_parser.dart';
 
 /// Intelligent Anti-Collision & Financial Entity Consolidation Service.
 ///
@@ -681,7 +679,6 @@ class EntityConsolidationService {
         for (final tx in dateTxns) {
           final id = tx['id'] as String;
           final notes = (tx['notes'] as String? ?? tx['note'] as String? ?? '').trim();
-          final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
 
           String? newNotes;
           String? newCategoryId;
