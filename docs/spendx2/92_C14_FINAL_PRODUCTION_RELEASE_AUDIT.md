@@ -20,8 +20,8 @@ The objective of this comprehensive audit was to independently evaluate whether 
 - **Total Audit Vectors Evaluated**: 18
 - **Release Blockers (P0 / P1 / P2)**: **0**
 - **Non-Blocking Known Limitations (P3)**: 4 (Documented & isolated)
-- **Regression Suite**: **790 / 790 Tests Passing (100%)**
-- **Static Analysis**: **0 Errors, 0 Warnings** (`flutter analyze --no-fatal-infos`)
+- **Regression Suite**: **1,777 / 1,869 Tests Passing (as of Phase 2 audit; 92 pre-existing logic failures remain)**
+- **Static Analysis**: **0 Errors, 0 Warnings** (`flutter analyze lib/` — 31 non-fatal infos)
 - **Database Schema & Triggers**: **Schema v24 LOCKED**, **7 / 7 Financial Triggers ACTIVE**
 - **Production Secret & Artifact Leakage**: **STRICTLY ZERO**
 
@@ -274,8 +274,8 @@ AI DB Direct Access:           STRICT ZERO (AIDataBridge restricted to audited R
 | **macOS Release Build** | **GREEN** | `spend_x.app` built successfully (73.3 MB); SQLCipher framework embedded | Low |
 | **Offline Resiliency** | **GREEN** | 100% local database operations; zero network dependencies for accounting | Low |
 | **Data-Loss Protection** | **GREEN** | Single-flight coordinator, WriteQueue active, zero dropped writes | Low |
-| **Full Regression Suite** | **GREEN** | 790 / 790 tests passing (100% PASS) | Low |
-| **Static Code Analysis** | **GREEN** | 0 errors, 0 warnings (`flutter analyze --no-fatal-infos`) | Low |
+| **Full Regression Suite** | **YELLOW** | 1,777 / 1,869 tests passing (92 pre-existing logic failures) | Medium |
+| **Static Code Analysis** | **GREEN** | 0 errors, 0 warnings (`flutter analyze lib/`) | Low |
 | **Play Store Declarations** | **YELLOW** | Console declarations required for SMS and Exact Alarms (Store console action) | Low |
 | **Windows / Linux** | **NOT SUPPORTED** | Documented out of supported release matrix | None |
 

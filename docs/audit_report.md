@@ -271,7 +271,7 @@ The app is in a **functionally complete but currently broken quality state**:
 | Cashback → income (removed from refund patterns / CC-refund regex) | `lib/services/transaction_text_parser.dart`, `lib/services/sms_import_service.dart` | 2 |
 | Parse cache: string key instead of int hashCode (collision fix) | `lib/services/transaction_text_parser.dart` | (flakiness) |
 
-**Result:** `flutter test` went from **1,286 passed / 583 failed** to **1,768 passed / 101 failed**. `sms_parser_matrix_test` went from 84/100 to 99/100. `flutter analyze lib/` clean-ish (37 issues, all pre-existing infos/warnings, no errors).
+**Result:** `flutter test` went from **1,286 passed / 583 failed** to **1,777 passed / 92 failed**. `sms_parser_matrix_test` went from 84/100 to 100/100. `flutter analyze lib/`: **0 errors, 0 warnings** (31 non-fatal infos).
 
 Remaining 101 failures are logic/assertion issues across 15 files (milestone tests, encryption real-device tests, security source-code assertions, domain routing, etc.) and are pre-existing, deeper, and riskier to fix.
 
