@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/credit_card.dart';
 import '../../models/credit_transaction.dart';
@@ -13,6 +14,7 @@ import '../../data/repositories/ledger_repo.dart';
 import '../../data/repositories/reminder_repo.dart';
 import '../../models/ledger_transaction.dart';
 import '../../services/financial_transaction_service.dart';
+import '../../services/data_change_bus.dart';
 
 class CreditCardService {
   final CreditRepo _creditRepo;
@@ -184,10 +186,16 @@ class CreditCardService {
     try {
       final updatedCard = await _creditRepo.getCard(cardId);
       if (updatedCard != null) {
-        final remainingDue = updatedCard.lastStatementBalance > 0
-            ? updatedCard.lastStatementBalance
-            : updatedCard.outstanding;
+        final remainingDue = updatedCard.lastStatementBalance;
         final isPaid = remainingDue <= 0.01;
+
+        if (isPaid) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final cycleKey = 'card_settled_${updatedCard.id}_${updatedCard.nextDueDate.year}_${updatedCard.nextDueDate.month}';
+            await prefs.setBool(cycleKey, true);
+          } catch (_) {}
+        }
 
         await _reminderRepo.insertGlobalReminder(
           Reminder(
@@ -221,6 +229,7 @@ class CreditCardService {
             await _reminderRepo.upsert(updated);
           }
         }
+        DataChangeBus.instance.notify();
       }
     } catch (_) {
       // Non-fatal if reminder sync fails

@@ -14,6 +14,7 @@ import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../features/salary/providers/salary_providers.dart';
 import '../../features/transactions/providers/transaction_providers.dart' show paginatedTransactionsProvider;
 import '../../data/providers.dart' as app_data;
+import '../../services/data_change_bus.dart';
 
 class PayCreditCardScreen extends ConsumerStatefulWidget {
   final CreditCard card;
@@ -76,6 +77,8 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
     ref.invalidate(app_data.transactionsProvider);
     ref.invalidate(paginatedTransactionsProvider);
     ref.invalidate(app_data.remindersProvider);
+    ref.invalidate(app_data.safeToSpendProvider);
+    DataChangeBus.instance.notify();
 
     if (mounted) {
       Navigator.pop(context, true);

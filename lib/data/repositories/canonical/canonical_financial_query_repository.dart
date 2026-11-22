@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/finance/finance.dart';
 import '../../../models/credit_card.dart';
@@ -415,6 +416,11 @@ class CanonicalFinancialQueryRepository {
     final items = <CommitmentItem>[];
     final seenCommitments = <String>{};
 
+    SharedPreferences? prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+    } catch (_) {}
+
     // Reconcile pending reminders against existing recorded payments/expenses
     try {
       await ReminderRepo(database: db).reconcileWithExistingTransactions(executor: db);
@@ -479,15 +485,28 @@ class CanonicalFinancialQueryRepository {
             }
 
             if (matchedCard != null) {
-              // QUALIFICATION (DEF-517): The 26-day window around due date is an attribution heuristic,
-              // not a guaranteed deterministic statement association. Where no explicit statement foreign
-              // key exists, payments or merchant refunds occurring within this span are attributed to this
-              // cycle obligation. Cross-cycle attribution is theoretically possible if dates overlap.
-              final dueUtc = dueDate.toUtc();
-              final minPayDateUtc = dueUtc.subtract(const Duration(days: 26)).toIso8601String();
-              final maxPayDateUtc = dueUtc.add(const Duration(days: 26)).toIso8601String();
-              final minPayDateLocal = dueDate.subtract(const Duration(days: 26)).toIso8601String();
-              final maxPayDateLocal = dueDate.add(const Duration(days: 26)).toIso8601String();
+              final cycleKey = 'card_settled_${matchedCard.id}_${dueDate.year}_${dueDate.month}';
+              final isSettled = prefs?.getBool(cycleKey) ?? false;
+              if (isSettled) {
+                final oldId = r['id'] as String?;
+                if (oldId != null && oldId.isNotEmpty) {
+                  await db.rawUpdate(
+                    'UPDATE ${Tables.reminders} SET is_completed = 1, record_status = ? WHERE id = ?',
+                    [ReminderRecordStatus.done.name, oldId],
+                  );
+                }
+                seenCommitments.add('card:${matchedCard.id}');
+                if (cardId != null && cardId.isNotEmpty) {
+                  seenCommitments.add('card:$cardId');
+                }
+                continue;
+              }
+
+              // Check payments within the last 45 days
+              final minPayDateUtc = now.subtract(const Duration(days: 45)).toUtc().toIso8601String();
+              final maxPayDateUtc = dueDate.add(const Duration(days: 30)).toUtc().toIso8601String();
+              final minPayDateLocal = now.subtract(const Duration(days: 45)).toIso8601String();
+              final maxPayDateLocal = dueDate.add(const Duration(days: 30)).toIso8601String();
 
               try {
                 final v24Pay = await db.rawQuery('''
@@ -516,13 +535,15 @@ class CanonicalFinancialQueryRepository {
                     SELECT COALESCE(SUM(amount), 0) AS total_paid
                     FROM ${Tables.transactions}
                     WHERE is_deleted = 0
-                      AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
-                      AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
+                      AND (related_entity_id = ? OR account_id = ? OR notes LIKE ? OR notes LIKE ? OR notes LIKE ?)
+                      AND (type = 'credit_payment' OR source = 'credit_card_payment' OR type = 'transfer' OR notes LIKE '%credit%' OR notes LIKE '%card%' OR notes LIKE '%bill%')
                       AND date >= ? AND date <= ?;
                   ''', [
                     matchedCard.id,
+                    matchedCard.id,
                     '%${matchedCard.bank}%',
                     '%${matchedCard.name}%',
+                    '%card payment%',
                     minPayDateLocal,
                     maxPayDateLocal,
                   ]);
@@ -544,6 +565,10 @@ class CanonicalFinancialQueryRepository {
                 if (cardId != null && cardId.isNotEmpty) {
                   seenCommitments.add('card:$cardId');
                 }
+                await db.rawUpdate(
+                  'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
+                  [matchedCard.id],
+                );
                 continue; // Skip paid credit card bill!
               }
             }
@@ -643,18 +668,21 @@ class CanonicalFinancialQueryRepository {
         if (alreadyInItems) continue;
 
         final nextDue = card.nextDueDate;
+        final cycleKey = 'card_settled_${card.id}_${nextDue.year}_${nextDue.month}';
+        final isCycleSettled = prefs?.getBool(cycleKey) ?? false;
+        if (isCycleSettled) {
+          seenCommitments.add('card:${card.id}');
+          continue;
+        }
 
         if (nextDue.isBefore(endWindow) || nextDue.isAtSameMomentAs(endWindow)) {
           // Check if statement balance has already been paid
           final lastStmt = card.lastStatementBalance;
-          if (lastStmt > 0) {
-            // QUALIFICATION (DEF-517): Heuristic 26-day payment/refund attribution window around nextDue.
-            // When no deterministic statement reference exists, debit postings on card in this range are allocated here.
-            final dueUtc = nextDue.toUtc();
-            final minPayDateUtc = dueUtc.subtract(const Duration(days: 26)).toIso8601String();
-            final maxPayDateUtc = dueUtc.add(const Duration(days: 26)).toIso8601String();
-            final minPayDateLocal = nextDue.subtract(const Duration(days: 26)).toIso8601String();
-            final maxPayDateLocal = nextDue.add(const Duration(days: 26)).toIso8601String();
+          if (lastStmt > 0.01) {
+            final minPayDateUtc = now.subtract(const Duration(days: 45)).toUtc().toIso8601String();
+            final maxPayDateUtc = nextDue.add(const Duration(days: 30)).toUtc().toIso8601String();
+            final minPayDateLocal = now.subtract(const Duration(days: 45)).toIso8601String();
+            final maxPayDateLocal = nextDue.add(const Duration(days: 30)).toIso8601String();
 
             double totalPaid = 0.0;
             try {
@@ -684,13 +712,15 @@ class CanonicalFinancialQueryRepository {
                   SELECT COALESCE(SUM(amount), 0) AS total_paid
                   FROM ${Tables.transactions}
                   WHERE is_deleted = 0
-                    AND (related_entity_id = ? OR notes LIKE ? OR notes LIKE ?)
-                    AND (type = 'credit_payment' OR source = 'credit_card_payment' OR notes LIKE '%credit%' OR notes LIKE '%card%')
+                    AND (related_entity_id = ? OR account_id = ? OR notes LIKE ? OR notes LIKE ? OR notes LIKE ?)
+                    AND (type = 'credit_payment' OR source = 'credit_card_payment' OR type = 'transfer' OR notes LIKE '%credit%' OR notes LIKE '%card%' OR notes LIKE '%bill%')
                     AND date >= ? AND date <= ?;
                 ''', [
                   card.id,
+                  card.id,
                   '%${card.bank}%',
                   '%${card.name}%',
+                  '%card payment%',
                   minPayDateLocal,
                   maxPayDateLocal,
                 ]);
@@ -712,24 +742,15 @@ class CanonicalFinancialQueryRepository {
                   isOverdue: nextDue.isBefore(today),
                 ),
               );
+            } else {
+              try {
+                await db.rawUpdate(
+                  'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
+                  [card.id],
+                );
+              } catch (_) {}
             }
             continue;
-          }
-
-          final dueAmount = card.outstanding;
-          if (dueAmount > 0.01) {
-            total14d += dueAmount;
-            seenCommitments.add('card:${card.id}');
-            items.add(
-              CommitmentItem(
-                title: card.name,
-                amount: Money.fromRupees(dueAmount, currency: currency),
-                dueDate: nextDue,
-                type: 'credit_card',
-                id: card.id,
-                isOverdue: nextDue.isBefore(today),
-              ),
-            );
           }
         }
       }
@@ -797,6 +818,12 @@ class CanonicalFinancialQueryRepository {
         );
 
         for (final occDate in occurrences) {
+          if (templateId != null && templateId.isNotEmpty) {
+            final recCycleKey = 'recurring_settled_${templateId}_${occDate.year}_${occDate.month}';
+            if (prefs?.getBool(recCycleKey) ?? false) {
+              continue;
+            }
+          }
           final settlement = await _isOccurrenceSettled(
             db: db,
             occDate: occDate,

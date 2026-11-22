@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../data/providers.dart' show safeToSpendProvider;
+import '../../../data/core/app_database.dart';
+import '../../../data/core/tables.dart';
+import '../../../data/providers.dart'
+    show safeToSpendProvider, cardsProvider, accountsProvider, remindersProvider;
+import '../../../data/repositories/credit_repo.dart';
 import '../../../data/repositories/recurring_repo.dart';
 import '../../../data/repositories/reminder_repo.dart';
 import '../../../domain/finance/safe_to_spend.dart';
+import '../../../screens/credit_card/pay_credit_card_screen.dart';
 import '../../../screens/expense/add_expense_screen.dart';
+import '../../../services/data_change_bus.dart';
 import '../../../services/haptic_service.dart';
 import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/glass/spendx_glass_sheet.dart';
@@ -841,7 +848,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             spacing: 6,
             runSpacing: 4,
             children: [
-              if (c.id != null) ...[
+              if (c.id != null || c.type == 'credit_card') ...[
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
@@ -858,7 +865,40 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   onPressed: () async {
                     HapticService.instance.tap();
                     Navigator.of(sheetContext).pop();
-                    if (c.type == 'recurring') {
+                    final db = await AppDatabase.instance.database;
+                    final prefs = await SharedPreferences.getInstance();
+
+                    if (c.type == 'credit_card') {
+                      String targetCardId = c.id ?? '';
+                      try {
+                        final allCards = await CreditRepo().getAll();
+                        final match = allCards.where((card) =>
+                          card.id == targetCardId ||
+                          card.name.toLowerCase() == c.title.toLowerCase() ||
+                          ReminderRepo.areMerchantsEquivalent(card.name, c.title) ||
+                          (card.bank.isNotEmpty && c.title.toLowerCase().contains(card.bank.toLowerCase()))
+                        ).firstOrNull;
+                        if (match != null) targetCardId = match.id;
+                      } catch (_) {}
+
+                      if (targetCardId.isNotEmpty) {
+                        await db.rawUpdate(
+                          'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
+                          [targetCardId],
+                        );
+                        final cycleKey = 'card_settled_${targetCardId}_${c.dueDate.year}_${c.dueDate.month}';
+                        await prefs.setBool(cycleKey, true);
+
+                        await db.rawUpdate('''
+                          UPDATE ${Tables.reminders}
+                          SET is_completed = 1, record_status = 'done'
+                          WHERE linked_entity_id = ? OR id = ? OR id = ?
+                        ''', [targetCardId, c.id, 'credit_due_$targetCardId']);
+                      }
+                      if (c.id != null) {
+                        try { await ReminderRepo().deleteGlobalReminder(c.id!); } catch (_) {}
+                      }
+                    } else if (c.type == 'recurring') {
                       try {
                         final recRepo = RecurringRepo();
                         final allRec = await recRepo.getAll();
@@ -870,8 +910,14 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           }
                         }
                       } catch (_) {}
+                      if (c.id != null) {
+                        final cycleKey = 'recurring_settled_${c.id}_${c.dueDate.year}_${c.dueDate.month}';
+                        await prefs.setBool(cycleKey, true);
+                      }
                     } else {
-                      await ReminderRepo().deleteGlobalReminder(c.id!);
+                      if (c.id != null) {
+                        await ReminderRepo().deleteGlobalReminder(c.id!);
+                      }
                       try {
                         final recRepo = RecurringRepo();
                         final allRec = await recRepo.getAll();
@@ -884,6 +930,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       } catch (_) {}
                     }
                     ref.invalidate(safeToSpendProvider);
+                    ref.invalidate(cardsProvider);
+                    ref.invalidate(remindersProvider);
+                    DataChangeBus.instance.notify();
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -895,36 +944,93 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     }
                   },
                 ),
-                // "Mark Paid" is only available for discrete reminders that maintain record completion state.
-                // Recurring templates are generative rules whose occurrences settle dynamically via ledger
-                // postings; their last_generated cursor is an engine watermark and cannot be used as proof of payment.
-                if (c.type != 'recurring') ...[
-                  const SizedBox(width: 4),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: const Color(0xFF16A34A),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    ),
-                    icon: const Icon(Icons.check_circle_outline_rounded, size: 14),
-                    label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                    onPressed: () async {
-                      HapticService.instance.tap();
-                      Navigator.of(sheetContext).pop();
-                      await ReminderRepo().markReminderPaid(c.id!);
-                      ref.invalidate(safeToSpendProvider);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${c.title} marked as paid ✓'),
-                            duration: const Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    },
+                const SizedBox(width: 4),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: const Color(0xFF16A34A),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   ),
-                ],
+                  icon: const Icon(Icons.check_circle_outline_rounded, size: 14),
+                  label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  onPressed: () async {
+                    HapticService.instance.tap();
+                    Navigator.of(sheetContext).pop();
+                    final db = await AppDatabase.instance.database;
+                    final prefs = await SharedPreferences.getInstance();
+
+                    if (c.type == 'credit_card') {
+                      String targetCardId = c.id ?? '';
+                      try {
+                        final allCards = await CreditRepo().getAll();
+                        final match = allCards.where((card) =>
+                          card.id == targetCardId ||
+                          card.name.toLowerCase() == c.title.toLowerCase() ||
+                          ReminderRepo.areMerchantsEquivalent(card.name, c.title) ||
+                          (card.bank.isNotEmpty && c.title.toLowerCase().contains(card.bank.toLowerCase()))
+                        ).firstOrNull;
+                        if (match != null) targetCardId = match.id;
+                      } catch (_) {}
+
+                      if (targetCardId.isNotEmpty) {
+                        await db.rawUpdate(
+                          'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
+                          [targetCardId],
+                        );
+                        final cycleKey = 'card_settled_${targetCardId}_${c.dueDate.year}_${c.dueDate.month}';
+                        await prefs.setBool(cycleKey, true);
+
+                        await db.rawUpdate('''
+                          UPDATE ${Tables.reminders}
+                          SET is_completed = 1, record_status = 'done', last_triggered_at = ?
+                          WHERE linked_entity_id = ? OR id = ? OR id = ?
+                        ''', [DateTime.now().toIso8601String(), targetCardId, c.id, 'credit_due_$targetCardId']);
+                      }
+                      if (c.id != null) {
+                        try { await ReminderRepo().markReminderPaid(c.id!); } catch (_) {}
+                      }
+                    } else if (c.type == 'recurring') {
+                      if (c.id != null) {
+                        final cycleKey = 'recurring_settled_${c.id}_${c.dueDate.year}_${c.dueDate.month}';
+                        await prefs.setBool(cycleKey, true);
+                      }
+                    } else {
+                      if (c.id != null) {
+                        await ReminderRepo().markReminderPaid(c.id!);
+                      }
+                      try {
+                        final allCards = await CreditRepo().getAll();
+                        final matchedCard = allCards.where((card) =>
+                          card.name.toLowerCase() == c.title.toLowerCase() ||
+                          ReminderRepo.areMerchantsEquivalent(card.name, c.title)
+                        ).firstOrNull;
+                        if (matchedCard != null) {
+                          await db.rawUpdate(
+                            'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
+                            [matchedCard.id],
+                          );
+                          await prefs.setBool('card_settled_${matchedCard.id}_${c.dueDate.year}_${c.dueDate.month}', true);
+                        }
+                      } catch (_) {}
+                    }
+
+                    ref.invalidate(safeToSpendProvider);
+                    ref.invalidate(cardsProvider);
+                    ref.invalidate(accountsProvider);
+                    ref.invalidate(remindersProvider);
+                    DataChangeBus.instance.notify();
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${c.title} marked as paid ✓'),
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  },
+                ),
               ],
               const SizedBox(width: 6),
               OutlinedButton.icon(
@@ -939,15 +1045,48 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 ),
                 icon: const Icon(Icons.payment_rounded, size: 14),
                 label: const Text('Pay / Log', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                onPressed: () {
+                onPressed: () async {
                   HapticService.instance.tap();
                   Navigator.of(sheetContext).pop();
-                  final initialType = c.type == 'credit_card' ? 'credit_payment' : 'expense';
-                  Navigator.push(
+
+                  if (c.type == 'credit_card') {
+                    try {
+                      final allCards = await CreditRepo().getAll();
+                      final matchedCard = allCards.where((card) =>
+                        card.id == c.id ||
+                        card.name.toLowerCase() == c.title.toLowerCase() ||
+                        ReminderRepo.areMerchantsEquivalent(card.name, c.title) ||
+                        (card.bank.isNotEmpty && c.title.toLowerCase().contains(card.bank.toLowerCase()))
+                      ).firstOrNull;
+
+                      if (matchedCard != null && rootContext.mounted) {
+                        final paid = await Navigator.push<bool>(
+                          rootContext,
+                          AppPageRoute(
+                            builder: (_) => PayCreditCardScreen(
+                              card: matchedCard,
+                              outstanding: c.amount.toRupees,
+                            ),
+                          ),
+                        );
+                        if (paid == true) {
+                          ref.invalidate(safeToSpendProvider);
+                          ref.invalidate(cardsProvider);
+                          ref.invalidate(accountsProvider);
+                          ref.invalidate(remindersProvider);
+                          DataChangeBus.instance.notify();
+                        }
+                        return;
+                      }
+                    } catch (_) {}
+                  }
+
+                  if (!rootContext.mounted) return;
+                  final logged = await Navigator.push<bool>(
                     rootContext,
                     AppPageRoute(
                       builder: (_) => AddExpenseScreen(
-                        initialType: initialType,
+                        initialType: 'expense',
                         prefillData: {
                           'amount': c.amount.toRupees.toStringAsFixed(2),
                           'notes': 'Payment towards ${c.title}',
@@ -955,6 +1094,14 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       ),
                     ),
                   );
+                  if (logged == true) {
+                    if (c.id != null) {
+                      await ReminderRepo().markReminderPaid(c.id!);
+                    }
+                    ref.invalidate(safeToSpendProvider);
+                    ref.invalidate(remindersProvider);
+                    DataChangeBus.instance.notify();
+                  }
                 },
               ),
             ],

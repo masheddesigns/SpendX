@@ -8009,10 +8009,16 @@ class LiveSmsService with WidgetsBindingObserver {
       final updatedCard = await CreditRepo().getCard(matchedCard.id);
       if (updatedCard != null) {
         final reminderRepo = ReminderRepo();
-        final remainingDue = updatedCard.lastStatementBalance > 0
-            ? updatedCard.lastStatementBalance
-            : updatedCard.outstanding;
+        final remainingDue = updatedCard.lastStatementBalance;
         final isFullyPaid = remainingDue <= 0.01;
+
+        if (isFullyPaid) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final cycleKey = 'card_settled_${updatedCard.id}_${updatedCard.nextDueDate.year}_${updatedCard.nextDueDate.month}';
+            await prefs.setBool(cycleKey, true);
+          } catch (_) {}
+        }
 
         // 1. Primary card due reminder
         await reminderRepo.insertGlobalReminder(
@@ -8057,6 +8063,7 @@ class LiveSmsService with WidgetsBindingObserver {
             await reminderRepo.upsert(updated);
           }
         }
+        DataChangeBus.instance.notify();
       }
     } catch (_) {}
   }
