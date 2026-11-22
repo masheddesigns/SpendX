@@ -180,4 +180,47 @@ A follow-up commit addressed several audit findings:
 4. **Layout safety:** Still 576 Rows vs 278 Expanded. Add Expanded/Flexible and TextOverflow.
 5. **Shared state widgets:** Still no `LoadingView`/`EmptyState`/`ErrorView`.
 
-*Audit based on static code analysis of `lib/` at commit `38e8daa`. No runtime/visual inspection performed.*
+---
+
+## Final State (commit `dcdf97a`)
+
+| Metric | Original | Final | Δ |
+|---|---|---|---|
+| `Semantics` widgets | 2 | 26 | +24 |
+| `Tooltip` widgets | 0 | 5 | +5 |
+| `tooltip:` props | 0 | 63 | +63 |
+| `minimumSize` | 6 | 10 | +4 |
+| `validator:` | 6 | 13 | +7 |
+| `TextOverflow` | 66 | 78 | +12 |
+| `maxLines` | 62 | 74 | +12 |
+| `Expanded` | 278 | 282 | +4 |
+| `SafeArea` | 54 | 54 | 0 |
+| `RefreshIndicator` | 14 | 16 | +2 |
+| Hardcoded `Color(0x)` | 1,218 | 1,165 | -53 |
+| Hardcoded `Colors.xxx` | 656 | 652 | -4 |
+
+### Final UI/UX Scorecard
+
+| Category | Original | Final | Verdict |
+|---|---|---|---|
+| Accessibility | 1/10 | **4/10** | 🟡 26 Semantics, 63 tooltips — improving but needs ~100+ |
+| Theming / Dark Mode | 4/10 | **6/10** | 🟡 Adaptive tokens + context extension; 1,165 hardcoded colors remain |
+| Responsiveness | 3/10 | **4/10** | 🟡 TextOverflow 66→78; still 5 LayoutBuilder |
+| Forms & Validation | 2/10 | **3/10** | 🟡 6→13 validators; ~50 more needed |
+| Loading/Empty/Error | 4/10 | **4/10** | ❌ No shared widgets yet |
+| Touch Targets | 4/10 | **4/10** | ❌ 6→10 minSize; still below standard |
+| Navigation | 6/10 | **6/10** | ✅ OK |
+| Motion | 5/10 | **5/10** | ✅ OK |
+| Typography/Spacing | 6/10 | **6/10** | ✅ OK |
+
+**Overall: 3.5/10 → 5/10** (steady improvement)
+
+### Remaining (non-blocking)
+1. Accessibility: ~100+ Semantics needed, 48px min touch targets
+2. Theme migration: 1,165 hardcoded colors → `ColorScheme`
+3. Form validation: ~50 more validators
+4. Layout safety: responsive breakpoints (`LayoutBuilder`)
+5. Shared `LoadingView`/`EmptyState`/`ErrorView` widgets
+6. Reduced motion support
+
+*Audit based on static code analysis of `lib/` at commit `dcdf97a`. No runtime/visual inspection performed.*
