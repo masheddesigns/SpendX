@@ -9,6 +9,7 @@ import '../widgets/spendx_app_bar.dart';
 import '../widgets/empty_state.dart';
 import '../shared/widgets/glass/spendx_states.dart';
 import '../widgets/transaction_tile.dart';
+import 'package:spend_x/theme/app_spacing.dart';
 import '../models/transaction.dart' as spx;
 
 class CreditHistoryScreen extends ConsumerStatefulWidget {
@@ -142,7 +143,7 @@ class _CreditHistoryScreenState extends ConsumerState<CreditHistoryScreen> {
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (sctx, setFs) => Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.section),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

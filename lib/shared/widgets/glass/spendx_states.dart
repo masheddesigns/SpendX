@@ -188,7 +188,7 @@ class SpendXErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.section),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

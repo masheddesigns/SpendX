@@ -172,8 +172,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                             firstDate: DateTime(2020),
                             lastDate: DateTime.now(),
                           );
-                          if (picked != null)
+                          if (picked != null) {
                             setSheet(() => givenDate = picked);
+                          }
                         },
                       ),
                     ),
@@ -210,8 +211,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                     onPressed: isValid
                         ? () async {
                             final parsedAmount = double.tryParse(amount);
-                            if (parsedAmount == null || parsedAmount <= 0)
+                            if (parsedAmount == null || parsedAmount <= 0) {
                               return;
+                            }
                             await ref
                                 .read(lendingProvider.notifier)
                                 .add(

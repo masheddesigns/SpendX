@@ -5,6 +5,8 @@ import '../features/health/health_score_provider.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/skeleton_loader.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
+
 /// Detail screen for financial health — uses the SAME provider as Insights card.
 class FinancialHealthScreen extends ConsumerWidget {
   const FinancialHealthScreen({super.key});
@@ -31,7 +33,7 @@ class FinancialHealthScreen extends ConsumerWidget {
             final bd = score.breakdown;
 
             return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(AppSpacing.section),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

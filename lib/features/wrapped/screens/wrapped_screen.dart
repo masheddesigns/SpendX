@@ -405,10 +405,12 @@ class _PersonalitySlide extends StatelessWidget {
     final l = topCat.toLowerCase();
     if (l.contains('food')) return 'Food was your weakness this time';
     if (l.contains('shopping')) return 'Shopping took the biggest slice';
-    if (l.contains('transport') || l.contains('travel'))
+    if (l.contains('transport') || l.contains('travel')) {
       return 'You were on the move a lot';
-    if (l.contains('entertainment') || l.contains('subscription'))
+    }
+    if (l.contains('entertainment') || l.contains('subscription')) {
       return 'Entertainment kept you going';
+    }
     if (l.contains('bill')) return 'Bills kept the lights on';
     return '$topCat dominated your spending';
   }

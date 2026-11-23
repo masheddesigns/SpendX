@@ -884,8 +884,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
   }
 
   String _reviewReason(ReviewItem item) {
-    if (item.confidence < 0.50)
+    if (item.confidence < 0.50) {
       return 'Very low confidence — needs verification';
+    }
     if (item.confidence < 0.70) return 'Medium confidence — please verify';
     if (item.parsed.merchant == null) return 'Merchant not detected';
     if (item.parsed.last4 == null) return 'Account not identified';

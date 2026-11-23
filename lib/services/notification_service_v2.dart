@@ -35,6 +35,7 @@ import '../features/review_queue/providers/review_providers.dart';
 import '../models/loan.dart';
 import '../screens/transaction_detail_screen.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
 class NotificationServiceV2 {
   static final NotificationServiceV2 _instance = NotificationServiceV2._();
   factory NotificationServiceV2() => _instance;
@@ -1337,7 +1338,7 @@ class _ReminderAlertDialog extends StatelessWidget {
         insetPadding: const EdgeInsets.symmetric(horizontal: 24),
         backgroundColor: Colors.transparent,
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.section),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(28),

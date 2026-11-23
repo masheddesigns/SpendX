@@ -890,6 +890,7 @@ class _MonthCard extends StatelessWidget {
     final isLate = m.status == SalaryStatus.paid && m.delayDays > 0;
 
     return AppTapScale(
+      semanticLabel: 'Open salary details for $dueLabel',
       onTap: () => Navigator.push(
         context,
         AppPageRoute(builder: (_) => MonthDetailScreen(monthId: m.month.id)),
@@ -1198,6 +1199,7 @@ class _ExportOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppTapScale(
+      semanticLabel: 'Open salary section',
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),

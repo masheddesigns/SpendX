@@ -2153,6 +2153,7 @@ class _CreditCardInstrument extends StatelessWidget {
                       if (onPayTap != null && card.usedAmount > 0) ...[
                         const SizedBox(width: 8),
                         AppTapScale(
+                          semanticLabel: 'Make a payment to ${card.name}',
                           onTap: onPayTap,
                           child: Container(
                             padding: const EdgeInsets.symmetric(

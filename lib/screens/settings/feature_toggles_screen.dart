@@ -4,6 +4,7 @@ import '../../services/gemini_service.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/spendx_app_bar.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
 class FeatureTogglesScreen extends StatelessWidget {
   const FeatureTogglesScreen({super.key});
 
@@ -16,7 +17,7 @@ class FeatureTogglesScreen extends StatelessWidget {
         builder: (context, settings, _) {
           return SafeArea(
             child: ListView(
-              padding: EdgeInsets.all(24),
+              padding: EdgeInsets.all(AppSpacing.section),
               children: [
                 const Text(
                   'Customize Your Experience',

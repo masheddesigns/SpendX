@@ -518,7 +518,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                     return SpendXGlassSurface(
                       level: SpendXGlassLevel.base,
                       borderRadius: BorderRadius.circular(16),
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(AppSpacing.section),
                       child: Center(
                         child: Text(
                           'No entries yet. Tap the button above to log progress.',
@@ -1045,7 +1045,7 @@ class _LogTile extends StatelessWidget {
         backgroundColor: Theme.of(
           context,
         ).colorScheme.secondary.withValues(alpha: 0.12),
-        child:  Icon(
+        child: Icon(
           Icons.add_rounded,
           color: Theme.of(context).colorScheme.secondary,
           size: 18,

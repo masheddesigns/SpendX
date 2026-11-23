@@ -311,79 +311,90 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                 ),
                 const SizedBox(height: AppSpacing.m),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _label('Last 4 Digits'),
-                          TextFormField(
-                            controller: _last4Ctrl,
-                            decoration: _dec('XXXX'),
-                            keyboardType: TextInputType.number,
-                            maxLength: 4,
-                            validator: (v) => (v == null || v.length != 4)
-                                ? '4 digits'
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const AppSectionHeader(
-                            title: 'Card Network',
-                            padding: EdgeInsets.only(bottom: AppSpacing.s),
-                          ),
-                          DropdownButtonFormField<String>(
-                            initialValue: _cardType,
-                            dropdownColor: Theme.of(
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final digitsField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _label('Last 4 Digits'),
+                        TextFormField(
+                          controller: _last4Ctrl,
+                          decoration: _dec('XXXX'),
+                          keyboardType: TextInputType.number,
+                          maxLength: 4,
+                          validator: (v) =>
+                              (v == null || v.length != 4) ? '4 digits' : null,
+                        ),
+                      ],
+                    );
+                    final networkField = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AppSectionHeader(
+                          title: 'Network',
+                          padding: EdgeInsets.only(bottom: AppSpacing.s),
+                        ),
+                        DropdownButtonFormField<String>(
+                          initialValue: _cardType,
+                          dropdownColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHigh,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Theme.of(
                               context,
-                            ).colorScheme.surfaceContainerHigh,
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainer,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.m,
-                                ),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.m,
-                                vertical: 14,
-                              ),
+                            ).colorScheme.surfaceContainer,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.m),
+                              borderSide: BorderSide.none,
                             ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'visa',
-                                child: Text('Visa'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'mastercard',
-                                child: Text('Mastercard'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'rupay',
-                                child: Text('RuPay'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'amex',
-                                child: Text('Amex'),
-                              ),
-                            ],
-                            onChanged: (v) => setState(() => _cardType = v!),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.m,
+                              vertical: 14,
+                            ),
                           ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'visa',
+                              child: Text('Visa'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'mastercard',
+                              child: Text('Mastercard'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'rupay',
+                              child: Text('RuPay'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'amex',
+                              child: Text('Amex'),
+                            ),
+                          ],
+                          onChanged: (v) => setState(() => _cardType = v!),
+                        ),
+                      ],
+                    );
+
+                    if (constraints.maxWidth < 360) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          digitsField,
+                          const SizedBox(height: AppSpacing.s),
+                          networkField,
                         ],
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: digitsField),
+                        const SizedBox(width: AppSpacing.m),
+                        Expanded(child: networkField),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.m),
 
@@ -689,7 +700,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(AppSpacing.section),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

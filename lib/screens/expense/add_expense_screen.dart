@@ -297,10 +297,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String get _appBarTitle {
     if (widget.existingTransaction != null) {
       final t = widget.existingTransaction!.type;
-      if (t == 'credit_payment' || t == 'credit_card_payment')
+      if (t == 'credit_payment' || t == 'credit_card_payment') {
         return 'Edit Card Payment';
-      if (t == 'loan_repayment' || t == 'loan_payment')
+      }
+      if (t == 'loan_repayment' || t == 'loan_payment') {
         return 'Edit Loan Repayment';
+      }
       if (t == 'loan_disbursement') return 'Edit Loan Disbursement';
       if (t == 'transfer') return 'Edit Transfer';
       return _selectedType == 'expense'
@@ -711,8 +713,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             setState(() {
               _selectedPaymentMethodId = bank.id;
               _destinationPaymentMethodId = cash.id;
-              if (_notesController.text.isEmpty)
+              if (_notesController.text.isEmpty) {
                 _notesController.text = 'ATM Cash Withdrawal';
+              }
             });
           }
         }, isDark),
@@ -727,8 +730,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             setState(() {
               _selectedPaymentMethodId = bank.id;
               _destinationPaymentMethodId = card.id;
-              if (_notesController.text.isEmpty)
+              if (_notesController.text.isEmpty) {
                 _notesController.text = 'Credit Card Bill Payment';
+              }
             });
           }
         }, isDark),
@@ -740,8 +744,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             setState(() {
               _selectedPaymentMethodId = banks[0].id;
               _destinationPaymentMethodId = banks[1].id;
-              if (_notesController.text.isEmpty)
+              if (_notesController.text.isEmpty) {
                 _notesController.text = 'Inter-Bank Transfer';
+              }
             });
           }
         }, isDark),
@@ -760,8 +765,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             setState(() {
               _selectedPaymentMethodId = cash.id;
               _destinationPaymentMethodId = bank.id;
-              if (_notesController.text.isEmpty)
+              if (_notesController.text.isEmpty) {
                 _notesController.text = 'Cash Deposit to Bank';
+              }
             });
           }
         }, isDark),
@@ -1226,8 +1232,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                               const AddBankAccountScreen(),
                                         ),
                                       );
-                                      if (result == true)
+                                      if (result == true) {
                                         await _loadInitialData();
+                                      }
                                     },
                                     child: const Text('Add Account'),
                                   ),

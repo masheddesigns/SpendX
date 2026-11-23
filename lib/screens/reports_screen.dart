@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:spend_x/theme/app_spacing.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -668,8 +669,9 @@ class _MonthlyMovementSection extends StatelessWidget {
                   showTitles: true,
                   getTitlesWidget: (v, _) {
                     final i = v.toInt();
-                    if (i < 0 || i >= data.length)
+                    if (i < 0 || i >= data.length) {
                       return const SizedBox.shrink();
+                    }
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
@@ -824,7 +826,7 @@ class _CategoryBreakdownSection extends StatelessWidget {
             level: SpendXGlassLevel.base,
             borderRadius: BorderRadius.circular(16),
             child: const Padding(
-              padding: EdgeInsets.all(24),
+              padding: EdgeInsets.all(AppSpacing.section),
               child: Center(
                 child: Text(
                   'No categorized expense records in this time horizon.',

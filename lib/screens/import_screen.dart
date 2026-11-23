@@ -14,6 +14,8 @@ import '../services/import_service.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../shared/widgets/loading_state_widget.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
+
 class ImportScreen extends ConsumerStatefulWidget {
   final String? initialMethod; // 'ai', 'csv', 'csv_generic'
   final bool embedded;
@@ -177,7 +179,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   }
 
   Widget _buildGenericPickView() => Padding(
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.all(AppSpacing.section),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

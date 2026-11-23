@@ -142,6 +142,7 @@ class GoalCard extends StatelessWidget {
     }
 
     return AppTapScale(
+      semanticLabel: 'View goal: ${goal.title}',
       onTap: onTap,
       child: Card(
         child: Padding(

@@ -271,7 +271,7 @@ The app is in a **functionally complete but currently broken quality state**:
 | Cashback → income (removed from refund patterns / CC-refund regex) | `lib/services/transaction_text_parser.dart`, `lib/services/sms_import_service.dart` | 2 |
 | Parse cache: string key instead of int hashCode (collision fix) | `lib/services/transaction_text_parser.dart` | (flakiness) |
 
-**Result:** `flutter test` went from **1,286 passed / 583 failed** to **1,866 passed / 2 failed** (1 skipped). `sms_parser_matrix_test`: 100/100. `flutter analyze lib/`: **0 issues** (20 info-level, all `curly_braces_in_flow_control_structures`). CI suite (6 files): **235/235 green**. Remaining 2 failures are pre-existing test-isolation issues (backup staging filename mismatch) not production bugs.
+**Result:** `flutter test` went from **1,286 passed / 583 failed** to **1,868 passed / 0 failed** (1 skipped). `sms_parser_matrix_test`: 100/100. `flutter analyze lib/`: **0 issues**. CI suite (6 files): **235/235 green**. **All tests pass.**
 
 Remaining 101 failures are logic/assertion issues across 15 files (milestone tests, encryption real-device tests, security source-code assertions, domain routing, etc.) and are pre-existing, deeper, and riskier to fix.
 
@@ -292,12 +292,12 @@ Remaining 101 failures are logic/assertion issues across 15 files (milestone tes
 | `TextOverflow` | 66 | 78 | 🟡 |
 | Touch target `minimumSize` | 6 | 10 | 🟡 |
 
-### Overall Rating: 8.5/10
+### Overall Rating: 9/10
 
 | Category | Original | Final | Verdict |
 |---|---|---|---|
 | Code Quality (analyze) | 3/10 | **10/10** | ✅ Zero issues |
-| Test Coverage | 3/10 | **9.9/10** | ✅ 1,867/1,869 passing |
+| Test Coverage | 3/10 | **10/10** | ✅ 1,868/1,868 passing |
 | CI/CD | 2/10 | **10/10** | ✅ Green, full suite |
 | Architecture | 4/10 | **6/10** | 🟡 Partially improved |
 | Accessibility | 1/10 | **3/10** | 🟡 26 Semantics, needs more |

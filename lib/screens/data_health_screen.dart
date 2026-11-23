@@ -564,8 +564,9 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     int resolved = 0;
     for (final id in transactionIds) {
       final tx = await txRepo.getById(id);
-      if (tx == null || (tx.categoryId != null && tx.categoryId!.isNotEmpty))
+      if (tx == null || (tx.categoryId != null && tx.categoryId!.isNotEmpty)) {
         continue;
+      }
       final resolution = await resolveCategoryForText(
         rawText: tx.rawPayload ?? tx.notes,
         merchant: tx.notes,

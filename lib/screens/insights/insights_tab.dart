@@ -47,6 +47,7 @@ class InsightsTab extends ConsumerWidget {
       // ═══════════════════════════════════════════════════════════
       healthScore.when(
         data: (score) => AppTapScale(
+          semanticLabel: 'View financial health score',
           onTap: () => Navigator.push(
             context,
             AppPageRoute(builder: (_) => const FinancialHealthScreen()),
@@ -127,6 +128,7 @@ class InsightsTab extends ConsumerWidget {
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: AppTapScale(
+              semanticLabel: 'Open salary insights',
               onTap: () => Navigator.push(
                 context,
                 AppPageRoute(builder: (_) => const SalaryScreen()),
@@ -547,6 +549,7 @@ class _NetWorthBanner extends StatelessWidget {
     final isPositive = change >= 0;
 
     return AppTapScale(
+      semanticLabel: 'Open spending comparison',
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(18),
@@ -630,6 +633,7 @@ class _CreditCompactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return AppTapScale(
+      semanticLabel: 'Open credit card health',
       onTap: onTap,
       child: Card(
         child: Padding(

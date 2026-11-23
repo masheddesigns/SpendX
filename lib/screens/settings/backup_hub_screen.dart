@@ -13,6 +13,8 @@ import '../../widgets/settings_tile.dart';
 import '../../widgets/app_button.dart';
 import 'package:spend_x/widgets/spendx_app_bar.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
+
 enum SyncHealth { healthy, syncing, needsAuth, locked, error }
 
 class BackupHubScreen extends StatefulWidget {
@@ -549,7 +551,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
     if (!_isDriveConnected || !DriveService.instance.isInitialized) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.section),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(20),

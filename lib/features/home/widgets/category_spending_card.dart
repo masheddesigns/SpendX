@@ -218,8 +218,9 @@ class CategorySpendingCard extends ConsumerWidget {
   }
 
   Color _resolveColor(BuildContext context, String? colorStr) {
-    if (colorStr == null || colorStr.isEmpty)
+    if (colorStr == null || colorStr.isEmpty) {
       return Theme.of(context).colorScheme.primary;
+    }
     try {
       final hex = colorStr.replaceAll('#', '');
       if (hex.length == 6) return Color(int.parse('0xFF$hex'));

@@ -23,6 +23,7 @@ import '../../services/recurring_detector.dart';
 import '../../shared/widgets/app_card.dart';
 import '../../utils/app_format.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
 /// Mandatory preview screen for Smart Import.
 ///
 /// User always confirms before a transaction is inserted. Confidence drives
@@ -853,7 +854,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Review transaction')),
       body: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.section),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

@@ -268,6 +268,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           final isSelected = _selectedCardIndex == index;
 
           return AppTapScale(
+            semanticLabel: 'Select ${card.name}',
             onTap: () {
               setState(() => _selectedCardIndex = index);
               _scrollToCard(index);
@@ -387,6 +388,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
 
   Widget _buildAddCardButton() {
     return AppTapScale(
+      semanticLabel: 'Add credit card',
       onTap: _navigateToAddCard,
       child: Container(
         width: 100,
@@ -490,7 +492,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             ).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child:  Text(
+                          child: Text(
                             'Not set',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.tertiary,
@@ -662,7 +664,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                           const SizedBox(height: 2),
                           Text(
                             AppFormat.currency(stmtSummary.repaidAmount),
-                            style:  TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                               color: Theme.of(context).colorScheme.secondary,
@@ -795,6 +797,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     VoidCallback onTap,
   ) {
     return AppTapScale(
+      semanticLabel: label,
       onTap: onTap,
       child: SizedBox(
         width: double.infinity,
@@ -941,6 +944,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppTapScale(
+        semanticLabel: 'View EMI plan details',
         onTap: () {
           Navigator.push(
             context,
@@ -1085,8 +1089,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             )
             .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
             .trim();
-        if (displayTitle.isEmpty)
+        if (displayTitle.isEmpty) {
           displayTitle = TextFormatter.toSmartTitleCase(tx.category);
+        }
 
         return ListTile(
           onTap: () async {

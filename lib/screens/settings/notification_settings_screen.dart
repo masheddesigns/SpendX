@@ -290,8 +290,9 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       await Permission.ignoreBatteryOptimizations.request();
                       final updated =
                           await Permission.ignoreBatteryOptimizations.isGranted;
-                      if (mounted)
+                      if (mounted) {
                         setState(() => _batteryOptimizationIgnored = updated);
+                      }
                     },
                     child: const Text('Unrestrict'),
                   ),

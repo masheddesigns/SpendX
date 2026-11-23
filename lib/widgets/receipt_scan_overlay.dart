@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
+
 class ReceiptScanOverlay extends StatefulWidget {
   const ReceiptScanOverlay({
     super.key,
@@ -70,7 +72,7 @@ class _ReceiptScanOverlayState extends State<ReceiptScanOverlay>
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
               child: Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(AppSpacing.section),
                 decoration: BoxDecoration(
                   color: colorScheme.surface.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(20),

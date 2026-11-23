@@ -6,6 +6,8 @@ import 'package:spend_x/widgets/spendx_app_bar.dart';
 import 'privacy_policy_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
+
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
@@ -25,7 +27,7 @@ class AboutScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
               children: [
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(AppSpacing.section),
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(28),

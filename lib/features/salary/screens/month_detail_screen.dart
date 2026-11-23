@@ -14,6 +14,7 @@ import '../../../features/transactions/providers/transaction_providers.dart';
 import '../../salary_ledger/salary_ledger_models.dart';
 import '../../salary_ledger/salary_ledger_notifier.dart';
 
+import 'package:spend_x/theme/app_spacing.dart';
 /// Detail screen for a single salary month — shows full breakdown + payment list.
 class MonthDetailScreen extends ConsumerWidget {
   final String monthId;
@@ -303,7 +304,7 @@ class MonthDetailScreen extends ConsumerWidget {
 
           if (m.payments.isEmpty)
             Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(AppSpacing.section),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(12),
