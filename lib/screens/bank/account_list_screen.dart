@@ -43,6 +43,9 @@ String resolveAccountDisplayName(String rawName) {
       trimmed.startsWith('sys_')) {
     return 'Unlinked Account';
   }
+  if (RegExp(r'^loan_[a-z0-9_-]+$', caseSensitive: false).hasMatch(trimmed)) {
+    return 'Loan Account';
+  }
   // Match only auto-generated system keys like "Asset acc_123" or "acc_123"
   final generatedKeyPattern = RegExp(r'^(?:Asset\s+)?acc_([a-zA-Z0-9_\-]+)$');
   final match = generatedKeyPattern.firstMatch(trimmed);
@@ -1350,58 +1353,62 @@ class _AccountsActionHub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final actions = <Widget>[
+      _ActionPillButton(
+        icon: Icons.account_balance_rounded,
+        iconColor: Theme.of(context).colorScheme.primary,
+        label: '+ Account',
+        isDark: isDark,
+        onTap: onAddAccount,
+      ),
+      _ActionPillButton(
+        icon: Icons.credit_card_rounded,
+        iconColor: Theme.of(context).colorScheme.error,
+        label: '+ Card',
+        isDark: isDark,
+        onTap: onAddCard,
+      ),
+      _ActionPillButton(
+        icon: Icons.trending_up_rounded,
+        iconColor: Theme.of(context).colorScheme.secondary,
+        label: '+ Invest',
+        isDark: isDark,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            AppPageRoute(
+              builder: (_) =>
+                  const AddBankAccountScreen(initialType: 'mutual_fund'),
+            ),
+          );
+        },
+      ),
+      _ActionPillButton(
+        icon: Icons.handshake_outlined,
+        iconColor: Theme.of(context).colorScheme.tertiary,
+        label: 'Lending',
+        isDark: isDark,
+        onTap: onOpenLending,
+      ),
+    ];
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ActionPillButton(
-              icon: Icons.account_balance_rounded,
-              iconColor: Theme.of(context).colorScheme.primary,
-              label: '+ Account',
-              isDark: isDark,
-              onTap: onAddAccount,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _ActionPillButton(
-              icon: Icons.credit_card_rounded,
-              iconColor: Theme.of(context).colorScheme.error,
-              label: '+ Card',
-              isDark: isDark,
-              onTap: onAddCard,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _ActionPillButton(
-              icon: Icons.trending_up_rounded,
-              iconColor: Theme.of(context).colorScheme.secondary,
-              label: '+ Invest',
-              isDark: isDark,
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  AppPageRoute(
-                    builder: (_) =>
-                        const AddBankAccountScreen(initialType: 'mutual_fund'),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _ActionPillButton(
-              icon: Icons.handshake_outlined,
-              iconColor: Theme.of(context).colorScheme.tertiary,
-              label: 'Lending',
-              isDark: isDark,
-              onTap: onOpenLending,
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth < 520 ? 2 : 4;
+          const spacing = 8.0;
+          final itemWidth =
+              (constraints.maxWidth - spacing * (columns - 1)) / columns;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: [
+              for (final action in actions)
+                SizedBox(width: itemWidth, child: action),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1432,46 +1439,55 @@ class _ActionPillButton extends StatelessWidget {
           onTap();
         },
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Theme.of(context).colorScheme.outline,
-              width: 0.8,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withValues(alpha: 0.15)
-                    : const Color(0x061C1917),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: iconColor),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimary,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: Tooltip(
+            message: label,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Theme.of(context).colorScheme.outline,
+                    width: 0.8,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.15)
+                          : const Color(0x061C1917),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 16, color: iconColor),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),

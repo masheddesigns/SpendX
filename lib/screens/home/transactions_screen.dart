@@ -412,51 +412,44 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                       const SizedBox(height: 10),
 
                       // SpendX Vocabulary Filter Chips (Spent, Received, Moved)
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        child: Row(
-                          children: [
-                            _buildFilterChip(
-                              label: 'All',
-                              isSelected: _selectedFilter == 'all',
-                              onTap: () =>
-                                  setState(() => _selectedFilter = 'all'),
-                              isDark: isDark,
-                            ),
-                            const SizedBox(width: 6),
-                            _buildFilterChip(
-                              label: 'Spent ↗',
-                              isSelected: _selectedFilter == 'spent',
-                              onTap: () =>
-                                  setState(() => _selectedFilter = 'spent'),
-                              isDark: isDark,
-                              activeColor: Theme.of(context).colorScheme.error,
-                            ),
-                            const SizedBox(width: 6),
-                            _buildFilterChip(
-                              label: 'Received ↙',
-                              isSelected: _selectedFilter == 'received',
-                              onTap: () =>
-                                  setState(() => _selectedFilter = 'received'),
-                              isDark: isDark,
-                              activeColor: Theme.of(
-                                context,
-                              ).colorScheme.secondary,
-                            ),
-                            const SizedBox(width: 6),
-                            _buildFilterChip(
-                              label: 'Moved ⇄',
-                              isSelected: _selectedFilter == 'moved',
-                              onTap: () =>
-                                  setState(() => _selectedFilter = 'moved'),
-                              isDark: isDark,
-                              activeColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                          ],
-                        ),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _buildFilterChip(
+                            label: 'All',
+                            isSelected: _selectedFilter == 'all',
+                            onTap: () =>
+                                setState(() => _selectedFilter = 'all'),
+                            isDark: isDark,
+                          ),
+                          _buildFilterChip(
+                            label: 'Spent ↗',
+                            isSelected: _selectedFilter == 'spent',
+                            onTap: () =>
+                                setState(() => _selectedFilter = 'spent'),
+                            isDark: isDark,
+                            activeColor: Theme.of(context).colorScheme.error,
+                          ),
+                          _buildFilterChip(
+                            label: 'Received ↙',
+                            isSelected: _selectedFilter == 'received',
+                            onTap: () =>
+                                setState(() => _selectedFilter = 'received'),
+                            isDark: isDark,
+                            activeColor: Theme.of(
+                              context,
+                            ).colorScheme.secondary,
+                          ),
+                          _buildFilterChip(
+                            label: 'Moved ⇄',
+                            isSelected: _selectedFilter == 'moved',
+                            onTap: () =>
+                                setState(() => _selectedFilter = 'moved'),
+                            isDark: isDark,
+                            activeColor: Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
                       ),
                       if (_selectedFilter == 'moved') ...[
                         const SizedBox(height: 10),
@@ -776,7 +769,10 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
-          child: Center(
+          child: Align(
+            alignment: Alignment.center,
+            widthFactor: 1,
+            heightFactor: 1,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

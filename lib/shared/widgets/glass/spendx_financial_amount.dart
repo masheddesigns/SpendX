@@ -2,20 +2,14 @@ import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 
-enum FinancialSemanticType {
-  neutral,
-  income,
-  expense,
-  transfer,
-  shortfall,
-}
+enum FinancialSemanticType { neutral, income, expense, transfer, shortfall }
 
 enum FinancialAmountSize {
-  hero,     // 34px - Safe to Spend & Net Worth
-  large,    // 26px - Card balances
-  medium,   // 18px - Section totals
+  hero, // 34px - Safe to Spend & Net Worth
+  large, // 26px - Card balances
+  medium, // 18px - Section totals
   standard, // 15px - List items
-  compact,  // 13px - Subtitles, metadata
+  compact, // 13px - Subtitles, metadata
 }
 
 /// Formatted financial amount with tabular figures and semantic coloring.
@@ -97,7 +91,9 @@ class SpendXFinancialAmount extends StatelessWidget {
     }
 
     final absAmount = amount.abs();
-    final isNegative = amount < 0 || (semanticType == FinancialSemanticType.shortfall && amount != 0);
+    final isNegative =
+        amount < 0 ||
+        (semanticType == FinancialSemanticType.shortfall && amount != 0);
     final rawFormatted = AppFormat.currency(absAmount);
 
     // Sanitize prefix: remove any duplicate currency symbol
@@ -107,7 +103,9 @@ class SpendXFinancialAmount extends StatelessWidget {
         .trim();
 
     String sign = '';
-    if (showSign && amount > 0 && semanticType == FinancialSemanticType.income) {
+    if (showSign &&
+        amount > 0 &&
+        semanticType == FinancialSemanticType.income) {
       sign = '+';
     } else if (isNegative) {
       if (!cleanPrefix.startsWith('-')) {
@@ -117,16 +115,19 @@ class SpendXFinancialAmount extends StatelessWidget {
 
     final displayText = '$sign$cleanPrefix$rawFormatted${suffix ?? ''}';
 
-    return Text(
-      displayText,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        letterSpacing: letterSpacing,
-        color: color,
-        fontFeatures: const [FontFeature.tabularFigures()],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        displayText,
+        maxLines: 1,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          letterSpacing: letterSpacing,
+          color: color,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }

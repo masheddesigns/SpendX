@@ -90,10 +90,11 @@ class SpendXTransactionTile extends StatelessWidget {
       isTransfer: isTransfer,
     );
 
-    // Sanitize technical internal suspense IDs in account name
-    final displayAccountName = (accountName == 'sys_suspense_transfer' || accountName?.startsWith('sys_suspense') == true)
-        ? 'Unlinked Account'
-        : accountName;
+    // Keep implementation IDs out of the visible transaction route.
+    final displayAccountName = accountName
+        ?.split('→')
+        .map(_cleanTransactionAccountLabel)
+        .join(' → ');
 
     // Route indicator for internal transfers and card settlements
     String? fromRoute;
@@ -132,7 +133,67 @@ class SpendXTransactionTile extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 360;
+
+                Widget amountAndBadges() => Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (foreignAmountStr != null) ...[
+                      Text(
+                        '${semanticType == FinancialSemanticType.expense ? "-" : (semanticType == FinancialSemanticType.income ? "+" : "")}$foreignAmountStr',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: context.textPrimary,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ] else ...[
+                      SpendXFinancialAmount(
+                        amount: transaction.amount,
+                        semanticType: semanticType,
+                        size: compact
+                            ? FinancialAmountSize.compact
+                            : FinancialAmountSize.standard,
+                        showSign: !isTransfer && !isCcPayment,
+                      ),
+                    ],
+                    if (isTransfer || isCcPayment) ...[
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: isCcPayment
+                              ? (isDark ? const Color(0x2210B981) : Theme.of(context).colorScheme.secondaryContainer)
+                              : (isDark ? const Color(0x226366F1) : Theme.of(context).colorScheme.primaryContainer),
+                          borderRadius: BorderRadius.circular(AppRadius.xs),
+                          border: Border.all(
+                            color: isCcPayment
+                                ? (isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary)
+                                : (isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Text(
+                          isCcPayment ? 'Bill Settled ✓' : '0 Net Impact',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: isCcPayment
+                                ? (isDark ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSecondaryContainer)
+                                : Theme.of(context).colorScheme.primary,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+
+                return Row(
               children: [
                 // Category Icon Pill
                 Container(
@@ -303,65 +364,25 @@ class SpendXTransactionTile extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (compact) ...[
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: amountAndBadges(),
+                        ),
+                      ],
                     ],
                   ),
                 ),
 
                 // Amount & Badges
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (foreignAmountStr != null) ...[
-                      Text(
-                        '${semanticType == FinancialSemanticType.expense ? "-" : (semanticType == FinancialSemanticType.income ? "+" : "")}$foreignAmountStr',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: context.textPrimary,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ] else ...[
-                      SpendXFinancialAmount(
-                        amount: transaction.amount,
-                        semanticType: semanticType,
-                        size: FinancialAmountSize.standard,
-                        showSign: !isTransfer && !isCcPayment,
-                      ),
-                    ],
-                    if (isTransfer || isCcPayment) ...[
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: isCcPayment
-                              ? (isDark ? const Color(0x2210B981) : Theme.of(context).colorScheme.secondaryContainer)
-                              : (isDark ? const Color(0x226366F1) : Theme.of(context).colorScheme.primaryContainer),
-                          borderRadius: BorderRadius.circular(AppRadius.xs),
-                          border: Border.all(
-                            color: isCcPayment
-                                ? (isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary)
-                                : (isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          isCcPayment ? 'Bill Settled ✓' : '0 Net Impact',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: isCcPayment
-                                ? (isDark ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSecondaryContainer)
-                                : (Theme.of(context).colorScheme.primary),
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                if (!compact) ...[
+                  const SizedBox(width: 8),
+                  amountAndBadges(),
+                ],
               ],
+            );
+              },
             ),
           ),
           if (showDivider)
@@ -431,6 +452,15 @@ String cleanTransactionDisplayTitle(
 
   // 1b. Specific merchant / wallet recognitions for raw text fallbacks:
   final lowerTitle = title.toLowerCase();
+
+  // Auto-created loan transactions sometimes use their database ID as the
+  // only note (for example, "EMI Repayment: 3bfaaa3"). Never show that key.
+  if (RegExp(
+    r'^(?:emi\s+)?(?:repayment|loan repayment)\s*:\s*[a-z0-9_-]{6,}$',
+    caseSensitive: false,
+  ).hasMatch(title)) {
+    return 'Loan repayment';
+  }
 
   // Reject date strings from ever displaying as merchant/payee title
   if (lowerTitle.contains('21-nov-2026')) {
@@ -534,4 +564,15 @@ String cleanTransactionDisplayTitle(
   }
 
   return title;
+}
+
+String _cleanTransactionAccountLabel(String rawLabel) {
+  final label = rawLabel.trim();
+  if (RegExp(r'^sys_[a-z0-9_-]+$', caseSensitive: false).hasMatch(label)) {
+    return 'Unlinked Account';
+  }
+  if (RegExp(r'^loan_[a-z0-9_-]+$', caseSensitive: false).hasMatch(label)) {
+    return 'Loan Account';
+  }
+  return label;
 }

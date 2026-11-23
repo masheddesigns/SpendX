@@ -106,7 +106,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       },
       child: SpendXScaffold(
-        extendBody: true,
+        // Let the tab viewport end above the floating navigation surface so
+        // the last visible row cannot be visually covered by the nav.
+        extendBody: false,
         extendBodyBehindAppBar: false,
         appBar: _currentIndex == 0
             ? null
@@ -124,6 +126,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 actions: [
                   if (_currentIndex == 1)
                     IconButton(
+                      icon: const Icon(Icons.add_rounded),
+                      tooltip: 'Add Transaction',
+                      onPressed: () => Navigator.push(
+                        context,
+                        AppPageRoute(
+                          builder: (_) =>
+                              const AddExpenseScreen(initialType: 'expense'),
+                        ),
+                      ),
+                    ),
+                  if (_currentIndex == 1)
+                    IconButton(
                       icon: const Icon(Icons.search_rounded),
                       tooltip: 'Search Transactions',
                       onPressed: () => Navigator.push(
@@ -137,30 +151,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
         body: IndexedStack(index: _currentIndex, children: _tabs),
-        floatingActionButton: Semantics(
-          button: true,
-          label: 'Add Transaction',
-          child: FloatingActionButton(
-            heroTag: 'spendx_primary_fab',
-            elevation: 4,
-            backgroundColor: AppTheme.primaryBlue,
-            foregroundColor: Colors.white,
-            shape: const CircleBorder(),
-            tooltip: 'Add Transaction',
-            onPressed: () {
-              HapticService.instance.medium();
-              Navigator.push(
-                context,
-                AppPageRoute(
-                  builder: (_) =>
-                      const AddExpenseScreen(initialType: 'expense'),
-                ),
-              );
-            },
-            child: const Icon(Icons.add_rounded, size: 28),
-          ),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        // Each tab exposes its own primary action. A persistent transaction
+        // FAB covered balances and ledger values across all tabs.
         bottomNavigationBar: SpendXGlassNavigation(
           selectedIndex: _currentIndex,
           onItemSelected: _onTabSelected,
