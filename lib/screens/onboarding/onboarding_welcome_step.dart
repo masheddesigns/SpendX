@@ -14,8 +14,8 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
               height: 88,
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0x1A6366F1)
-                    : const Color(0x146366F1),
+                    ? AppTheme.primaryBlue.withValues(alpha: 0.102)
+                    : AppTheme.primaryBlue.withValues(alpha: 0.078),
                 borderRadius: BorderRadius.circular(26),
                 border: Border.all(
                   color: AppTheme.primaryBlue.withValues(alpha: 0.35),

@@ -36,7 +36,6 @@ class _OnboardingStepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       label: 'Setup step ${currentPage + 1} of $totalPages',
@@ -48,9 +47,7 @@ class _OnboardingStepIndicator extends StatelessWidget {
             final decoration = BoxDecoration(
               color: selected
                   ? AppTheme.primaryBlue
-                  : (isDark
-                        ? const Color(0x33FFFFFF)
-                        : const Color(0x22000000)),
+                  : Theme.of(context).colorScheme.outline,
               borderRadius: BorderRadius.circular(3),
             );
             final margin = const EdgeInsets.symmetric(horizontal: 4);
@@ -217,9 +214,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0F111A)
-          : const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [

@@ -159,6 +159,7 @@ class FlutterSecureStorageAdapter implements SecureStorageAdapter {
               aOptions: AndroidOptions(
                 resetOnError: false,
                 migrateOnAlgorithmChange: false,
+                migrateWithBackup: true,
               ),
               iOptions: IOSOptions(
                 accessibility: KeychainAccessibility.first_unlock,

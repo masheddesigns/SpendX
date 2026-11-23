@@ -50,7 +50,6 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   Future<void> _logProgress() async {
     final amountCtrl = TextEditingController();
     final noteCtrl = TextEditingController();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final result = await showDialog<({double amount, String? note})>(
       context: context,
@@ -79,15 +78,17 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 labelText: 'Amount',
                 prefixText: '₹ ',
                 filled: true,
-                fillColor: isDark
-                    ? const Color(0x1AFFFFFF)
-                    : const Color(0x66FFFFFF),
+                fillColor: context.onSurfaceOverlay(
+                  lightOpacity: 0.4,
+                  darkOpacity: 0.1,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: isDark
-                        ? const Color(0x28FFFFFF)
-                        : const Color(0x18000000),
+                    color: context.onSurfaceOverlay(
+                      lightOpacity: 0.094,
+                      darkOpacity: 0.157,
+                    ),
                     width: 0.75,
                   ),
                 ),
@@ -103,15 +104,17 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               decoration: InputDecoration(
                 labelText: 'Note (optional)',
                 filled: true,
-                fillColor: isDark
-                    ? const Color(0x1AFFFFFF)
-                    : const Color(0x66FFFFFF),
+                fillColor: context.onSurfaceOverlay(
+                  lightOpacity: 0.4,
+                  darkOpacity: 0.1,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: isDark
-                        ? const Color(0x28FFFFFF)
-                        : const Color(0x18000000),
+                    color: context.onSurfaceOverlay(
+                      lightOpacity: 0.094,
+                      darkOpacity: 0.157,
+                    ),
                     width: 0.75,
                   ),
                 ),
@@ -202,7 +205,6 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final progress = ref.watch(goalProgressProvider(_goal));
     final logsAsync = ref.watch(goalLogsProvider(_goal.id));
     final nudgesAsync = ref.watch(goalInsightsProvider);
@@ -297,9 +299,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                               child: CircularProgressIndicator(
                                 value: value,
                                 strokeWidth: 10,
-                                backgroundColor: isDark
-                                    ? const Color(0x1FFFFFFF)
-                                    : const Color(0x18000000),
+                                backgroundColor: context.onSurfaceOverlay(
+                                  lightOpacity: 0.094,
+                                  darkOpacity: 0.122,
+                                ),
                                 valueColor: AlwaysStoppedAnimation(barColor),
                                 strokeCap: StrokeCap.round,
                               ),
@@ -543,9 +546,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                           if (i < logs.length - 1)
                             Divider(
                               height: 1,
-                              color: isDark
-                                  ? const Color(0x1AFFFFFF)
-                                  : const Color(0x14000000),
+                              color: context.onSurfaceOverlay(
+                                lightOpacity: 0.078,
+                                darkOpacity: 0.102,
+                              ),
                               indent: 16,
                               endIndent: 16,
                             ),
@@ -578,9 +582,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                   ),
                   Divider(
                     height: 16,
-                    color: isDark
-                        ? const Color(0x1AFFFFFF)
-                        : const Color(0x14000000),
+                    color: context.onSurfaceOverlay(
+                      lightOpacity: 0.078,
+                      darkOpacity: 0.102,
+                    ),
                   ),
                   _StatRow(
                     label: 'End Date',
@@ -588,9 +593,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                   ),
                   Divider(
                     height: 16,
-                    color: isDark
-                        ? const Color(0x1AFFFFFF)
-                        : const Color(0x14000000),
+                    color: context.onSurfaceOverlay(
+                      lightOpacity: 0.078,
+                      darkOpacity: 0.102,
+                    ),
                   ),
                   _StatRow(
                     label: 'Target',

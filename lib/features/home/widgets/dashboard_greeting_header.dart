@@ -81,8 +81,8 @@ class DashboardGreetingHeader extends ConsumerWidget {
                 Semantics(
                   button: true,
                   label: 'Net worth: ${AppFormat.currency(netWorth)}',
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 48),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {
@@ -97,9 +97,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E2330)
-                              : Theme.of(context).colorScheme.primaryContainer,
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isDark
@@ -144,9 +142,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                 fontSize: 27,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.7,
-                color: isDark
-                    ? const Color(0xFFF8FAFC)
-                    : const Color(0xFF1C1917),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],

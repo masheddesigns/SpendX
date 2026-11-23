@@ -143,7 +143,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
                 final ratio = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
 
                 final color = isOver
-                    ? const Color(0xFFE05260)
+                    ? Theme.of(context).colorScheme.error
                     : (ratio > 0.8
                           ? Theme.of(context).colorScheme.tertiary
                           : (Theme.of(context).colorScheme.secondary));
@@ -239,7 +239,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
                             decoration: BoxDecoration(
                               color: isDark
                                   ? Colors.white.withValues(alpha: 0.08)
-                                  : const Color(0xFFEBE5D8),
+                                  : Theme.of(context).colorScheme.outline,
                               borderRadius: BorderRadius.circular(3),
                             ),
                           ),

@@ -491,13 +491,15 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: isSolvent
-                            ? const Color(0x1F10B981)
-                            : const Color(0x1FEF4444),
+                            ? Theme.of(context).colorScheme.secondaryContainer
+                            : Theme.of(context).colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isSolvent
-                              ? const Color(0x4010B981)
-                              : const Color(0x40EF4444),
+                          color:
+                              (isSolvent
+                                      ? Theme.of(context).colorScheme.secondary
+                                      : Theme.of(context).colorScheme.error)
+                                  .withValues(alpha: 0.25),
                           width: 0.75,
                         ),
                       ),
@@ -587,9 +589,10 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       child: Container(
                         height: 7,
                         width: double.infinity,
-                        color: isDark
-                            ? const Color(0x22FFFFFF)
-                            : const Color(0x18000000),
+                        color: context.onSurfaceOverlay(
+                          lightOpacity: 0.094,
+                          darkOpacity: 0.133,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
@@ -856,7 +859,10 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   const Color(0xFF1E1B4B).withValues(alpha: 0.6),
                   const Color(0xFF0F172A).withValues(alpha: 0.8),
                 ]
-              : [Theme.of(context).colorScheme.primaryContainer, const Color(0xFFF8FAFC)],
+              : [
+                  Theme.of(context).colorScheme.primaryContainer,
+                  Theme.of(context).colorScheme.surface,
+                ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -879,7 +885,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   ).colorScheme.primary.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child:  Icon(
+                child: Icon(
                   Icons.auto_graph_rounded,
                   size: 20,
                   color: Theme.of(context).colorScheme.primary,
@@ -1306,7 +1312,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 ).colorScheme.tertiary.withValues(alpha: isDark ? 0.20 : 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child:  Icon(
+              child: Icon(
                 Icons.handshake_rounded,
                 color: Theme.of(context).colorScheme.tertiary,
                 size: 20,
@@ -1337,7 +1343,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
             ),
             Text(
               '−${AppFormat.currency(remaining)}',
-              style:  TextStyle(
+              style: TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w700,
                 fontFeatures: [FontFeature.tabularFigures()],
@@ -1406,7 +1412,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               ),
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E222D) : Colors.white,
+                  color: Theme.of(context).colorScheme.surfaceContainer,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(24),
                   ),
@@ -1455,7 +1461,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1511,9 +1519,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                           color: assetColor,
                         ),
                         filled: true,
-                        fillColor: isDark
-                            ? const Color(0xFF141822)
-                            : const Color(0xFFF1F5F9),
+                        fillColor: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHigh,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -1591,9 +1599,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? const Color(0x1AFFFFFF)
-                                    : const Color(0xFFE2E8F0),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
@@ -1603,7 +1611,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                   fontWeight: FontWeight.w600,
                                   color: isDark
                                       ? Colors.white70
-                                      : const Color(0xFF334155),
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimaryContainer,
                                 ),
                               ),
                             ),

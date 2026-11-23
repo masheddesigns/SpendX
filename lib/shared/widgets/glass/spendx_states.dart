@@ -268,7 +268,7 @@ class SpendXReviewBanner extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : const Color(0xFFB45309),
+                color: Theme.of(context).colorScheme.onTertiaryContainer,
                 letterSpacing: -0.1,
               ),
             ),
@@ -276,7 +276,7 @@ class SpendXReviewBanner extends StatelessWidget {
           Icon(
             Icons.chevron_right_rounded,
             size: 18,
-            color: isDark ? Colors.white70 : const Color(0xFFB45309),
+            color: Theme.of(context).colorScheme.onTertiaryContainer,
           ),
         ],
       ),

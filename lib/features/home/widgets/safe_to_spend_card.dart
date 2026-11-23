@@ -339,7 +339,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       fontSize: 34,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1.0,
-                      color: isDark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                      color: isDark
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ],
@@ -410,9 +412,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 color: Theme.of(context).colorScheme.errorContainer,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isDark
-                      ? const Color(0x40E05260)
-                      : const Color(0x35F87171),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.error.withValues(alpha: 0.35),
                   width: 0.8,
                 ),
               ),
@@ -430,9 +432,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? Theme.of(context).colorScheme.error
-                          : const Color(0xFFBE123C),
+                      color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
                   ),
                 ],
@@ -799,7 +799,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isOverdue
-              ? (isDark ? const Color(0x60E11D48) : const Color(0x50FCA5A5))
+              ? Theme.of(context).colorScheme.error.withValues(alpha: 0.32)
               : (isDark
                     ? Colors.white.withValues(alpha: 0.08)
                     : Theme.of(context).colorScheme.outline),
@@ -843,7 +843,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                        color: isDark
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1474,7 +1476,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     } else if (isSafeToSpend) {
       amountColor = Theme.of(context).colorScheme.secondary;
     } else {
-      amountColor = isDark ? Colors.white : const Color(0xFF0F172A);
+      amountColor = Theme.of(context).colorScheme.onSurface;
     }
 
     return Padding(
@@ -1642,8 +1644,7 @@ class _OrganicPathPainter extends CustomPainter {
       ..lineTo(p1.dx - diamondRadius, p1.dy)
       ..close();
 
-    final diamondHaloColor =
-        colorScheme.tertiary.withValues(alpha: 0.20);
+    final diamondHaloColor = colorScheme.tertiary.withValues(alpha: 0.20);
     final diamondStrokeColor = colorScheme.tertiary;
 
     final diamondHalo = Paint()

@@ -104,7 +104,7 @@ class ManageCompanyScreen extends ConsumerWidget {
                       radius: 20,
                       backgroundColor: isSelected
                           ? Colors.blueAccent.withValues(alpha: 0.15)
-                          : const Color(0xFF2A2A2A),
+                          : Theme.of(context).colorScheme.surfaceContainer,
                       child: Icon(
                         Icons.apartment_rounded,
                         color: isSelected

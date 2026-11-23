@@ -111,9 +111,9 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                           'A new version with performance improvements and features is ready.',
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: isDark
-                                ? const Color(0xFFD1D5DB)
-                                : Theme.of(context).colorScheme.primary,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                             height: 1.3,
                           ),
                         ),
@@ -197,9 +197,9 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                               'Auto-capture UPI, debit/credit transactions & bank balances in real-time as alerts arrive.',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: isDark
-                                    ? const Color(0xFFD1D5DB)
-                                    : const Color(0xFF78350F),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
                                 height: 1.3,
                               ),
                             ),
@@ -213,7 +213,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                           Icons.close_rounded,
                           size: 16,
                           color: isDark
-                              ? const Color(0xFF9CA3AF)
+                              ? Theme.of(context).colorScheme.onSurfaceVariant
                               : Theme.of(
                                   context,
                                 ).colorScheme.onTertiaryContainer,
@@ -280,7 +280,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
         alertIcon = Icons.warning_amber_rounded;
         break;
       case AlertSeverity.normal:
-        alertColor = const Color(0xFF3B82F6);
+        alertColor = Theme.of(context).colorScheme.primary;
         alertIcon = Icons.info_outline_rounded;
         break;
     }
@@ -288,7 +288,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2330) : Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: alertColor.withValues(alpha: isDark ? 0.35 : 0.35),

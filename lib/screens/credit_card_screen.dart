@@ -537,29 +537,32 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             const SizedBox(height: 12),
             GestureDetector(
               onTap: () => _navigateToEditCard(card),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 14,
-                    color: Theme.of(context).colorScheme.tertiary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Set your credit limit to track usage',
-                    style: TextStyle(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 14,
                       color: Theme.of(context).colorScheme.tertiary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
                     ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 16,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      'Set your credit limit to track usage',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.tertiary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -711,14 +714,16 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                         ),
                         GestureDetector(
                           onTap: () => _navigateToPayments(card),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text(
-                              'Pay Bill \u2192',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: cs.primary,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            child: Center(
+                              child: Text(
+                                'Pay Bill \u2192',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: cs.primary,
+                                ),
                               ),
                             ),
                           ),

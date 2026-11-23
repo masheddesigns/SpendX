@@ -259,7 +259,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                       BoxShadow(
                         color: isDark
                             ? Colors.black.withValues(alpha: 0.3)
-                            : const Color(0x0C1C1917),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.shadow.withValues(alpha: 0.047),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -276,7 +278,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isDark
-                                  ? const Color(0x254F46E5)
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer
                                   : Theme.of(
                                       context,
                                     ).colorScheme.primaryContainer,
@@ -366,9 +370,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                           letterSpacing: -0.8,
                           color: isOverdrawn
                               ? Theme.of(context).colorScheme.error
-                              : (isDark
-                                    ? const Color(0xFFF8FAFC)
-                                    : const Color(0xFF0F172A)),
+                              : Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -384,9 +386,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                               ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
-                                color: isDark
-                                    ? const Color(0xFF151926)
-                                    : const Color(0xFFF4F0E8),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainer,
                               ),
                               child: Row(
                                 children: [
@@ -441,9 +443,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                               ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
-                                color: isDark
-                                    ? const Color(0xFF151926)
-                                    : const Color(0xFFF4F0E8),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainer,
                               ),
                               child: Row(
                                 children: [
@@ -698,13 +700,11 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
     required bool isDark,
     Color? activeColor,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final effectiveActiveBg = activeColor != null
         ? activeColor.withValues(alpha: isDark ? 0.28 : 0.16)
-        : (isDark
-              ? Theme.of(context).colorScheme.primary
-              : const Color(0xFF1C1917));
-    final effectiveActiveText =
-        activeColor ?? (isDark ? Colors.white : Colors.white);
+        : cs.primary;
+    final effectiveActiveText = activeColor ?? cs.onPrimary;
 
     return GestureDetector(
       onTap: onTap,
@@ -722,7 +722,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                 ? (activeColor ??
                       (isDark
                           ? Colors.white.withValues(alpha: 0.3)
-                          : const Color(0xFF1C1917)))
+                          : cs.primary))
                 : (isDark
                       ? Colors.white.withValues(alpha: 0.08)
                       : Theme.of(context).colorScheme.outline),
@@ -776,7 +776,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                 BoxShadow(
                   color: isDark
                       ? Colors.black.withValues(alpha: 0.25)
-                      : const Color(0x081C1917),
+                      : Theme.of(
+                          context,
+                        ).colorScheme.shadow.withValues(alpha: 0.03),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
@@ -928,7 +930,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                                   ? BorderSide(
                                       color: isDark
                                           ? Colors.white.withValues(alpha: 0.05)
-                                          : const Color(0xFFF0ECE4),
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.outline,
                                       width: 0.8,
                                     )
                                   : BorderSide.none,
@@ -948,9 +952,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                                         ).colorScheme.secondary.withValues(
                                           alpha: isDark ? 0.20 : 0.12,
                                         )
-                                      : (isDark
-                                            ? const Color(0xFF1E2230)
-                                            : const Color(0xFFF1EDE6)),
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
                                 ),
                                 child: Icon(
                                   iconData,
@@ -1078,7 +1082,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                         thickness: 0.5,
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.05)
-                            : const Color(0xFFF0ECE4),
+                            : Theme.of(context).colorScheme.outline,
                       ),
                     ),
                   ],

@@ -401,12 +401,12 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? color.withValues(alpha: isDark ? 0.25 : 0.18)
-                                  : (isDark ? const Color(0x14FFFFFF) : const Color(0x40FFFFFF)),
+                                  : Theme.of(context).colorScheme.surfaceContainer,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected
                                     ? color
-                                    : (isDark ? const Color(0x24FFFFFF) : const Color(0x18000000)),
+                                    : Theme.of(context).colorScheme.outline,
                                 width: isSelected ? 1.25 : 0.75,
                               ),
                             ),

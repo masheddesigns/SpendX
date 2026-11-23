@@ -276,7 +276,9 @@ class PlanTab extends ConsumerWidget {
                         BoxShadow(
                           color: isDark
                               ? Colors.black.withValues(alpha: 0.25)
-                              : const Color(0x081C1917),
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.shadow.withValues(alpha: 0.03),
                           blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),
@@ -305,7 +307,7 @@ class PlanTab extends ConsumerWidget {
                             thickness: 0.5,
                             color: isDark
                                 ? Colors.white.withValues(alpha: 0.06)
-                                : const Color(0xFFF0ECE4),
+                                : Theme.of(context).colorScheme.outline,
                           ),
                         ),
                         _FoundationsRowTile(
@@ -423,21 +425,15 @@ class _FinancialHorizonCard extends StatelessWidget {
   void _showHabitScoreExplanation(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark
-          ? const Color(0xFF1E222D)
-          : const Color(0xFFFFFFFF),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         final textPrimary = Theme.of(context).colorScheme.onSurface;
         final textSecondary = Theme.of(context).colorScheme.onSurfaceVariant;
-        final surface = isDark
-            ? const Color(0xFF282D3C)
-            : const Color(0xFFFAF7F2);
-        final border = isDark
-            ? Colors.white.withValues(alpha: 0.08)
-            : const Color(0xFFEDE6DA);
+        final surface = Theme.of(context).colorScheme.surfaceContainer;
+        final border = Theme.of(context).colorScheme.outline;
 
         return SafeArea(
           child: Padding(
@@ -451,7 +447,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : const Color(0xFFE2DDD2),
+                      color: Theme.of(context).colorScheme.outlineVariant,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -464,9 +460,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                       height: 36,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isDark
-                            ? const Color(0x204F46E5)
-                            : Theme.of(context).colorScheme.primaryContainer,
+                        color: Theme.of(context).colorScheme.primaryContainer,
                       ),
                       child: Icon(
                         Icons.track_changes_rounded,
@@ -590,7 +584,7 @@ class _FinancialHorizonCard extends StatelessWidget {
           BoxShadow(
             color: isDark
                 ? Colors.black.withValues(alpha: 0.25)
-                : const Color(0x081C1917),
+                : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.03),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -736,12 +730,12 @@ class _FinancialHorizonCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.03)
-                    : const Color(0xFFFAF7F2),
+                    : Theme.of(context).colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.05)
-                      : const Color(0xFFEDE6DA),
+                      : Theme.of(context).colorScheme.outline,
                   width: 0.7,
                 ),
               ),
@@ -758,7 +752,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                     height: 24,
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.08)
-                        : const Color(0xFFE2DDD2),
+                        : Theme.of(context).colorScheme.outline,
                   ),
                   _ForecastMetric(
                     label: 'EST. OUTFLOW',
@@ -771,7 +765,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                     height: 24,
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.08)
-                        : const Color(0xFFE2DDD2),
+                        : Theme.of(context).colorScheme.outline,
                   ),
                   _ForecastMetric(
                     label: forecast!.predictedSavings >= 0
@@ -800,14 +794,12 @@ class _FinancialHorizonCard extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0x184F46E5)
-                      : Theme.of(context).colorScheme.primaryContainer,
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isDark
-                        ? const Color(0x354F46E5)
-                        : Theme.of(context).colorScheme.primary,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.2),
                     width: 0.6,
                   ),
                 ),
@@ -829,11 +821,9 @@ class _FinancialHorizonCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? const Color(0xFFE0E7FF)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.onPrimaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimaryContainer,
                         ),
                       ),
                     ),
@@ -983,7 +973,7 @@ class _BudgetHorizonsList extends StatelessWidget {
           BoxShadow(
             color: isDark
                 ? Colors.black.withValues(alpha: 0.25)
-                : const Color(0x081C1917),
+                : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.03),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -1004,7 +994,7 @@ class _BudgetHorizonsList extends StatelessWidget {
                     thickness: 0.5,
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.06)
-                        : const Color(0xFFF0ECE4),
+                        : Theme.of(context).colorScheme.outline,
                   ),
                 ),
             ],
@@ -1171,20 +1161,24 @@ class _EmptyBudgetCard extends StatelessWidget {
               context,
               AppPageRoute(builder: (_) => const BudgetManagementScreen()),
             ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Theme.of(context).colorScheme.primary
-                    : const Color(0xFF1C1917),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Text(
-                '+ Set Budget Horizon',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Text(
+                  '+ Set Budget Horizon',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -1223,7 +1217,7 @@ class _GoalsLandmarkList extends ConsumerWidget {
           BoxShadow(
             color: isDark
                 ? Colors.black.withValues(alpha: 0.25)
-                : const Color(0x081C1917),
+                : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.03),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -1254,7 +1248,7 @@ class _GoalsLandmarkList extends ConsumerWidget {
                     thickness: 0.5,
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.06)
-                        : const Color(0xFFF0ECE4),
+                        : Theme.of(context).colorScheme.outline,
                   ),
                 ),
             ],
@@ -1435,18 +1429,24 @@ class _EmptyGoalsCard extends StatelessWidget {
               context,
               AppPageRoute(builder: (_) => const AddGoalScreen()),
             ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Text(
-                '+ Set First Milestone',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Text(
+                  '+ Set First Milestone',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -1494,7 +1494,7 @@ class _MilestoneTrack extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.08)
-                      : const Color(0xFFEBE5D8),
+                      : Theme.of(context).colorScheme.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

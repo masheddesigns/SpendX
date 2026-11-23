@@ -69,9 +69,9 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                                 ? AppTheme.primaryBlue.withValues(
                                     alpha: isDark ? 0.3 : 0.15,
                                   )
-                                : (isDark
-                                      ? const Color(0x18FFFFFF)
-                                      : const Color(0x0A000000)),
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainer,
                           ),
                           alignment: Alignment.center,
                           child: Text(
@@ -79,7 +79,7 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                             style: TextStyle(
                               color: isSelected
                                   ? AppTheme.primaryBlue
-                                  : (isDark ? Colors.white : Colors.black),
+                                  : Theme.of(context).colorScheme.onSurface,
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
                             ),

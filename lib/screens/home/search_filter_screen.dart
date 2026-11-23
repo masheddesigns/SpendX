@@ -159,9 +159,7 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                     decoration: InputDecoration(
                       hintText: 'Search notes, tags, descriptions...',
                       hintStyle: TextStyle(
-                        color: isDark
-                            ? const Color(0x7094A3B8)
-                            : const Color(0x8064748B),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 14,
                       ),
                       prefixIcon: const Icon(
@@ -186,9 +184,7 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                             )
                           : null,
                       filled: true,
-                      fillColor: isDark
-                          ? const Color(0x1AFFFFFF)
-                          : const Color(0x66FFFFFF),
+                      fillColor: Theme.of(context).colorScheme.surfaceContainer,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 12,
@@ -196,18 +192,14 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
-                          color: isDark
-                              ? const Color(0x28FFFFFF)
-                              : const Color(0x18000000),
+                          color: Theme.of(context).colorScheme.outline,
                           width: 0.75,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
-                          color: isDark
-                              ? const Color(0x28FFFFFF)
-                              : const Color(0x18000000),
+                          color: Theme.of(context).colorScheme.outline,
                           width: 0.75,
                         ),
                       ),
@@ -315,18 +307,16 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                                   ? AppTheme.primaryBlue.withValues(
                                       alpha: isDark ? 0.20 : 0.15,
                                     )
-                                  : (isDark
-                                        ? const Color(0x14FFFFFF)
-                                        : const Color(0x40FFFFFF)),
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainer,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: (_startDate != null)
                                     ? AppTheme.primaryBlue.withValues(
                                         alpha: isDark ? 0.60 : 0.45,
                                       )
-                                    : (isDark
-                                          ? const Color(0x24FFFFFF)
-                                          : const Color(0x18000000)),
+                                    : Theme.of(context).colorScheme.outline,
                                 width: 0.75,
                               ),
                             ),
@@ -351,7 +341,9 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w600,
                                     color: (_startDate != null)
-                                        ? (Theme.of(context).colorScheme.onSurface)
+                                        ? (Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface)
                                         : (Theme.of(
                                             context,
                                           ).colorScheme.onSurfaceVariant),

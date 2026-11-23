@@ -200,9 +200,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF090D16)
-          : const Color(0xFFF8FAFC),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -378,9 +376,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? const Color(0xFFBAE6FD)
-                              : Theme.of(context).colorScheme.primary,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ],
@@ -412,9 +408,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? Theme.of(context).colorScheme.error
-                              : const Color(0xFFB91C1C),
+                          color: Theme.of(context).colorScheme.error,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -424,9 +418,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                         style: TextStyle(
                           fontSize: 12,
                           height: 1.35,
-                          color: isDark
-                              ? Colors.white70
-                              : const Color(0xFF475569),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -449,14 +441,12 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1E293B).withValues(alpha: 0.60)
-                      : Colors.white,
+                  color: theme.colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF334155).withValues(alpha: 0.5)
-                        : const Color(0xFFE2E8F0),
+                    color: theme.colorScheme.outline.withValues(
+                      alpha: isDark ? 0.5 : 1,
+                    ),
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -565,7 +555,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
         color: Colors.transparent,
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.grey.withValues(alpha: 0.4),
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
           width: 1.5,
         ),
       ),
@@ -578,7 +568,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: Theme.of(context).colorScheme.inverseSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(color: color.withValues(alpha: 0.5)),
@@ -738,7 +728,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                         colors: [
                           Theme.of(context).colorScheme.primary,
                           Theme.of(context).colorScheme.primary,
-                          Color(0xFF312E81),
+                          Theme.of(context).colorScheme.primaryContainer,
                         ],
                       ),
                       boxShadow: [

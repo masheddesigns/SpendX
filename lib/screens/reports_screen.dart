@@ -262,38 +262,35 @@ class _PillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final activeBg = isDark
-        ? cs.primary.withValues(alpha: 0.20)
-        : cs.primary.withValues(alpha: 0.12);
-    final inactiveBg = isDark
-        ? Colors.white.withValues(alpha: 0.05)
-        : Colors.black.withValues(alpha: 0.04);
+    final activeBg = cs.primaryContainer;
+    final inactiveBg = cs.surfaceContainer;
 
-    final activeText = isDark ? cs.primary : const Color(0xFF0F766E);
+    final activeText = cs.onPrimaryContainer;
     final inactiveText = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? activeBg : inactiveBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? cs.primary.withValues(alpha: 0.35)
-                : (isDark ? Colors.white10 : Colors.black12),
-            width: 1,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? activeBg : inactiveBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? cs.primary : cs.outline,
+              width: 1,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? activeText : inactiveText,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? activeText : inactiveText,
+            ),
           ),
         ),
       ),

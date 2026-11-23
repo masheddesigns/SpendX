@@ -165,9 +165,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.03)
-                            : const Color(0xFFF6F2EA),
+                        color: Theme.of(context).colorScheme.surfaceContainer,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -184,7 +182,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                                   strokeWidth: 4,
                                   backgroundColor: isDark
                                       ? Colors.white.withValues(alpha: 0.08)
-                                      : const Color(0xFFE2DDD2),
+                                      : Theme.of(context).colorScheme.outline,
                                   valueColor: AlwaysStoppedAnimation<Color>(
                                     isCompleted
                                         ? Theme.of(
@@ -247,8 +245,12 @@ class DashboardGoalsCard extends ConsumerWidget {
                             ),
                             decoration: BoxDecoration(
                               color: isCompleted
-                                  ? const Color(0x2016A34A)
-                                  : const Color(0x184F46E5),
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.secondaryContainer
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer,
                               borderRadius: BorderRadius.circular(
                                 AppRadius.full,
                               ),

@@ -45,27 +45,24 @@ class _PrimaryButtonState extends State<PrimaryButton> {
     final cs = Theme.of(context).colorScheme;
     final isDisabled = widget.onPressed == null || widget.isLoading;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final foregroundColor = widget.tone == PrimaryButtonTone.primary
         ? cs.onPrimary
-        : (widget.tone == PrimaryButtonTone.outline
-              ? (isDark ? Theme.of(context).colorScheme.primary : cs.primary)
-              : (Theme.of(context).colorScheme.onSurface));
+        : cs.onSurface;
 
-    final backgroundColor = widget.backgroundColor ??
+    final backgroundColor =
+        widget.backgroundColor ??
         widget.color ??
         (widget.tone == PrimaryButtonTone.primary
-        ? cs.primary
-        : (widget.tone == PrimaryButtonTone.outline
-              ? Colors.transparent
-              : (isDark ? const Color(0x1FFFFFFF) : const Color(0x40FFFFFF))));
+            ? cs.primary
+            : (widget.tone == PrimaryButtonTone.outline
+                  ? Colors.transparent
+                  : cs.surfaceContainer));
 
     final border = widget.tone == PrimaryButtonTone.outline
-        ? BorderSide(color: isDark ? Theme.of(context).colorScheme.primary : cs.primary, width: 1.25)
+        ? BorderSide(color: cs.primary, width: 1.25)
         : (widget.tone == PrimaryButtonTone.secondary
-            ? BorderSide(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x1F000000), width: 0.75)
-            : BorderSide.none);
+              ? BorderSide(color: cs.outline, width: 0.75)
+              : BorderSide.none);
 
     final button = GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
@@ -99,15 +96,17 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                       : const SizedBox.shrink()),
             label: Text(
               widget.label,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontSize: widget.fontSize ?? 15,
-                fontWeight: FontWeight.w600,
-                color: foregroundColor,
-              ) ?? TextStyle(
-                fontSize: widget.fontSize ?? 15,
-                fontWeight: FontWeight.w600,
-                color: foregroundColor,
-              ),
+              style:
+                  Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontSize: widget.fontSize ?? 15,
+                    fontWeight: FontWeight.w600,
+                    color: foregroundColor,
+                  ) ??
+                  TextStyle(
+                    fontSize: widget.fontSize ?? 15,
+                    fontWeight: FontWeight.w600,
+                    color: foregroundColor,
+                  ),
             ),
             style: ElevatedButton.styleFrom(
               elevation: 0,
@@ -116,9 +115,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
               disabledBackgroundColor: backgroundColor.withValues(alpha: 0.5),
               disabledForegroundColor: foregroundColor.withValues(alpha: 0.7),
               side: border,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16.0),
               ),
@@ -164,6 +161,7 @@ class SecondaryButton extends StatelessWidget {
 class IconButtonClean extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
+  final String semanticLabel;
   final Color? color;
   final double size;
 
@@ -171,6 +169,7 @@ class IconButtonClean extends StatelessWidget {
     super.key,
     required this.icon,
     required this.onTap,
+    required this.semanticLabel,
     this.color,
     this.size = 24,
   });
@@ -178,15 +177,24 @@ class IconButtonClean extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () {
-        HapticService.instance.tap();
-        onTap();
-      },
-      borderRadius: BorderRadius.circular(24.0),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Icon(icon, color: color ?? cs.primary, size: size),
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Tooltip(
+        message: semanticLabel,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: InkWell(
+            onTap: () {
+              HapticService.instance.tap();
+              onTap();
+            },
+            borderRadius: BorderRadius.circular(24.0),
+            child: Center(
+              child: Icon(icon, color: color ?? cs.primary, size: size),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -41,6 +41,7 @@ class DatabaseKeyManager {
     aOptions: AndroidOptions(
       resetOnError: false,
       migrateOnAlgorithmChange: false,
+      migrateWithBackup: true,
     ),
   );
   String? _inMemoryTestKey;

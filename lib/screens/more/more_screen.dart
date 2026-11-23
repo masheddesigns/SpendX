@@ -148,7 +148,7 @@ class MoreScreen extends ConsumerWidget {
                 children: [
                   _MoreGlassRow(
                     icon: Icons.bar_chart_rounded,
-                    iconColor: const Color(0xFF0D9488),
+                    iconColor: Theme.of(context).colorScheme.secondary,
                     title: 'Reports & Cash Flow',
                     subtitle:
                         'Income vs expense breakdown, monthly cash flow analysis',
@@ -210,7 +210,7 @@ class MoreScreen extends ConsumerWidget {
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.cloud_sync_rounded,
-                    iconColor: const Color(0xFF3B82F6),
+                    iconColor: Theme.of(context).colorScheme.primary,
                     title: 'Backup & Cloud Sync',
                     subtitle: 'Encrypted Google Drive and local JSON backups',
                     isDark: isDark,

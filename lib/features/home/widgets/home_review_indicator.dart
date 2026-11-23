@@ -38,12 +38,12 @@ class HomeReviewIndicator extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0x33F59E0B), const Color(0x1AF59E0B)]
-                    : [
-                        Theme.of(context).colorScheme.tertiaryContainer,
-                        const Color(0xFFFFFBEB),
-                      ],
+                colors: [
+                  Theme.of(context).colorScheme.tertiaryContainer,
+                  Theme.of(
+                    context,
+                  ).colorScheme.tertiaryContainer.withValues(alpha: 0.72),
+                ],
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(

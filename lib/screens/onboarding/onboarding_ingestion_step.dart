@@ -66,7 +66,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              _statusPill(_notificationListenerEnabled, isDark),
+                              _statusPill(_notificationListenerEnabled),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -169,7 +169,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                             .withValues(alpha: isDark ? 0.20 : 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child:  Icon(
+                      child: Icon(
                         Icons.sms_rounded,
                         color: Theme.of(context).colorScheme.secondary,
                         size: 20,
@@ -193,7 +193,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              _statusPill(_smsPermissionGranted, isDark),
+                              _statusPill(_smsPermissionGranted),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -218,7 +218,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                       await Permission.sms.request();
                       await _checkPermissions();
                     },
-                    child:  Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
@@ -295,7 +295,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                             .withValues(alpha: isDark ? 0.20 : 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child:  Icon(
+                      child: Icon(
                         Icons.alarm_rounded,
                         color: Theme.of(context).colorScheme.tertiary,
                         size: 20,
@@ -319,7 +319,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              _statusPill(_systemNotificationsEnabled, isDark),
+                              _statusPill(_systemNotificationsEnabled),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -344,7 +344,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                       await NotificationServiceV2().requestPermissions();
                       await _checkPermissions();
                     },
-                    child:  Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
@@ -422,7 +422,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                         ).withValues(alpha: isDark ? 0.20 : 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child:  Icon(
+                      child: Icon(
                         Icons.battery_charging_full_rounded,
                         color: Theme.of(context).colorScheme.primary,
                         size: 20,
@@ -446,7 +446,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              _statusPill(_batteryOptimizationIgnored, isDark),
+                              _statusPill(_batteryOptimizationIgnored),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -471,7 +471,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                       await Permission.ignoreBatteryOptimizations.request();
                       await _checkPermissions();
                     },
-                    child:  Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
@@ -531,13 +531,13 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
     );
   }
 
-  Widget _statusPill(bool isEnabled, bool isDark) {
+  Widget _statusPill(bool isEnabled) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: isEnabled
-            ? const Color(0x1F10B981)
-            : (isDark ? const Color(0x22FFFFFF) : const Color(0x18000000)),
+            ? Theme.of(context).colorScheme.secondaryContainer
+            : context.onSurfaceOverlay(lightOpacity: 0.094, darkOpacity: 0.133),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

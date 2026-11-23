@@ -1461,7 +1461,9 @@ class _ActionPillButton extends StatelessWidget {
                     BoxShadow(
                       color: isDark
                           ? Colors.black.withValues(alpha: 0.15)
-                          : const Color(0x061C1917),
+                          : Theme.of(
+                              context,
+                            ).colorScheme.shadow.withValues(alpha: 0.024),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -2115,17 +2117,22 @@ class _CreditCardInstrument extends StatelessWidget {
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: onTap,
-                    child: Text(
-                      card.limitAmount > 0
-                          ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
-                          : 'No limit set',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: utilizationColor,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: Center(
+                        child: Text(
+                          card.limitAmount > 0
+                              ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
+                              : 'No limit set',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: utilizationColor,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -2135,31 +2142,38 @@ class _CreditCardInstrument extends StatelessWidget {
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: onTap,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '◇',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(context).colorScheme.tertiary,
-                                fontWeight: FontWeight.bold,
-                              ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '◇',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.tertiary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  dueText,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              dueText,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                       if (onPayTap != null && card.usedAmount > 0) ...[

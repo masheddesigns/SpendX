@@ -593,7 +593,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0x1AFFFFFF) : const Color(0x40FFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: context.onSurfaceOverlay(
@@ -785,7 +785,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0x18FFFFFF) : const Color(0x10000000),
+          color: context.onSurfaceOverlay(
+            lightOpacity: 0.063,
+            darkOpacity: 0.094,
+          ),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: context.onSurfaceOverlay(
@@ -1049,34 +1052,37 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           return InkWell(
                             borderRadius: BorderRadius.circular(16),
                             onTap: () => _applyQuickAmount(amount),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surface
-                                    .withValues(alpha: isDark ? 0.12 : 0.25),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: context.onSurfaceOverlay(
-                                    lightOpacity: 0.09,
-                                    darkOpacity: 0.16,
-                                  ),
-                                  width: 0.75,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 48),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
                                 ),
-                              ),
-                              child: Text(
-                                '${settings.currencySymbol}${_formatQuickAmount(amount)}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surface
+                                      .withValues(alpha: isDark ? 0.12 : 0.25),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: context.onSurfaceOverlay(
+                                      lightOpacity: 0.09,
+                                      darkOpacity: 0.16,
+                                    ),
+                                    width: 0.75,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${settings.currencySymbol}${_formatQuickAmount(amount)}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1134,32 +1140,38 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                       });
                                     }
                                   },
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 48,
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.add_circle_outline_rounded,
-                                          size: 16,
-                                          color:
-                                              modern_theme.AppTheme.primaryBlue,
-                                        ),
-                                        SizedBox(width: 4),
-                                        Text(
-                                          'Add New',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 4,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.add_circle_outline_rounded,
+                                            size: 16,
                                             color: modern_theme
                                                 .AppTheme
                                                 .primaryBlue,
                                           ),
-                                        ),
-                                      ],
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Add New',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: modern_theme
+                                                  .AppTheme
+                                                  .primaryBlue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1210,9 +1222,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? const Color(0x14FFFFFF)
-                                    : const Color(0x33000000),
+                                color: context.onSurfaceOverlay(
+                                  lightOpacity: 0.2,
+                                  darkOpacity: 0.078,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(

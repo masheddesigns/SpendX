@@ -244,7 +244,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
               ),
               SettingsTile(
                 icon: Icons.table_chart_outlined,
-                color: const Color(0xFF0EA5E9),
+                color: Theme.of(context).colorScheme.primary,
                 title: 'Export Transactions CSV',
                 subtitle: 'Share transactions as a spreadsheet',
                 onTap: () {

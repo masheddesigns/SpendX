@@ -396,7 +396,7 @@ class _AutomaticIngestionScreenState
                 children: [
                   Row(
                     children: [
-                       Icon(
+                      Icon(
                         Icons.shield_outlined,
                         size: 18,
                         color: Theme.of(context).colorScheme.primary,
@@ -407,9 +407,7 @@ class _AutomaticIngestionScreenState
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF1E293B),
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ],
@@ -559,7 +557,7 @@ class _AutomaticIngestionScreenState
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -567,9 +565,7 @@ class _AutomaticIngestionScreenState
                       status.statusSubtitle,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? const Color(0xFFCBD5E1)
-                            : const Color(0xFF475569),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],

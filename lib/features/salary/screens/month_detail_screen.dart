@@ -149,7 +149,7 @@ class MonthDetailScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: _statusBg(m.status),
+              color: _statusBg(context, m.status),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15)),
             ),
@@ -351,13 +351,16 @@ class MonthDetailScreen extends ConsumerWidget {
     );
   }
 
-  Color _statusBg(SalaryStatus s) => switch (s) {
-        SalaryStatus.paid => Colors.green.shade900.withValues(alpha: 0.25),
-        SalaryStatus.partial => Colors.orange.shade900.withValues(alpha: 0.25),
-        SalaryStatus.pending => const Color(0xFF1C1C1E),
-        SalaryStatus.onHold => Colors.amber.shade900.withValues(alpha: 0.2),
-        SalaryStatus.overdue => Colors.red.shade900.withValues(alpha: 0.25),
-      };
+  Color _statusBg(BuildContext context, SalaryStatus s) {
+    final cs = Theme.of(context).colorScheme;
+    return switch (s) {
+      SalaryStatus.paid => cs.secondaryContainer,
+      SalaryStatus.partial => cs.tertiaryContainer,
+      SalaryStatus.pending => cs.surfaceContainer,
+      SalaryStatus.onHold => cs.tertiaryContainer,
+      SalaryStatus.overdue => cs.errorContainer,
+    };
+  }
 
   Color _statusColor(SalaryStatus s) => switch (s) {
         SalaryStatus.paid => Colors.greenAccent,
@@ -746,7 +749,7 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
                                 style: TextStyle(
                                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 14)),
-                            dropdownColor: const Color(0xFF2A2A2A),
+                            dropdownColor: Theme.of(context).colorScheme.surfaceContainer,
                             style: TextStyle(
                                 color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
                             items: [

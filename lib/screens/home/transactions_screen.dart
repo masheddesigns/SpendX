@@ -226,14 +226,14 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                                   vertical: 4.5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF1E2230)
-                                      : const Color(0xFFF0ECE4),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainer,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isDark
                                         ? Colors.white.withValues(alpha: 0.06)
-                                        : const Color(0xFFE4DDD0),
+                                        : Theme.of(context).colorScheme.outline,
                                     width: 0.8,
                                   ),
                                 ),
@@ -257,9 +257,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                                         fontSize: 11.5,
                                         fontWeight: FontWeight.w600,
                                         letterSpacing: 0.2,
-                                        color: isDark
-                                            ? const Color(0xFFE2E8F0)
-                                            : const Color(0xFF44403C),
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                   ],
@@ -273,14 +273,15 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                                     vertical: 4.5,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: isDark
-                                        ? const Color(0x1E16A34A)
-                                        : const Color(0xFFDCFCE7),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondaryContainer,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: isDark
-                                          ? const Color(0x3516A34A)
-                                          : const Color(0xFFBBF7D0),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .secondary
+                                          .withValues(alpha: 0.35),
                                       width: 0.8,
                                     ),
                                   ),
@@ -290,11 +291,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                                       fontSize: 11.5,
                                       fontWeight: FontWeight.w600,
                                       letterSpacing: 0.2,
-                                      color: isDark
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.secondary
-                                          : const Color(0xFF15803D),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSecondaryContainer,
                                     ),
                                   ),
                                 ),
@@ -339,7 +338,8 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                             BoxShadow(
                               color: isDark
                                   ? Colors.black.withValues(alpha: 0.18)
-                                  : const Color(0x061C1917),
+                                  : Theme.of(context).colorScheme.shadow
+                                        .withValues(alpha: 0.024),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -520,14 +520,12 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0x1F6366F1)
-                            : Theme.of(context).colorScheme.primaryContainer,
+                        color: Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: isDark
-                              ? const Color(0x35818CF8)
-                              : Theme.of(context).colorScheme.primary,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.35),
                           width: 0.8,
                         ),
                       ),
@@ -537,9 +535,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isDark
-                                  ? const Color(0x306366F1)
-                                  : const Color(0xFFE0E7FF),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
                             ),
                             child: Icon(
                               Icons.sync_alt_rounded,
@@ -558,9 +556,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                                   style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark
-                                        ? const Color(0xFFE0E7FF)
-                                        : const Color(0xFF312E81),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer,
                                   ),
                                 ),
                                 const SizedBox(height: 1),
@@ -659,23 +657,24 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                           const SizedBox(height: 18),
                           GestureDetector(
                             onTap: _onAddTransaction,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Theme.of(context).colorScheme.primary
-                                    : const Color(0xFF1C1917),
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: const Text(
-                                '+ Log activity',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 48),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                child: const Text(
+                                  '+ Log activity',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
@@ -754,11 +753,11 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
     required bool isDark,
     Color? activeColor,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final effectiveActiveBg = activeColor != null
         ? activeColor.withValues(alpha: isDark ? 0.25 : 0.15)
-        : (isDark ? const Color(0xFF334155) : const Color(0xFF1C1917));
-    final effectiveActiveText =
-        activeColor ?? (isDark ? Colors.white : Colors.white);
+        : cs.primary;
+    final effectiveActiveText = activeColor ?? cs.onPrimary;
 
     return Semantics(
       button: true,
@@ -786,7 +785,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                       ? (activeColor ??
                             (isDark
                                 ? Colors.white.withValues(alpha: 0.3)
-                                : const Color(0xFF1C1917)))
+                                : cs.primary))
                       : (isDark
                             ? Colors.white.withValues(alpha: 0.08)
                             : Theme.of(context).colorScheme.outline),
@@ -817,11 +816,11 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
     required bool isDark,
     Color? activeColor,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final effectiveActiveBg = activeColor != null
         ? activeColor.withValues(alpha: isDark ? 0.28 : 0.16)
-        : (isDark ? const Color(0xFF334155) : const Color(0xFF0F172A));
-    final effectiveActiveText =
-        activeColor ?? (isDark ? Colors.white : Colors.white);
+        : cs.primary;
+    final effectiveActiveText = activeColor ?? cs.onPrimary;
 
     return Semantics(
       button: true,
@@ -839,19 +838,20 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
               decoration: BoxDecoration(
                 color: isSelected
                     ? effectiveActiveBg
-                    : (isDark
-                          ? const Color(0x1AFFFFFF)
-                          : const Color(0x0A000000)),
+                    : context.onSurfaceOverlay(
+                        lightOpacity: 0.04,
+                        darkOpacity: 0.10,
+                      ),
                 borderRadius: BorderRadius.circular(100),
                 border: Border.all(
                   color: isSelected
                       ? (activeColor ??
                             (isDark
                                 ? Colors.white.withValues(alpha: 0.3)
-                                : const Color(0xFF0F172A)))
+                                : cs.primary))
                       : (isDark
                             ? Colors.white.withValues(alpha: 0.08)
-                            : const Color(0xFFE2E8F0)),
+                            : cs.outline),
                   width: isSelected ? 1.0 : 0.6,
                 ),
               ),
@@ -904,7 +904,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                 BoxShadow(
                   color: isDark
                       ? Colors.black.withValues(alpha: 0.25)
-                      : const Color(0x081C1917),
+                      : Theme.of(
+                          context,
+                        ).colorScheme.shadow.withValues(alpha: 0.03),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
@@ -1032,7 +1034,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                         thickness: 0.5,
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.05)
-                            : const Color(0xFFF0ECE4),
+                            : Theme.of(context).colorScheme.outline,
                       ),
                     ),
                   ],

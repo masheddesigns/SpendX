@@ -269,7 +269,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                       BoxShadow(
                         color: isDark
                             ? Colors.black.withValues(alpha: 0.25)
-                            : const Color(0x081C1917),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.shadow.withValues(alpha: 0.03),
                         blurRadius: 14,
                         offset: const Offset(0, 4),
                       ),

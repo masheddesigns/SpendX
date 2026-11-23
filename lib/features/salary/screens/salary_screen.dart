@@ -705,20 +705,22 @@ class _FilterChips extends ConsumerWidget {
         label: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.black : Colors.grey.shade300,
+            color: selected
+                ? Theme.of(context).colorScheme.onPrimary
+                : Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 12,
           ),
         ),
         selected: selected,
         onSelected: (_) => onTap(),
-        selectedColor: Colors.blueAccent,
-        backgroundColor: const Color(0xFF2A2A2A),
-        checkmarkColor: Colors.black,
+        selectedColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        checkmarkColor: Theme.of(context).colorScheme.onPrimary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(
             color: selected
-                ? Colors.blueAccent
+                ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.outline,
           ),
         ),

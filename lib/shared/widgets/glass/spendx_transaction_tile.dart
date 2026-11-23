@@ -167,13 +167,13 @@ class SpendXTransactionTile extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: isCcPayment
-                              ? (isDark ? const Color(0x2210B981) : Theme.of(context).colorScheme.secondaryContainer)
-                              : (isDark ? const Color(0x226366F1) : Theme.of(context).colorScheme.primaryContainer),
+                              ? Theme.of(context).colorScheme.secondaryContainer
+                              : Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(AppRadius.xs),
                           border: Border.all(
                             color: isCcPayment
-                                ? (isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary)
-                                : (isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary),
+                                ? Theme.of(context).colorScheme.secondary
+                                : Theme.of(context).colorScheme.primary,
                             width: 0.5,
                           ),
                         ),
@@ -269,10 +269,10 @@ class SpendXTransactionTile extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0x1F6366F1) : Theme.of(context).colorScheme.primaryContainer,
+                                  color: Theme.of(context).colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(AppRadius.xs),
                                   border: Border.all(
-                                    color: isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(context).colorScheme.primary,
                                     width: 0.5,
                                   ),
                                 ),
@@ -293,7 +293,7 @@ class SpendXTransactionTile extends StatelessWidget {
                               child: Icon(
                                 Icons.arrow_forward_rounded,
                                 size: 10,
-                                color: isDark ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.primary,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                             Flexible(
@@ -301,13 +301,13 @@ class SpendXTransactionTile extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                 decoration: BoxDecoration(
                                   color: isCcPayment
-                                      ? (isDark ? const Color(0x2210B981) : Theme.of(context).colorScheme.secondaryContainer)
-                                      : (isDark ? const Color(0x1F6366F1) : Theme.of(context).colorScheme.primaryContainer),
+                                      ? Theme.of(context).colorScheme.secondaryContainer
+                                      : Theme.of(context).colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(AppRadius.xs),
                                   border: Border.all(
                                     color: isCcPayment
-                                        ? (isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary)
-                                        : (isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary),
+                                        ? Theme.of(context).colorScheme.secondary
+                                        : Theme.of(context).colorScheme.primary,
                                     width: 0.5,
                                   ),
                                 ),
