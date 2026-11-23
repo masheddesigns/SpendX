@@ -23,14 +23,23 @@ class TagManagementScreen extends ConsumerStatefulWidget {
 class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
   Future<void> _showAddTagDialog([Tag? existing]) async {
     final controller = TextEditingController(text: existing?.name ?? '');
+    final formKey = GlobalKey<FormState>();
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(existing == null ? 'New Tag' : 'Edit Tag'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Tag Name'),
+        content: Form(
+          key: formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: TextFormField(
+            controller: controller,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Tag Name'),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Enter a tag name'
+                : null,
+          ),
         ),
         actions: [
           TextButton(
@@ -39,10 +48,8 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              if (!(formKey.currentState?.validate() ?? false)) return;
               final name = controller.text.trim().toLowerCase();
-              if (name.isEmpty) {
-                return;
-              }
 
               final tag = Tag(
                 id: existing?.id ?? const Uuid().v4(),

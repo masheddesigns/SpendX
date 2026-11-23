@@ -76,6 +76,10 @@ class _OnboardingStepIndicator extends StatelessWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen>
     with WidgetsBindingObserver {
+  static const _supportedCurrencies = {
+    'INR', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'AED', 'SGD',
+  };
+
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final int _totalPages = 5;
@@ -159,6 +163,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void _updateState(VoidCallback update) => setState(update);
 
   Future<void> _finishOnboarding() async {
+    if (!_supportedCurrencies.contains(_selectedCurrency)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a supported currency to continue')),
+      );
+      return;
+    }
+
     await SettingsService.instance.setOnboardingComplete(true);
     await SettingsService.instance.setPrimaryCurrency(_selectedCurrency);
 

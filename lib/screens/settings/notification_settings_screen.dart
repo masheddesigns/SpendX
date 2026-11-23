@@ -815,6 +815,7 @@ class _NotificationSettingsScreenState
   void _showWhatsAppContactsSheet() {
     final senders = List<String>.from(SettingsService.instance.whatsappAllowedSenders);
     final textController = TextEditingController();
+    final contactFormKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
       context: context,
@@ -859,24 +860,40 @@ class _NotificationSettingsScreenState
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: textController,
-                      decoration: const InputDecoration(
-                        hintText: 'Add bank name or contact (e.g. HDFC)',
-                        isDense: true,
-                        border: OutlineInputBorder(),
+                    child: Form(
+                      key: contactFormKey,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      child: TextFormField(
+                        controller: textController,
+                        decoration: const InputDecoration(
+                          hintText: 'Add bank name or contact (e.g. HDFC)',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          final contact = (value ?? '').trim();
+                          if (contact.isEmpty) return 'Enter a contact name';
+                          if (senders.any(
+                            (sender) => sender.toLowerCase() == contact.toLowerCase(),
+                          )) {
+                            return 'This contact is already allowed';
+                          }
+                          return null;
+                        },
+                        onChanged: (_) => setSheetState(() {}),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
                     onPressed: () async {
-                      final text = textController.text.trim();
-                      if (text.isNotEmpty && !senders.contains(text)) {
-                        setSheetState(() => senders.add(text));
-                        textController.clear();
-                        await SettingsService.instance.setWhatsAppAllowedSenders(senders);
+                      if (!(contactFormKey.currentState?.validate() ?? false)) {
+                        return;
                       }
+                      final text = textController.text.trim();
+                      setSheetState(() => senders.add(text));
+                      textController.clear();
+                      await SettingsService.instance.setWhatsAppAllowedSenders(senders);
                     },
                     child: const Text('Add'),
                   ),

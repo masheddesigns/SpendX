@@ -25,6 +25,7 @@ class _CategoryManagementScreenState
     extends ConsumerState<CategoryManagementScreen> {
   void _showAddCategoryDialog({Category? existingCategory}) {
     final nameController = TextEditingController(text: existingCategory?.name);
+    final formKey = GlobalKey<FormState>();
     String type = existingCategory?.type ?? 'expense';
     String icon =
         existingCategory?.icon ?? CategoryMetaMap.iconKey('Food', 'expense');
@@ -93,25 +94,32 @@ class _CategoryManagementScreenState
                   ],
                 ),
                 const SizedBox(height: 24),
-                TextField(
-                  controller: nameController,
-                  autofocus: existingCategory == null,
-                  decoration: InputDecoration(
-                    labelText: 'Category Name',
-                    hintText: 'e.g. Groceries',
-                    prefixIcon: Container(
-                      margin: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _hexToColor(color).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        widthFactor: 1,
-                        child: _buildIcon(icon, color, size: 20),
+                Form(
+                  key: formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: TextFormField(
+                    controller: nameController,
+                    autofocus: existingCategory == null,
+                    decoration: InputDecoration(
+                      labelText: 'Category Name',
+                      hintText: 'e.g. Groceries',
+                      prefixIcon: Container(
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _hexToColor(color).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          widthFactor: 1,
+                          child: _buildIcon(icon, color, size: 20),
+                        ),
                       ),
                     ),
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter a category name'
+                        : null,
                   ),
-                  textCapitalization: TextCapitalization.words,
                 ),
                 const SizedBox(height: 24),
                 CategoryIconPicker(
@@ -128,9 +136,7 @@ class _CategoryManagementScreenState
                 const SizedBox(height: 32),
                 PrimaryButton(
                   onPressed: () async {
-                    if (nameController.text.trim().isEmpty) {
-                      return;
-                    }
+                    if (!(formKey.currentState?.validate() ?? false)) return;
 
                     final category = Category(
                       id: existingCategory?.id ?? const Uuid().v4(),

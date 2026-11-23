@@ -22,6 +22,7 @@ class SpendXGlassDialog extends StatelessWidget {
   final IconData? icon;
   final Color? iconColor;
   final bool isDestructive;
+  final bool primaryEnabled;
 
   const SpendXGlassDialog({
     super.key,
@@ -35,6 +36,7 @@ class SpendXGlassDialog extends StatelessWidget {
     this.icon,
     this.iconColor,
     this.isDestructive = false,
+    this.primaryEnabled = true,
   }) : assert(message != null || content != null, 'Either message or content must be provided');
 
   static Future<bool?> show(
@@ -198,7 +200,7 @@ class SpendXGlassDialog extends StatelessWidget {
                               variant: isDestructive
                                   ? SpendXGlassButtonVariant.danger
                                   : SpendXGlassButtonVariant.primary,
-                              onPressed: onPrimary,
+                              onPressed: primaryEnabled ? onPrimary : null,
                               child: Text(primaryLabel),
                             ),
                           ),

@@ -33,6 +33,7 @@ class _BudgetManagementScreenState
     final amountController = TextEditingController(
       text: existing?.budget.limit.toStringAsFixed(0) ?? '',
     );
+    final formKey = GlobalKey<FormState>();
     String? selectedCategoryId = existing?.budget.categoryId;
 
     final available = expenseCategories.where((category) {
@@ -70,10 +71,13 @@ class _BudgetManagementScreenState
           return SpendXGlassDialog(
             title: existing == null ? 'New Budget' : 'Edit Budget',
             primaryLabel: 'Save',
+            primaryEnabled: isValid(),
             secondaryLabel: 'Cancel',
             onSecondary: () => Navigator.pop(dialogContext),
             onPrimary: () async {
-              if (!isValid()) return;
+              if (!(formKey.currentState?.validate() ?? false) || !isValid()) {
+                return;
+              }
               final limit = double.tryParse(
                 amountController.text.trim(),
               );
@@ -100,9 +104,12 @@ class _BudgetManagementScreenState
                 Navigator.of(dialogContext).pop();
               }
             },
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            content: Form(
+              key: formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 if (existing == null)
                   DropdownButtonFormField<String>(
                     initialValue: selectedCategoryId,
@@ -116,6 +123,7 @@ class _BudgetManagementScreenState
                       ),
                     ),
                     dropdownColor: Theme.of(dialogContext).colorScheme.surfaceContainerHigh,
+                    validator: (value) => value == null ? 'Choose a category' : null,
                     items: available
                         .map(
                           (category) => DropdownMenuItem<String>(
@@ -129,7 +137,7 @@ class _BudgetManagementScreenState
                     },
                   ),
                 const SizedBox(height: 16),
-                TextField(
+                TextFormField(
                   controller: amountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
@@ -139,10 +147,6 @@ class _BudgetManagementScreenState
                     labelText: 'Monthly Limit',
                     prefixText: '₹ ',
                     hintText: '0.00',
-                    errorText: amountController.text.isNotEmpty &&
-                            (double.tryParse(amountController.text) ?? 0) <= 0
-                        ? 'Limit must be greater than zero'
-                        : null,
                     filled: true,
                     fillColor: Theme.of(dialogContext).colorScheme.surfaceContainer,
                     border: OutlineInputBorder(
@@ -150,9 +154,17 @@ class _BudgetManagementScreenState
                       borderSide: BorderSide.none,
                     ),
                   ),
+                  validator: (value) {
+                    final limit = double.tryParse((value ?? '').trim());
+                    if (limit == null || !limit.isFinite || limit <= 0) {
+                      return 'Enter a monthly limit greater than zero';
+                    }
+                    return null;
+                  },
                   onChanged: (_) => setDialogState(() {}),
                 ),
-              ],
+                ],
+              ),
             ),
           );
         },

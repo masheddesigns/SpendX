@@ -226,15 +226,25 @@ class _ApiKeyTileState extends State<_ApiKeyTile> {
                 onPressed: () async {
               final controller =
                   TextEditingController(text: settings.geminiApiKey);
+              final formKey = GlobalKey<FormState>();
               final result = await showDialog<String>(
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Gemini API Key'),
-                  content: TextField(
-                    controller: controller,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Paste your Google AI Studio key',
+                  content: Form(
+                    key: formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: TextFormField(
+                      controller: controller,
+                      obscureText: true,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      decoration: const InputDecoration(
+                        hintText: 'Paste your Google AI Studio key',
+                      ),
+                      validator: (value) => value == null || value.trim().isEmpty
+                          ? 'Enter an API key'
+                          : null,
                     ),
                   ),
                   actions: [
@@ -242,8 +252,17 @@ class _ApiKeyTileState extends State<_ApiKeyTile> {
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text('Cancel'),
                     ),
+                    if (hasKey)
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, ''),
+                        child: const Text('Remove'),
+                      ),
                     TextButton(
-                      onPressed: () => Navigator.pop(ctx, controller.text),
+                      onPressed: () {
+                        if (formKey.currentState?.validate() ?? false) {
+                          Navigator.pop(ctx, controller.text.trim());
+                        }
+                      },
                       child: const Text('Save'),
                     ),
                   ],
