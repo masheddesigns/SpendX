@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/app_theme.dart';
 
 class AppTextField extends StatelessWidget {
   final String label;
@@ -48,21 +49,12 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final fillColor = isDark
-        ? const Color(0x1AFFFFFF) // ~10% white
-        : const Color(0x66FFFFFF); // ~40% white
-
-    final borderColor = isDark
-        ? const Color(0x2EFFFFFF) // ~18% white
-        : const Color(0x1F000000); // ~12% black
-
-    final focusColor = isDark
-        ? Theme.of(context).colorScheme.primary // AppTheme.accentCyan
-        : Theme.of(context).colorScheme.primary; // AppTheme.darkAccentCyan
+    final fillColor = context.fieldFillColor;
+    final borderColor = context.fieldBorderColor;
+    final focusColor = cs.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +100,7 @@ class AppTextField extends StatelessWidget {
                     : prefixIcon as Widget?),
             suffixIcon: suffix ?? suffixIcon,
             hintStyle: textTheme.bodyLarge?.copyWith(
-              color: isDark ? const Color(0x7094A3B8) : const Color(0x8064748B),
+              color: context.fieldHintColor,
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16.0,

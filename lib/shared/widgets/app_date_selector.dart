@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../theme/app_theme.dart';
 
 class AppDateSelector extends StatelessWidget {
   const AppDateSelector({
@@ -13,15 +14,8 @@ class AppDateSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final fillColor = isDark
-        ? const Color(0x1AFFFFFF)
-        : const Color(0x66FFFFFF);
-
-    final borderColor = isDark
-        ? const Color(0x2EFFFFFF)
-        : const Color(0x1F000000);
+    final fillColor = context.fieldFillColor;
+    final borderColor = context.fieldBorderColor;
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),

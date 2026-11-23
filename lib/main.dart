@@ -19,6 +19,7 @@ import 'data/core/schema_validator.dart';
 import 'theme/app_theme.dart';
 import 'core/config/app_env.dart';
 import 'services/sms_live_channel_bridge.dart';
+import 'shared/widgets/app_page_route.dart';
 
 Future<void>? appInitFuture;
 
@@ -170,12 +171,11 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'SpendX',
-      routes: routeBuilders,
       onGenerateRoute: (routeSettings) {
         final routeName = AppRouteTable.normalize(routeSettings.name);
         final routeBuilder = routeBuilders[routeName];
         if (routeBuilder == null) return null;
-        return MaterialPageRoute<void>(
+        return AppPageRoute<void>(
           settings: RouteSettings(name: routeName),
           builder: routeBuilder,
         );
@@ -186,7 +186,7 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
             ? routeBuilders[routeName]
             : null;
         return [
-          MaterialPageRoute<void>(
+          AppPageRoute<void>(
             settings: RouteSettings(name: routeName),
             builder: linkedRoute ?? (_) => const SplashScreen(),
           ),

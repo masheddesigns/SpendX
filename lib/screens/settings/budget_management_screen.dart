@@ -250,6 +250,7 @@ class _BudgetManagementScreenState
                 icon: Icons.account_balance_wallet_outlined,
                 title: 'No budgets set yet',
                 subtitle: 'Tap + to set a monthly limit per category.',
+                illustrationAsset: 'assets/illustrations/empty_budgets.svg',
               )
             : RefreshIndicator(
                 onRefresh: () async {

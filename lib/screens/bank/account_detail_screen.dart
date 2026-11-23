@@ -512,7 +512,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                     Container(
                       height: 44,
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: Theme.of(context).colorScheme.surfaceContainer,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isDark
@@ -629,7 +629,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.onSurface,
+                      color: Theme.of(context).colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isDark
@@ -715,7 +715,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? effectiveActiveBg
-              : (Theme.of(context).colorScheme.onSurface),
+              : (Theme.of(context).colorScheme.surfaceContainer),
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
             color: isSelected
@@ -765,7 +765,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).colorScheme.surfaceContainer,
               border: Border.all(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.08)

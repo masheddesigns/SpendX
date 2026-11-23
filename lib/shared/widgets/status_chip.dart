@@ -25,13 +25,11 @@ class StatusChip extends StatelessWidget {
 
     final (background, foreground) = switch (type) {
       StatusChipType.received || StatusChipType.success => (
-        Colors.green.withValues(alpha: 0.15),
-        Colors.green,
+        cs.secondaryContainer,
+        cs.onSecondaryContainer,
       ),
-      StatusChipType.pending || StatusChipType.warning => (
-        Colors.orange.withValues(alpha: 0.15),
-        Colors.orange,
-      ),
+      StatusChipType.pending ||
+      StatusChipType.warning => (cs.tertiaryContainer, cs.onTertiaryContainer),
       StatusChipType.delayed ||
       StatusChipType.danger ||
       StatusChipType.error => (cs.error.withValues(alpha: 0.15), cs.error),

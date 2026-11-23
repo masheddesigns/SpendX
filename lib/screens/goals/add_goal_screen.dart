@@ -399,7 +399,7 @@ class _DurationChip extends StatelessWidget {
       selected: selected,
       label: '$label duration',
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 48),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,

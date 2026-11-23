@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/settings_service.dart';
+import '../../theme/app_theme.dart';
 
 class AppAmountField extends StatelessWidget {
   const AppAmountField({
@@ -20,18 +21,8 @@ class AppAmountField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final effectiveColor =
-        amountColor ??
-        (isDark ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.primary);
-
-    final fillColor = isDark
-        ? const Color(0x1AFFFFFF) // ~10% white
-        : const Color(0x66FFFFFF); // ~40% white
-
-    final borderColor = isDark
-        ? const Color(0x2EFFFFFF)
-        : const Color(0x1F000000);
+    final colorScheme = Theme.of(context).colorScheme;
+    final effectiveColor = amountColor ?? colorScheme.primary;
 
     return Semantics(
       textField: true,
@@ -88,14 +79,20 @@ class AppAmountField extends StatelessWidget {
             vertical: 16.0,
           ),
           filled: true,
-          fillColor: fillColor,
+          fillColor: context.fieldFillColor,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16.0),
-            borderSide: BorderSide(color: borderColor, width: 0.75),
+            borderSide: BorderSide(
+              color: context.fieldBorderColor,
+              width: 0.75,
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16.0),
-            borderSide: BorderSide(color: borderColor, width: 0.75),
+            borderSide: BorderSide(
+              color: context.fieldBorderColor,
+              width: 0.75,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16.0),

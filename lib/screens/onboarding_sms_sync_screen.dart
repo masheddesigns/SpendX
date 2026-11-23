@@ -255,7 +255,9 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                           : 'Analyzing transaction SMS to set up your accounts and safe-to-spend.'),
                 style: TextStyle(
                   fontSize: 14,
-                  color: isDark ? Colors.white70 : Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: isDark
+                      ? Colors.white70
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.4,
                 ),
                 textAlign: TextAlign.center,
@@ -365,7 +367,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                       Icon(
+                      Icon(
                         Icons.history_rounded,
                         size: 14,
                         color: Theme.of(context).colorScheme.primary,
@@ -518,7 +520,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
       return Container(
         width: 22,
         height: 22,
-        decoration:  BoxDecoration(
+        decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.secondary,
           shape: BoxShape.circle,
         ),
@@ -542,7 +544,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                 shape: BoxShape.circle,
               ),
             ),
-             SizedBox(
+            SizedBox(
               width: 14,
               height: 14,
               child: CircularProgressIndicator(
@@ -678,107 +680,110 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
   }
 
   Widget _buildRadarHologram(bool isDark) {
-    return GestureDetector(
-      onTap: () {
-        HapticService.instance.tap();
-        _pulseController.forward(from: 0.0);
-        if (!_isRunning && !_isFinished) {
-          _startSyncProcess();
-        }
-      },
-      child: SizedBox(
-        width: 170,
-        height: 170,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([
-            _radarController,
-            _pulseController,
-            _orbitController,
-          ]),
-          builder: (context, _) {
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                // Concentric Ripple Rings
-                for (int i = 0; i < 3; i++) ...[
-                  Builder(
-                    builder: (context) {
-                      final progress =
-                          (_radarController.value + (i * 0.33)) % 1.0;
-                      final size = 70.0 + (progress * 130.0);
-                      final opacity = (1.0 - progress).clamp(0.0, 1.0);
-                      return Container(
-                        width: size,
-                        height: size,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.primary
-                                .withValues(alpha: opacity * 0.5),
-                            width: 1.5,
+    return Semantics(
+      button: true,
+      label: _isRunning ? 'SMS sync in progress' : 'Start SMS sync',
+      child: GestureDetector(
+        onTap: () {
+          HapticService.instance.tap();
+          _pulseController.forward(from: 0.0);
+          if (!_isRunning && !_isFinished) {
+            _startSyncProcess();
+          }
+        },
+        child: SizedBox(
+          width: 170,
+          height: 170,
+          child: AnimatedBuilder(
+            animation: Listenable.merge([
+              _radarController,
+              _pulseController,
+              _orbitController,
+            ]),
+            builder: (context, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Concentric Ripple Rings
+                  for (int i = 0; i < 3; i++) ...[
+                    Builder(
+                      builder: (context) {
+                        final progress =
+                            (_radarController.value + (i * 0.33)) % 1.0;
+                        final size = 70.0 + (progress * 130.0);
+                        final opacity = (1.0 - progress).clamp(0.0, 1.0);
+                        return Container(
+                          width: size,
+                          height: size,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.primary
+                                  .withValues(alpha: opacity * 0.5),
+                              width: 1.5,
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+                        );
+                      },
+                    ),
+                  ],
 
-                // Central Glowing Orb
-                Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient:  RadialGradient(
-                      colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.primary,
-                        Color(0xFF312E81),
+                  // Central Glowing Orb
+                  Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.primary,
+                          Color(0xFF312E81),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context).colorScheme.primary
+                              .withValues(alpha: 0.60 * _pulseController.value),
+                          blurRadius: 28,
+                          spreadRadius: 4,
+                        ),
                       ],
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(context).colorScheme.primary.withValues(
-                          alpha: 0.60 * _pulseController.value,
-                        ),
-                        blurRadius: 28,
-                        spreadRadius: 4,
-                      ),
-                    ],
+                    child: const Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    color: Colors.white,
-                    size: 36,
-                  ),
-                ),
 
-                // Orbiting Satellite Badges (Bank, Card, Shield)
-                _buildOrbitingSatellite(
-                  angle: _orbitController.value * 2 * math.pi,
-                  radius: 80,
-                  icon: Icons.account_balance_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                _buildOrbitingSatellite(
-                  angle:
-                      (_orbitController.value * 2 * math.pi) +
-                      (math.pi * 2 / 3),
-                  radius: 80,
-                  icon: Icons.credit_card_rounded,
-                  color: const Color(0xFFA855F7),
-                ),
-                _buildOrbitingSatellite(
-                  angle:
-                      (_orbitController.value * 2 * math.pi) +
-                      (math.pi * 4 / 3),
-                  radius: 80,
-                  icon: Icons.security_rounded,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ],
-            );
-          },
+                  // Orbiting Satellite Badges (Bank, Card, Shield)
+                  _buildOrbitingSatellite(
+                    angle: _orbitController.value * 2 * math.pi,
+                    radius: 80,
+                    icon: Icons.account_balance_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  _buildOrbitingSatellite(
+                    angle:
+                        (_orbitController.value * 2 * math.pi) +
+                        (math.pi * 2 / 3),
+                    radius: 80,
+                    icon: Icons.credit_card_rounded,
+                    color: const Color(0xFFA855F7),
+                  ),
+                  _buildOrbitingSatellite(
+                    angle:
+                        (_orbitController.value * 2 * math.pi) +
+                        (math.pi * 4 / 3),
+                    radius: 80,
+                    icon: Icons.security_rounded,
+                    color: Theme.of(context).colorScheme.secondary,
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

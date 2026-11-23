@@ -54,7 +54,8 @@ class _SpendXLoadingStateState extends State<SpendXLoadingState>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final opacity = 0.3 + (_controller.value * 0.4);
+        final opacity = 0.5 + (_controller.value * 0.3);
+        final colorScheme = Theme.of(context).colorScheme;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Column(
@@ -64,9 +65,11 @@ class _SpendXLoadingStateState extends State<SpendXLoadingState>
                 child: SpendXGlassSurface(
                   height: widget.itemHeight,
                   borderRadius: BorderRadius.circular(AppRadius.m),
-                  color: isDark
-                      ? AppTheme.darkElevated.withValues(alpha: opacity)
-                      : AppTheme.lightElevated.withValues(alpha: opacity),
+                  color:
+                      (isDark
+                              ? colorScheme.surfaceContainerHigh
+                              : colorScheme.surfaceContainerHighest)
+                          .withValues(alpha: opacity),
                   child: const SizedBox.expand(),
                 ),
               );

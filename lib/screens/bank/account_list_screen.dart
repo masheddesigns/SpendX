@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../data/providers.dart' as app_data;
 import '../../features/accounts/providers/account_providers.dart';
@@ -167,7 +168,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration:  BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: Theme.of(context).colorScheme.primary,
                     ),
@@ -761,7 +762,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
-                leading:  Icon(
+                leading: Icon(
                   Icons.payment_rounded,
                   color: Theme.of(context).colorScheme.secondary,
                 ),
@@ -1104,8 +1105,10 @@ class _NetPositionHorizonCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top Row: Solvency Status Badge + Breakdown Action
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -1151,7 +1154,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            isSolvent ? 'SOLVENT' : 'OBLIGATIONS EXCEED ASSETS',
+                            isSolvent ? 'SOLVENT' : 'NEGATIVE NET WORTH',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -1534,135 +1537,154 @@ class _BankAccountRow extends StatelessWidget {
                       : Colors.black.withValues(alpha: 0.03),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 9),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Account Icon Pill
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color:
-                                (isNegative
-                                        ? Theme.of(context).colorScheme.tertiary
-                                        : Theme.of(context).colorScheme.primary)
-                                    .withValues(alpha: isDark ? 0.16 : 0.10),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color:
-                                  (isNegative
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.tertiary
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.primary)
-                                      .withValues(alpha: isDark ? 0.28 : 0.18),
-                              width: 0.6,
-                            ),
-                          ),
-                          child: Icon(
-                            iconData,
-                            size: 20,
-                            color: isNegative
-                                ? Theme.of(context).colorScheme.tertiary
-                                : Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-
-                        // Name, Type Pill, Overdraft Indicator
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: context.textPrimary,
-                                  letterSpacing: -0.2,
+                        Row(
+                          children: [
+                            // Account Icon Pill
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color:
+                                    (isNegative
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.tertiary
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.primary)
+                                        .withValues(
+                                          alpha: isDark ? 0.16 : 0.10,
+                                        ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color:
+                                      (isNegative
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.tertiary
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.primary)
+                                          .withValues(
+                                            alpha: isDark ? 0.28 : 0.18,
+                                          ),
+                                  width: 0.6,
                                 ),
                               ),
-                              const SizedBox(height: 3),
-                              Wrap(
-                                spacing: 5,
-                                runSpacing: 2,
-                                crossAxisAlignment: WrapCrossAlignment.center,
+                              child: Icon(
+                                iconData,
+                                size: 20,
+                                color: isNegative
+                                    ? Theme.of(context).colorScheme.tertiary
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 1.5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.06)
-                                          : const Color(0xFFF0ECE4),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      typeLabel,
-                                      style: TextStyle(
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.3,
-                                        color: context.textSecondary,
-                                      ),
+                                  Text(
+                                    displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: context.textPrimary,
+                                      letterSpacing: -0.2,
                                     ),
                                   ),
-                                  if (isNegative)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 5,
-                                        vertical: 1.5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? const Color(
-                                                0xFF78350F,
-                                              ).withValues(alpha: 0.5)
-                                            : Theme.of(context).colorScheme.tertiaryContainer,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'OVERDRAWN',
-                                        style: TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.4,
+                                  const SizedBox(height: 3),
+                                  Wrap(
+                                    spacing: 5,
+                                    runSpacing: 2,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1.5,
+                                        ),
+                                        decoration: BoxDecoration(
                                           color: isDark
-                                              ? const Color(0xFFFCD34D)
-                                              : Theme.of(context).colorScheme.onTertiaryContainer,
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.06,
+                                                )
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainerHigh,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          typeLabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.3,
+                                            color: context.textSecondary,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  if (account.last4 != null &&
-                                      account.last4!.isNotEmpty)
-                                    Text(
-                                      '••${account.last4}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: context.textMuted,
-                                      ),
-                                    ),
+                                      if (isNegative)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 1.5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.tertiaryContainer,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'OVERDRAWN',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.4,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onTertiaryContainer,
+                                            ),
+                                          ),
+                                        ),
+                                      if (account.last4 != null &&
+                                          account.last4!.isNotEmpty)
+                                        Text(
+                                          '••${account.last4}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: context.textMuted,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-
-                        // Balance
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 120,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: SizedBox(
+                              width: 140,
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
                                 alignment: Alignment.centerRight,
@@ -1681,7 +1703,7 @@ class _BankAccountRow extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
@@ -1691,21 +1713,23 @@ class _BankAccountRow extends StatelessWidget {
 
               // Context Options Button
               const SizedBox(width: 2),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticService.instance.tap();
-                  onOptionsTap();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 12,
-                  ),
-                  child: Icon(
-                    Icons.more_vert_rounded,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+              Semantics(
+                button: true,
+                label: 'Account options for ${account.name}',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticService.instance.tap();
+                    onOptionsTap();
+                  },
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Icon(
+                      Icons.more_vert_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -1827,7 +1851,7 @@ class _CreditCardInstrument extends StatelessWidget {
                               ).colorScheme.tertiary.withValues(alpha: 0.8),
                               width: 1.0,
                             ),
-                            gradient:  LinearGradient(
+                            gradient: LinearGradient(
                               colors: [
                                 Color(0xFFFDE68A),
                                 Theme.of(context).colorScheme.tertiary,
@@ -1842,11 +1866,13 @@ class _CreditCardInstrument extends StatelessWidget {
                                 .toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:  TextStyle(
+                            style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.1,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -1867,7 +1893,7 @@ class _CreditCardInstrument extends StatelessWidget {
                             HapticService.instance.tap();
                             onOptionsTap();
                           },
-                          child:  Padding(
+                          child: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 8,
@@ -1875,7 +1901,9 @@ class _CreditCardInstrument extends StatelessWidget {
                             child: Icon(
                               Icons.more_vert_rounded,
                               size: 18,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -1916,10 +1944,12 @@ class _CreditCardInstrument extends StatelessWidget {
                           ),
                           Text(
                             '•••• ${card.last4.isNotEmpty ? card.last4 : '••••'}',
-                            style:  TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
@@ -1943,11 +1973,13 @@ class _CreditCardInstrument extends StatelessWidget {
                                       : 'OUTSTANDING BALANCE',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style:  TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 0.8,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1987,7 +2019,7 @@ class _CreditCardInstrument extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                 Text(
+                                Text(
                                   'AVAILABLE LIMIT',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1995,7 +2027,9 @@ class _CreditCardInstrument extends StatelessWidget {
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 0.8,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -2060,8 +2094,11 @@ class _CreditCardInstrument extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Track Metadata & Milestone Due Diamond & Direct Pay Action
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -2070,6 +2107,8 @@ class _CreditCardInstrument extends StatelessWidget {
                       card.limitAmount > 0
                           ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
                           : 'No limit set',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
                         color: utilizationColor,
@@ -2087,7 +2126,7 @@ class _CreditCardInstrument extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                             Text(
+                            Text(
                               '◇',
                               style: TextStyle(
                                 fontSize: 11,
@@ -2098,11 +2137,15 @@ class _CreditCardInstrument extends StatelessWidget {
                             const SizedBox(width: 4),
                             Text(
                               dueText,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFFCBD5E1),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w500,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -2128,7 +2171,7 @@ class _CreditCardInstrument extends StatelessWidget {
                                 width: 0.8,
                               ),
                             ),
-                            child:  Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
@@ -2257,7 +2300,7 @@ class _LoanAmortizationRow extends StatelessWidget {
                           width: 0.6,
                         ),
                       ),
-                      child:  Icon(
+                      child: Icon(
                         Icons.account_balance_outlined,
                         size: 19,
                         color: Theme.of(context).colorScheme.tertiary,
@@ -2513,7 +2556,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
               ).colorScheme.error.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child:  Icon(
+            child: Icon(
               Icons.credit_card_rounded,
               size: 18,
               color: Theme.of(context).colorScheme.error,
@@ -2587,7 +2630,7 @@ class _EmptyStateCard extends StatelessWidget {
         children: [
           Row(
             children: [
-               Icon(
+              Icon(
                 Icons.account_balance_wallet_outlined,
                 size: 24,
                 color: Theme.of(context).colorScheme.primary,
@@ -2602,6 +2645,18 @@ class _EmptyStateCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Semantics(
+              image: true,
+              label: 'Accounts illustration',
+              child: SvgPicture.asset(
+                'assets/illustrations/empty_accounts.svg',
+                width: 128,
+                height: 84,
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Text(

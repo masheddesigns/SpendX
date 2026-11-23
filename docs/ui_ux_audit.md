@@ -186,34 +186,37 @@ A follow-up commit addressed several audit findings:
 
 | Metric | Original | Final | Δ |
 |---|---|---|---|
-| `Semantics` widgets | 2 | 26 | +24 |
+| Semantics widgets | 2 | 33 | +31 |
 | `Tooltip` widgets | 0 | 5 | +5 |
 | `tooltip:` props | 0 | 63 | +63 |
 | `minimumSize` | 6 | 10 | +4 |
-| `validator:` | 6 | 13 | +7 |
-| `TextOverflow` | 66 | 78 | +12 |
-| `maxLines` | 62 | 74 | +12 |
-| `Expanded` | 278 | 282 | +4 |
+| `validator:` | 6 | 24 | +18 |
+| `TextOverflow` | 66 | 120 | +54 |
+| `maxLines` | 62 | 121 | +59 |
+| `Expanded` | 278 | 299 | +21 |
 | `SafeArea` | 54 | 54 | 0 |
-| `RefreshIndicator` | 14 | 16 | +2 |
-| Hardcoded `Color(0x)` | 1,218 | 1,165 | -53 |
-| Hardcoded `Colors.xxx` | 656 | 652 | -4 |
+| `RefreshIndicator` | 14 | 30 | +16 |
+| Hardcoded `Color(0x)` | 1,218 | 456 | -762 |
+| Hardcoded `Colors.xxx` | 656 | 599 | -57 |
+| EmptyState widgets | 0 | 42 | +42 |
+| Skeleton loaders | 0 | 44 | +44 |
+| Illustrations | 1 | 5 | +4 |
 
 ### Final UI/UX Scorecard
 
 | Category | Original | Final | Verdict |
 |---|---|---|---|
-| Accessibility | 1/10 | **4/10** | 🟡 26 Semantics, 63 tooltips — improving but needs ~100+ |
-| Theming / Dark Mode | 4/10 | **6/10** | 🟡 Adaptive tokens + context extension; 1,165 hardcoded colors remain |
-| Responsiveness | 3/10 | **4/10** | 🟡 TextOverflow 66→78; still 5 LayoutBuilder |
-| Forms & Validation | 2/10 | **3/10** | 🟡 6→13 validators; ~50 more needed |
-| Loading/Empty/Error | 4/10 | **4/10** | ❌ No shared widgets yet |
+| Accessibility | 1/10 | **5/10** | 🟡 33 Semantics, 63 tooltips — improving but needs ~100+ |
+| Theming / Dark Mode | 4/10 | **7/10** | 🟡 Adaptive tokens + context extension; 456 hardcoded colors remain |
+| Responsiveness | 3/10 | **5/10** | 🟡 TextOverflow 66→120; still 6 LayoutBuilder |
+| Forms & Validation | 2/10 | **4/10** | 🟡 6→24 validators; ~40 more needed |
+| Loading/Empty/Error | 4/10 | **7/10** | ✅ EmptyStateWidget + LoadingStateWidget + illustrations |
 | Touch Targets | 4/10 | **4/10** | ❌ 6→10 minSize; still below standard |
 | Navigation | 6/10 | **6/10** | ✅ OK |
 | Motion | 5/10 | **5/10** | ✅ OK |
 | Typography/Spacing | 6/10 | **6/10** | ✅ OK |
 
-**Overall: 3.5/10 → 5/10** (steady improvement)
+**Overall: 3.5/10 → 6/10** (significant improvement)
 
 ### Remaining (non-blocking)
 1. Accessibility: ~100+ Semantics needed, 48px min touch targets

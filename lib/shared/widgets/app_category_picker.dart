@@ -38,12 +38,12 @@ class AppCategoryPicker extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected
                   ? tintColor.withValues(alpha: isDark ? 0.22 : 0.16)
-                  : (isDark ? const Color(0x14FFFFFF) : const Color(0x40FFFFFF)),
+                  : Theme.of(context).colorScheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: selected
                     ? tintColor.withValues(alpha: isDark ? 0.60 : 0.45)
-                    : (isDark ? const Color(0x24FFFFFF) : const Color(0x18000000)),
+                    : Theme.of(context).colorScheme.outline,
                 width: selected ? 1.0 : 0.75,
               ),
             ),

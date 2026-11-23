@@ -35,11 +35,11 @@ class GoalsScreen extends ConsumerWidget {
           if (goals.isEmpty) {
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(goalsProvider),
-              child: ListView(
+              child: ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(height: 320, child: _buildEmptyState(context)),
-                ],
+                itemCount: 1,
+                itemBuilder: (context, _) =>
+                    SizedBox(height: 320, child: _buildEmptyState(context)),
               ),
             );
           }
@@ -51,18 +51,21 @@ class GoalsScreen extends ConsumerWidget {
               ref.invalidate(goalsProvider);
               ref.invalidate(goalInsightsProvider);
             },
-            child: ListView(
+            child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              children: [
-                // Nudges banner
-                if (nudges.isNotEmpty) ...[
-                  _NudgesBanner(nudges: nudges),
-                  const SizedBox(height: 16),
-                ],
-
-                // Goal cards
-                for (final goal in goals) ...[
-                  GoalCard(
+              itemCount: goals.length + (nudges.isNotEmpty ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (nudges.isNotEmpty && index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _NudgesBanner(nudges: nudges),
+                  );
+                }
+                final goalIndex = index - (nudges.isNotEmpty ? 1 : 0);
+                final goal = goals[goalIndex];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: GoalCard(
                     goal: goal,
                     progress: ref.watch(goalProgressProvider(goal)),
                     onTap: () async {
@@ -72,14 +75,11 @@ class GoalsScreen extends ConsumerWidget {
                           builder: (_) => GoalDetailScreen(goal: goal),
                         ),
                       );
-                      if (result == true) {
-                        ref.invalidate(goalsProvider);
-                      }
+                      if (result == true) ref.invalidate(goalsProvider);
                     },
                   ),
-                  const SizedBox(height: 12),
-                ],
-              ],
+                );
+              },
             ),
           );
         },
@@ -105,7 +105,7 @@ class GoalsScreen extends ConsumerWidget {
       icon: Icons.flag_rounded,
       title: 'No goals yet',
       description: 'Set a savings target, spending limit, or debt payoff goal.',
-      illustrationAsset: 'assets/illustrations/empty_finances.svg',
+      illustrationAsset: 'assets/illustrations/empty_goals.svg',
     );
   }
 }

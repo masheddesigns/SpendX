@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../features/automation/automation_engine.dart';
 import '../../features/automation/automation_providers.dart';
@@ -15,6 +16,7 @@ import '../../models/goal.dart';
 import '../../services/financial_identity_service.dart';
 import '../../services/money_score_service.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
@@ -144,7 +146,12 @@ class PlanTab extends ConsumerWidget {
                 child: SpendXLoadingState(count: 1, itemHeight: 140),
               ),
             ),
-            error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            error: (error, _) => SliverToBoxAdapter(
+              child: ErrorStateWidget(
+                error: error,
+                onRetry: () => ref.invalidate(financialTimelineProvider),
+              ),
+            ),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 14)),
@@ -189,7 +196,12 @@ class PlanTab extends ConsumerWidget {
                 child: SpendXLoadingState(count: 2, itemHeight: 64),
               ),
             ),
-            error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            error: (error, _) => SliverToBoxAdapter(
+              child: ErrorStateWidget(
+                error: error,
+                onRetry: () => ref.invalidate(smartBudgetProvider),
+              ),
+            ),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 14)),
@@ -229,7 +241,12 @@ class PlanTab extends ConsumerWidget {
                 child: SpendXLoadingState(count: 2, itemHeight: 64),
               ),
             ),
-            error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            error: (error, _) => SliverToBoxAdapter(
+              child: ErrorStateWidget(
+                error: error,
+                onRetry: () => ref.invalidate(activeGoalsProvider),
+              ),
+            ),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 14)),
@@ -248,7 +265,7 @@ class PlanTab extends ConsumerWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(24),
-                      color: Theme.of(context).colorScheme.onSurface,
+                      color: Theme.of(context).colorScheme.surfaceContainer,
                       border: Border.all(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.08)
@@ -562,7 +579,7 @@ class _FinancialHorizonCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: Theme.of(context).colorScheme.onSurface,
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
@@ -955,7 +972,7 @@ class _BudgetHorizonsList extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: Theme.of(context).colorScheme.onSurface,
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
@@ -1121,19 +1138,13 @@ class _EmptyBudgetCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark
-                  ? const Color(0x204F46E5)
-                  : Theme.of(context).colorScheme.primaryContainer,
-            ),
-            child: Icon(
-              Icons.tune_rounded,
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
+          Semantics(
+            image: true,
+            label: 'Budgets illustration',
+            child: SvgPicture.asset(
+              'assets/illustrations/empty_budgets.svg',
+              width: 120,
+              height: 88,
             ),
           ),
           const SizedBox(height: 10),
@@ -1391,19 +1402,13 @@ class _EmptyGoalsCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark
-                  ? const Color(0x204F46E5)
-                  : Theme.of(context).colorScheme.primaryContainer,
-            ),
-            child: Icon(
-              Icons.flag_outlined,
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
+          Semantics(
+            image: true,
+            label: 'Savings goals illustration',
+            child: SvgPicture.asset(
+              'assets/illustrations/empty_goals.svg',
+              width: 120,
+              height: 88,
             ),
           ),
           const SizedBox(height: 10),
@@ -1511,7 +1516,7 @@ class _MilestoneTrack extends StatelessWidget {
                   transform: Matrix4.rotationZ(0.785398),
                   transformAlignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface,
+                    color: Theme.of(context).colorScheme.surfaceContainer,
                     border: Border.all(
                       color: isOver
                           ? Theme.of(context).colorScheme.error

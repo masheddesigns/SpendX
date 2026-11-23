@@ -1497,9 +1497,9 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
         : 0.0;
 
     final utilColor = overallUtil >= 80
-        ? Colors.red
+        ? cs.error
         : (overallUtil >= 50
-              ? Colors.orange
+              ? cs.tertiary
               : Theme.of(context).colorScheme.secondary);
 
     return SpendXGlassSurface(

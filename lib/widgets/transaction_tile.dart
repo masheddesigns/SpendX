@@ -8,7 +8,8 @@ import '../services/settings_service.dart';
 import '../shared/widgets/app_card.dart';
 import '../models/transaction.dart';
 import '../models/category.dart';
-import '../shared/widgets/glass/spendx_transaction_tile.dart' show cleanTransactionDisplayTitle;
+import '../shared/widgets/glass/spendx_transaction_tile.dart'
+    show cleanTransactionDisplayTitle;
 import '../utils/app_format.dart';
 import '../utils/text_formatter.dart';
 
@@ -40,8 +41,12 @@ class TransactionTile extends StatelessWidget {
   /// Only labels that ADD meaning — no "Card" (implied), no "Manual" (obvious).
   String _buildSubtitle() {
     final src = transaction.source;
-    final isCcPayment = src == 'credit_card_payment' || src == 'credit_payment' || transaction.type == 'credit_payment';
-    final isAuto = src == 'sms_auto' || src == 'sms_import' || src == 'sms_review';
+    final isCcPayment =
+        src == 'credit_card_payment' ||
+        src == 'credit_payment' ||
+        transaction.type == 'credit_payment';
+    final isAuto =
+        src == 'sms_auto' || src == 'sms_import' || src == 'sms_review';
     final isLoan = src == 'loan_payment';
     final isTransfer = src == 'bank_transfer' || transaction.type == 'transfer';
 
@@ -49,12 +54,12 @@ class TransactionTile extends StatelessWidget {
     final sourceLabel = isCcPayment
         ? 'CC Payment'
         : isAuto
-            ? 'Auto-detected'
-            : isLoan
-                ? 'Loan EMI'
-                : isTransfer
-                    ? 'Transfer'
-                    : null;
+        ? 'Auto-detected'
+        : isLoan
+        ? 'Loan EMI'
+        : isTransfer
+        ? 'Transfer'
+        : null;
 
     // Build: "notes \u00b7 source" or "date \u00b7 source" or just notes/date
     final notesText = transaction.notes.isNotEmpty
@@ -76,8 +81,12 @@ class TransactionTile extends StatelessWidget {
   String _buildTitle() {
     final type = transaction.type.trim().toLowerCase();
     final src = transaction.source.trim().toLowerCase();
-    final isCc = type == 'credit_payment' || src == 'credit_card_payment' || src == 'credit_payment';
-    final isTr = type == 'transfer' || src == 'bank_transfer' || src == 'transfer';
+    final isCc =
+        type == 'credit_payment' ||
+        src == 'credit_card_payment' ||
+        src == 'credit_payment';
+    final isTr =
+        type == 'transfer' || src == 'bank_transfer' || src == 'transfer';
     if (transaction.notes.isNotEmpty) {
       final clean = cleanTransactionDisplayTitle(
         transaction.notes,
@@ -110,7 +119,7 @@ class TransactionTile extends StatelessWidget {
     final hasCategory = transaction.categoryId != null;
     final hasAccount = transaction.accountId != null;
     final isFullyMapped = hasCategory && hasAccount;
-    final color = isFullyMapped ? Colors.green : Colors.orange;
+    final color = isFullyMapped ? cs.secondary : cs.tertiary;
     final label = isFullyMapped ? 'High confidence' : 'Needs review';
     return Builder(
       builder: (ctx) => Semantics(
@@ -128,7 +137,10 @@ class TransactionTile extends StatelessWidget {
                 child: Container(
                   width: 8,
                   height: 8,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
             ),
@@ -142,7 +154,7 @@ class TransactionTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final hasCategory = transaction.categoryId != null;
     final hasAccount = transaction.accountId != null;
-    final color = isFullyMapped ? Colors.green : Colors.orange;
+    final color = isFullyMapped ? cs.secondary : cs.tertiary;
     final label = isFullyMapped ? 'High confidence' : 'Needs review';
 
     showModalBottomSheet(
@@ -172,15 +184,19 @@ class TransactionTile extends StatelessWidget {
                 Container(
                   width: 12,
                   height: 12,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Auto-detected · $label',
                   style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
                 ),
               ],
             ),
@@ -190,13 +206,13 @@ class TransactionTile extends StatelessWidget {
                   ? 'I matched this to a category and account from your saved details.'
                   : 'I detected the amount, but couldn\'t match everything. Tap Fix to update what\'s missing.',
               style: TextStyle(
-                  color: cs.onSurfaceVariant, fontSize: 13, height: 1.4),
+                color: cs.onSurfaceVariant,
+                fontSize: 13,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 16),
-            _ConfidenceCheck(
-              label: 'Amount detected',
-              ok: true,
-            ),
+            _ConfidenceCheck(label: 'Amount detected', ok: true),
             _ConfidenceCheck(
               label: hasCategory ? 'Category matched' : 'Category missing',
               ok: hasCategory,
@@ -320,22 +336,22 @@ class TransactionTile extends StatelessWidget {
     return Icon(iconData, color: color, size: size);
   }
 
-  Color? _specialIconColor(String source) {
+  Color? _specialIconColor(String source, ColorScheme cs) {
     if (source == 'income' ||
         source == 'lending_received' ||
         source == 'refund' ||
         source == 'loan_disbursement') {
-      return Colors.green;
+      return cs.secondary;
     }
     if (source == 'transfer' ||
         source == 'credit_payment' ||
         source == 'credit_card_payment' ||
         transaction.type == 'credit_payment' ||
         transaction.type == 'transfer') {
-      return Colors.blue;
+      return cs.primary;
     }
     if (source == 'emi_installment' || source == 'loan_payment') {
-      return Colors.orange;
+      return cs.tertiary;
     }
     return null;
   }
@@ -357,14 +373,14 @@ class TransactionTile extends StatelessWidget {
         source == 'lending_received' ||
         source == 'refund' ||
         source == 'loan_disbursement') {
-      amountColor = Colors.green;
+      amountColor = cs.secondary;
       sign = '+';
     } else if (type == 'transfer' ||
         type == 'credit_payment' ||
         source == 'transfer' ||
         source == 'credit_payment' ||
         source == 'credit_card_payment') {
-      amountColor = Colors.blue;
+      amountColor = cs.primary;
       sign = '→';
     } else if (type == 'expense' ||
         source == 'emi_installment' ||
@@ -375,7 +391,7 @@ class TransactionTile extends StatelessWidget {
 
     final Color categoryColor = category != null
         ? CategoryMetaMap.resolve(category!.name, category!.type).color
-        : (_specialIconColor(transaction.source) ?? cs.outline);
+        : (_specialIconColor(transaction.source, cs) ?? cs.outline);
 
     final tile = AppCard(
       borderRadius: AppRadius.l,
@@ -537,14 +553,17 @@ class _ConfidenceCheck extends StatelessWidget {
           Icon(
             ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
             size: 16,
-            color: ok ? Colors.green : Colors.orange,
+            color: ok ? cs.secondary : cs.tertiary,
           ),
           const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );

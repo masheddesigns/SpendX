@@ -761,7 +761,7 @@ class _LendingCard extends StatelessWidget {
                           : Icons.calendar_today,
                       size: 12,
                       color: lending.isOverdue
-                          ? Colors.orange
+                          ? cs.tertiary
                           : cs.onSurfaceVariant,
                     ),
                     const SizedBox(width: 3),
@@ -770,25 +770,25 @@ class _LendingCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: lending.isOverdue
-                            ? Colors.orange
+                            ? cs.tertiary
                             : cs.onSurfaceVariant,
                       ),
                     ),
                   ],
                   const Spacer(),
                   if (lending.isSettled)
-                    const Row(
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.check_circle_rounded,
                           size: 14,
-                          color: Colors.green,
+                          color: cs.secondary,
                         ),
                         SizedBox(width: 4),
                         Text(
                           'Settled',
-                          style: TextStyle(fontSize: 11, color: Colors.green),
+                          style: TextStyle(fontSize: 11, color: cs.secondary),
                         ),
                       ],
                     ),

@@ -12,7 +12,8 @@ import '../../shared/widgets/app_account_picker.dart';
 import '../../domain/credit/credit_card_service.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../features/salary/providers/salary_providers.dart';
-import '../../features/transactions/providers/transaction_providers.dart' show paginatedTransactionsProvider;
+import '../../features/transactions/providers/transaction_providers.dart'
+    show paginatedTransactionsProvider;
 import '../../data/providers.dart' as app_data;
 import '../../services/data_change_bus.dart';
 
@@ -156,7 +157,7 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
               ),
               AppAmountField(
                 controller: _amountController,
-                amountColor: Colors.green,
+                amountColor: cs.secondary,
               ),
               AppSpacing.sectionSpacer,
 
@@ -170,16 +171,16 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
                 ),
                 error: (err, _) => Text(
                   'Error loading accounts: $err',
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                  style: TextStyle(color: cs.error, fontSize: 12),
                 ),
                 data: (accounts) {
                   final assetAccounts = accounts
                       .where((a) => a.isAsset)
                       .toList();
                   if (assetAccounts.isEmpty) {
-                    return const Text(
+                    return Text(
                       'No accounts available. Add a bank account first.',
-                      style: TextStyle(color: Colors.red, fontSize: 12),
+                      style: TextStyle(color: cs.error, fontSize: 12),
                     );
                   }
 
@@ -199,7 +200,7 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
                     selectedAccountId: _selectedAccountId,
                     onAccountSelected: (id) =>
                         setState(() => _selectedAccountId = id),
-                    activeColor: Colors.green,
+                    activeColor: cs.secondary,
                   );
                 },
               ),

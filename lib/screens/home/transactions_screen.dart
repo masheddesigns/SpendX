@@ -327,7 +327,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                       Container(
                         height: 44,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.onSurface,
+                          color: Theme.of(context).colorScheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isDark
@@ -609,7 +609,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                         vertical: 32,
                       ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: Theme.of(context).colorScheme.surfaceContainer,
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
                           color: isDark
@@ -625,7 +625,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                             image: true,
                             label: 'Empty ledger illustration',
                             child: SvgPicture.asset(
-                              'assets/illustrations/empty_finances.svg',
+                              'assets/illustrations/empty_transactions.svg',
                               width: 132,
                               height: 104,
                             ),
@@ -772,7 +772,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
       selected: isSelected,
       label: '$label filter',
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 48),
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
@@ -783,7 +783,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
               decoration: BoxDecoration(
                 color: isSelected
                     ? effectiveActiveBg
-                    : (Theme.of(context).colorScheme.onSurface),
+                    : (Theme.of(context).colorScheme.surfaceContainer),
                 borderRadius: BorderRadius.circular(100),
                 border: Border.all(
                   color: isSelected
@@ -832,7 +832,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
       selected: isSelected,
       label: '$label sub-filter',
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 48),
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
@@ -897,7 +897,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).colorScheme.surfaceContainer,
               border: Border.all(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.08)

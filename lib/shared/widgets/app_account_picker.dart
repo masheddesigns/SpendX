@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/bank_account.dart';
+import '../../theme/app_theme.dart';
 
 class AppAccountPicker extends StatelessWidget {
   const AppAccountPicker({
@@ -18,19 +19,12 @@ class AppAccountPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final fillColor = isDark
-        ? const Color(0x1AFFFFFF)
-        : const Color(0x66FFFFFF);
-
-    final borderColor = isDark
-        ? const Color(0x2EFFFFFF)
-        : const Color(0x1F000000);
+    final fillColor = context.fieldFillColor;
+    final borderColor = context.fieldBorderColor;
 
     return DropdownButtonFormField<String>(
       initialValue: selectedAccountId,
-      dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      dropdownColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w500,
@@ -44,7 +38,10 @@ class AppAccountPicker extends StatelessWidget {
         ),
         filled: true,
         fillColor: fillColor,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: borderColor, width: 0.75),

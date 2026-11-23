@@ -3,12 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../theme/app_theme.dart';
 import 'spendx_glass_surface.dart';
 
-enum SpendXGlassButtonVariant {
-  primary,
-  secondary,
-  tonal,
-  danger,
-}
+enum SpendXGlassButtonVariant { primary, secondary, tonal, danger }
 
 /// Interactive Apple-inspired Liquid Glass button.
 ///
@@ -142,9 +137,14 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
     } else {
       switch (widget.variant) {
         case SpendXGlassButtonVariant.primary:
-          tintColor = AppTheme.primaryBlue.withValues(alpha: _isPressed ? 0.85 : 0.75);
+          tintColor = AppTheme.primaryBlue.withValues(
+            alpha: _isPressed ? 0.85 : 0.75,
+          );
           textColor = Colors.white;
-          border = Border.all(color: Colors.white.withValues(alpha: 0.35), width: 0.6);
+          border = Border.all(
+            color: Colors.white.withValues(alpha: 0.35),
+            width: 0.6,
+          );
           break;
         case SpendXGlassButtonVariant.secondary:
           tintColor = isDark
@@ -152,12 +152,16 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
               : Colors.black.withValues(alpha: _isPressed ? 0.10 : 0.05);
           textColor = context.textPrimary;
           border = Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.12),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.12),
             width: 0.5,
           );
           break;
         case SpendXGlassButtonVariant.tonal:
-          tintColor = AppTheme.primaryBlue.withValues(alpha: _isPressed ? 0.28 : 0.16);
+          tintColor = AppTheme.primaryBlue.withValues(
+            alpha: _isPressed ? 0.28 : 0.16,
+          );
           textColor = isDark ? const Color(0xFF93C5FD) : AppTheme.primaryBlue;
           border = Border.all(
             color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.35 : 0.25),
@@ -165,10 +169,14 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
           );
           break;
         case SpendXGlassButtonVariant.danger:
-          tintColor = AppTheme.semanticExpense.withValues(alpha: _isPressed ? 0.28 : 0.16);
+          tintColor = AppTheme.semanticExpense.withValues(
+            alpha: _isPressed ? 0.28 : 0.16,
+          );
           textColor = AppTheme.semanticExpense;
           border = Border.all(
-            color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.40 : 0.30),
+            color: AppTheme.semanticExpense.withValues(
+              alpha: isDark ? 0.40 : 0.30,
+            ),
             width: 0.5,
           );
           break;
@@ -182,13 +190,11 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
       enabled: isEnabled,
       focusable: isEnabled,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
         child: AnimatedBuilder(
           animation: _scaleAnimation,
-          builder: (context, child) => Transform.scale(
-            scale: _scaleAnimation.value,
-            child: child,
-          ),
+          builder: (context, child) =>
+              Transform.scale(scale: _scaleAnimation.value, child: child),
           child: GestureDetector(
             onTapDown: isEnabled ? _handleTapDown : null,
             onTapUp: isEnabled ? _handleTapUp : null,
@@ -206,7 +212,9 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
               borderRadius: radius,
               color: isEnabled ? tintColor : tintColor.withValues(alpha: 0.3),
               border: border,
-              padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding:
+                  widget.padding ??
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Center(
                 child: widget.isLoading
                     ? SizedBox(

@@ -122,12 +122,18 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
       backgroundColor: CinematicTheme.bg,
       body: async.when(
         loading: () => const SkeletonLoader.summary(),
-        error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(wrappedSummaryProvider(widget.period))),
+        error: (e, _) => ErrorStateWidget(
+          error: e,
+          onRetry: () => ref.invalidate(wrappedSummaryProvider(widget.period)),
+        ),
         data: (summary) {
           if (summary == null) {
             return const Center(
-                child: Text('No data for this period',
-                    style: TextStyle(color: Colors.grey)));
+              child: Text(
+                'No data for this period',
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
           }
 
           final hasComparison = summary.prevExpense != null;
@@ -168,24 +174,29 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
                         // Left zone: 40% → previous
                         Flexible(
                           flex: 40,
-                          child: GestureDetector(
-                            onTap: _goPrev,
-                            behavior: HitTestBehavior.translucent,
-                            child: const SizedBox.expand(),
+                          child: Semantics(
+                            button: true,
+                            label: 'Previous story',
+                            child: GestureDetector(
+                              onTap: _goPrev,
+                              behavior: HitTestBehavior.translucent,
+                              child: const SizedBox.expand(),
+                            ),
                           ),
                         ),
                         // Dead zone: 20% center → no action (prevents accidental taps)
-                        const Flexible(
-                          flex: 20,
-                          child: SizedBox.expand(),
-                        ),
+                        const Flexible(flex: 20, child: SizedBox.expand()),
                         // Right zone: 40% → next
                         Flexible(
                           flex: 40,
-                          child: GestureDetector(
-                            onTap: _goNext,
-                            behavior: HitTestBehavior.translucent,
-                            child: const SizedBox.expand(),
+                          child: Semantics(
+                            button: true,
+                            label: 'Next story',
+                            child: GestureDetector(
+                              onTap: _goNext,
+                              behavior: HitTestBehavior.translucent,
+                              child: const SizedBox.expand(),
+                            ),
                           ),
                         ),
                       ],
@@ -241,7 +252,11 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
                   right: 12,
                   child: IconButton(
                     tooltip: 'Close',
-                    icon: const Icon(Icons.close, color: Colors.white54, size: 22),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white54,
+                      size: 22,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
@@ -259,10 +274,16 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      child: const Text('Done',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -308,12 +329,20 @@ class _IdentitySlide extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(summary.label,
-              style: TextStyle(color: CinematicTheme.textMuted,
-                  fontSize: 14, letterSpacing: 3, fontWeight: FontWeight.w500)),
+          Text(
+            summary.label,
+            style: TextStyle(
+              color: CinematicTheme.textMuted,
+              fontSize: 14,
+              letterSpacing: 3,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           const SizedBox(height: 40),
-          Text('You handled',
-              style: TextStyle(color: CinematicTheme.textSecondary, fontSize: 18)),
+          Text(
+            'You handled',
+            style: TextStyle(color: CinematicTheme.textSecondary, fontSize: 18),
+          ),
           const SizedBox(height: 8),
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0, end: summary.totalIncome),
@@ -321,27 +350,42 @@ class _IdentitySlide extends StatelessWidget {
             curve: Curves.easeOutExpo,
             builder: (_, v, _) => Text(
               AppFormat.currency(v),
-              style: const TextStyle(color: Colors.white, fontSize: 44,
-                  fontWeight: FontWeight.w800, letterSpacing: -1),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 44,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1,
+              ),
             ),
           ),
           const SizedBox(height: 40),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _MiniStat('Spent', AppFormat.currency(summary.totalExpense), Colors.redAccent),
+              _MiniStat(
+                'Spent',
+                AppFormat.currency(summary.totalExpense),
+                Colors.redAccent,
+              ),
               const SizedBox(width: 40),
-              _MiniStat('Saved', AppFormat.currency(net.abs()),
-                  isPositive ? Colors.greenAccent : Colors.redAccent),
+              _MiniStat(
+                'Saved',
+                AppFormat.currency(net.abs()),
+                isPositive ? Colors.greenAccent : Colors.redAccent,
+              ),
             ],
           ),
           const SizedBox(height: 28),
           if (summary.prevExpense != null)
             Text(
-              isPositive ? 'Better than last period' : 'Higher spending than before',
+              isPositive
+                  ? 'Better than last period'
+                  : 'Higher spending than before',
               style: TextStyle(
                 color: isPositive ? Colors.greenAccent : Colors.orangeAccent,
-                fontSize: 13, fontWeight: FontWeight.w500),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
         ],
       ),
@@ -361,8 +405,10 @@ class _PersonalitySlide extends StatelessWidget {
     final l = topCat.toLowerCase();
     if (l.contains('food')) return 'Food was your weakness this time';
     if (l.contains('shopping')) return 'Shopping took the biggest slice';
-    if (l.contains('transport') || l.contains('travel')) return 'You were on the move a lot';
-    if (l.contains('entertainment') || l.contains('subscription')) return 'Entertainment kept you going';
+    if (l.contains('transport') || l.contains('travel'))
+      return 'You were on the move a lot';
+    if (l.contains('entertainment') || l.contains('subscription'))
+      return 'Entertainment kept you going';
     if (l.contains('bill')) return 'Bills kept the lights on';
     return '$topCat dominated your spending';
   }
@@ -370,15 +416,22 @@ class _PersonalitySlide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cats = summary.topCategories.take(5).toList();
-    final colors = [Colors.blueAccent, Colors.redAccent, Colors.tealAccent,
-        Colors.orangeAccent, Colors.purpleAccent];
+    final colors = [
+      Colors.blueAccent,
+      Colors.redAccent,
+      Colors.tealAccent,
+      Colors.orangeAccent,
+      Colors.purpleAccent,
+    ];
 
     return _BaseSlide(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('You spent mostly on',
-              style: TextStyle(color: CinematicTheme.textSecondary, fontSize: 16)),
+          Text(
+            'You spent mostly on',
+            style: TextStyle(color: CinematicTheme.textSecondary, fontSize: 16),
+          ),
           const SizedBox(height: 28),
           ...cats.asMap().entries.map((e) {
             final c = e.value;
@@ -387,30 +440,56 @@ class _PersonalitySlide extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 16),
               child: Row(
                 children: [
-                  SizedBox(width: 90, child: Text(c.categoryName,
-                      style: const TextStyle(color: Colors.white, fontSize: 14,
-                          fontWeight: FontWeight.w600))),
-                  Expanded(child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: c.percentage / 100,
-                      backgroundColor: Colors.white10,
-                      valueColor: AlwaysStoppedAnimation(color), minHeight: 8),
-                  )),
+                  SizedBox(
+                    width: 90,
+                    child: Text(
+                      c.categoryName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: c.percentage / 100,
+                        backgroundColor: Colors.white10,
+                        valueColor: AlwaysStoppedAnimation(color),
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  SizedBox(width: 36, child: Text('${c.percentage.toStringAsFixed(0)}%',
-                      style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.right)),
+                  SizedBox(
+                    width: 36,
+                    child: Text(
+                      '${c.percentage.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
                 ],
               ),
             );
           }),
           const SizedBox(height: 20),
           if (cats.isNotEmpty)
-            Text(_quip(cats.first.categoryName),
-                style: TextStyle(color: CinematicTheme.textSecondary,
-                    fontSize: 13, fontStyle: FontStyle.italic),
-                textAlign: TextAlign.center),
+            Text(
+              _quip(cats.first.categoryName),
+              style: TextStyle(
+                color: CinematicTheme.textSecondary,
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
         ],
       ),
     );
@@ -431,14 +510,22 @@ class _BehaviorSlide extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Insight('\u{1F4B0}', 'Biggest Expense', AppFormat.currency(summary.biggestExpense)),
+          _Insight(
+            '\u{1F4B0}',
+            'Biggest Expense',
+            AppFormat.currency(summary.biggestExpense),
+          ),
           const SizedBox(height: 14),
           if (summary.biggestCategory != null)
             _Insight('\u{1F3AF}', 'Top Category', summary.biggestCategory!),
           const SizedBox(height: 14),
           _Insight('\u{1F4CA}', 'Transactions', '${summary.transactionCount}'),
           const SizedBox(height: 14),
-          _Insight('\u{1F4B5}', 'Savings Rate', '${summary.savingsRate.toStringAsFixed(0)}%'),
+          _Insight(
+            '\u{1F4B5}',
+            'Savings Rate',
+            '${summary.savingsRate.toStringAsFixed(0)}%',
+          ),
         ],
       ),
     );
@@ -458,35 +545,55 @@ class _ComparisonSlide extends StatelessWidget {
     final change = summary.expenseChange;
     final savedMore = change < 0;
     final diff = summary.prevExpense != null
-        ? (summary.totalExpense - summary.prevExpense!).abs() : 0.0;
+        ? (summary.totalExpense - summary.prevExpense!).abs()
+        : 0.0;
 
     return _BaseSlide(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(savedMore ? Icons.trending_down_rounded : Icons.trending_up_rounded,
-              size: 56, color: savedMore ? Colors.greenAccent : Colors.orangeAccent),
+          Icon(
+            savedMore ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+            size: 56,
+            color: savedMore ? Colors.greenAccent : Colors.orangeAccent,
+          ),
           const SizedBox(height: 28),
           Text(
             savedMore
                 ? 'You spent ${AppFormat.currency(diff)} less'
                 : 'You spent ${AppFormat.currency(diff)} more',
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 6),
-          Text('than last period',
-              style: TextStyle(color: CinematicTheme.textMuted, fontSize: 15)),
+          Text(
+            'than last period',
+            style: TextStyle(color: CinematicTheme.textMuted, fontSize: 15),
+          ),
           const SizedBox(height: 28),
           Text(
             '${change > 0 ? "+" : ""}${change.toStringAsFixed(0)}%',
             style: TextStyle(
               color: savedMore ? Colors.greenAccent : Colors.orangeAccent,
-              fontSize: 32, fontWeight: FontWeight.w800),
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 20),
-          Text(savedMore ? 'Keep this momentum going!' : 'Let\'s work on this next month.',
-              style: TextStyle(color: CinematicTheme.textSecondary,
-                  fontSize: 13, fontStyle: FontStyle.italic)),
+          Text(
+            savedMore
+                ? 'Keep this momentum going!'
+                : 'Let\'s work on this next month.',
+            style: TextStyle(
+              color: CinematicTheme.textSecondary,
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
         ],
       ),
     );
@@ -525,11 +632,20 @@ class _VerdictSlide extends StatelessWidget {
         children: [
           Text(emoji, style: const TextStyle(fontSize: 56)),
           const SizedBox(height: 12),
-          Text('Your money habit',
-              style: TextStyle(color: CinematicTheme.textMuted, fontSize: 14)),
+          Text(
+            'Your money habit',
+            style: TextStyle(color: CinematicTheme.textMuted, fontSize: 14),
+          ),
           const SizedBox(height: 6),
-          Text(label, style: TextStyle(color: color, fontSize: 34,
-              fontWeight: FontWeight.w900, letterSpacing: 3)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 34,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 3,
+            ),
+          ),
           const SizedBox(height: 32),
           Container(
             padding: const EdgeInsets.all(16),
@@ -542,9 +658,16 @@ class _VerdictSlide extends StatelessWidget {
               children: [
                 const Text('\u{1F4A1}', style: TextStyle(fontSize: 18)),
                 const SizedBox(width: 12),
-                Expanded(child: Text(_tip(summary),
-                    style: TextStyle(color: CinematicTheme.textSecondary,
-                        fontSize: 12, height: 1.4))),
+                Expanded(
+                  child: Text(
+                    _tip(summary),
+                    style: TextStyle(
+                      color: CinematicTheme.textSecondary,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -567,11 +690,23 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Text(label, style: TextStyle(color: CinematicTheme.textMuted, fontSize: 11)),
-      const SizedBox(height: 4),
-      Text(value, style: TextStyle(color: color, fontSize: 17, fontWeight: FontWeight.bold)),
-    ]);
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: CinematicTheme.textMuted, fontSize: 11),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -590,14 +725,29 @@ class _Insight extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: CinematicTheme.border),
       ),
-      child: Row(children: [
-        Text(emoji, style: const TextStyle(fontSize: 22)),
-        const SizedBox(width: 14),
-        Expanded(child: Text(title, style: TextStyle(
-            color: CinematicTheme.textSecondary, fontSize: 13))),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 15,
-            fontWeight: FontWeight.bold)),
-      ]),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: CinematicTheme.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
