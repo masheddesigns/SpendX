@@ -122,9 +122,12 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'Total Outstanding',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
                         ),
                         Text(
                           AppFormat.currency(widget.outstanding),

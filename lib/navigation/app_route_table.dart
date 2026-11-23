@@ -20,7 +20,9 @@ class AppRouteTable {
 
   static Map<String, WidgetBuilder> get routes => {
     home: (_) => const HomeScreen(),
-    transactions: (_) => const TransactionListScreen(),
+    // A directly routed activity page must provide its own scaffold;
+    // embedded mode is only used inside the bottom-navigation shell.
+    transactions: (_) => const TransactionListScreen(isFullScreen: true),
     accounts: (_) => const AccountListScreen(),
     goals: (_) => const GoalsScreen(),
     reports: (_) => const ReportsScreen(),
@@ -32,7 +34,10 @@ class AppRouteTable {
     if (location == null || location.isEmpty) return home;
     final uri = Uri.tryParse(location);
     if (uri == null) return location;
-    if (uri.scheme != 'spendx') return uri.path.isEmpty ? location : uri.path;
+    if (uri.scheme != 'spendx') {
+      final path = uri.path.isEmpty ? location : uri.path;
+      return routes.containsKey(path) ? path : home;
+    }
 
     final routePath = uri.host.isNotEmpty
         ? '/${uri.host}${uri.path == '/' ? '' : uri.path}'

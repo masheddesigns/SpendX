@@ -150,6 +150,11 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
     // Initialize share intent listener after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ShareIntentService.instance.init(MyApp.navigatorKey);
+      SmsLiveChannelBridge.instance.registerDeepLinkHandler((link) async {
+        if (!SettingsService.instance.isOnboardingComplete) return;
+        final routeName = AppRouteTable.normalize(link);
+        await MyApp.navigatorKey.currentState?.pushNamed(routeName);
+      });
     });
   }
 

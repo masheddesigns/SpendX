@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -273,21 +275,26 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 : () => _showBreakdownSheet(context, calc, isDark),
             child: Container(
               width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 48),
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    statusLine,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      letterSpacing: -0.2,
+                  Flexible(
+                    child: Text(
+                      statusLine,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        letterSpacing: -0.2,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(width: 4),
                   Icon(
@@ -463,7 +470,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
         final x0 = w * 0.12;
         final x1 = w * 0.40;
         final x2 = w * 0.68;
-        final x3 = w * 0.90;
+        final x3 = math.min(w * 0.90, w - 36);
 
         return Stack(
           fit: StackFit.expand,

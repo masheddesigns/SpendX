@@ -38,7 +38,10 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
         ],
       ),
@@ -95,10 +98,12 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
           ),
           data: (history) {
             if (history.isEmpty) {
-              return const Center(
+              return Center(
                 child: Text(
                   'No snapshots captured yet.',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               );
             }
@@ -129,17 +134,23 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active
-                ? Colors.blueAccent.withValues(alpha: 0.2)
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: active
-                ? Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))
+                ? Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
+                  )
                 : null,
           ),
           child: Text(
             title,
             style: TextStyle(
-              color: active ? Colors.blueAccent : Colors.grey,
+              color: active
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               fontSize: 13,
             ),
@@ -182,7 +193,10 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
                   ),
                   subtitle: Text(
                     item.subtitle,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
                   ),
                   trailing: isSnapshots
                       ? IconButton(
@@ -211,18 +225,29 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
                           _dataItem(
                             'Net Worth',
                             AppFormat.currency(item.netWorth),
-                            item.netWorth >= 0 ? Colors.blueAccent : Colors.red,
+                            item.netWorth >= 0
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.error,
+                            labelColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                             large: true,
                           ),
                           _dataItem(
                             'Assets',
                             AppFormat.currency(item.assets),
-                            Colors.green,
+                            Theme.of(context).colorScheme.secondary,
+                            labelColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                           _dataItem(
                             'Liabilities',
                             AppFormat.currency(item.liabilities),
-                            Colors.redAccent,
+                            Theme.of(context).colorScheme.error,
+                            labelColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ],
                       ),
@@ -270,10 +295,13 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
 
   Widget _changePill(double change) {
     final isPositive = change >= 0;
+    final semanticColor = isPositive
+        ? Theme.of(context).colorScheme.secondary
+        : Theme.of(context).colorScheme.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: (isPositive ? Colors.green : Colors.red).withValues(alpha: 0.1),
+        color: semanticColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -282,13 +310,13 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
           Icon(
             isPositive ? Icons.trending_up : Icons.trending_down,
             size: 12,
-            color: isPositive ? Colors.green : Colors.red,
+            color: semanticColor,
           ),
           const SizedBox(width: 4),
           Text(
             AppFormat.currency(change.abs()),
             style: TextStyle(
-              color: isPositive ? Colors.green : Colors.red,
+              color: semanticColor,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -302,6 +330,7 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
     String label,
     String value,
     Color color, {
+    required Color labelColor,
     bool large = false,
   }) {
     return Column(
@@ -318,7 +347,7 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+        Text(label, style: TextStyle(color: labelColor, fontSize: 10)),
       ],
     );
   }

@@ -97,9 +97,12 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Total EMI Value',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
                   ),
                   Text(
                     AppFormat.currency(totalAmount),
@@ -187,7 +190,13 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+        Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 11,
+          ),
+        ),
         const SizedBox(height: 2),
         Text(
           value,

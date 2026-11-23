@@ -45,15 +45,17 @@ class CategoryIconPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 360;
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Pick an Icon',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Colors.grey,
+            color: colorScheme.onSurfaceVariant,
             decoration: TextDecoration.none,
           ),
         ),
@@ -71,8 +73,8 @@ class CategoryIconPicker extends StatelessWidget {
             ),
           ),
           child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: compact ? 4 : 5,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
             ),
@@ -83,7 +85,7 @@ class CategoryIconPicker extends StatelessWidget {
               return Semantics(
                 button: true,
                 selected: isSelected,
-                label: 'Category icon $icon',
+                label: 'Category icon ${icon.replaceAll('_', ' ')}',
                 child: Tooltip(
                   message: icon,
                   child: GestureDetector(
@@ -93,28 +95,28 @@ class CategoryIconPicker extends StatelessWidget {
                       width: 48,
                       height: 48,
                       child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.2)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Icon(
-                    iconForKey(icon),
-                    size: 22,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.2)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Icon(
+                          iconForKey(icon),
+                          size: 22,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),

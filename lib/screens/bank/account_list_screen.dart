@@ -177,13 +177,17 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Your financial balance sheet',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  Flexible(
+                    child: Text(
+                      'Your financial balance sheet',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ],
@@ -506,35 +510,39 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
             'Accounts',
             style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.auto_fix_high_rounded),
-              tooltip: 'Consolidate & Deduplicate',
-              onPressed: () async {
-                HapticService.instance.medium();
-                final count = await EntityConsolidationService.instance
-                    .consolidate();
-                ref.invalidate(accountsProvider);
-                ref.invalidate(creditCardsProvider);
-                ref.invalidate(loansProvider);
-                ref.invalidate(app_data.netWorthSummaryProvider);
-                app_data.invalidateAllFinancialProviders(ref);
-                if (context.mounted) {
-                  CustomSnackBar.show(
-                    context,
-                    message: count > 0
-                        ? 'Cleaned & consolidated $count duplicate items.'
-                        : 'All accounts and cards are clean and synced.',
-                  );
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_rounded),
-              tooltip: 'Add Account',
-              onPressed: () => _openAddAccount(context, ref),
-            ),
-          ],
+          actions: MediaQuery.sizeOf(context).width < 400
+              ? [
+                  PopupMenuButton<String>(
+                    tooltip: 'Account actions',
+                    icon: const Icon(Icons.add_rounded),
+                    onSelected: (action) {
+                      if (action == 'add') {
+                        _openAddAccount(context, ref);
+                      } else {
+                        _consolidateAccounts(context, ref);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'add', child: Text('Add account')),
+                      PopupMenuItem(
+                        value: 'consolidate',
+                        child: Text('Consolidate & deduplicate'),
+                      ),
+                    ],
+                  ),
+                ]
+              : [
+                  IconButton(
+                    icon: const Icon(Icons.auto_fix_high_rounded),
+                    tooltip: 'Consolidate & Deduplicate',
+                    onPressed: () => _consolidateAccounts(context, ref),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_rounded),
+                    tooltip: 'Add Account',
+                    onPressed: () => _openAddAccount(context, ref),
+                  ),
+                ],
         ),
         body: content,
       );
@@ -544,6 +552,24 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
   }
 
   // ── Actions & Navigation Handlers ────────────────────────────
+
+  Future<void> _consolidateAccounts(BuildContext context, WidgetRef ref) async {
+    HapticService.instance.medium();
+    final count = await EntityConsolidationService.instance.consolidate();
+    ref.invalidate(accountsProvider);
+    ref.invalidate(creditCardsProvider);
+    ref.invalidate(loansProvider);
+    ref.invalidate(app_data.netWorthSummaryProvider);
+    app_data.invalidateAllFinancialProviders(ref);
+    if (context.mounted) {
+      CustomSnackBar.show(
+        context,
+        message: count > 0
+            ? 'Cleaned & consolidated $count duplicate items.'
+            : 'All accounts and cards are clean and synced.',
+      );
+    }
+  }
 
   Future<void> _openAddAccount(BuildContext context, WidgetRef ref) async {
     HapticService.instance.tap();
@@ -1073,6 +1099,32 @@ class _NetPositionHorizonCard extends ConsumerWidget {
     }
 
     final isSolvent = netWorth >= 0;
+    Widget metric(String label, String value, Color valueColor) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+            color: valueColor,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1119,7 +1171,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
+                        horizontal: 6,
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
@@ -1147,20 +1199,24 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                                   : Theme.of(context).colorScheme.error,
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            isSolvent ? 'SOLVENT' : 'NEGATIVE NET WORTH',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.6,
-                              color: isSolvent
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.onSecondaryContainer
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onErrorContainer,
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              isSolvent ? 'SOLVENT' : 'NEGATIVE NET WORTH',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.3,
+                                color: isSolvent
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onSecondaryContainer
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onErrorContainer,
+                              ),
                             ),
                           ),
                         ],
@@ -1245,87 +1301,48 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                 const SizedBox(height: 14),
 
                 // Assets & Liabilities Split Strip
-                Row(
-                  children: [
-                    // Assets Column (Emerald when positive, Neutral when zero - NEVER NEGATIVE)
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final assetMetric = metric(
+                      'Total Assets',
+                      assets <= 0
+                          ? AppFormat.currency(0)
+                          : '+${AppFormat.currency(assets)}',
+                      Theme.of(context).colorScheme.secondary,
+                    );
+                    final liabilityMetric = metric(
+                      'Total Liabilities',
+                      AppFormat.currency(liabilities.abs()),
+                      Theme.of(context).colorScheme.error,
+                    );
+                    if (constraints.maxWidth < 300) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Total Assets',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                          assetMetric,
+                          const SizedBox(height: 12),
+                          Container(
+                            height: 0.6,
+                            color: Theme.of(context).colorScheme.outlineVariant,
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            assets <= 0
-                                ? AppFormat.currency(0)
-                                : '+${AppFormat.currency(assets)}',
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              color: isDark
-                                  ? Theme.of(context).colorScheme.secondary
-                                  : Theme.of(context).colorScheme.secondary,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 12),
+                          liabilityMetric,
                         ],
-                      ),
-                    ),
-
-                    Container(
-                      width: 0.6,
-                      height: 30,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.12)
-                          : Colors.black.withValues(alpha: 0.08),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Liabilities Column
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Total Liabilities',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            AppFormat.currency(liabilities.abs()),
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.error,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: assetMetric),
+                        Container(
+                          width: 0.6,
+                          height: 30,
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(child: liabilityMetric),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

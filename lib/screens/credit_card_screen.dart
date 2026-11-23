@@ -519,18 +519,31 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final limit = Text(
                   'Limit: ${AppFormat.currency(card.creditLimit)}',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-                ),
-                Text(
+                );
+                final available = Text(
                   'Available: ${AppFormat.currency(card.creditLimit - outstanding)}',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-                ),
-              ],
+                );
+                if (constraints.maxWidth < 340) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      limit,
+                      const SizedBox(height: 4),
+                      Align(alignment: Alignment.centerRight, child: available),
+                    ],
+                  );
+                }
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [limit, available],
+                );
+              },
             ),
           ],
           if (!hasLimit) ...[
@@ -772,26 +785,38 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   }
 
   Widget _buildActionGrid(CreditCard card) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildActionButton(
-            'Add Expense',
-            Icons.shopping_bag_outlined,
-            Theme.of(context).colorScheme.primary,
-            () => _navigateToAddTransaction(card),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _buildActionButton(
-            'Pay Card',
-            Icons.account_balance_wallet_outlined,
-            Theme.of(context).colorScheme.secondary,
-            () => _navigateToPayments(card),
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final addExpense = _buildActionButton(
+          'Add Expense',
+          Icons.shopping_bag_outlined,
+          Theme.of(context).colorScheme.primary,
+          () => _navigateToAddTransaction(card),
+        );
+        final payCard = _buildActionButton(
+          'Pay Card',
+          Icons.account_balance_wallet_outlined,
+          Theme.of(context).colorScheme.secondary,
+          () => _navigateToPayments(card),
+        );
+        if (constraints.maxWidth < 340) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              addExpense,
+              const SizedBox(height: AppSpacing.md),
+              payCard,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: addExpense),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: payCard),
+          ],
+        );
+      },
     );
   }
 

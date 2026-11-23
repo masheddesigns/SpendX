@@ -590,12 +590,15 @@ class _MonthlyMovementSection extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: chronologicalData.isEmpty
-                ? const SizedBox(
+                ? SizedBox(
                     height: 160,
                     child: Center(
                       child: Text(
                         'No transaction records in this time horizon.',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   )
@@ -821,12 +824,15 @@ class _CategoryBreakdownSection extends StatelessWidget {
           SpendXGlassSurface(
             level: SpendXGlassLevel.base,
             borderRadius: BorderRadius.circular(16),
-            child: const Padding(
-              padding: EdgeInsets.all(AppSpacing.section),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.section),
               child: Center(
                 child: Text(
                   'No categorized expense records in this time horizon.',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),

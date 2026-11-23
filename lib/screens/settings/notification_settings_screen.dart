@@ -145,7 +145,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       ).colorScheme.primary.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child:  Icon(
+                    child: Icon(
                       Icons.bolt_rounded,
                       color: Theme.of(context).colorScheme.primary,
                       size: 20,
@@ -171,7 +171,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       ],
                     ),
                   ),
-                   Icon(
+                  Icon(
                     Icons.chevron_right_rounded,
                     color: Theme.of(context).colorScheme.primary,
                   ),
@@ -248,15 +248,19 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.35),
                 ),
               ),
               child: Row(
                 children: [
-                   Icon(
+                  Icon(
                     Icons.battery_alert_rounded,
                     color: Theme.of(context).colorScheme.primary,
                   ),
@@ -897,9 +901,12 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Only notifications from contacts matching these names will be inspected for transactions.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 16),
               Row(

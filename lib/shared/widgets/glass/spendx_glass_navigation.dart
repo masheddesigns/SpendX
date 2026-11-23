@@ -7,11 +7,13 @@ class SpendXNavItem {
   final IconData icon;
   final IconData? activeIcon;
   final String label;
+  final String? compactLabel;
 
   const SpendXNavItem({
     required this.icon,
     this.activeIcon,
     required this.label,
+    this.compactLabel,
   });
 }
 
@@ -40,6 +42,7 @@ class SpendXGlassNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final compact = MediaQuery.sizeOf(context).width < 360;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Padding(
@@ -64,6 +67,7 @@ class SpendXGlassNavigation extends StatelessWidget {
                 item: item,
                 isSelected: isSelected,
                 isDark: isDark,
+                compact: compact,
                 onTap: () {
                   HapticFeedback.selectionClick();
                   onItemSelected(index);
@@ -81,17 +85,20 @@ class _GlassNavItem extends StatelessWidget {
   final SpendXNavItem item;
   final bool isSelected;
   final bool isDark;
+  final bool compact;
   final VoidCallback onTap;
 
   const _GlassNavItem({
     required this.item,
     required this.isSelected,
     required this.isDark,
+    required this.compact,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final activeColor = AppTheme.primaryBlue;
     final inactiveColor = isDark
         ? const Color(0xFF8896AB)
@@ -107,7 +114,9 @@ class _GlassNavItem extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             margin: const EdgeInsets.symmetric(horizontal: 2),
             padding: const EdgeInsets.symmetric(vertical: 5),
@@ -156,7 +165,7 @@ class _GlassNavItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  item.label,
+                  compact ? (item.compactLabel ?? item.label) : item.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

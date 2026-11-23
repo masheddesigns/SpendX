@@ -32,6 +32,7 @@ class MainActivity : FlutterActivity() {
 
     private var pendingIslandCardEvent: Map<String, Any?>? = null
     private var pendingSmsEvent: List<String>? = null
+    private var pendingDeepLink: String? = null
 
     override fun onResume() {
         super.onResume()
@@ -68,6 +69,22 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIslandIntents(intent)
+        handleAppLinkIntent(intent)
+    }
+
+    private fun handleAppLinkIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (intent.action != Intent.ACTION_VIEW || uri.scheme != "spendx") return
+
+        val engine = flutterEngine ?: FlutterEngineCache.getInstance().get(ENGINE_ID)
+        if (engine == null) {
+            pendingDeepLink = uri.toString()
+            return
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
+                .invokeMethod("onDeepLinkReceived", uri.toString())
+        }, 300)
     }
 
     private fun handleIslandIntents(intent: Intent?) {
@@ -178,6 +195,14 @@ class MainActivity : FlutterActivity() {
                 MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod("onSmsReceived", payload)
             }, 600)
             pendingSmsEvent = null
+        }
+
+        pendingDeepLink?.let { link ->
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+                    .invokeMethod("onDeepLinkReceived", link)
+            }, 600)
+            pendingDeepLink = null
         }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler {

@@ -23,10 +23,19 @@ class CategoryColorPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Pick a Color', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey, decoration: TextDecoration.none)),
+        Text(
+          'Pick a Color',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurfaceVariant,
+            decoration: TextDecoration.none,
+          ),
+        ),
         const SizedBox(height: 12),
         SizedBox(
           height: 48,
@@ -38,7 +47,8 @@ class CategoryColorPicker extends StatelessWidget {
               final item = palette[index];
               final hex = item['hex']!;
               final color = Color(int.parse(hex.replaceAll('#', '0xFF')));
-              final isSelected = selectedColor.toUpperCase() == hex.toUpperCase();
+              final isSelected =
+                  selectedColor.toUpperCase() == hex.toUpperCase();
 
               return Semantics(
                 button: true,
@@ -50,20 +60,32 @@ class CategoryColorPicker extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     onTap: () => onColorSelected(hex),
                     child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      width: 3,
-                    ),
-                    boxShadow: isSelected ? [
-                      BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 2)
-                    ] : null,
-                  ),
-                  child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? Colors.white : Colors.transparent,
+                          width: 3,
+                        ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: color.withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 20,
+                            )
+                          : null,
                     ),
                   ),
                 ),

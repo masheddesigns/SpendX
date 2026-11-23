@@ -19,15 +19,19 @@ class ReceiptScanOverlay extends StatefulWidget {
     String title = 'Scanning receipt...',
     String subtitle = 'Analyzing receipt data',
   }) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return showGeneralDialog<T>(
       context: context,
       barrierDismissible: false,
       barrierLabel: title,
       barrierColor: Colors.black.withValues(alpha: 0.32),
-      transitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
       pageBuilder: (context, animation, secondaryAnimation) =>
           ReceiptScanOverlay(title: title, subtitle: subtitle),
       transitionBuilder: (context, animation, secondaryAnimation, child) {
+        if (reduceMotion) return child;
         return FadeTransition(
           opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
           child: ScaleTransition(
@@ -50,7 +54,27 @@ class _ReceiptScanOverlayState extends State<ReceiptScanOverlay>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1800),
-  )..repeat();
+  );
+
+  bool _motionConfigured = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!_motionConfigured || reduceMotion != _reducedMotion) {
+      _motionConfigured = true;
+      _reducedMotion = reduceMotion;
+      if (reduceMotion) {
+        _controller.stop();
+        _controller.value = 0;
+      } else {
+        _controller.repeat();
+      }
+    }
+  }
+
+  bool _reducedMotion = false;
 
   @override
   void dispose() {

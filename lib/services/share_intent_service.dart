@@ -26,13 +26,26 @@ class ShareIntentService {
 
   /// File extensions that the file (CSV/JSON/Notion) pipeline supports.
   static const _fileExtensions = {
-    'csv', 'tsv', 'txt', 'md', 'markdown',
-    'html', 'htm', 'json', 'zip',
+    'csv',
+    'tsv',
+    'txt',
+    'md',
+    'markdown',
+    'html',
+    'htm',
+    'json',
+    'zip',
   };
 
   /// Image extensions that should go through OCR.
   static const _imageExtensions = {
-    'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'bmp',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'heic',
+    'heif',
+    'bmp',
   };
 
   void init(GlobalKey<NavigatorState> navigatorKey) {
@@ -47,20 +60,16 @@ class ShareIntentService {
     _drainColdStart(navigatorKey);
 
     // Warm start: app was already running.
-    _streamSub = ReceiveSharingIntent.instance.getMediaStream().listen(
-      (items) {
-        if (items.isNotEmpty) {
-          _handleShared(items, navigatorKey);
-        }
-      },
-    );
+    _streamSub = ReceiveSharingIntent.instance.getMediaStream().listen((items) {
+      if (items.isNotEmpty) {
+        _handleShared(items, navigatorKey);
+      }
+    });
   }
 
   /// Drain the cold-start payload, retrying briefly until navigator is ready.
   /// Guards against the stream re-delivering the same items immediately after.
-  Future<void> _drainColdStart(
-    GlobalKey<NavigatorState> navigatorKey,
-  ) async {
+  Future<void> _drainColdStart(GlobalKey<NavigatorState> navigatorKey) async {
     if (_handledInitial) return;
     final initial = await ReceiveSharingIntent.instance.getInitialMedia();
     if (initial.isEmpty) {
@@ -129,8 +138,17 @@ class ShareIntentService {
         case SharedMediaType.image:
           image ??= s;
           break;
-        case SharedMediaType.text:
         case SharedMediaType.url:
+          // The share plugin also reports VIEW intents as URLs. Ignore our
+          // own app links here so they continue through MaterialApp routing
+          // instead of being parsed as transaction text.
+          if (s.type == SharedMediaType.url &&
+              Uri.tryParse(s.path)?.scheme.toLowerCase() == 'spendx') {
+            break;
+          }
+          text ??= s;
+          break;
+        case SharedMediaType.text:
           text ??= s;
           break;
         case SharedMediaType.file:
@@ -150,10 +168,7 @@ class ShareIntentService {
 
     // Image + caption together → merge into image payload with caption.
     if (image != null) {
-      return SharePayload.image(
-        File(image.path),
-        caption: text?.path,
-      );
+      return SharePayload.image(File(image.path), caption: text?.path);
     }
     if (text != null) {
       return SharePayload.text(text.path);

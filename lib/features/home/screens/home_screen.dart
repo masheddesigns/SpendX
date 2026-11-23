@@ -63,11 +63,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       icon: Icons.account_balance_wallet_outlined,
       activeIcon: Icons.account_balance_wallet_rounded,
       label: 'Accounts',
+      compactLabel: 'Acct',
     ),
     SpendXNavItem(
       icon: Icons.calendar_today_outlined,
       activeIcon: Icons.calendar_today_rounded,
       label: 'Planning',
+      compactLabel: 'Plan',
     ),
     SpendXNavItem(
       icon: Icons.tune_outlined,

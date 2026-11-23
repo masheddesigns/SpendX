@@ -603,32 +603,42 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           width: 0.75,
         ),
       ),
-      child: Row(
-        children: [
-          _buildTypeOption(
-            label: 'Spent',
-            type: 'expense',
-            color: modern_theme.AppTheme.semanticExpense,
-            icon: Icons.arrow_upward_rounded,
-            isDark: isDark,
-          ),
-          const SizedBox(width: 4),
-          _buildTypeOption(
-            label: 'Received',
-            type: 'income',
-            color: modern_theme.AppTheme.semanticIncome,
-            icon: Icons.arrow_downward_rounded,
-            isDark: isDark,
-          ),
-          const SizedBox(width: 4),
-          _buildTypeOption(
-            label: 'Moved',
-            type: 'transfer',
-            color: modern_theme.AppTheme.primaryBlue,
-            icon: Icons.swap_horiz_rounded,
-            isDark: isDark,
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact =
+              constraints.maxWidth < 520 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.1;
+          return Row(
+            children: [
+              _buildTypeOption(
+                label: 'Spent',
+                type: 'expense',
+                color: modern_theme.AppTheme.semanticExpense,
+                icon: Icons.arrow_upward_rounded,
+                isDark: isDark,
+                compact: compact,
+              ),
+              const SizedBox(width: 4),
+              _buildTypeOption(
+                label: 'Received',
+                type: 'income',
+                color: modern_theme.AppTheme.semanticIncome,
+                icon: Icons.arrow_downward_rounded,
+                isDark: isDark,
+                compact: compact,
+              ),
+              const SizedBox(width: 4),
+              _buildTypeOption(
+                label: 'Moved',
+                type: 'transfer',
+                color: modern_theme.AppTheme.primaryBlue,
+                icon: Icons.swap_horiz_rounded,
+                isDark: isDark,
+                compact: compact,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -639,57 +649,107 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     required Color color,
     required IconData icon,
     required bool isDark,
+    required bool compact,
   }) {
     final isSelected = _selectedType == type;
+    final semanticLabel = switch (type) {
+      'expense' => 'Money spent',
+      'income' => 'Money received',
+      _ => 'Transfer money',
+    };
     return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedType = type;
-            _selectedCategoryId = null;
-          });
-          _loadInitialData();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? color.withValues(alpha: isDark ? 0.30 : 0.20)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: isSelected
-                ? Border.all(color: color.withValues(alpha: 0.6), width: 1.0)
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 14,
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: semanticLabel,
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedType = type;
+              _selectedCategoryId = null;
+            });
+            _loadInitialData();
+          },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: AnimatedContainer(
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
                 color: isSelected
-                    ? color
-                    : (Theme.of(context).colorScheme.onSurfaceVariant),
+                    ? color.withValues(alpha: isDark ? 0.30 : 0.20)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: isSelected
+                    ? Border.all(
+                        color: color.withValues(alpha: 0.6),
+                        width: 1.0,
+                      )
+                    : null,
               ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected
-                        ? color
-                        : (Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                ),
-              ),
-            ],
+              alignment: Alignment.center,
+              child: compact
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 14,
+                          color: isSelected
+                              ? color
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? color
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          size: 14,
+                          color: isSelected
+                              ? color
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected
+                                  ? color
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ),
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/import_validation_log.dart';
 import '../../services/retention_events.dart';
+import '../../shared/widgets/error_state_widget.dart';
 
 /// Internal debug panel for the retention observation window.
 ///
@@ -20,6 +21,7 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
   Map<String, Map<String, int>>? _last7Days;
   ImportValidationStats? _import;
   bool _loading = true;
+  Object? _error;
 
   @override
   void initState() {
@@ -28,24 +30,44 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
   }
 
   Future<void> _load() async {
-    final events = RetentionEvents.instance;
-    final today = await events.ratesFor();
-    final avg = await events.sevenDayAverage();
-    final history = await events.recent(days: 7);
-    final import = await ImportValidationLog.instance.snapshot();
-    if (!mounted) return;
     setState(() {
-      _today = today;
-      _sevenDayAvg = avg;
-      _last7Days = history;
-      _import = import;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final events = RetentionEvents.instance;
+      final today = await events.ratesFor();
+      final avg = await events.sevenDayAverage();
+      final history = await events.recent(days: 7);
+      final import = await ImportValidationLog.instance.snapshot();
+      if (!mounted) return;
+      setState(() {
+        _today = today;
+        _sevenDayAvg = avg;
+        _last7Days = history;
+        _import = import;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _resetImport() async {
-    await ImportValidationLog.instance.reset();
-    await _load();
+    try {
+      await ImportValidationLog.instance.reset();
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -56,11 +78,16 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
         title: const Text('Retention Metrics'),
         actions: [
           IconButton(
-            tooltip: 'Refresh',icon: const Icon(Icons.refresh), onPressed: _load),
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh),
+            onPressed: _loading ? null : _load,
+          ),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? ErrorStateWidget(error: _error!, onRetry: _load)
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
@@ -69,41 +96,54 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
                   // 7-day average — anchor to prevent overreacting to today
                   _sevenDayAverageBar(_sevenDayAvg!, cs),
                   const SizedBox(height: 16),
-                  Text('TODAY',
-                      style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
-                          letterSpacing: 1)),
+                  Text(
+                    'TODAY',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      letterSpacing: 1,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   _todayCard(_today!, cs),
                   const SizedBox(height: 24),
-                  Text('LAST 7 DAYS',
-                      style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
-                          letterSpacing: 1)),
+                  Text(
+                    'LAST 7 DAYS',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      letterSpacing: 1,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   if (_last7Days!.isEmpty)
-                    Text('No data yet',
-                        style: TextStyle(color: cs.onSurfaceVariant))
+                    Text(
+                      'No data yet',
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    )
                   else
                     ..._last7Days!.entries.map((e) => _historyTile(e, cs)),
                   const SizedBox(height: 24),
                   Row(
                     children: [
-                      Text('IMPORT VALIDATION',
-                          style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                              letterSpacing: 1)),
+                      Text(
+                        'IMPORT VALIDATION',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                          letterSpacing: 1,
+                        ),
+                      ),
                       const Spacer(),
                       TextButton(
                         onPressed: _resetImport,
-                        child: const Text('Reset',
-                            style: TextStyle(fontSize: 11)),
+                        child: const Text(
+                          'Reset',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                   ),
@@ -136,9 +176,10 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
               'Review ${fmt(r.reviewCompletionRate)} · '
               'Notif ${fmt(r.notifOpenRate)}',
               style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
+                color: cs.onSurface,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -158,29 +199,32 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
         children: [
           _row('App opens', '${r.appOpens}'),
           _row('Digest shown', '${r.digestShown}'),
-          _row('CTA taps', '${r.ctaClicked}',
-              suffix: r.ctaClickRate != null
-                  ? '(${r.ctaClickRate}%)'
-                  : null,
-              highlight: _ctaColor(r.ctaClickRate)),
+          _row(
+            'CTA taps',
+            '${r.ctaClicked}',
+            suffix: r.ctaClickRate != null ? '(${r.ctaClickRate}%)' : null,
+            highlight: _ctaColor(r.ctaClickRate),
+          ),
           const Divider(height: 24),
           _row('Reviews shown', '${r.reviewShown}'),
           _row(
-              'Reviews completed',
-              '${r.reviewApproved + r.reviewRejected}',
-              suffix: r.reviewCompletionRate != null
-                  ? '(${r.reviewCompletionRate}%)'
-                  : null,
-              highlight: _completionColor(r.reviewCompletionRate)),
+            'Reviews completed',
+            '${r.reviewApproved + r.reviewRejected}',
+            suffix: r.reviewCompletionRate != null
+                ? '(${r.reviewCompletionRate}%)'
+                : null,
+            highlight: _completionColor(r.reviewCompletionRate),
+          ),
           _row('  approved', '${r.reviewApproved}', dim: true),
           _row('  rejected', '${r.reviewRejected}', dim: true),
           const Divider(height: 24),
           _row('Notifications sent', '${r.notifReceived}'),
-          _row('Notifications opened', '${r.notifOpened}',
-              suffix: r.notifOpenRate != null
-                  ? '(${r.notifOpenRate}%)'
-                  : null,
-              highlight: _notifColor(r.notifOpenRate)),
+          _row(
+            'Notifications opened',
+            '${r.notifOpened}',
+            suffix: r.notifOpenRate != null ? '(${r.notifOpenRate}%)' : null,
+            highlight: _notifColor(r.notifOpenRate),
+          ),
           const Divider(height: 24),
           _row('All-set shown', '${r.allSetShown}'),
           _row('Recovery shown', '${r.recoveryShown}'),
@@ -189,7 +233,10 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
     );
   }
 
-  Widget _historyTile(MapEntry<String, Map<String, int>> entry, ColorScheme cs) {
+  Widget _historyTile(
+    MapEntry<String, Map<String, int>> entry,
+    ColorScheme cs,
+  ) {
     final dayLabel = entry.key.replaceFirst('events_', '');
     final c = entry.value;
     return Container(
@@ -201,11 +248,14 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
       ),
       child: Row(
         children: [
-          Text(dayLabel,
-              style: TextStyle(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12)),
+          Text(
+            dayLabel,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Wrap(
@@ -229,36 +279,52 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
         color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text('$short:$value',
-          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10)),
+      child: Text(
+        '$short:$value',
+        style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
+      ),
     );
   }
 
-  Widget _row(String label, String value,
-      {String? suffix, Color? highlight, bool dim = false}) {
+  Widget _row(
+    String label,
+    String value, {
+    String? suffix,
+    Color? highlight,
+    bool dim = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: dim ? Colors.grey : null,
-                    fontSize: dim ? 12 : 13,
-                    fontWeight: dim ? FontWeight.w400 : FontWeight.w500)),
-          ),
-          Text(value,
+            child: Text(
+              label,
               style: TextStyle(
-                  color: highlight,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14)),
+                color: dim ? Colors.grey : null,
+                fontSize: dim ? 12 : 13,
+                fontWeight: dim ? FontWeight.w400 : FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: highlight,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
           if (suffix != null) ...[
             const SizedBox(width: 6),
-            Text(suffix,
-                style: TextStyle(
-                    color: highlight ?? Colors.grey,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500)),
+            Text(
+              suffix,
+              style: TextStyle(
+                color: highlight ?? Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ],
       ),
@@ -290,25 +356,37 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
         children: [
           _row('Imports shown', '${s.total}'),
           const Divider(height: 24),
-          _row('Amount accuracy', pct(s.amountAccuracy),
-              suffix: '(target ≥ 95%)',
-              highlight: targetColor(s.amountAccuracy, 95)),
-          _row('Merchant accuracy', pct(s.merchantAccuracy),
-              suffix: '(target ≥ 80%)',
-              highlight: targetColor(s.merchantAccuracy, 80)),
-          _row('Correction rate', pct(s.correctionRate),
-              suffix: '(target ≤ 20%)',
-              highlight: s.correctionRate == null
-                  ? null
-                  : (s.correctionRate! <= 20 ? Colors.green : Colors.orange)),
+          _row(
+            'Amount accuracy',
+            pct(s.amountAccuracy),
+            suffix: '(target ≥ 95%)',
+            highlight: targetColor(s.amountAccuracy, 95),
+          ),
+          _row(
+            'Merchant accuracy',
+            pct(s.merchantAccuracy),
+            suffix: '(target ≥ 80%)',
+            highlight: targetColor(s.merchantAccuracy, 80),
+          ),
+          _row(
+            'Correction rate',
+            pct(s.correctionRate),
+            suffix: '(target ≤ 20%)',
+            highlight: s.correctionRate == null
+                ? null
+                : (s.correctionRate! <= 20 ? Colors.green : Colors.orange),
+          ),
           const Divider(height: 24),
           _row('  amount edits', '${s.amountEdits}', dim: true),
           _row('  merchant edits', '${s.merchantEdits}', dim: true),
           _row('  any correction', '${s.corrected}', dim: true),
           const Divider(height: 24),
-          _row('Avg latency (share→preview)', ms(s.avgLatencyMs),
-              suffix: '(target ≤ 2500 ms, n=${s.sampleSize})',
-              highlight: latencyColor(s.avgLatencyMs)),
+          _row(
+            'Avg latency (share→preview)',
+            ms(s.avgLatencyMs),
+            suffix: '(target ≤ 2500 ms, n=${s.sampleSize})',
+            highlight: latencyColor(s.avgLatencyMs),
+          ),
         ],
       ),
     );
@@ -325,12 +403,15 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('TARGETS',
-              style: TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                  letterSpacing: 1)),
+          Text(
+            'TARGETS',
+            style: TextStyle(
+              color: Colors.blue,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              letterSpacing: 1,
+            ),
+          ),
           const SizedBox(height: 8),
           _bullet('Digest CTA: 40-60% (alert if <25%)'),
           _bullet('Review completion: >40%'),
@@ -344,8 +425,7 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
   Widget _bullet(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text('• $text',
-          style: const TextStyle(fontSize: 12, height: 1.4)),
+      child: Text('• $text', style: const TextStyle(fontSize: 12, height: 1.4)),
     );
   }
 

@@ -23,6 +23,8 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
   late final AnimationController _rotationController;
 
   SyncStage _lastStage = SyncStage.idle;
+  bool _reducedMotion = false;
+  bool _motionConfigured = false;
 
   @override
   void initState() {
@@ -46,14 +48,36 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
 
     _rotationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
-    )..repeat();
+    );
 
     SyncActivityService.instance.addListener(_handleSyncChange);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_motionConfigured && reduceMotion == _reducedMotion) return;
+    _motionConfigured = true;
+    _reducedMotion = reduceMotion;
+    if (reduceMotion) {
+      _slideController.stop();
+      _pulseController.stop();
+      _rotationController.stop();
+      _slideController.value = SyncActivityService.instance.state.isVisible
+          ? 1
+          : 0;
+      _pulseController.value = 0.5;
+      _rotationController.value = 0;
+    } else {
+      _pulseController.repeat(reverse: true);
+      _rotationController.repeat();
+    }
   }
 
   @override
@@ -71,9 +95,17 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
         !_slideController.isCompleted &&
         !_slideController.isAnimating) {
       HapticService.instance.tap();
-      _slideController.forward();
+      if (_reducedMotion) {
+        _slideController.value = 1;
+      } else {
+        _slideController.forward();
+      }
     } else if (!state.isVisible && _slideController.value > 0) {
-      _slideController.reverse();
+      if (_reducedMotion) {
+        _slideController.value = 0;
+      } else {
+        _slideController.reverse();
+      }
     }
 
     if (state.stage == SyncStage.completed &&
@@ -137,7 +169,10 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
+                          constraints: const BoxConstraints(minHeight: 48),
+                          duration: _reducedMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 300),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 8,

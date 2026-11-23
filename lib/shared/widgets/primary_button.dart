@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_motion.dart';
 import '../../services/haptic_service.dart';
 
 enum PrimaryButtonTone { primary, secondary, outline }
@@ -43,6 +44,8 @@ class _PrimaryButtonState extends State<PrimaryButton> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final buttonHeight = widget.height < 48 ? 48.0 : widget.height;
     final isDisabled = widget.onPressed == null || widget.isLoading;
 
     final foregroundColor = widget.tone == PrimaryButtonTone.primary
@@ -65,70 +68,102 @@ class _PrimaryButtonState extends State<PrimaryButton> {
               : BorderSide.none);
 
     final button = GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: SizedBox(
-          height: widget.height,
-          child: ElevatedButton.icon(
-            onPressed: isDisabled
-                ? null
-                : () {
-                    HapticService.instance.trigger(widget.hapticType);
-                    widget.onPressed!();
-                  },
-            icon: widget.isLoading
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        foregroundColor,
-                      ),
-                    ),
-                  )
-                : (widget.icon != null
-                      ? Icon(widget.icon, size: 20)
-                      : const SizedBox.shrink()),
-            label: Text(
-              widget.label,
-              style:
-                  Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontSize: widget.fontSize ?? 15,
-                    fontWeight: FontWeight.w600,
-                    color: foregroundColor,
-                  ) ??
-                  TextStyle(
-                    fontSize: widget.fontSize ?? 15,
-                    fontWeight: FontWeight.w600,
-                    color: foregroundColor,
-                  ),
-            ),
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: backgroundColor,
-              foregroundColor: foregroundColor,
-              disabledBackgroundColor: backgroundColor.withValues(alpha: 0.5),
-              disabledForegroundColor: foregroundColor.withValues(alpha: 0.7),
-              side: border,
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.0),
+      onTapDown: reduceMotion || isDisabled
+          ? null
+          : (_) => setState(() => _isPressed = true),
+      onTapUp: reduceMotion || isDisabled
+          ? null
+          : (_) => setState(() => _isPressed = false),
+      onTapCancel: reduceMotion || isDisabled
+          ? null
+          : () => setState(() => _isPressed = false),
+      child: reduceMotion
+          ? SizedBox(
+              height: buttonHeight,
+              child: _buildButton(
+                context,
+                isDisabled: isDisabled,
+                foregroundColor: foregroundColor,
+                backgroundColor: backgroundColor,
+                border: border,
+              ),
+            )
+          : AnimatedScale(
+              scale: _isPressed ? 0.96 : 1.0,
+              duration: AppMotion.fast,
+              child: SizedBox(
+                height: buttonHeight,
+                child: _buildButton(
+                  context,
+                  isDisabled: isDisabled,
+                  foregroundColor: foregroundColor,
+                  backgroundColor: backgroundColor,
+                  border: border,
+                ),
               ),
             ),
-          ),
-        ),
-      ),
     );
 
     final shouldExpand = widget.fullWidth ?? widget.expand;
     return shouldExpand
         ? SizedBox(width: double.infinity, child: button)
         : button;
+  }
+
+  Widget _buildButton(
+    BuildContext context, {
+    required bool isDisabled,
+    required Color foregroundColor,
+    required Color backgroundColor,
+    required BorderSide border,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: isDisabled
+          ? null
+          : () {
+              HapticService.instance.trigger(widget.hapticType);
+              widget.onPressed!();
+            },
+      icon: widget.isLoading
+          ? SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
+              ),
+            )
+          : (widget.icon != null
+                ? Icon(widget.icon, size: 20)
+                : const SizedBox.shrink()),
+      label: Text(
+        widget.label,
+        style:
+            Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontSize: widget.fontSize ?? 15,
+              fontWeight: FontWeight.w600,
+              color: foregroundColor,
+            ) ??
+            TextStyle(
+              fontSize: widget.fontSize ?? 15,
+              fontWeight: FontWeight.w600,
+              color: foregroundColor,
+            ),
+      ),
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        minimumSize: const Size(48, 48),
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
+        disabledBackgroundColor: backgroundColor.withValues(alpha: 0.5),
+        disabledForegroundColor: foregroundColor.withValues(alpha: 0.7),
+        side: border,
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.0),
+        ),
+      ),
+    );
   }
 }
 

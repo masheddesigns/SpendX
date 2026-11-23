@@ -5,6 +5,7 @@ import '../core/logging/app_logger.dart';
 
 typedef SmsReceivedCallback = FutureOr<void> Function(List<dynamic>? args);
 typedef IslandEventCallback = FutureOr<void> Function(Map<dynamic, dynamic>? args);
+typedef DeepLinkCallback = FutureOr<void> Function(String link);
 
 /// Centralized MethodChannel dispatcher for 'spendx/sms_live'.
 ///
@@ -32,6 +33,8 @@ class SmsLiveChannelBridge {
   final List<Map<dynamic, dynamic>?> _pendingCardClicks = [];
 
   IslandEventCallback? _dynamicIslandEventCallback;
+  DeepLinkCallback? _deepLinkCallback;
+  String? _pendingDeepLink;
 
   @visibleForTesting
   void resetForTesting() {
@@ -40,6 +43,8 @@ class SmsLiveChannelBridge {
     _islandCardClickCallback = null;
     _pendingCardClicks.clear();
     _dynamicIslandEventCallback = null;
+    _deepLinkCallback = null;
+    _pendingDeepLink = null;
   }
 
   void registerSmsHandler(SmsReceivedCallback callback) {
@@ -76,6 +81,13 @@ class SmsLiveChannelBridge {
     _dynamicIslandEventCallback = callback;
   }
 
+  void registerDeepLinkHandler(DeepLinkCallback callback) {
+    _deepLinkCallback = callback;
+    final pending = _pendingDeepLink;
+    _pendingDeepLink = null;
+    if (pending != null) callback(pending);
+  }
+
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onSmsReceived':
@@ -103,6 +115,15 @@ class SmsLiveChannelBridge {
         if (_dynamicIslandEventCallback != null) {
           return await _dynamicIslandEventCallback!(args);
         }
+        return null;
+
+      case 'onDeepLinkReceived':
+        final link = call.arguments as String?;
+        if (link == null || link.isEmpty) return null;
+        if (_deepLinkCallback != null) {
+          return await _deepLinkCallback!(link);
+        }
+        _pendingDeepLink = link;
         return null;
 
       default:

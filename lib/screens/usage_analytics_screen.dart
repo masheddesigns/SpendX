@@ -5,8 +5,33 @@ import '../shared/widgets/empty_state_widget.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/loading_state_widget.dart';
 
-class UsageAnalyticsScreen extends StatelessWidget {
+class UsageAnalyticsScreen extends StatefulWidget {
   const UsageAnalyticsScreen({super.key});
+
+  @override
+  State<UsageAnalyticsScreen> createState() => _UsageAnalyticsScreenState();
+}
+
+class _UsageAnalyticsScreenState extends State<UsageAnalyticsScreen> {
+  late Future<List<Map<String, dynamic>>> _sessionsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionsFuture = _loadSessions();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadSessions() =>
+      AppSessionService.instance.getRecentSessions(50);
+
+  Future<void> _retry() async {
+    setState(() => _sessionsFuture = _loadSessions());
+    try {
+      await _sessionsFuture;
+    } catch (_) {
+      // FutureBuilder renders the failure and offers this retry action again.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,14 +40,24 @@ class UsageAnalyticsScreen extends StatelessWidget {
         title: const Text('Detailed Analytics'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'Refresh activity',
+            onPressed: _retry,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
       ),
       body: SafeArea(
         child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: AppSessionService.instance.getRecentSessions(50),
+          future: _sessionsFuture,
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               if (snapshot.hasError) {
-                return ErrorStateWidget(error: snapshot.error!);
+                return ErrorStateWidget(
+                  error: snapshot.error!,
+                  onRetry: _retry,
+                );
               }
               return const LoadingStateWidget(message: 'Loading activity…');
             }
@@ -104,10 +139,12 @@ class UsageAnalyticsScreen extends StatelessWidget {
                               decoration: TextDecoration.none,
                             ),
                           ),
-                          const Text(
+                          Text(
                             'Duration',
                             style: TextStyle(
-                              color: Colors.white24,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontSize: 10,
                               decoration: TextDecoration.none,
                             ),

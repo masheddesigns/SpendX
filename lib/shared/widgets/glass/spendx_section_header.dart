@@ -23,80 +23,96 @@ class SpendXSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sectionTitle = Row(
+      children: [
+        Flexible(
+          child: Text(
+            title,
+            maxLines: MediaQuery.textScalerOf(context).scale(1) > 1.1 ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.sectionHeading.copyWith(
+              color: context.textSecondary,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+        if (count != null) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(AppRadius.full),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: context.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final trailingWidget = actionLabel != null && onAction != null
+        ? Semantics(
+            button: true,
+            label: actionLabel,
+            child: GestureDetector(
+              onTap: onAction,
+              behavior: HitTestBehavior.opaque,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: Center(
+                  child: Text(
+                    actionLabel!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryBlue,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : trailing;
 
     return Padding(
       padding: padding,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.sectionHeading.copyWith(
-                    color: context.textSecondary,
-                    letterSpacing: 0.2,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact =
+              constraints.maxWidth < 480 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.1;
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                sectionTitle,
+                if (trailingWidget != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: trailingWidget,
                   ),
-                ),
-              ),
-              if (count != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 1.5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: context.textMuted,
-                    ),
-                  ),
-                ),
               ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: sectionTitle),
+              ?trailingWidget,
             ],
-          ),
-          if (actionLabel != null && onAction != null)
-            Semantics(
-              button: true,
-              label: actionLabel,
-              child: GestureDetector(
-                onTap: onAction,
-                behavior: HitTestBehavior.opaque,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Center(
-                    child: Text(
-                      actionLabel!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryBlue,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            )
-          else ...[
-            ?trailing,
-          ],
-        ],
+          );
+        },
       ),
     );
   }
