@@ -12,6 +12,7 @@ class AppCard extends StatelessWidget {
     this.border,
     this.onTap,
     this.onLongPress,
+    this.semanticLabel,
     this.margin,
     this.index,
   });
@@ -25,6 +26,7 @@ class AppCard extends StatelessWidget {
   final dynamic border;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final String? semanticLabel;
   final EdgeInsetsGeometry? margin;
   final int? index;
 
@@ -32,7 +34,7 @@ class AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = cs.brightness == Brightness.dark;
-    
+
     final BorderRadius resolvedInkRadius = switch (borderRadius) {
       BorderRadius radius => radius,
       BorderRadiusGeometry _ => BorderRadius.circular(16.0),
@@ -77,6 +79,14 @@ class AppCard extends StatelessWidget {
       ),
     );
 
-    return card;
+    if (onTap == null && onLongPress == null) return card;
+    return Semantics(
+      button: onTap != null || onLongPress != null,
+      label: semanticLabel,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: card,
+      ),
+    );
   }
 }

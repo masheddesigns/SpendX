@@ -596,7 +596,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         color: isDark ? const Color(0x1AFFFFFF) : const Color(0x40FFFFFF),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+          color: context.onSurfaceOverlay(
+            lightOpacity: 0.09,
+            darkOpacity: 0.16,
+          ),
           width: 0.75,
         ),
       ),
@@ -785,7 +788,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           color: isDark ? const Color(0x18FFFFFF) : const Color(0x10000000),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+            color: context.onSurfaceOverlay(
+              lightOpacity: 0.09,
+              darkOpacity: 0.16,
+            ),
             width: 0.75,
           ),
         ),
@@ -1049,14 +1055,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: isDark
-                                    ? const Color(0x1FFFFFFF)
-                                    : const Color(0x40FFFFFF),
+                                color: Theme.of(context).colorScheme.surface
+                                    .withValues(alpha: isDark ? 0.12 : 0.25),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: isDark
-                                      ? const Color(0x28FFFFFF)
-                                      : const Color(0x18000000),
+                                  color: context.onSurfaceOverlay(
+                                    lightOpacity: 0.09,
+                                    darkOpacity: 0.16,
+                                  ),
                                   width: 0.75,
                                 ),
                               ),

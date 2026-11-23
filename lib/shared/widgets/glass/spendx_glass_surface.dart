@@ -78,14 +78,8 @@ class SpendXGlassSurface extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
-              ? const [
-                  Color(0xFF171A26),
-                  Color(0xFF141722),
-                ]
-              : const [
-                  Color(0xFFFFFFFF),
-                  Color(0xFFFAFBFE),
-                ],
+              ? const [Color(0xFF171A26), Color(0xFF141722)]
+              : const [Color(0xFFFFFFFF), Color(0xFFFAFBFE)],
         );
         defaultBorderColor = isDark
             ? const Color(0xFF262B3D)
@@ -108,14 +102,8 @@ class SpendXGlassSurface extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? const [
-                  Color(0xFF1F2333),
-                  Color(0xFF191D2B),
-                ]
-              : const [
-                  Color(0xFFFFFFFF),
-                  Color(0xFFF8FAFD),
-                ],
+              ? const [Color(0xFF1F2333), Color(0xFF191D2B)]
+              : const [Color(0xFFFFFFFF), Color(0xFFF8FAFD)],
         );
         defaultBorderColor = isDark
             ? const Color(0xFF2F354B)
@@ -138,14 +126,8 @@ class SpendXGlassSurface extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
-              ? const [
-                  Color(0xF0171A26),
-                  Color(0xF0121520),
-                ]
-              : const [
-                  Color(0xF8FFFFFF),
-                  Color(0xF2F7F9FD),
-                ],
+              ? const [Color(0xF0171A26), Color(0xF0121520)]
+              : const [Color(0xF8FFFFFF), Color(0xF2F7F9FD)],
         );
         defaultBorderColor = isDark
             ? const Color(0xFF2F354B)
@@ -168,14 +150,8 @@ class SpendXGlassSurface extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: isDark
-              ? const [
-                  Color(0xFF202538),
-                  Color(0xFF1A1E2E),
-                ]
-              : const [
-                  Color(0xFFFFFFFF),
-                  Color(0xFFF4F6FC),
-                ],
+              ? const [Color(0xFF202538), Color(0xFF1A1E2E)]
+              : const [Color(0xFFFFFFFF), Color(0xFFF4F6FC)],
         );
         defaultBorderColor = isDark
             ? const Color(0xFF2D3349)
@@ -290,6 +266,7 @@ class SpendXGlassSurface extends StatelessWidget {
 class SpendXGlassCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
+  final String? semanticLabel;
   final SpendXGlassLevel level;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
@@ -304,6 +281,7 @@ class SpendXGlassCard extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.semanticLabel,
     this.level = SpendXGlassLevel.base,
     this.padding = const EdgeInsets.all(AppSpacing.standard),
     this.margin,
@@ -333,15 +311,18 @@ class SpendXGlassCard extends StatelessWidget {
     if (onTap == null) return surface;
 
     final radius = borderRadius ?? BorderRadius.circular(AppRadius.card);
-    return Padding(
-      padding: margin ?? EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        child: InkWell(
-          borderRadius: radius,
-          onTap: onTap,
-          child: surface,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: Padding(
+          padding: margin ?? EdgeInsets.zero,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: radius,
+            child: InkWell(borderRadius: radius, onTap: onTap, child: surface),
+          ),
         ),
       ),
     );

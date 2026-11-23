@@ -31,9 +31,7 @@ class SpendXMetric extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTextStyles.caption.copyWith(
-            color: context.textMuted,
-          ),
+          style: AppTextStyles.caption.copyWith(color: context.textMuted),
         ),
         const SizedBox(height: 4),
         Row(
@@ -46,30 +44,31 @@ class SpendXMetric extends StatelessWidget {
               semanticType: semanticType,
               size: size,
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 6),
-              trailing!,
-            ],
+            if (trailing != null) ...[const SizedBox(width: 6), trailing!],
           ],
         ),
         if (subtitle != null) ...[
           const SizedBox(height: 2),
           Text(
             subtitle!,
-            style: TextStyle(
-              fontSize: 11,
-              color: context.textSecondary,
-            ),
+            style: TextStyle(fontSize: 11, color: context.textSecondary),
           ),
         ],
       ],
     );
 
     if (onTap == null) return content;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: content,
+    return Semantics(
+      button: true,
+      label: label,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: content,
+        ),
+      ),
     );
   }
 }

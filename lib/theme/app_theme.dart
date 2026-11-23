@@ -187,6 +187,12 @@ extension SpendXThemeContext on BuildContext {
   Color get fieldFillColor => Theme.of(this).colorScheme.surfaceContainerHigh;
   Color get fieldBorderColor => Theme.of(this).colorScheme.outline;
   Color get fieldHintColor => Theme.of(this).colorScheme.onSurfaceVariant;
+  Color onSurfaceOverlay({
+    required double lightOpacity,
+    required double darkOpacity,
+  }) => Theme.of(this).colorScheme.onSurface.withValues(
+    alpha: isDark ? darkOpacity : lightOpacity,
+  );
 }
 
 /// Controlled dark theme for full-screen immersive experiences.
@@ -227,6 +233,12 @@ class AppTheme extends ChangeNotifier {
   static const Color semanticTransfer = Color(0xFF55B8C5);
   static const Color semanticWarning = Color(0xFFF3AD4E);
   static const Color semanticShortfall = Color(0xFFE76D76);
+
+  // The credit instrument surface remains deliberately dark in both app themes.
+  static const Color creditCardSurfaceDarkTop = Color(0xFF1E2230);
+  static const Color creditCardSurfaceDarkBottom = Color(0xFF12151E);
+  static const Color creditCardSurfaceLightTop = Color(0xFF232A3B);
+  static const Color creditCardSurfaceLightBottom = Color(0xFF141824);
 
   static const Color successGreen = semanticIncome;
   static const Color warningAmber = semanticWarning;

@@ -997,16 +997,23 @@ class _DateField extends StatelessWidget {
               ),
             ),
             if (onClear != null)
-              GestureDetector(
-                onTap: onClear,
-                child: SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Center(
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 16,
-                      color: cs.onSurfaceVariant,
+              Semantics(
+                button: true,
+                label: 'Clear date',
+                child: Tooltip(
+                  message: 'Clear date',
+                  child: GestureDetector(
+                    onTap: onClear,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 16,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
                 ),

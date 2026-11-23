@@ -438,7 +438,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
                   child: _MetricPillar(
                     label: 'Avg Daily Spend',
                     value: AppFormat.currency(summary.avgDailySpending),
-                    valueColor: isDark ? Colors.white : const Color(0xFF1E293B),
+                    valueColor: Theme.of(context).colorScheme.onSurface,
                     isDark: isDark,
                   ),
                 ),
@@ -637,8 +637,7 @@ class _MonthlyMovementSection extends StatelessWidget {
             barTouchData: BarTouchData(
               enabled: true,
               touchTooltipData: BarTouchTooltipData(
-                getTooltipColor: (_) =>
-                    isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+                getTooltipColor: (_) => cs.surfaceContainer,
                 tooltipBorderRadius: BorderRadius.circular(8),
                 getTooltipItem: (group, groupIndex, rod, rodIndex) {
                   final item = data[group.x.toInt()];
@@ -1210,6 +1209,7 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                   lentColor,
                   borrowedColor,
                   Theme.of(context).colorScheme.onSurfaceVariant,
+                  Theme.of(context).colorScheme,
                 ),
               ),
             ] else ...[
@@ -1234,6 +1234,7 @@ class _PeerLendingCadenceCard extends StatelessWidget {
     Color lentColor,
     Color borrowedColor,
     Color neutralColor,
+    ColorScheme colorScheme,
   ) {
     final maxVal = trend.fold<double>(
       0.0,
@@ -1249,8 +1250,7 @@ class _PeerLendingCadenceCard extends StatelessWidget {
         barTouchData: BarTouchData(
           enabled: true,
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) =>
-                isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
+            getTooltipColor: (_) => colorScheme.surfaceContainer,
             tooltipBorderRadius: BorderRadius.circular(8),
             getTooltipItem: (group, _, rod, rodIndex) {
               final d = trend[group.x.toInt()];

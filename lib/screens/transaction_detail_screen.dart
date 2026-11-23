@@ -182,7 +182,6 @@ class _UnifiedTransactionDetailScreenState
     String defaultPersonName,
   ) async {
     final nameCtrl = TextEditingController(text: defaultPersonName);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final verb = type == 'lent' ? 'Lent to' : 'Borrowed from';
 
     final confirmed = await showModalBottomSheet<bool>(
@@ -218,9 +217,10 @@ class _UnifiedTransactionDetailScreenState
                   labelText: 'Person Name',
                   hintText: 'Enter contact name',
                   filled: true,
-                  fillColor: isDark
-                      ? const Color(0x1AFFFFFF)
-                      : const Color(0x0A000000),
+                  fillColor: context.onSurfaceOverlay(
+                    lightOpacity: 0.04,
+                    darkOpacity: 0.10,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -391,9 +391,9 @@ class _UnifiedTransactionDetailScreenState
                   child: DropdownButton<int>(
                     value: selectedTenure,
                     isExpanded: true,
-                    dropdownColor: isDark
-                        ? const Color(0xFF1E293B)
-                        : Colors.white,
+                    dropdownColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHigh,
                     items: [3, 6, 9, 12, 18, 24, 36]
                         .map(
                           (t) => DropdownMenuItem(
@@ -433,9 +433,8 @@ class _UnifiedTransactionDetailScreenState
                             decoration: InputDecoration(
                               hintText: '12.0',
                               filled: true,
-                              fillColor: isDark
-                                  ? const Color(0x1AFFFFFF)
-                                  : const Color(0x66FFFFFF),
+                              fillColor: Theme.of(context).colorScheme.surface
+                                  .withValues(alpha: isDark ? 0.10 : 0.40),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -466,9 +465,8 @@ class _UnifiedTransactionDetailScreenState
                             decoration: InputDecoration(
                               hintText: '199',
                               filled: true,
-                              fillColor: isDark
-                                  ? const Color(0x1AFFFFFF)
-                                  : const Color(0x66FFFFFF),
+                              fillColor: Theme.of(context).colorScheme.surface
+                                  .withValues(alpha: isDark ? 0.10 : 0.40),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -808,14 +806,16 @@ class _UnifiedTransactionDetailScreenState
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0x1AFFFFFF)
-                                : const Color(0x33000000),
+                            color: context.onSurfaceOverlay(
+                              lightOpacity: 0.20,
+                              darkOpacity: 0.10,
+                            ),
                             borderRadius: BorderRadius.circular(AppRadius.full),
                             border: Border.all(
-                              color: isDark
-                                  ? const Color(0x28FFFFFF)
-                                  : const Color(0x18000000),
+                              color: context.onSurfaceOverlay(
+                                lightOpacity: 0.09,
+                                darkOpacity: 0.16,
+                              ),
                               width: 0.75,
                             ),
                           ),
@@ -897,14 +897,16 @@ class _UnifiedTransactionDetailScreenState
                                     child: Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: isDark
-                                            ? const Color(0x18FFFFFF)
-                                            : const Color(0x0A000000),
+                                        color: context.onSurfaceOverlay(
+                                          lightOpacity: 0.04,
+                                          darkOpacity: 0.09,
+                                        ),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: isDark
-                                              ? const Color(0x24FFFFFF)
-                                              : const Color(0x14000000),
+                                          color: context.onSurfaceOverlay(
+                                            lightOpacity: 0.08,
+                                            darkOpacity: 0.14,
+                                          ),
                                           width: 0.75,
                                         ),
                                       ),
@@ -979,14 +981,16 @@ class _UnifiedTransactionDetailScreenState
                                     child: Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: isDark
-                                            ? const Color(0x18FFFFFF)
-                                            : const Color(0x0A000000),
+                                        color: context.onSurfaceOverlay(
+                                          lightOpacity: 0.04,
+                                          darkOpacity: 0.09,
+                                        ),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: isDark
-                                              ? const Color(0x24FFFFFF)
-                                              : const Color(0x14000000),
+                                          color: context.onSurfaceOverlay(
+                                            lightOpacity: 0.08,
+                                            darkOpacity: 0.14,
+                                          ),
                                           width: 0.75,
                                         ),
                                       ),
@@ -1435,9 +1439,7 @@ class _UnifiedTransactionDetailScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0x2010B981)
-                      : const Color(0x1510B981),
+                  color: Theme.of(context).colorScheme.secondaryContainer,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
@@ -1456,7 +1458,10 @@ class _UnifiedTransactionDetailScreenState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0x14FFFFFF) : const Color(0x08000000),
+              color: context.onSurfaceOverlay(
+                lightOpacity: 0.03,
+                darkOpacity: 0.08,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -1523,7 +1528,10 @@ class _UnifiedTransactionDetailScreenState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0x14FFFFFF) : const Color(0x08000000),
+              color: context.onSurfaceOverlay(
+                lightOpacity: 0.03,
+                darkOpacity: 0.08,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -1539,7 +1547,7 @@ class _UnifiedTransactionDetailScreenState
                     ).colorScheme.tertiary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child:  Text(
+                  child: Text(
                     'CR',
                     style: TextStyle(
                       fontSize: 10,
@@ -1592,14 +1600,12 @@ class _UnifiedTransactionDetailScreenState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0x1038BDF8)
-                    : const Color(0x0C0284C7),
+                color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                   Icon(
+                  Icon(
                     Icons.info_outline_rounded,
                     size: 13,
                     color: Theme.of(context).colorScheme.primary,
@@ -1643,7 +1649,7 @@ class _UnifiedTransactionDetailScreenState
                   ).withValues(alpha: isDark ? 0.22 : 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child:  Icon(
+                child: Icon(
                   Icons.currency_exchange_rounded,
                   size: 19,
                   color: Theme.of(context).colorScheme.primary,
@@ -1694,7 +1700,7 @@ class _UnifiedTransactionDetailScreenState
                 ),
                 child: Text(
                   forex.rateDisplay,
-                  style:  TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Theme.of(context).colorScheme.primary,
@@ -1707,7 +1713,10 @@ class _UnifiedTransactionDetailScreenState
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0x14FFFFFF) : const Color(0x06000000),
+              color: context.onSurfaceOverlay(
+                lightOpacity: 0.02,
+                darkOpacity: 0.08,
+              ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isDark
@@ -1767,7 +1776,7 @@ class _UnifiedTransactionDetailScreenState
                       const SizedBox(height: 4),
                       Text(
                         AppFormat.currency(forex.estimatedInr),
-                        style:  TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                           color: Theme.of(context).colorScheme.secondary,
@@ -1799,10 +1808,10 @@ class _UnifiedTransactionDetailScreenState
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0x1F10B981) : Theme.of(context).colorScheme.secondaryContainer,
+        color: Theme.of(context).colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(AppRadius.l),
         border: Border.all(
-          color: isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary,
+          color: Theme.of(context).colorScheme.secondary,
           width: 0.8,
         ),
       ),
@@ -1815,11 +1824,9 @@ class _UnifiedTransactionDetailScreenState
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isDark
-                      ? const Color(0x3010B981)
-                      : const Color(0xFFD1FAE5),
+                  color: Theme.of(context).colorScheme.secondaryContainer,
                 ),
-                child:  Icon(
+                child: Icon(
                   Icons.handshake_rounded,
                   size: 18,
                   color: Theme.of(context).colorScheme.secondary,
@@ -1837,16 +1844,18 @@ class _UnifiedTransactionDetailScreenState
                         fontWeight: FontWeight.w700,
                         color: isDark
                             ? Theme.of(context).colorScheme.secondary
-                            : Theme.of(context).colorScheme.onSecondaryContainer,
+                            : Theme.of(
+                                context,
+                              ).colorScheme.onSecondaryContainer,
                       ),
                     ),
                     Text(
                       'Outstanding loan: ${AppFormat.currency(loan.remainingAmount)} remaining',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark
-                            ? Theme.of(context).colorScheme.secondary
-                            : const Color(0xFF047857),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSecondaryContainer,
                       ),
                     ),
                   ],
@@ -1926,9 +1935,7 @@ class _UnifiedTransactionDetailScreenState
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0x1F6366F1)
-                    : Theme.of(context).colorScheme.primaryContainer,
+                color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -1938,9 +1945,7 @@ class _UnifiedTransactionDetailScreenState
                       'Payment note mentions a loan keyword. Track under Friends & Family?',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark
-                            ? const Color(0xFFE0E7FF)
-                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ),
@@ -1980,7 +1985,7 @@ class _UnifiedTransactionDetailScreenState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                       Icon(
+                      Icon(
                         Icons.arrow_upward_rounded,
                         size: 14,
                         color: Theme.of(context).colorScheme.error,
@@ -2009,7 +2014,7 @@ class _UnifiedTransactionDetailScreenState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                       Icon(
+                      Icon(
                         Icons.arrow_downward_rounded,
                         size: 14,
                         color: Theme.of(context).colorScheme.secondary,
@@ -2059,7 +2064,10 @@ class _UnifiedTransactionDetailScreenState
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: isDark ? const Color(0x1AFFFFFF) : const Color(0x33000000),
+            color: context.onSurfaceOverlay(
+              lightOpacity: 0.20,
+              darkOpacity: 0.10,
+            ),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 18, color: AppTheme.primaryBlue),

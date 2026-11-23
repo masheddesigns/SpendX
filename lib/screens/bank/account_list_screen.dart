@@ -261,7 +261,9 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                       BoxShadow(
                         color: isDark
                             ? Colors.black.withValues(alpha: 0.25)
-                            : const Color(0x081C1917),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.shadow.withValues(alpha: 0.03),
                         blurRadius: 14,
                         offset: const Offset(0, 4),
                       ),
@@ -394,7 +396,9 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                     BoxShadow(
                       color: isDark
                           ? Colors.black.withValues(alpha: 0.25)
-                          : const Color(0x081C1917),
+                          : Theme.of(
+                              context,
+                            ).colorScheme.shadow.withValues(alpha: 0.03),
                       blurRadius: 14,
                       offset: const Offset(0, 4),
                     ),
@@ -441,9 +445,9 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? const Color(0xFFCBD5E1)
-                                    : const Color(0xFF475569),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -609,7 +613,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: isDark ? const Color(0xFF1E222D) : Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -718,7 +722,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
-      backgroundColor: isDark ? const Color(0xFF1E222D) : Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1082,7 +1086,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
           BoxShadow(
             color: isDark
                 ? Colors.black.withValues(alpha: 0.28)
-                : const Color(0x0C1C1917),
+                : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.05),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -1117,25 +1121,13 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                       ),
                       decoration: BoxDecoration(
                         color: isSolvent
-                            ? (isDark
-                                  ? const Color(
-                                      0xFF064E3B,
-                                    ).withValues(alpha: 0.5)
-                                  : const Color(0xFFDCFCE7))
-                            : (isDark
-                                  ? const Color(
-                                      0xFF7F1D1D,
-                                    ).withValues(alpha: 0.4)
-                                  : const Color(0xFFFEE2E2)),
+                            ? Theme.of(context).colorScheme.secondaryContainer
+                            : Theme.of(context).colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
                           color: isSolvent
-                              ? (isDark
-                                    ? Theme.of(context).colorScheme.secondary
-                                    : Theme.of(context).colorScheme.secondary)
-                              : (isDark
-                                    ? const Color(0xFFDC2626)
-                                    : Theme.of(context).colorScheme.error),
+                              ? Theme.of(context).colorScheme.secondary
+                              : Theme.of(context).colorScheme.error,
                           width: 0.6,
                         ),
                       ),
@@ -1160,14 +1152,12 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.6,
                               color: isSolvent
-                                  ? (isDark
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.secondary
-                                        : const Color(0xFF166534))
-                                  : (isDark
-                                        ? Theme.of(context).colorScheme.error
-                                        : const Color(0xFF991B1B)),
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.onSecondaryContainer
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
                             ),
                           ),
                         ],
@@ -1204,9 +1194,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.0,
                     fontSize: 11,
-                    color: isDark
-                        ? const Color(0xFFCBD5E1)
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
 
@@ -1792,7 +1780,7 @@ class _CreditCardInstrument extends StatelessWidget {
     final isMidUtilization = utilization > 30 && utilization <= 70;
 
     final utilizationColor = isHighUtilization
-        ? const Color(0xFFF87171)
+        ? Theme.of(context).colorScheme.error
         : (isMidUtilization
               ? Theme.of(context).colorScheme.tertiary
               : Theme.of(context).colorScheme.secondary);
@@ -1809,13 +1797,19 @@ class _CreditCardInstrument extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF1E2230), const Color(0xFF12151E)]
-              : [const Color(0xFF232A3B), const Color(0xFF141824)],
+              ? [
+                  AppTheme.creditCardSurfaceDarkTop,
+                  AppTheme.creditCardSurfaceDarkBottom,
+                ]
+              : [
+                  AppTheme.creditCardSurfaceLightTop,
+                  AppTheme.creditCardSurfaceLightBottom,
+                ],
         ),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.12)
-              : const Color(0xFF333D55),
+              : Theme.of(context).colorScheme.outline,
           width: 0.9,
         ),
         boxShadow: [
@@ -1853,7 +1847,9 @@ class _CreditCardInstrument extends StatelessWidget {
                             ),
                             gradient: LinearGradient(
                               colors: [
-                                Color(0xFFFDE68A),
+                                Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
                                 Theme.of(context).colorScheme.tertiary,
                               ],
                             ),
