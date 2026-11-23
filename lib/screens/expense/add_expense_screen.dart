@@ -60,6 +60,7 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
+  final _formKey = GlobalKey<FormState>();
   late String _selectedType;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -303,6 +304,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String get _normalizedType => _selectedType.trim().toLowerCase();
 
   Future<void> _saveTransaction() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_amountController.text.isEmpty) {
       CustomSnackBar.show(
         context,
@@ -727,7 +729,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : const Color(0xFF1E293B),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
@@ -746,7 +748,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: isDark ? modern_theme.AppTheme.darkTextMuted : modern_theme.AppTheme.lightTextMuted,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             letterSpacing: 0.3,
           ),
         ),
@@ -784,7 +786,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -808,7 +810,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -821,7 +823,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
             ],
@@ -834,7 +836,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 10),
@@ -851,7 +853,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 10),
@@ -884,7 +886,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               icon: Icon(
                 Icons.document_scanner_rounded,
                 size: 20,
-                color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
               tooltip: 'Scan Receipt',
               onPressed: _scanReceipt,
@@ -903,7 +905,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-        child: Column(
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Section 1: Type & Amount Card ────────────
@@ -923,13 +928,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? modern_theme.AppTheme.darkTextMuted : modern_theme.AppTheme.lightTextMuted,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 8),
                   AppAmountField(
                     controller: _amountController,
                     amountColor: headerColor,
+                    validator: (value) {
+                      final amount = double.tryParse((value ?? '').trim());
+                      if (amount == null || !amount.isFinite || amount <= 0) {
+                        return 'Enter an amount greater than zero';
+                      }
+                      return null;
+                    },
                   ),
                   if (_recentAmounts.isNotEmpty) ...[
                     const SizedBox(height: 12),
@@ -956,7 +968,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 fontFeatures: const [FontFeature.tabularFigures()],
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -989,7 +1001,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               InkWell(
@@ -1056,7 +1068,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -1085,7 +1097,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                     'No accounts found.',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: isDark ? modern_theme.AppTheme.darkTextSecondary : modern_theme.AppTheme.lightTextSecondary,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ),
@@ -1122,7 +1134,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? modern_theme.AppTheme.darkTextPrimary : modern_theme.AppTheme.lightTextPrimary,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -1153,6 +1165,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

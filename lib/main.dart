@@ -6,6 +6,12 @@ import 'package:provider/provider.dart' as provider_pkg;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/logging/app_logger.dart';
 import 'screens/splash_screen.dart';
+import 'screens/home/transactions_screen.dart';
+import 'screens/expense/add_expense_screen.dart';
+import 'screens/reports_screen.dart';
+import 'screens/goals/goals_screen.dart';
+import 'screens/bank/account_list_screen.dart';
+import 'features/home/screens/home_screen.dart';
 import 'services/settings_service.dart';
 import 'services/auth_service.dart';
 import 'services/share_intent_service.dart';
@@ -162,16 +168,35 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       context,
       listen: true,
     );
+    final routeBuilders = <String, WidgetBuilder>{
+      '/home': (_) => const HomeScreen(),
+      '/transactions': (_) => const TransactionListScreen(),
+      '/accounts': (_) => const AccountListScreen(),
+      '/goals': (_) => const GoalsScreen(),
+      '/reports': (_) => const ReportsScreen(),
+      '/add-expense': (_) => const AddExpenseScreen(),
+    };
 
     return MaterialApp(
       navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'SpendX',
+      routes: routeBuilders,
+      onGenerateInitialRoutes: (initialRoute) {
+        final linkedRoute = settings.isOnboardingComplete
+            ? routeBuilders[initialRoute]
+            : null;
+        return [
+          MaterialPageRoute<void>(
+            settings: RouteSettings(name: initialRoute),
+            builder: linkedRoute ?? (_) => const SplashScreen(),
+          ),
+        ];
+      },
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: settings.themeMode,
       builder: (context, child) => child ?? const SizedBox.shrink(),
-      home: const SplashScreen(),
     );
   }
 }

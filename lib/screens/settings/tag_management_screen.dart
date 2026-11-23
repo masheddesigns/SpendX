@@ -147,6 +147,7 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
                         title: Text(tag.name),
                         onTap: () => _showAddTagDialog(tag),
                         trailing: IconButton(
+                          tooltip: 'Delete',
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _deleteTag(tag),
                         ),

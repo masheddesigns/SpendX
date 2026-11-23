@@ -153,6 +153,7 @@ class SpendXGlassSheet extends StatelessWidget {
                         ),
                         ?trailing,
                         IconButton(
+                          tooltip: 'Close',
                           icon: Icon(
                             Icons.close_rounded,
                             size: 20,

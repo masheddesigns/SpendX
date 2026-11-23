@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/gemini_service.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/spendx_app_bar.dart';
 
@@ -161,12 +162,28 @@ class FeatureTogglesScreen extends StatelessWidget {
   }
 }
 
-class _ApiKeyTile extends StatelessWidget {
+class _ApiKeyTile extends StatefulWidget {
   final SettingsService settings;
   const _ApiKeyTile({required this.settings});
 
   @override
+  State<_ApiKeyTile> createState() => _ApiKeyTileState();
+}
+
+class _ApiKeyTileState extends State<_ApiKeyTile> {
+  bool _testing = false;
+
+  Future<void> _testConnection() async {
+    setState(() => _testing = true);
+    final result = await GeminiService.instance.testConnection();
+    if (!mounted) return;
+    setState(() => _testing = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final settings = widget.settings;
     final hasKey = settings.geminiApiKey.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(16),
@@ -202,8 +219,11 @@ class _ApiKeyTile extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(
-            onPressed: () async {
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: () async {
               final controller =
                   TextEditingController(text: settings.geminiApiKey);
               final result = await showDialog<String>(
@@ -229,11 +249,19 @@ class _ApiKeyTile extends StatelessWidget {
                   ],
                 ),
               );
+              controller.dispose();
               if (result != null) {
                 await settings.setGeminiApiKey(result);
               }
-            },
-            child: Text(hasKey ? 'Change' : 'Set'),
+                },
+                child: Text(hasKey ? 'Change' : 'Set'),
+              ),
+              if (hasKey)
+                TextButton(
+                  onPressed: _testing ? null : _testConnection,
+                  child: Text(_testing ? 'Testing…' : 'Test'),
+                ),
+            ],
           ),
         ],
       ),

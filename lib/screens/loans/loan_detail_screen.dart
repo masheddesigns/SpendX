@@ -57,9 +57,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             Text(
               'EMI Amount: ${AppFormat.currency(inst.amount)}',
               style: AppTextStyles.body.copyWith(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppColors.secondaryText
-                    : const Color(0xFF64748B),
+                color: AppColors.textSecondaryOf(context),
               ),
             ),
             const SizedBox(height: 20),
@@ -188,7 +186,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                     style: TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                      color: AppColors.textPrimaryOf(context),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -196,7 +194,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                     subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                      color: AppColors.textSecondaryOf(context),
                     ),
                   ),
                 ],
@@ -205,7 +203,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             Icon(
               Icons.chevron_right_rounded,
               size: 20,
-              color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+              color: AppColors.textMutedOf(context),
             ),
           ],
         ),
@@ -265,6 +263,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             },
           ),
           IconButton(
+            tooltip: 'Delete',
             icon: const Icon(Icons.delete_outline, color: AppColors.danger),
             onPressed: _deleteLoan,
           ),
@@ -451,9 +450,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                                         ).format(inst.dueDate),
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Theme.of(context).brightness == Brightness.dark
-                                              ? AppColors.secondaryText
-                                              : const Color(0xFF64748B),
+                                          color: AppColors.textSecondaryOf(context),
                                         ),
                                       ),
                                     ],

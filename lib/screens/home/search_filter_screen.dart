@@ -174,6 +174,7 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                       ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
+                            tooltip: 'Clear search',
                               icon: Icon(
                                 Icons.clear_rounded,
                                 size: 18,

@@ -297,7 +297,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                                         ? 'Overdue'
                                         : '${progress.daysLeft}d left',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                                  color: AppColors.textSecondaryOf(context),
                                 ),
                               ),
                             ],
@@ -398,7 +398,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                             child: Text(
                               n.text,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                                color: AppColors.textPrimaryOf(context),
                               ),
                             ),
                           ),
@@ -445,7 +445,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               'Spending limit updates automatically from transactions.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                color: AppColors.textSecondaryOf(context),
               ),
             ),
           ],
@@ -470,7 +470,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                       child: Text(
                         'No entries yet. Tap the button above to log progress.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+                          color: AppColors.textMutedOf(context),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -593,9 +593,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? AppColors.secondaryText
-                  : const Color(0xFF64748B),
+              color: AppColors.textSecondaryOf(context),
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),

@@ -67,7 +67,8 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+            tooltip: 'Refresh',onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: _isLoading

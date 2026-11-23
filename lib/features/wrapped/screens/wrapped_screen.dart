@@ -40,7 +40,9 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
       });
     // Slight delay before starting — prevents instant motion shock
     Future.delayed(const Duration(milliseconds: 400), () async {
-      if (mounted) _timerCtrl.forward();
+      if (mounted && !MediaQuery.disableAnimationsOf(context)) {
+        _timerCtrl.forward();
+      }
       // Mark as viewed so the home bubble expires after its post-view window
       // (weekly 24h, monthly 7d) — see WrappedService.
       if (mounted) {
@@ -62,22 +64,36 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
     // Pause timer when app goes background, resume when foreground
     if (state == AppLifecycleState.paused) {
       _timerCtrl.stop();
-    } else if (state == AppLifecycleState.resumed && !_paused) {
+    } else if (state == AppLifecycleState.resumed &&
+        !_paused &&
+        !MediaQuery.disableAnimationsOf(context)) {
       _timerCtrl.forward();
     }
   }
 
   void _goNext() {
     if (_page < _totalPages - 1) {
-      _ctrl.nextPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _ctrl.jumpToPage(_page + 1);
+      } else {
+        _ctrl.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     }
   }
 
   void _goPrev() {
     if (_page > 0) {
-      _ctrl.previousPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _ctrl.jumpToPage(_page - 1);
+      } else {
+        _ctrl.previousPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     }
   }
 
@@ -88,11 +104,12 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
 
   void _resumeTimer() {
     _paused = false;
-    _timerCtrl.forward();
+    if (!MediaQuery.disableAnimationsOf(context)) _timerCtrl.forward();
   }
 
   void _restartTimer() {
     _paused = false;
+    if (MediaQuery.disableAnimationsOf(context)) return;
     _timerCtrl.reset();
     _timerCtrl.forward();
   }
@@ -223,6 +240,7 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
                   top: 24,
                   right: 12,
                   child: IconButton(
+                    tooltip: 'Close',
                     icon: const Icon(Icons.close, color: Colors.white54, size: 22),
                     onPressed: () => Navigator.pop(context),
                   ),

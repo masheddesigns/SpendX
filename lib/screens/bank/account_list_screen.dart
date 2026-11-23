@@ -177,7 +177,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.2,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -241,7 +241,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
-                    color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+                    color: Theme.of(context).colorScheme.surfaceContainer,
                     border: Border.all(
                       color: isDark
                           ? Colors.white.withValues(alpha: 0.08)
@@ -363,7 +363,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+                  color: Theme.of(context).colorScheme.surfaceContainer,
                   border: Border.all(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.08)
@@ -625,7 +625,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                 '${account.bank.isNotEmpty ? '${account.bank} • ' : ''}${account.accountType.replaceAll('_', ' ').toUpperCase()}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 16),
@@ -732,7 +732,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                 '${card.bank} • •••• ${card.last4}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1036,7 +1036,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
@@ -1407,7 +1407,7 @@ class _ActionPillButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: isDark ? const Color(0xFF1A1D27) : const Color(0xFFFFFFFF),
+            color: Theme.of(context).colorScheme.surfaceContainer,
             border: Border.all(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.08)
@@ -2417,7 +2417,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
@@ -2499,7 +2499,7 @@ class _EmptyStateCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
@@ -2535,7 +2535,7 @@ class _EmptyStateCard extends StatelessWidget {
             'Connect bank accounts, credit cards, or cash wallets to reflect your true net worth and automate statements.',
             style: TextStyle(
               fontSize: 12.5,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 16),

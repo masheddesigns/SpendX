@@ -356,7 +356,7 @@ class _RecurringPaymentsScreenState
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14.5,
-                                  color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                                  color: AppColors.textPrimaryOf(context),
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -364,7 +364,7 @@ class _RecurringPaymentsScreenState
                                 '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                                  color: AppColors.textSecondaryOf(context),
                                 ),
                               ),
                             ],
@@ -386,18 +386,19 @@ class _RecurringPaymentsScreenState
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                GestureDetector(
-                                  onTap: () => _showAddDialog(categoriesMap, template),
-                                  child: Icon(
+                                IconButton(
+                                  tooltip: 'Edit recurring payment',
+                                  onPressed: () => _showAddDialog(categoriesMap, template),
+                                  icon: Icon(
                                     Icons.edit_outlined,
                                     size: 17,
-                                    color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+                                    color: AppColors.textMutedOf(context),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
-                                  onTap: () => _deleteTemplate(template),
-                                  child: Icon(
+                                IconButton(
+                                  tooltip: 'Delete recurring payment',
+                                  onPressed: () => _deleteTemplate(template),
+                                  icon: Icon(
                                     Icons.delete_outline_rounded,
                                     size: 17,
                                     color: AppColors.danger.withValues(alpha: 0.8),

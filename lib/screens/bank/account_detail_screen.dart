@@ -186,6 +186,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
+          tooltip: 'Back',
           icon: Icon(
             Icons.arrow_back_ios_new_rounded,
             size: 20,
@@ -479,6 +480,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                           ),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
+                                tooltip: 'Clear search',
                                   icon: const Icon(Icons.clear_rounded, size: 16),
                                   onPressed: () {
                                     _searchController.clear();

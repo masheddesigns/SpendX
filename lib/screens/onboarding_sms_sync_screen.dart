@@ -30,6 +30,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
   bool _isFinished = false;
   bool _isRunning = false;
   bool _isError = false;
+  bool _motionConfigured = false;
   String? _errorMessage;
 
   final List<String> _steps = const [
@@ -47,19 +48,35 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     _radarController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
-    )..repeat();
+    );
 
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
+    );
 
     _orbitController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 8000),
-    )..repeat();
+    );
 
     _startSyncProcess();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionConfigured) return;
+    _motionConfigured = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _radarController.value = 0.5;
+      _pulseController.value = 0.5;
+      _orbitController.value = 0.5;
+    } else {
+      _radarController.repeat();
+      _pulseController.repeat(reverse: true);
+      _orbitController.repeat();
+    }
   }
 
   @override

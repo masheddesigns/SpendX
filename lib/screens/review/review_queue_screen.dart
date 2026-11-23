@@ -59,6 +59,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
       appBar: SpendXAppBar(
         leading: _isSelectionMode
             ? IconButton(
+              tooltip: 'Close',
                 icon: const Icon(Icons.close),
                 onPressed: _clearSelection,
               )

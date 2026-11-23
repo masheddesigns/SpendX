@@ -9,17 +9,21 @@ class AppAmountField extends StatelessWidget {
     this.focusNode,
     this.amountColor,
     this.onChanged,
+    this.validator,
   });
 
   final TextEditingController controller;
   final FocusNode? focusNode;
   final Color? amountColor;
   final ValueChanged<String>? onChanged;
+  final FormFieldValidator<String>? validator;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final effectiveColor = amountColor ?? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7));
+    final effectiveColor =
+        amountColor ??
+        (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7));
 
     final fillColor = isDark
         ? const Color(0x1AFFFFFF) // ~10% white
@@ -36,6 +40,7 @@ class AppAmountField extends StatelessWidget {
         controller: controller,
         focusNode: focusNode,
         onChanged: onChanged,
+        validator: validator,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
@@ -78,7 +83,10 @@ class AppAmountField extends StatelessWidget {
               );
             },
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20.0,
+            vertical: 16.0,
+          ),
           filled: true,
           fillColor: fillColor,
           border: OutlineInputBorder(

@@ -34,6 +34,7 @@ class SkeletonLoader extends StatefulWidget {
 class _SkeletonLoaderState extends State<SkeletonLoader>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
+  bool _motionConfigured = false;
 
   @override
   void initState() {
@@ -41,7 +42,19 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
     _ctrl = AnimationController(
       vsync: this,
       duration: AppMotion.ambient,
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionConfigured) return;
+    _motionConfigured = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.value = 0.5;
+    } else {
+      _ctrl.repeat();
+    }
   }
 
   @override

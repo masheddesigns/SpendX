@@ -55,7 +55,8 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
       appBar: AppBar(
         title: const Text('Retention Metrics'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          IconButton(
+            tooltip: 'Refresh',icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
       body: _loading

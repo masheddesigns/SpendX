@@ -361,6 +361,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                       ),
                       if (isSelected)
                         IconButton(
+                          tooltip: 'Edit',
                           icon: const Icon(
                             Icons.edit_rounded,
                             color: Colors.white70,

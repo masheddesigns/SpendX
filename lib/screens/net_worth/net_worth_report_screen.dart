@@ -180,6 +180,7 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
                 ),
                 trailing: isSnapshots
                     ? IconButton(
+                      tooltip: 'Delete',
                         icon: const Icon(
                           Icons.delete_outline,
                           color: Colors.redAccent,

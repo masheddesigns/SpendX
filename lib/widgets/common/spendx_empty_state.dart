@@ -10,6 +10,7 @@ class SpendXEmptyState extends StatelessWidget {
     required this.description,
     this.actionLabel,
     this.onActionPressed,
+    this.illustrationAsset,
   });
 
   final IconData icon;
@@ -17,6 +18,7 @@ class SpendXEmptyState extends StatelessWidget {
   final String description;
   final String? actionLabel;
   final VoidCallback? onActionPressed;
+  final String? illustrationAsset;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +28,7 @@ class SpendXEmptyState extends StatelessWidget {
       description: description,
       ctaLabel: actionLabel,
       onCtaTap: onActionPressed,
+      illustrationAsset: illustrationAsset,
     );
   }
 }

@@ -727,7 +727,7 @@ class _UnifiedTransactionDetailScreenState
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
+                                      color: Theme.of(context).colorScheme.primary,
                                     ),
                                   ),
                                 ),
@@ -784,7 +784,7 @@ class _UnifiedTransactionDetailScreenState
                                   Icon(
                                     Icons.alt_route_rounded,
                                     size: 15,
-                                    color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                                    color: Theme.of(context).colorScheme.primary,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
@@ -1151,7 +1151,7 @@ class _UnifiedTransactionDetailScreenState
     } else if (isCcPayment || isTransfer) {
       impactText = 'Net Worth Impact: ${AppFormat.currency(0)} (Neutral • Internal Movement)';
       impactIcon = Icons.swap_horiz_rounded;
-      impactColor = isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA);
+      impactColor = Theme.of(context).colorScheme.primary;
       impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
       impactBorder = impactColor.withValues(alpha: isDark ? 0.32 : 0.20);
     } else if (isIncome) {
@@ -1245,7 +1245,7 @@ class _UnifiedTransactionDetailScreenState
               Icon(
                 Icons.balance_rounded,
                 size: 15,
-                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -1421,7 +1421,7 @@ class _UnifiedTransactionDetailScreenState
                       style: TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ),
@@ -1473,7 +1473,7 @@ class _UnifiedTransactionDetailScreenState
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ],
@@ -1543,7 +1543,7 @@ class _UnifiedTransactionDetailScreenState
                   child: Icon(
                     Icons.arrow_forward_rounded,
                     size: 16,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 Expanded(
@@ -1580,7 +1580,7 @@ class _UnifiedTransactionDetailScreenState
             style: TextStyle(
               fontSize: 11,
               height: 1.45,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1726,12 +1726,23 @@ class _UnifiedTransactionDetailScreenState
                       ),
                     ),
                   ),
-                  InkWell(
-                    onTap: () => setState(() => _dismissedLoanPrompt = true),
-                    child: Icon(
-                      Icons.close,
-                      size: 16,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6366F1),
+                  Semantics(
+                    button: true,
+                    label: 'Dismiss loan suggestion',
+                    child: Tooltip(
+                      message: 'Dismiss suggestion',
+                      child: InkWell(
+                        onTap: () => setState(() => _dismissedLoanPrompt = true),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6366F1),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/providers.dart' as app_data;
@@ -122,7 +123,9 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
       await ref.read(app_data.cardsProvider.notifier).replace(card);
       final oldOutstanding = widget.existingCard!.usedAmount;
       if ((outstanding - oldOutstanding).abs() >= 0.01) {
-        await ref.read(app_data.creditRepoProvider).reconcileOutstanding(
+        await ref
+            .read(app_data.creditRepoProvider)
+            .reconcileOutstanding(
               card.id,
               outstanding,
               reason: 'Manual credit card outstanding adjustment',
@@ -274,6 +277,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
           padding: const EdgeInsets.all(AppSpacing.m),
           child: Form(
             key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -288,6 +292,9 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                 AppTextField(
                   controller: _nameCtrl,
                   hintText: 'e.g. HDFC Regalia',
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Enter a card name'
+                      : null,
                 ),
                 const SizedBox(height: AppSpacing.m),
 
@@ -298,6 +305,9 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                 AppTextField(
                   controller: _bankCtrl,
                   hintText: 'e.g. HDFC, SBI, ICICI',
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Enter the bank name'
+                      : null,
                 ),
                 const SizedBox(height: AppSpacing.m),
 
@@ -385,6 +395,21 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                   controller: _limitCtrl,
                   keyboardType: TextInputType.number,
                   hintText: 'e.g. 100000',
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,2}'),
+                    ),
+                  ],
+                  validator: (value) {
+                    final amount = double.tryParse((value ?? '').trim());
+                    if (amount == null || !amount.isFinite || amount < 0) {
+                      return 'Enter a valid credit limit';
+                    }
+                    if (widget.existingCard == null && amount == 0) {
+                      return 'Credit limit must be greater than zero';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: AppSpacing.m),
 
@@ -402,6 +427,21 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                             controller: _outstandingCtrl,
                             keyboardType: TextInputType.number,
                             hintText: 'e.g. 5000',
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}'),
+                              ),
+                            ],
+                            validator: (value) {
+                              final amount = double.tryParse(
+                                (value ?? '').trim(),
+                              );
+                              return amount == null ||
+                                      !amount.isFinite ||
+                                      amount < 0
+                                  ? 'Enter a valid amount'
+                                  : null;
+                            },
                           ),
                         ],
                       ),
@@ -419,6 +459,21 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                             controller: _lastBillCtrl,
                             keyboardType: TextInputType.number,
                             hintText: 'e.g. 2500',
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}'),
+                              ),
+                            ],
+                            validator: (value) {
+                              final amount = double.tryParse(
+                                (value ?? '').trim(),
+                              );
+                              return amount == null ||
+                                      !amount.isFinite ||
+                                      amount < 0
+                                  ? 'Enter a valid amount'
+                                  : null;
+                            },
                           ),
                         ],
                       ),
@@ -521,40 +576,52 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                   padding: EdgeInsets.only(bottom: AppSpacing.s),
                 ),
                 Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: _cardColors.map((c) {
                     final isSelected = _selectedColor == c['color'];
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedColor = c['color']!),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: _hexColor(c['color']!),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.white
-                                : Colors.transparent,
-                            width: 2.5,
+                    return Semantics(
+                      button: true,
+                      selected: isSelected,
+                      label: 'Card color ${c['label']}',
+                      child: Tooltip(
+                        message: 'Select ${c['label']}',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              setState(() => _selectedColor = c['color']!),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: _hexColor(c['color']!),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.transparent,
+                                width: 2.5,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: _hexColor(
+                                          c['color']!,
+                                        ).withValues(alpha: 0.5),
+                                        blurRadius: 8,
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: isSelected
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 18,
+                                  )
+                                : null,
                           ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: _hexColor(
-                                      c['color']!,
-                                    ).withValues(alpha: 0.5),
-                                    blurRadius: 8,
-                                  ),
-                                ]
-                              : [],
                         ),
-                        child: isSelected
-                            ? const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 18,
-                              )
-                            : null,
                       ),
                     );
                   }).toList(),

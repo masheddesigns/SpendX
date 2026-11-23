@@ -46,7 +46,9 @@ class AboutScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: colorScheme.primary.withValues(alpha: 0.35),
+                              color: colorScheme.primary.withValues(
+                                alpha: 0.35,
+                              ),
                               blurRadius: 24,
                               spreadRadius: 2,
                             ),
@@ -58,6 +60,7 @@ class AboutScreen extends StatelessWidget {
                             'assets/logo.svg',
                             width: 80,
                             height: 80,
+                            semanticsLabel: 'SpendX logo',
                           ),
                         ),
                       ),
@@ -97,44 +100,51 @@ class AboutScreen extends StatelessWidget {
                     _InfoRow(
                       icon: Icons.receipt_long_rounded,
                       label: 'Expense & Income Tracking',
-                      value: 'Log transactions with categories, tags, notes, and payment methods. '
+                      value:
+                          'Log transactions with categories, tags, notes, and payment methods. '
                           'Supports recurring payments and auto-logging.',
                     ),
                     _InfoRow(
                       icon: Icons.account_balance_wallet_rounded,
                       label: 'Salary Intelligence',
-                      value: 'Track income by company or client — full-time, part-time, freelance, or contract. '
+                      value:
+                          'Track income by company or client — full-time, part-time, freelance, or contract. '
                           'Supports monthly, weekly, bi-weekly, daily, and per-project pay cycles '
                           'with delay analysis, reliability scoring, and payment hold tracking.',
                     ),
                     _InfoRow(
                       icon: Icons.account_balance_rounded,
                       label: 'Loans, Credit Cards & Lending',
-                      value: 'Manage loan EMIs, credit card outstanding, and lending/borrowing '
+                      value:
+                          'Manage loan EMIs, credit card outstanding, and lending/borrowing '
                           'with payment tracking and reminders.',
                     ),
                     _InfoRow(
                       icon: Icons.flag_rounded,
                       label: 'Savings Goals',
-                      value: 'Set financial targets with progress tracking, '
+                      value:
+                          'Set financial targets with progress tracking, '
                           'contribution logs, and visual progress indicators.',
                     ),
                     _InfoRow(
                       icon: Icons.upload_file_rounded,
                       label: 'Smart Import',
-                      value: 'Import bank transactions from CSV, JSON, Markdown, HTML, '
+                      value:
+                          'Import bank transactions from CSV, JSON, Markdown, HTML, '
                           'or ZIP exports with auto-detected columns and 200+ category aliases.',
                     ),
                     _InfoRow(
                       icon: Icons.share_rounded,
                       label: 'Share-to-Import',
-                      value: 'Share files directly from Notion, Google Sheets, or any app '
+                      value:
+                          'Share files directly from Notion, Google Sheets, or any app '
                           'to SpendX for instant import via the Android share sheet.',
                     ),
                     _InfoRow(
                       icon: Icons.emoji_events_rounded,
                       label: 'Gamification & Wrapped',
-                      value: 'Earn XP, level up through Bronze to Diamond tiers, '
+                      value:
+                          'Earn XP, level up through Bronze to Diamond tiers, '
                           'and view Spotify-style weekly/monthly/yearly financial summaries.',
                     ),
                   ],
@@ -148,28 +158,33 @@ class AboutScreen extends StatelessWidget {
                     _InfoRow(
                       icon: Icons.phone_android_rounded,
                       label: 'Flutter + Riverpod',
-                      value: 'Cross-platform UI with Material Design 3 and reactive state management.',
+                      value:
+                          'Cross-platform UI with Material Design 3 and reactive state management.',
                     ),
                     _InfoRow(
                       icon: Icons.storage_rounded,
                       label: 'SQLite (44 tables)',
-                      value: 'Local offline-first database via sqflite with full schema validation.',
+                      value:
+                          'Local offline-first database via sqflite with full schema validation.',
                     ),
                     _InfoRow(
                       icon: Icons.cloud_done_outlined,
                       label: 'Google Drive Backup',
-                      value: 'AES-256 encrypted backup to your personal Drive with auto-backup, '
+                      value:
+                          'AES-256 encrypted backup to your personal Drive with auto-backup, '
                           'auto-restore, and multi-device sync.',
                     ),
                     _InfoRow(
                       icon: Icons.auto_awesome_outlined,
                       label: 'Gemini AI',
-                      value: 'Receipt scanning, AI chat assistant, and smart transaction categorization.',
+                      value:
+                          'Receipt scanning, AI chat assistant, and smart transaction categorization.',
                     ),
                     _InfoRow(
                       icon: Icons.palette_outlined,
                       label: 'Material Design 3',
-                      value: 'Clean Light and Dark modes with a consistent card system.',
+                      value:
+                          'Clean Light and Dark modes with a consistent card system.',
                     ),
                   ],
                 ),
@@ -182,18 +197,21 @@ class AboutScreen extends StatelessWidget {
                     _InfoRow(
                       icon: Icons.lock_outline_rounded,
                       label: 'Privacy-first',
-                      value: 'All data stays on your device by default. No external servers, no tracking, no ads.',
+                      value:
+                          'All data stays on your device by default. No external servers, no tracking, no ads.',
                     ),
                     _InfoRow(
                       icon: Icons.enhanced_encryption_outlined,
                       label: 'Encrypted backup',
-                      value: 'Cloud backup is AES-256 encrypted on-device before upload. '
+                      value:
+                          'Cloud backup is AES-256 encrypted on-device before upload. '
                           'Only you can decrypt it — even across devices.',
                     ),
                     _InfoRow(
                       icon: Icons.delete_outline_rounded,
                       label: 'Full control',
-                      value: 'Export as CSV/JSON/PDF, restore from backup, clear individual data types, '
+                      value:
+                          'Export as CSV/JSON/PDF, restore from backup, clear individual data types, '
                           'or delete everything including cloud backups.',
                     ),
                   ],
@@ -205,9 +223,7 @@ class AboutScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   onTap: () => Navigator.push(
                     context,
-                    AppPageRoute(
-                      builder: (_) => const PrivacyPolicyScreen(),
-                    ),
+                    AppPageRoute(builder: (_) => const PrivacyPolicyScreen()),
                   ),
                   child: Container(
                     padding: const EdgeInsets.all(20),
@@ -215,7 +231,9 @@ class AboutScreen extends StatelessWidget {
                       color: colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.45,
+                        ),
                       ),
                     ),
                     child: Row(
@@ -293,8 +311,9 @@ class _InfoCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 20),
           for (var index = 0; index < rows.length; index++) ...[

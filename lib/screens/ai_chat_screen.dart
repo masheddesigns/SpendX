@@ -1,6 +1,9 @@
 import '../core/logging/app_logger.dart';
 import '../core/database/database_service.dart';
 import 'package:flutter/material.dart';
+import 'settings/feature_toggles_screen.dart';
+import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/loading_state_widget.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import '../features/ai/ai_action.dart';
@@ -381,10 +384,30 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (GeminiService.instance.apiKey.trim().isEmpty)
+              MaterialBanner(
+                content: const Text(
+                  'Add a Gemini API key in Settings to use AI chat. Your other SpendX features still work without it.',
+                ),
+                leading: const Icon(Icons.info_outline_rounded),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        AppPageRoute(
+                          builder: (_) => const FeatureTogglesScreen(),
+                        ),
+                      );
+                      if (mounted) setState(() {});
+                    },
+                    child: const Text('Settings'),
+                  ),
+                ],
+              ),
             // Messages
             Expanded(
               child: !_initialized
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const LoadingStateWidget(message: 'Preparing your AI chat…')
                   : ListView.builder(
                       controller: _scrollCtrl,
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -478,11 +501,17 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _sendMessage(_textCtrl.text),
-                      child: Container(
-                        width: 44,
-                        height: 44,
+                    Semantics(
+                      button: true,
+                      label: 'Send message',
+                      child: IconButton(
+                        tooltip: 'Send message',
+                        onPressed: _isLoading
+                            ? null
+                            : () => _sendMessage(_textCtrl.text),
+                        icon: Container(
+                          width: 48,
+                          height: 48,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -492,7 +521,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                           ),
                           shape: BoxShape.circle,
                         ),
-                        child: _isLoading
+                          child: _isLoading
                             ? Padding(
                                 padding: const EdgeInsets.all(10),
                                 child: CircularProgressIndicator(
@@ -507,6 +536,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                                 color: Theme.of(context).colorScheme.onPrimary,
                                 size: 20,
                               ),
+                        ),
                       ),
                     ),
                   ],

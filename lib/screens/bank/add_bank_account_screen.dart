@@ -293,7 +293,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                        color: AppColors.textPrimaryOf(context),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -329,18 +329,29 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? AppColors.secondaryText : const Color(0xFF64748B),
+                        color: AppColors.textSecondaryOf(context),
                       ),
                     ),
                     const SizedBox(height: 6),
-                    AppAmountField(controller: _balanceCtrl),
+                    AppAmountField(
+                      controller: _balanceCtrl,
+                      validator: (value) {
+                        final amount = double.tryParse(
+                          (value ?? '').trim().replaceAll(',', ''),
+                        );
+                        if (amount == null || !amount.isFinite || amount < 0) {
+                          return 'Enter a valid balance of zero or more';
+                        }
+                        return null;
+                      },
+                    ),
                     if (_isInvestment) ...[
                       const SizedBox(height: 6),
                       Text(
                         'Tip: You can update this valuation anytime in the Net Worth screen.',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark ? AppColors.mutedText : const Color(0xFF94A3B8),
+                          color: AppColors.textMutedOf(context),
                         ),
                       ),
                     ],
@@ -363,7 +374,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                        color: AppColors.textPrimaryOf(context),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -404,7 +415,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                               style: TextStyle(
                                 color: isSelected
                                     ? color
-                                    : (isDark ? AppColors.secondaryText : const Color(0xFF475569)),
+                                    : AppColors.textSecondaryOf(context),
                                 fontSize: 13,
                                 fontWeight: isSelected
                                     ? FontWeight.w600
@@ -437,7 +448,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.primaryText : const Color(0xFF0F172A),
+                              color: AppColors.textPrimaryOf(context),
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -445,7 +456,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                             'Disable for loan or liability accounts',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isDark ? AppColors.mutedText : const Color(0xFF64748B),
+                              color: AppColors.textMutedOf(context),
                             ),
                           ),
                         ],

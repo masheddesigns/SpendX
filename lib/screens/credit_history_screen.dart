@@ -249,10 +249,12 @@ class _CreditHistoryScreenState extends ConsumerState<CreditHistoryScreen> {
         title: 'Credit History',
         actions: [
           IconButton(
+            tooltip: 'Sort',
             icon: const Icon(Icons.sort_rounded),
             onPressed: _showSortOptions,
           ),
           IconButton(
+            tooltip: 'Filter',
             icon: const Icon(Icons.filter_list_rounded),
             onPressed: _showFilterSheet,
           ),

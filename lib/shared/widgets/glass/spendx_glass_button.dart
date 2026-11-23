@@ -101,7 +101,9 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
   }
 
   void _handleTapDown(TapDownDetails _) {
-    if (widget.onPressed != null && !widget.isLoading) {
+    if (widget.onPressed != null &&
+        !widget.isLoading &&
+        !MediaQuery.disableAnimationsOf(context)) {
       setState(() => _isPressed = true);
       _animController.forward();
     }

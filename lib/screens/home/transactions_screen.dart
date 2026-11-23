@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/providers.dart' show cardsProvider;
@@ -344,6 +345,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                             ),
                             if (_searchQuery.isNotEmpty)
                               IconButton(
+                                tooltip: 'Close',
                                 icon: const Icon(Icons.close_rounded, size: 18),
                                 color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
                                 onPressed: () {
@@ -535,19 +537,13 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isDark ? const Color(0x254F46E5) : const Color(0xFFEEF2FF),
-                            ),
-                            child: Icon(
-                              _searchQuery.isNotEmpty
-                                  ? Icons.search_off_rounded
-                                  : Icons.receipt_long_outlined,
-                              size: 24,
-                              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          Semantics(
+                            image: true,
+                            label: 'Empty ledger illustration',
+                            child: SvgPicture.asset(
+                              'assets/illustrations/empty_finances.svg',
+                              width: 132,
+                              height: 104,
                             ),
                           ),
                           const SizedBox(height: 14),

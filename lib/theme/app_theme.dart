@@ -160,10 +160,6 @@ class AppColors {
   static const Color danger = AppTheme.semanticExpense;
   static const Color transfer = AppTheme.semanticTransfer;
   static const Color shortfall = AppTheme.semanticShortfall;
-  static const Color primaryText = AppTheme.darkTextPrimary;
-  static const Color secondaryText = AppTheme.darkTextSecondary;
-  static const Color mutedText = AppTheme.darkTextMuted;
-
   // Adaptive theme-aware resolvers
   static Color textPrimaryOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
@@ -405,7 +401,15 @@ class AppTheme extends ChangeNotifier {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: primary,
+            minimumSize: const Size(48, 48),
+            tapTargetSize: MaterialTapTargetSize.padded,
             textStyle: AppTextStyles.button,
+          ),
+        ),
+        iconButtonTheme: const IconButtonThemeData(
+          style: ButtonStyle(
+            minimumSize: WidgetStatePropertyAll(Size(48, 48)),
+            tapTargetSize: MaterialTapTargetSize.padded,
           ),
         ),
         appBarTheme: AppBarTheme(
@@ -505,7 +509,15 @@ class AppTheme extends ChangeNotifier {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
+          minimumSize: const Size(48, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
           textStyle: AppTextStyles.button,
+        ),
+      ),
+      iconButtonTheme: const IconButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: WidgetStatePropertyAll(Size(48, 48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
         ),
       ),
       appBarTheme: AppBarTheme(

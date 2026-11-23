@@ -5,7 +5,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:spend_x/data/core/app_database.dart';
-import 'package:spend_x/data/core/spendx_database_factory.dart';
+import 'package:spend_x/data/core/database_access_gate.dart';
+import 'package:spend_x/data/core/database_lifecycle_coordinator.dart';
 import 'package:spend_x/data/core/tables.dart';
 import 'package:spend_x/data/security/database_key_manager.dart';
 import 'package:spend_x/data/security/database_encryption_migration_service.dart';
@@ -28,6 +29,10 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    // The key-loss case intentionally leaves admission closed. Reset global
+    // singleton lifecycle state so each test starts with an independent gate.
+    DatabaseAccessGate.instance.resetForTesting();
+    DatabaseLifecycleCoordinator.instance.resetForTesting();
     tempDir = await Directory.systemTemp.createTemp('spendx_c12_p1_test_');
     mockStorage = InMemorySecureStorageAdapter();
     keyManager = SpendXDatabaseKeyManager(storageAdapter: mockStorage);

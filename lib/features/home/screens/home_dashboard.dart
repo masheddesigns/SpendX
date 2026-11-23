@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -103,7 +104,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
     }
 
     return RefreshIndicator(
-      color: const Color(0xFF4F46E5),
+      color: Theme.of(context).colorScheme.primary,
       onRefresh: () async {
         SyncActivityService.instance.startSync(
           title: 'Refreshing Financial Ledger',
@@ -183,27 +184,23 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+                    color: Theme.of(context).colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+                      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.45),
                       width: 0.8,
                     ),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0x254F46E5) : const Color(0xFFEEF2FF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.receipt_long_outlined,
-                          size: 22,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                      Semantics(
+                        image: true,
+                        label: 'Empty ledger illustration',
+                        child: SvgPicture.asset(
+                          'assets/illustrations/empty_finances.svg',
+                          width: 132,
+                          height: 104,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -212,7 +209,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -221,7 +218,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12.5,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -238,7 +235,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
-                    color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+                    color: Theme.of(context).colorScheme.surfaceContainer,
                     border: Border.all(
                       color: isDark
                           ? Colors.white.withValues(alpha: 0.08)

@@ -47,7 +47,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
       parent: _chartAnimCtrl,
       curve: Curves.easeOutCubic,
     );
-    _chartAnimCtrl.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _chartAnimCtrl.value = 1;
+      } else {
+        _chartAnimCtrl.forward();
+      }
+    });
   }
 
   @override
@@ -59,8 +66,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   void _onPeriodChanged(int months) {
     if (ref.read(reportsPeriodProvider) == months) return;
     ref.read(reportsPeriodProvider.notifier).state = months;
-    _chartAnimCtrl.reset();
-    _chartAnimCtrl.forward();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _chartAnimCtrl.value = 1;
+    } else {
+      _chartAnimCtrl.reset();
+      _chartAnimCtrl.forward();
+    }
   }
 
   void _showExportSheet(BuildContext context) {
@@ -91,8 +102,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         ],
       ),
       body: reportsAsync.when(
-        data: (summary) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
+        data: (summary) => RefreshIndicator(
+          onRefresh: () async => ref.invalidate(reportsProvider),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -137,6 +151,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                 isDark: isDark,
               ),
             ],
+          ),
           ),
         ),
         loading: () => const SkeletonLoader.summary(),

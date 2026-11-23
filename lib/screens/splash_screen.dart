@@ -50,6 +50,7 @@ class _SplashScreenState extends State<SplashScreen>
   /// every 400ms until splash becomes the visible route again, then
   /// fires the home navigation that was deferred.
   Timer? _navRecheck;
+  bool _motionConfigured = false;
 
   @override
   void initState() {
@@ -98,8 +99,18 @@ class _SplashScreenState extends State<SplashScreen>
         curve: const Interval(0.2, 0.8, curve: Curves.easeInOut),
       ),
     );
+  }
 
-    _ctrl.forward();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionConfigured) return;
+    _motionConfigured = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.value = 1;
+    } else {
+      _ctrl.forward();
+    }
   }
 
   @override
@@ -127,7 +138,9 @@ class _SplashScreenState extends State<SplashScreen>
       await CategoryRepo().ensureDefaults().timeout(
         const Duration(seconds: 6),
         onTimeout: () {
-          throw TimeoutException('Database initialization timed out after 6 seconds');
+          throw TimeoutException(
+            'Database initialization timed out after 6 seconds',
+          );
         },
       );
       debugPrint('\u2705 Categories seeded');
@@ -236,9 +249,9 @@ class _SplashScreenState extends State<SplashScreen>
     }
     _navRecheck?.cancel();
     _navRecheck = null;
-    Navigator.of(context).pushReplacement(
-      AppPageRoute(builder: (_) => const HomeScreen()),
-    );
+    Navigator.of(
+      context,
+    ).pushReplacement(AppPageRoute(builder: (_) => const HomeScreen()));
   }
 
   Future<void> _requestPermissions() async {
@@ -258,8 +271,13 @@ class _SplashScreenState extends State<SplashScreen>
 
       // Weekly: next Monday 9am
       final daysUntilMonday = (DateTime.monday - now.weekday + 7) % 7;
-      final nextMonday = DateTime(now.year, now.month,
-          now.day + (daysUntilMonday == 0 ? 7 : daysUntilMonday), 9, 0);
+      final nextMonday = DateTime(
+        now.year,
+        now.month,
+        now.day + (daysUntilMonday == 0 ? 7 : daysUntilMonday),
+        9,
+        0,
+      );
       NotificationServiceV2().scheduleNotification(
         id: 90000,
         title: 'Your Weekly Wrapped is ready!',
@@ -313,8 +331,13 @@ class _SplashScreenState extends State<SplashScreen>
 
       // Weekly: next Monday at 8am
       final daysUntilMon = (DateTime.monday - now.weekday + 7) % 7;
-      final nextMon = DateTime(now.year, now.month,
-          now.day + (daysUntilMon == 0 ? 7 : daysUntilMon), 8, 0);
+      final nextMon = DateTime(
+        now.year,
+        now.month,
+        now.day + (daysUntilMon == 0 ? 7 : daysUntilMon),
+        8,
+        0,
+      );
       NotificationServiceV2().scheduleNotification(
         id: 42002,
         title: 'Weekly Spending Report',
@@ -333,8 +356,19 @@ class _SplashScreenState extends State<SplashScreen>
 
   static String _monthName(int month) {
     const names = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      '',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return names[month.clamp(1, 12)];
   }
@@ -361,10 +395,7 @@ class _SplashScreenState extends State<SplashScreen>
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [
-                          Color(0x666558E8),
-                          Colors.transparent,
-                        ],
+                        colors: [Color(0x666558E8), Colors.transparent],
                       ),
                     ),
                   ),
@@ -381,10 +412,7 @@ class _SplashScreenState extends State<SplashScreen>
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [
-                          Color(0x4035B779),
-                          Colors.transparent,
-                        ],
+                        colors: [Color(0x4035B779), Colors.transparent],
                       ),
                     ),
                   ),
@@ -408,8 +436,9 @@ class _SplashScreenState extends State<SplashScreen>
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF6558E8).withValues(
-                                    alpha: _glowOpacity.value * 0.55),
+                                color: const Color(
+                                  0xFF6558E8,
+                                ).withValues(alpha: _glowOpacity.value * 0.55),
                                 blurRadius: 40,
                                 spreadRadius: 4,
                               ),
@@ -421,6 +450,7 @@ class _SplashScreenState extends State<SplashScreen>
                               'assets/logo.svg',
                               width: 104,
                               height: 104,
+                              semanticsLabel: 'SpendX logo',
                             ),
                           ),
                         ),
@@ -439,10 +469,7 @@ class _SplashScreenState extends State<SplashScreen>
                           color: Colors.white,
                           letterSpacing: 3,
                           shadows: [
-                            Shadow(
-                              color: Color(0x806558E8),
-                              blurRadius: 20,
-                            ),
+                            Shadow(color: Color(0x806558E8), blurRadius: 20),
                           ],
                         ),
                       ),
@@ -478,7 +505,9 @@ class _SplashScreenState extends State<SplashScreen>
                             color: const Color(0xFF1E293B),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.5),
+                              color: const Color(
+                                0xFFEF4444,
+                              ).withValues(alpha: 0.5),
                               width: 1.5,
                             ),
                             boxShadow: [
@@ -521,17 +550,23 @@ class _SplashScreenState extends State<SplashScreen>
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
-                                  onPressed: _isRetrying ? null : _checkInitialState,
+                                  onPressed: _isRetrying
+                                      ? null
+                                      : _checkInitialState,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF6558E8),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
                                   ),
                                   child: Text(
-                                    _isRetrying ? 'Retrying...' : 'Retry Startup',
+                                    _isRetrying
+                                        ? 'Retrying...'
+                                        : 'Retry Startup',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 14,

@@ -111,17 +111,26 @@ class TransactionTile extends StatelessWidget {
     final hasAccount = transaction.accountId != null;
     final isFullyMapped = hasCategory && hasAccount;
     final color = isFullyMapped ? Colors.green : Colors.orange;
+    final label = isFullyMapped ? 'High confidence' : 'Needs review';
     return Builder(
-      builder: (ctx) => GestureDetector(
-        onTap: () => _showConfidenceSheet(ctx, isFullyMapped),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
+      builder: (ctx) => Semantics(
+        button: true,
+        label: 'Auto-detected transaction: $label. Show details.',
+        child: Tooltip(
+          message: 'Auto-detected: $label',
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => _showConfidenceSheet(ctx, isFullyMapped),
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Center(
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+              ),
             ),
           ),
         ),

@@ -9,6 +9,7 @@ import '../../models/goal.dart';
 import '../../utils/app_format.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 import 'add_goal_screen.dart';
 import 'goal_detail_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
@@ -31,7 +32,15 @@ class GoalsScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(activeGoalsProvider),
         ),
         data: (goals) {
-          if (goals.isEmpty) return _buildEmptyState(context);
+          if (goals.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: () async => ref.invalidate(goalsProvider),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [SizedBox(height: 320, child: _buildEmptyState(context))],
+              ),
+            );
+          }
 
           final nudges = nudgesAsync.valueOrNull ?? [];
 
@@ -90,30 +99,11 @@ class GoalsScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.flag_rounded,
-            size: 64,
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No goals yet',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Set a savings target, spending limit, or debt payoff goal.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+    return const EmptyStateWidget(
+      icon: Icons.flag_rounded,
+      title: 'No goals yet',
+      description: 'Set a savings target, spending limit, or debt payoff goal.',
+      illustrationAsset: 'assets/illustrations/empty_finances.svg',
     );
   }
 }

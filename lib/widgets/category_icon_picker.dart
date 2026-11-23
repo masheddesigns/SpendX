@@ -72,7 +72,7 @@ class CategoryIconPicker extends StatelessWidget {
           ),
           child: GridView.builder(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 6,
+              crossAxisCount: 5,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
             ),
@@ -80,9 +80,19 @@ class CategoryIconPicker extends StatelessWidget {
             itemBuilder: (context, index) {
               final icon = defaultIcons[index];
               final isSelected = selectedIcon == icon;
-              return GestureDetector(
-                onTap: () => onIconSelected(icon),
-                child: Container(
+              return Semantics(
+                button: true,
+                selected: isSelected,
+                label: 'Category icon $icon',
+                child: Tooltip(
+                  message: icon,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onIconSelected(icon),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isSelected
@@ -104,6 +114,9 @@ class CategoryIconPicker extends StatelessWidget {
                     color: isSelected
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                      ),
+                    ),
                   ),
                 ),
               );

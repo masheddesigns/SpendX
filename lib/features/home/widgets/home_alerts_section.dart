@@ -212,6 +212,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Close',
                         visualDensity: VisualDensity.compact,
                         icon: Icon(
                           Icons.close_rounded,

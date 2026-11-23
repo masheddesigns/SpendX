@@ -38,6 +38,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
+  bool _motionConfigured = false;
 
   @override
   void initState() {
@@ -45,12 +46,24 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
-    )..repeat(reverse: true);
+    );
 
     _pulseAnimation = CurvedAnimation(
       parent: _pulseController,
       curve: Curves.easeInOutSine,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionConfigured) return;
+    _motionConfigured = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulseController.value = 0.5;
+    } else {
+      _pulseController.repeat(reverse: true);
+    }
   }
 
   @override

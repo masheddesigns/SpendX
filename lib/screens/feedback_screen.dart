@@ -274,6 +274,7 @@ class FeedbackScreen extends StatelessWidget {
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Copy',
                       icon: const Icon(Icons.copy, size: 18),
                       onPressed: () async {
                         await Clipboard.setData(

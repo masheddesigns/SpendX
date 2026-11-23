@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../theme/app_theme.dart';
 import 'spendx_glass_button.dart';
 import 'spendx_glass_surface.dart';
@@ -21,6 +22,7 @@ class SpendXLoadingState extends StatefulWidget {
 class _SpendXLoadingStateState extends State<SpendXLoadingState>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  bool _motionConfigured = false;
 
   @override
   void initState() {
@@ -28,7 +30,19 @@ class _SpendXLoadingStateState extends State<SpendXLoadingState>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionConfigured) return;
+    _motionConfigured = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 0.5;
+    } else {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override
@@ -75,6 +89,7 @@ class SpendXEmptyState extends StatelessWidget {
   final String subtitle;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? illustrationAsset;
 
   const SpendXEmptyState({
     super.key,
@@ -83,6 +98,7 @@ class SpendXEmptyState extends StatelessWidget {
     required this.subtitle,
     this.actionLabel,
     this.onAction,
+    this.illustrationAsset,
   });
 
   @override
@@ -95,7 +111,19 @@ class SpendXEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
+            if (illustrationAsset != null)
+              Semantics(
+                image: true,
+                label: '$title illustration',
+                child: SvgPicture.asset(
+                  illustrationAsset!,
+                  width: 144,
+                  height: 120,
+                  fit: BoxFit.contain,
+                ),
+              )
+            else
+              Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
@@ -113,7 +141,7 @@ class SpendXEmptyState extends StatelessWidget {
                 size: 28,
                 color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
               ),
-            ),
+              ),
             const SizedBox(height: 14),
             Text(
               title,

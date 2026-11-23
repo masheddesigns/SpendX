@@ -282,6 +282,7 @@ class _BudgetManagementScreenState
                                   ),
                                 ),
                                 IconButton(
+                                  tooltip: 'Edit',
                                   icon: Icon(
                                     Icons.edit_outlined,
                                     size: 18,
@@ -296,6 +297,7 @@ class _BudgetManagementScreenState
                                   ),
                                 ),
                                 IconButton(
+                                  tooltip: 'Delete',
                                   icon: Icon(
                                     Icons.delete_outline,
                                     size: 18,

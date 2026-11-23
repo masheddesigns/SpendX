@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AppTextField extends StatelessWidget {
   final String label;
@@ -13,6 +14,7 @@ class AppTextField extends StatelessWidget {
   final Widget? suffix;
   final ValueChanged<String>? onChanged;
   final FormFieldValidator<String>? validator;
+  final List<TextInputFormatter>? inputFormatters;
   final int? maxLines;
   final bool autofocus;
   final FocusNode? focusNode;
@@ -35,6 +37,7 @@ class AppTextField extends StatelessWidget {
     this.suffix,
     this.onChanged,
     this.validator,
+    this.inputFormatters,
     this.maxLines = 1,
     this.autofocus = false,
     this.focusNode,
@@ -70,7 +73,9 @@ class AppTextField extends StatelessWidget {
             child: Text(
               label,
               style: textTheme.labelLarge?.copyWith(
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF64748B),
                 fontWeight: FontWeight.w600,
                 letterSpacing: -0.1,
               ),
@@ -83,6 +88,7 @@ class AppTextField extends StatelessWidget {
           focusNode: focusNode,
           onChanged: onChanged,
           validator: validator,
+          inputFormatters: inputFormatters,
           maxLines: maxLines,
           autofocus: autofocus,
           readOnly: readOnly,
@@ -94,20 +100,24 @@ class AppTextField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             errorText: errorText,
-            prefixIcon: prefix ??
+            prefixIcon:
+                prefix ??
                 (prefixIcon is IconData
-                ? Icon(
-                    prefixIcon as IconData,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                  )
-                : prefixIcon as Widget?),
+                    ? Icon(
+                        prefixIcon as IconData,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      )
+                    : prefixIcon as Widget?),
             suffixIcon: suffix ?? suffixIcon,
             hintStyle: textTheme.bodyLarge?.copyWith(
-              color: isDark
-                  ? const Color(0x7094A3B8)
-                  : const Color(0x8064748B),
+              color: isDark ? const Color(0x7094A3B8) : const Color(0x8064748B),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 15.0),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 15.0,
+            ),
             filled: true,
             fillColor: fillColor,
             border: OutlineInputBorder(

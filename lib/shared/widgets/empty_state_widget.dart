@@ -9,6 +9,7 @@ class EmptyStateWidget extends StatelessWidget {
     this.description,
     this.ctaLabel,
     this.onCtaTap,
+    this.illustrationAsset,
   });
 
   final IconData icon;
@@ -16,6 +17,7 @@ class EmptyStateWidget extends StatelessWidget {
   final String? description;
   final String? ctaLabel;
   final VoidCallback? onCtaTap;
+  final String? illustrationAsset;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +27,7 @@ class EmptyStateWidget extends StatelessWidget {
       subtitle: description ?? '',
       actionLabel: ctaLabel,
       onAction: onCtaTap,
+      illustrationAsset: illustrationAsset,
     );
   }
 }

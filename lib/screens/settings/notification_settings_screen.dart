@@ -95,7 +95,8 @@ class _NotificationSettingsScreenState
     return Scaffold(
       appBar: SpendXAppBar(
         title: 'Notifications',
-        actions: [IconButton(onPressed: _save, icon: const Icon(Icons.check))],
+        actions: [IconButton(
+          tooltip: 'Save',onPressed: _save, icon: const Icon(Icons.check))],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -843,6 +844,7 @@ class _NotificationSettingsScreenState
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: 'Close',
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(ctx),
                   ),
@@ -895,6 +897,7 @@ class _NotificationSettingsScreenState
                         leading: const Icon(Icons.account_balance, size: 20),
                         title: Text(item, style: const TextStyle(fontSize: 14)),
                         trailing: IconButton(
+                          tooltip: 'Delete',
                           icon: const Icon(Icons.delete_outline, size: 20),
                           onPressed: () async {
                             setSheetState(() => senders.removeAt(index));

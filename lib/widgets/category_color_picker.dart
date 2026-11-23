@@ -29,7 +29,7 @@ class CategoryColorPicker extends StatelessWidget {
         const Text('Pick a Color', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey, decoration: TextDecoration.none)),
         const SizedBox(height: 12),
         SizedBox(
-          height: 44,
+          height: 48,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: palette.length,
@@ -40,11 +40,18 @@ class CategoryColorPicker extends StatelessWidget {
               final color = Color(int.parse(hex.replaceAll('#', '0xFF')));
               final isSelected = selectedColor.toUpperCase() == hex.toUpperCase();
 
-              return GestureDetector(
-                onTap: () => onColorSelected(hex),
-                child: Container(
-                  width: 44,
-                  height: 44,
+              return Semantics(
+                button: true,
+                selected: isSelected,
+                label: 'Category color ${item['name']}',
+                child: Tooltip(
+                  message: 'Select ${item['name']}',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onColorSelected(hex),
+                    child: Container(
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
@@ -57,6 +64,8 @@ class CategoryColorPicker extends StatelessWidget {
                     ] : null,
                   ),
                   child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                    ),
+                  ),
                 ),
               );
             },

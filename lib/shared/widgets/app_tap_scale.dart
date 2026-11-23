@@ -11,6 +11,7 @@ class AppTapScale extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final bool haptic;
+  final String? semanticLabel;
 
   const AppTapScale({
     super.key,
@@ -18,6 +19,7 @@ class AppTapScale extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.haptic = false,
+    this.semanticLabel,
   });
 
   @override
@@ -28,7 +30,8 @@ class _AppTapScaleState extends State<AppTapScale> {
   bool _pressed = false;
 
   void _onTapDown(TapDownDetails _) {
-    if (widget.onTap != null || widget.onLongPress != null) {
+    if (!MediaQuery.disableAnimationsOf(context) &&
+        (widget.onTap != null || widget.onLongPress != null)) {
       setState(() => _pressed = true);
     }
   }
@@ -38,6 +41,7 @@ class _AppTapScaleState extends State<AppTapScale> {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return GestureDetector(
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
@@ -47,15 +51,22 @@ class _AppTapScaleState extends State<AppTapScale> {
         widget.onTap?.call();
       },
       onLongPress: widget.onLongPress,
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: AppMotion.fast,
-        curve: AppMotion.curveSpring,
-        child: AnimatedOpacity(
-          opacity: _pressed ? 0.85 : 1.0,
-          duration: AppMotion.fast,
-          child: widget.child,
-        ),
+      child: Semantics(
+        label: widget.semanticLabel,
+        button: widget.onTap != null || widget.onLongPress != null,
+        enabled: widget.onTap != null || widget.onLongPress != null,
+        child: reduceMotion
+            ? widget.child
+            : AnimatedScale(
+                scale: _pressed ? 0.97 : 1.0,
+                duration: AppMotion.fast,
+                curve: AppMotion.curveSpring,
+                child: AnimatedOpacity(
+                  opacity: _pressed ? 0.85 : 1.0,
+                  duration: AppMotion.fast,
+                  child: widget.child,
+                ),
+              ),
       ),
     );
   }

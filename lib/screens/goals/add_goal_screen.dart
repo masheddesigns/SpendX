@@ -20,6 +20,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   GoalType _type = GoalType.savings;
   final _titleCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   int _durationDays = 30;
   String? _selectedCategoryId;
 
@@ -62,7 +63,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
 
   Future<void> _save() async {
     debugPrint('🎯 _save called, isValid: $_isValid');
-    if (!_isValid) return;
+    if (!_isValid || !(_formKey.currentState?.validate() ?? false)) return;
 
     try {
       if (_isEditing) {
@@ -113,7 +114,10 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
+          child: Form(
+            key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Goal Type ──────────────────────────────────────────
@@ -178,8 +182,11 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
               const SizedBox(height: 24),
 
               // ── Title ──────────────────────────────────────────────
-              TextField(
+              TextFormField(
                 controller: _titleCtrl,
+                validator: (value) => (value == null || value.trim().isEmpty)
+                    ? 'Enter a goal title'
+                    : null,
                 decoration: InputDecoration(
                   labelText: 'Goal title',
                   hintText: _type == GoalType.savings
@@ -187,9 +194,6 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                       : _type == GoalType.spendingLimit
                           ? 'e.g. Food Budget'
                           : 'e.g. Clear HDFC Card',
-                  errorText: _titleCtrl.text.isNotEmpty && _titleCtrl.text.trim().isEmpty
-                      ? 'Title cannot be blank'
-                      : null,
                   filled: true,
                   fillColor: cs.surfaceContainer,
                   border: OutlineInputBorder(
@@ -203,8 +207,17 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
               const SizedBox(height: 16),
 
               // ── Amount ─────────────────────────────────────────────
-              TextField(
+              TextFormField(
                 controller: _amountCtrl,
+                validator: (value) {
+                  final amount = double.tryParse(
+                    (value ?? '').trim().replaceAll(',', '').replaceAll(' ', ''),
+                  );
+                  if (amount == null || !amount.isFinite || amount <= 0) {
+                    return 'Amount must be greater than zero';
+                  }
+                  return null;
+                },
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
@@ -215,10 +228,6 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                       : 'Target amount',
                   prefixText: '\u20b9 ',
                   hintText: '0.00',
-                  errorText: _amountCtrl.text.isNotEmpty &&
-                          (_parsedAmount == null || _parsedAmount! <= 0)
-                      ? 'Amount must be greater than zero'
-                      : null,
                   filled: true,
                   fillColor: cs.surfaceContainer,
                   border: OutlineInputBorder(
@@ -281,6 +290,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
 
               const SizedBox(height: 32),
             ],
+            ),
           ),
         ),
       ),

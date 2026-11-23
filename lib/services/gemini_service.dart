@@ -1,4 +1,5 @@
 import '../core/logging/app_logger.dart';
+import 'dart:async';
 import 'settings_service.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -34,6 +35,47 @@ class GeminiService {
 
   /// Public getter exposing the API key (if any) for verification and testing.
   String get apiKey => _apiKey;
+
+  /// Verifies the configured key against Gemini without adding the request to
+  /// the user's chat history. Returns a user-safe status message.
+  Future<String> testConnection() async {
+    if (_apiKey.trim().isEmpty) return 'Add an API key first.';
+    try {
+      final response = await http
+          .post(
+            Uri.parse(_getApiUrl('gemini-2.5-flash')),
+            headers: headers,
+            body: jsonEncode({
+              'contents': [
+                {
+                  'role': 'user',
+                  'parts': [
+                    {'text': 'Reply with OK.'},
+                  ],
+                },
+              ],
+              'generationConfig': {'maxOutputTokens': 8},
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) return 'Connection successful.';
+      if (response.statusCode == 400 ||
+          response.statusCode == 401 ||
+          response.statusCode == 403) {
+        return 'The API key was rejected. Check the key and its access.';
+      }
+      if (response.statusCode == 429) {
+        return 'Gemini rate limit reached. Try again shortly.';
+      }
+      return 'Gemini could not be reached (HTTP ${response.statusCode}).';
+    } on SocketException {
+      return 'No internet connection. Check your network and try again.';
+    } on TimeoutException {
+      return 'Gemini did not respond in time. Try again.';
+    } catch (_) {
+      return 'Could not verify the Gemini connection. Try again.';
+    }
+  }
 
   // Secure HTTP endpoint with zero credentials in URL query parameters.
   String _getApiUrl(String model) {
