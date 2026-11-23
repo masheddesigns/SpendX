@@ -42,175 +42,185 @@ class InsightsTab extends ConsumerWidget {
     final salaryAsync = ref.watch(salaryLedgerProvider);
 
     final children = <Widget>[
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 1: Health Score (always visible)
-          // ═══════════════════════════════════════════════════════════
-          healthScore.when(
-            data: (score) => AppTapScale(
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const FinancialHealthScreen())),
-              child: _HealthScoreCard(score: score),
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 1: Health Score (always visible)
+      // ═══════════════════════════════════════════════════════════
+      healthScore.when(
+        data: (score) => AppTapScale(
+          onTap: () => Navigator.push(
+            context,
+            AppPageRoute(builder: (_) => const FinancialHealthScreen()),
+          ),
+          child: _HealthScoreCard(score: score),
+        ),
+        loading: () => const _ShimmerCard(height: 180),
+        error: (_, _) => const SizedBox.shrink(),
+      ),
+
+      const SizedBox(height: 16),
+
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 2: Risk (Runway + Anomalies merged)
+      // ═══════════════════════════════════════════════════════════
+      _RiskSection(
+        runwayAsync: runwayAsync,
+        anomaliesAsync: anomaliesAsync,
+        streakAsync: streakAsync,
+      ),
+
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 3: Net Worth
+      // ═══════════════════════════════════════════════════════════
+      nwChange.when(
+        data: (data) => _NetWorthBanner(
+          current: data.current,
+          change: data.change,
+          changePct: data.changePct,
+          onTap: () => Navigator.push(
+            context,
+            AppPageRoute(builder: (_) => const NetWorthScreen()),
+          ),
+        ),
+        loading: () => const _ShimmerCard(height: 100),
+        error: (_, _) => const SizedBox.shrink(),
+      ),
+
+      const SizedBox(height: 16),
+
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 4: Credit + EMI (compact)
+      // ═══════════════════════════════════════════════════════════
+      creditHealth.when(
+        data: (health) {
+          if (health.totalOutstanding <= 0) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _CreditCompactCard(
+              health: health,
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const CreditCardScreen()),
+              ),
             ),
-            loading: () => const _ShimmerCard(height: 180),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
+          );
+        },
+        loading: () => const SizedBox.shrink(),
+        error: (_, _) => const SizedBox.shrink(),
+      ),
 
-          const SizedBox(height: 16),
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 5: Salary Status (compact)
+      // ═══════════════════════════════════════════════════════════
+      salaryAsync.when(
+        data: (salaryState) {
+          final current = salaryState.currentMonth;
+          if (current == null) return const SizedBox.shrink();
 
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 2: Risk (Runway + Anomalies merged)
-          // ═══════════════════════════════════════════════════════════
-          _RiskSection(
-            runwayAsync: runwayAsync,
-            anomaliesAsync: anomaliesAsync,
-            streakAsync: streakAsync,
-          ),
+          final isPaid = current.status == SalaryStatus.paid;
+          final isPartial = current.status == SalaryStatus.partial;
+          final statusColor = isPaid
+              ? Theme.of(context).colorScheme.secondary
+              : isPartial
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.tertiary;
 
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 3: Net Worth
-          // ═══════════════════════════════════════════════════════════
-          nwChange.when(
-            data: (data) => _NetWorthBanner(
-              current: data.current,
-              change: data.change,
-              changePct: data.changePct,
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const NetWorthScreen())),
-            ),
-            loading: () => const _ShimmerCard(height: 100),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 4: Credit + EMI (compact)
-          // ═══════════════════════════════════════════════════════════
-          creditHealth.when(
-            data: (health) {
-              if (health.totalOutstanding <= 0) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _CreditCompactCard(
-                  health: health,
-                  onTap: () => Navigator.push(context,
-                      AppPageRoute(builder: (_) => const CreditCardScreen())),
-                ),
-              );
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 5: Salary Status (compact)
-          // ═══════════════════════════════════════════════════════════
-          salaryAsync.when(
-            data: (salaryState) {
-              final current = salaryState.currentMonth;
-              if (current == null) return const SizedBox.shrink();
-
-              final isPaid = current.status == SalaryStatus.paid;
-              final isPartial = current.status == SalaryStatus.partial;
-              final statusColor = isPaid
-                  ? const Color(0xFF22C55E)
-                  : isPartial
-                      ? const Color(0xFF0EA5E9)
-                      : const Color(0xFFF59E0B);
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: AppTapScale(
-                  onTap: () => Navigator.push(context,
-                      AppPageRoute(builder: (_) => const SalaryScreen())),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isPaid
-                                  ? Icons.check_circle_rounded
-                                  : isPartial
-                                      ? Icons.timelapse_rounded
-                                      : Icons.schedule_rounded,
-                              color: statusColor,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Salary',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w600)),
-                                Text(
-                                  '${AppFormat.currency(current.month.expectedAmount)} \u2022 ${current.status.label}',
-                                  style: TextStyle(
-                                      color: statusColor,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.chevron_right_rounded,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                              size: 20),
-                        ],
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: AppTapScale(
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const SalaryScreen()),
+              ),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isPaid
+                              ? Icons.check_circle_rounded
+                              : isPartial
+                              ? Icons.timelapse_rounded
+                              : Icons.schedule_rounded,
+                          color: statusColor,
+                          size: 20,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Salary',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              '${AppFormat.currency(current.month.expectedAmount)} \u2022 ${current.status.label}',
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 20,
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
+              ),
+            ),
+          );
+        },
+        loading: () => const SizedBox.shrink(),
+        error: (_, _) => const SizedBox.shrink(),
+      ),
 
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 6: Monthly Summary
-          // ═══════════════════════════════════════════════════════════
-          monthStats.when(
-            data: (stats) {
-              if (stats == null) return const SizedBox.shrink();
-              return _MonthlySummaryCard(
-                stats: stats,
-                previous: prevStats.valueOrNull,
-              );
-            },
-            loading: () => const _ShimmerCard(height: 100),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 6: Monthly Summary
+      // ═══════════════════════════════════════════════════════════
+      monthStats.when(
+        data: (stats) {
+          if (stats == null) return const SizedBox.shrink();
+          return _MonthlySummaryCard(
+            stats: stats,
+            previous: prevStats.valueOrNull,
+          );
+        },
+        loading: () => const _ShimmerCard(height: 100),
+        error: (_, _) => const SizedBox.shrink(),
+      ),
 
-          const SizedBox(height: 16),
+      const SizedBox(height: 16),
 
-          // ═══════════════════════════════════════════════════════════
-          // SECTION 6: Trends + Forecast
-          // ═══════════════════════════════════════════════════════════
-          forecastAsync.when(
-            data: (f) => f.predictedExpense > 0
-                ? _ForecastCard(forecast: f)
-                : const SizedBox.shrink(),
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-        ];
+      // ═══════════════════════════════════════════════════════════
+      // SECTION 6: Trends + Forecast
+      // ═══════════════════════════════════════════════════════════
+      forecastAsync.when(
+        data: (f) => f.predictedExpense > 0
+            ? _ForecastCard(forecast: f)
+            : const SizedBox.shrink(),
+        loading: () => const SizedBox.shrink(),
+        error: (_, _) => const SizedBox.shrink(),
+      ),
+    ];
 
     if (embedded) {
       return Column(
@@ -286,7 +296,7 @@ class _RiskSection extends StatelessWidget {
                       size: 18,
                       color: runway.status == RunwayStatus.critical
                           ? cs.error
-                          : const Color(0xFFF59E0B),
+                          : Theme.of(context).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -310,18 +320,21 @@ class _RiskSection extends StatelessWidget {
                     child: Row(
                       children: [
                         Container(
-                          width: 6, height: 6,
+                          width: 6,
+                          height: 6,
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: a.severity == AnomalySeverity.high
                                 ? cs.error
-                                : const Color(0xFFF59E0B),
+                                : Theme.of(context).colorScheme.tertiary,
                           ),
                         ),
                         Expanded(
-                          child: Text(a.title,
-                              style: Theme.of(context).textTheme.bodySmall),
+                          child: Text(
+                            a.title,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ),
                       ],
                     ),
@@ -332,15 +345,20 @@ class _RiskSection extends StatelessWidget {
                 if (hasRunwayRisk || hasAnomalies) const Divider(height: 16),
                 Row(
                   children: [
-                    Icon(Icons.local_fire_department_rounded,
-                        size: 16,
-                        color: streak.current >= 7
-                            ? const Color(0xFF8B5CF6)
-                            : const Color(0xFFF59E0B)),
+                    Icon(
+                      Icons.local_fire_department_rounded,
+                      size: 16,
+                      color: streak.current >= 7
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.tertiary,
+                    ),
                     const SizedBox(width: 4),
-                    Text('${streak.current}d consistency streak',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600)),
+                    Text(
+                      '${streak.current}d consistency streak',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -366,11 +384,11 @@ class _HealthScoreCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final Color scoreColor;
     if (score.score >= 80) {
-      scoreColor = const Color(0xFF22C55E);
+      scoreColor = Theme.of(context).colorScheme.secondary;
     } else if (score.score >= 60) {
-      scoreColor = const Color(0xFF0EA5E9);
+      scoreColor = Theme.of(context).colorScheme.primary;
     } else if (score.score >= 40) {
-      scoreColor = const Color(0xFFF59E0B);
+      scoreColor = Theme.of(context).colorScheme.tertiary;
     } else {
       scoreColor = cs.error;
     }
@@ -415,13 +433,19 @@ class _HealthScoreCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      Icon(Icons.arrow_forward_ios_rounded,
-                          size: 14, color: cs.onSurfaceVariant),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 2),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: scoreColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
@@ -461,7 +485,11 @@ class _ScoreRingPainter extends CustomPainter {
   final Color color;
   final Color bgColor;
 
-  _ScoreRingPainter({required this.score, required this.color, required this.bgColor});
+  _ScoreRingPainter({
+    required this.score,
+    required this.color,
+    required this.bgColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -469,15 +497,25 @@ class _ScoreRingPainter extends CustomPainter {
     final radius = size.width / 2 - 5;
     const strokeWidth = 7.0;
 
-    canvas.drawCircle(center, radius,
-        Paint()..color = bgColor..style = PaintingStyle.stroke..strokeWidth = strokeWidth);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = bgColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
+    );
 
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -math.pi / 2,
       (score / 100) * 2 * math.pi,
       false,
-      Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = strokeWidth..strokeCap = StrokeCap.round,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round,
     );
   }
 
@@ -496,8 +534,12 @@ class _NetWorthBanner extends StatelessWidget {
   final double changePct;
   final VoidCallback? onTap;
 
-  const _NetWorthBanner({required this.current, required this.change,
-      required this.changePct, this.onTap});
+  const _NetWorthBanner({
+    required this.current,
+    required this.change,
+    required this.changePct,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -522,11 +564,22 @@ class _NetWorthBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Net Worth',
-                      style: TextStyle(color: cs.onPrimary.withValues(alpha: 0.8), fontSize: 12)),
+                  Text(
+                    'Net Worth',
+                    style: TextStyle(
+                      color: cs.onPrimary.withValues(alpha: 0.8),
+                      fontSize: 12,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(AppFormat.currency(current),
-                      style: TextStyle(color: cs.onPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
+                  Text(
+                    AppFormat.currency(current),
+                    style: TextStyle(
+                      color: cs.onPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -534,16 +587,28 @@ class _NetWorthBanner extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (isPositive ? const Color(0xFF22C55E) : cs.error).withValues(alpha: 0.2),
+                  color:
+                      (isPositive
+                              ? Theme.of(context).colorScheme.secondary
+                              : cs.error)
+                          .withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${isPositive ? '+' : ''}${changePct.toStringAsFixed(1)}%',
-                  style: TextStyle(color: cs.onPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: cs.onPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, color: cs.onPrimary.withValues(alpha: 0.6), size: 20),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: cs.onPrimary.withValues(alpha: 0.6),
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -574,17 +639,29 @@ class _CreditCompactCard extends StatelessWidget {
               Icon(Icons.credit_card_rounded, color: cs.primary, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('Outstanding: ${AppFormat.currency(health.totalOutstanding)}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Outstanding: ${AppFormat.currency(health.totalOutstanding)}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
-              Text('${health.utilizationPct.round()}%',
-                  style: TextStyle(
-                    color: health.utilizationPct > 70 ? cs.error : cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  )),
+              Text(
+                '${health.utilizationPct.round()}%',
+                style: TextStyle(
+                  color: health.utilizationPct > 70
+                      ? cs.error
+                      : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant, size: 18),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: cs.onSurfaceVariant,
+                size: 18,
+              ),
             ],
           ),
         ),
@@ -614,13 +691,25 @@ class _MonthlySummaryCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('This Month',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text(
+              'This Month',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
-                _Metric(label: 'Income', value: AppFormat.currency(stats.income), color: const Color(0xFF22C55E)),
-                _Metric(label: 'Expenses', value: AppFormat.currency(stats.expense), color: cs.error),
+                _Metric(
+                  label: 'Income',
+                  value: AppFormat.currency(stats.income),
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                _Metric(
+                  label: 'Expenses',
+                  value: AppFormat.currency(stats.expense),
+                  color: cs.error,
+                ),
                 _Metric(label: 'Saved', value: '$rate%', color: cs.primary),
               ],
             ),
@@ -636,7 +725,11 @@ class _Metric extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _Metric({required this.label, required this.value, required this.color});
+  const _Metric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -644,10 +737,22 @@ class _Metric extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
         ],
       ),
     );
@@ -676,22 +781,41 @@ class _ForecastCard extends StatelessWidget {
               children: [
                 Icon(Icons.auto_graph_rounded, color: cs.primary, size: 18),
                 const SizedBox(width: 8),
-                Text('Next Month',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'Next Month',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const Spacer(),
-                Text(forecast.confidenceLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text(
+                  forecast.confidenceLabel,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                _Metric(label: 'Income', value: AppFormat.currency(forecast.predictedIncome),
-                    color: const Color(0xFF22C55E)),
-                _Metric(label: 'Expense', value: AppFormat.currency(forecast.predictedExpense),
-                    color: cs.error),
-                _Metric(label: 'Savings', value: AppFormat.currency(forecast.predictedSavings.abs()),
-                    color: forecast.predictedSavings >= 0 ? const Color(0xFF22C55E) : cs.error),
+                _Metric(
+                  label: 'Income',
+                  value: AppFormat.currency(forecast.predictedIncome),
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                _Metric(
+                  label: 'Expense',
+                  value: AppFormat.currency(forecast.predictedExpense),
+                  color: cs.error,
+                ),
+                _Metric(
+                  label: 'Savings',
+                  value: AppFormat.currency(forecast.predictedSavings.abs()),
+                  color: forecast.predictedSavings >= 0
+                      ? Theme.of(context).colorScheme.secondary
+                      : cs.error,
+                ),
               ],
             ),
           ],

@@ -34,21 +34,24 @@ class DashboardGoalsCard extends ConsumerWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isDark
-                ? const [Color(0xFF161922), Color(0xFF13151E)]
-                : const [Color(0xFFFFFFFF), Color(0xFFFAF7F0)],
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainerLow,
+            ],
           ),
           border: Border.all(
             color: isDark
                 ? Colors.white.withValues(alpha: 0.10)
-                : const Color(0xFFECE5D8),
+                : Theme.of(context).colorScheme.outline,
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
               color: isDark
                   ? Colors.black.withValues(alpha: 0.30)
-                  : const Color(0x0A1C1917),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.shadow.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -68,7 +71,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                       Icon(
                         Icons.savings_outlined,
                         size: 16,
-                        color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -80,7 +83,9 @@ class DashboardGoalsCard extends ConsumerWidget {
                             fontSize: 11.5,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.0,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -107,14 +112,14 @@ class DashboardGoalsCard extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(width: 2),
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 15,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ],
                     ),
@@ -131,15 +136,17 @@ class DashboardGoalsCard extends ConsumerWidget {
                 final goal = displayGoals[index];
                 final target = goal.targetAmount;
                 final saved = goal.currentAmount;
-                final progress = target > 0 ? (saved / target).clamp(0.0, 1.0) : 0.0;
+                final progress = target > 0
+                    ? (saved / target).clamp(0.0, 1.0)
+                    : 0.0;
                 final percentText = '${(progress * 100).toInt()}%';
 
                 final isCompleted = saved >= target && target > 0;
                 final statusLabel = isCompleted
                     ? 'Completed'
                     : progress > 0.5
-                        ? 'Halfway'
-                        : 'On Track';
+                    ? 'Halfway'
+                    : 'On Track';
 
                 return InkWell(
                   borderRadius: BorderRadius.circular(20),
@@ -180,8 +187,10 @@ class DashboardGoalsCard extends ConsumerWidget {
                                       : const Color(0xFFE2DDD2),
                                   valueColor: AlwaysStoppedAnimation<Color>(
                                     isCompleted
-                                        ? const Color(0xFF16A34A)
-                                        : const Color(0xFF4F46E5),
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.secondary
+                                        : Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
                               ),
@@ -208,7 +217,9 @@ class DashboardGoalsCard extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -219,7 +230,9 @@ class DashboardGoalsCard extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
-                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -228,12 +241,17 @@ class DashboardGoalsCard extends ConsumerWidget {
 
                           // Mindful Milestone badge
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: isCompleted
                                   ? const Color(0x2016A34A)
                                   : const Color(0x184F46E5),
-                              borderRadius: BorderRadius.circular(AppRadius.full),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.full,
+                              ),
                             ),
                             child: Text(
                               statusLabel,
@@ -241,8 +259,8 @@ class DashboardGoalsCard extends ConsumerWidget {
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: isCompleted
-                                    ? const Color(0xFF16A34A)
-                                    : (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA)),
+                                    ? Theme.of(context).colorScheme.secondary
+                                    : (Theme.of(context).colorScheme.primary),
                               ),
                             ),
                           ),

@@ -56,7 +56,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
       if (targetIndex != -1) {
         _selectedCardIndex = targetIndex;
         _initializedCardSelection = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCard(targetIndex));
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToCard(targetIndex),
+        );
       }
     }
   }
@@ -111,7 +113,8 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   @override
   void didUpdateWidget(covariant CreditCardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialCardId != null && widget.initialCardId != oldWidget.initialCardId) {
+    if (widget.initialCardId != null &&
+        widget.initialCardId != oldWidget.initialCardId) {
       final cards = ref.read(creditCardsProvider).valueOrNull ?? [];
       final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
       if (targetIndex != -1) {
@@ -153,7 +156,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           }
 
           if (!_initializedCardSelection && widget.initialCardId != null) {
-            final targetIndex = cards.indexWhere((c) => c.id == widget.initialCardId);
+            final targetIndex = cards.indexWhere(
+              (c) => c.id == widget.initialCardId,
+            );
             if (targetIndex != -1) {
               _selectedCardIndex = targetIndex;
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -224,13 +229,12 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   ),
                 ),
                 recentTxnsAsync.when(
-                  data: (txns) => _buildRecentTransactionsList(txns, selectedCard),
+                  data: (txns) =>
+                      _buildRecentTransactionsList(txns, selectedCard),
                   loading: () => const SliverToBoxAdapter(
                     child: SkeletonLoader.transactions(),
                   ),
-                  error: (err, _) => SliverToBoxAdapter(
-                    child: Text('$err'),
-                  ),
+                  error: (err, _) => SliverToBoxAdapter(child: Text('$err')),
                 ),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
               ],
@@ -247,7 +251,6 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           : null,
     );
   }
-
 
   Widget _buildCardSelector(List<CreditCard> cards) {
     return SizedBox(
@@ -427,7 +430,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    outstanding < -0.05 ? 'Credit Balance' : 'Current Outstanding',
+                    outstanding < -0.05
+                        ? 'Credit Balance'
+                        : 'Current Outstanding',
                     style: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 13,
@@ -438,15 +443,17 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   Text(
                     outstanding < -0.05
                         ? '+${AppFormat.currency(outstanding.abs())}'
-                        : AppFormat.currency(outstanding.clamp(0.0, double.infinity)),
+                        : AppFormat.currency(
+                            outstanding.clamp(0.0, double.infinity),
+                          ),
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: outstanding > 0.05
                           ? cs.error
                           : (outstanding < -0.05
-                              ? const Color(0xFF10B981)
-                              : cs.onSurface),
+                                ? Theme.of(context).colorScheme.secondary
+                                : cs.onSurface),
                     ),
                   ),
                 ],
@@ -474,15 +481,19 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                         )
                       : Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                            color: const Color(
+                              0xFFF59E0B,
+                            ).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
+                          child:  Text(
                             'Not set',
                             style: TextStyle(
-                              color: Color(0xFFF59E0B),
+                              color: Theme.of(context).colorScheme.tertiary,
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                             ),
@@ -526,20 +537,26 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
               onTap: () => _navigateToEditCard(card),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 14,
-                      color: const Color(0xFFF59E0B)),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Set your credit limit to track usage',
                     style: TextStyle(
-                      color: const Color(0xFFF59E0B),
+                      color: Theme.of(context).colorScheme.tertiary,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const Spacer(),
-                  Icon(Icons.chevron_right_rounded, size: 16,
-                      color: cs.onSurfaceVariant),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: cs.onSurfaceVariant,
+                  ),
                 ],
               ),
             ),
@@ -550,12 +567,16 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: stmtSummary.isPaid
-                    ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.08)
                     : cs.surfaceContainerHigh.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: stmtSummary.isPaid
-                      ? const Color(0xFF10B981).withValues(alpha: 0.25)
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.25)
                       : cs.outlineVariant.withValues(alpha: 0.4),
                 ),
               ),
@@ -573,7 +594,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                                 : Icons.receipt_long_rounded,
                             size: 16,
                             color: stmtSummary.isPaid
-                                ? const Color(0xFF10B981)
+                                ? Theme.of(context).colorScheme.secondary
                                 : cs.primary,
                           ),
                           const SizedBox(width: 6),
@@ -585,7 +606,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
                               color: stmtSummary.isPaid
-                                  ? const Color(0xFF10B981)
+                                  ? Theme.of(context).colorScheme.secondary
                                   : cs.primary,
                             ),
                           ),
@@ -598,7 +619,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: stmtSummary.isPaid
-                                ? const Color(0xFF10B981)
+                                ? Theme.of(context).colorScheme.secondary
                                 : cs.error,
                           ),
                         ),
@@ -611,30 +632,40 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Bill Generated',
-                              style: TextStyle(
-                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                          Text(
+                            'Bill Generated',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             AppFormat.currency(stmtSummary.statementAmount),
                             style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text('Repaid',
-                              style: TextStyle(
-                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                          Text(
+                            'Repaid',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             AppFormat.currency(stmtSummary.repaidAmount),
-                            style: const TextStyle(
+                            style:  TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
-                              color: Color(0xFF10B981),
+                              color: Theme.of(context).colorScheme.secondary,
                             ),
                           ),
                         ],
@@ -642,9 +673,13 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('Bill Due',
-                              style: TextStyle(
-                                  fontSize: 11, color: cs.onSurfaceVariant)),
+                          Text(
+                            'Bill Due',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             AppFormat.currency(stmtSummary.remainingDue),
@@ -653,7 +688,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                               fontSize: 14,
                               color: stmtSummary.remainingDue > 0
                                   ? cs.error
-                                  : const Color(0xFF10B981),
+                                  : Theme.of(context).colorScheme.secondary,
                             ),
                           ),
                         ],
@@ -668,16 +703,21 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                         Text(
                           'Min Due: ${AppFormat.currency(stmtSummary.minimumDue)}',
                           style: TextStyle(
-                              fontSize: 11, color: cs.onSurfaceVariant),
+                            fontSize: 11,
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                         GestureDetector(
                           onTap: () => _navigateToPayments(card),
-                          child: Text(
-                            'Pay Bill \u2192',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: cs.primary,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              'Pay Bill \u2192',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: cs.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -790,26 +830,32 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     // Only build chips that have data — hide entire section if empty
     final chips = <Widget>[];
     if (intel.unbilledAmount > 0) {
-      chips.add(_buildIntelChip(
-        'Unbilled: ${AppFormat.currency(intel.unbilledAmount)}',
-        Icons.history_rounded,
-        Colors.orange,
-      ));
+      chips.add(
+        _buildIntelChip(
+          'Unbilled: ${AppFormat.currency(intel.unbilledAmount)}',
+          Icons.history_rounded,
+          Colors.orange,
+        ),
+      );
     }
     if (intel.isOverlimit) {
-      chips.add(_buildIntelChip(
-        'Overlimit!',
-        Icons.warning_rounded,
-        Theme.of(context).colorScheme.error,
-      ));
+      chips.add(
+        _buildIntelChip(
+          'Overlimit!',
+          Icons.warning_rounded,
+          Theme.of(context).colorScheme.error,
+        ),
+      );
     }
     // Add advice chips
     for (final advice in intel.advice.take(2)) {
-      chips.add(_buildIntelChip(
-        advice,
-        Icons.lightbulb_outline_rounded,
-        Theme.of(context).colorScheme.primary,
-      ));
+      chips.add(
+        _buildIntelChip(
+          advice,
+          Icons.lightbulb_outline_rounded,
+          Theme.of(context).colorScheme.primary,
+        ),
+      );
     }
 
     if (chips.isEmpty) return const SizedBox.shrink();
@@ -822,11 +868,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: chips,
-        ),
+        Wrap(spacing: 10, runSpacing: 10, children: chips),
       ],
     );
   }
@@ -902,9 +944,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         onTap: () {
           Navigator.push(
             context,
-            AppPageRoute(
-              builder: (context) => CreditEmiDetailScreen(emi: emi),
-            ),
+            AppPageRoute(builder: (context) => CreditEmiDetailScreen(emi: emi)),
           ).then((_) => _invalidateAll());
         },
         child: SpendXGlassSurface(
@@ -989,7 +1029,10 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     );
   }
 
-  Widget _buildRecentTransactionsList(List<CreditTransaction> txns, CreditCard card) {
+  Widget _buildRecentTransactionsList(
+    List<CreditTransaction> txns,
+    CreditCard card,
+  ) {
     if (txns.isEmpty) {
       return const SliverToBoxAdapter(
         child: Center(
@@ -1007,40 +1050,45 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         final isPaymentOrCredit =
             tx.type == 'payment' || tx.type == 'refund' || tx.type == 'credit';
 
-          final rawTitle = tx.note?.isNotEmpty == true
-              ? tx.note!
-              : TextFormatter.toSmartTitleCase(tx.category);
+        final rawTitle = tx.note?.isNotEmpty == true
+            ? tx.note!
+            : TextFormatter.toSmartTitleCase(tx.category);
 
-          // Check for foreign currency in title/note
-          final foreignMatch = RegExp(
-            r'\b(AED|USD|EUR|GBP|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
-            caseSensitive: false,
-          ).firstMatch(rawTitle);
+        // Check for foreign currency in title/note
+        final foreignMatch = RegExp(
+          r'\b(AED|USD|EUR|GBP|SGD|CAD|AUD)\s*([0-9,]+(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ).firstMatch(rawTitle);
 
-          String displayTitle = rawTitle;
-          String displayAmount;
-          if (foreignMatch != null) {
-            final cur = foreignMatch.group(1)!.toUpperCase();
-            final val = foreignMatch.group(2)!;
-            displayAmount = '$cur $val';
-            displayTitle = displayTitle
-                .replaceAll(foreignMatch.group(0)!, '')
-                .replaceAll(RegExp(r'[()\-:]'), '')
-                .trim();
-          } else if (rawTitle.toLowerCase().contains('air arabia') && (tx.amount - 2508.28).abs() < 0.01) {
-            displayAmount = 'AED 2,508.28';
-          } else {
-            displayAmount = AppFormat.currency(tx.amount);
-          }
-
-          // Strip any trailing noise like ". Avl Limit..."
+        String displayTitle = rawTitle;
+        String displayAmount;
+        if (foreignMatch != null) {
+          final cur = foreignMatch.group(1)!.toUpperCase();
+          final val = foreignMatch.group(2)!;
+          displayAmount = '$cur $val';
           displayTitle = displayTitle
-              .replaceAll(RegExp(r'[.\s]+avl(?:\s*crd)?\s*limit.*$', caseSensitive: false), '')
-              .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
+              .replaceAll(foreignMatch.group(0)!, '')
+              .replaceAll(RegExp(r'[()\-:]'), '')
               .trim();
-          if (displayTitle.isEmpty) displayTitle = TextFormatter.toSmartTitleCase(tx.category);
+        } else if (rawTitle.toLowerCase().contains('air arabia') &&
+            (tx.amount - 2508.28).abs() < 0.01) {
+          displayAmount = 'AED 2,508.28';
+        } else {
+          displayAmount = AppFormat.currency(tx.amount);
+        }
 
-          return ListTile(
+        // Strip any trailing noise like ". Avl Limit..."
+        displayTitle = displayTitle
+            .replaceAll(
+              RegExp(r'[.\s]+avl(?:\s*crd)?\s*limit.*$', caseSensitive: false),
+              '',
+            )
+            .replaceAll(RegExp(r'^[.\s,\-]+|[.\s,\-]+$'), '')
+            .trim();
+        if (displayTitle.isEmpty)
+          displayTitle = TextFormatter.toSmartTitleCase(tx.category);
+
+        return ListTile(
           onTap: () async {
             final spxTx = spx.Transaction(
               id: tx.id,
@@ -1082,7 +1130,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
             displayTitle,
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
-          subtitle: Text(DateFormat('dd MMM, hh:mm a').format(tx.date.toLocal())),
+          subtitle: Text(
+            DateFormat('dd MMM, hh:mm a').format(tx.date.toLocal()),
+          ),
           trailing: Text(
             '${isPaymentOrCredit ? "+" : "-"}$displayAmount',
             style: TextStyle(

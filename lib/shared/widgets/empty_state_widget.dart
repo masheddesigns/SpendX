@@ -9,7 +9,7 @@ class EmptyStateWidget extends StatelessWidget {
     this.description,
     this.ctaLabel,
     this.onCtaTap,
-    this.illustrationAsset,
+    this.illustrationAsset = 'assets/illustrations/empty_finances.svg',
   });
 
   final IconData icon;
@@ -27,7 +27,8 @@ class EmptyStateWidget extends StatelessWidget {
       subtitle: description ?? '',
       actionLabel: ctaLabel,
       onAction: onCtaTap,
-      illustrationAsset: illustrationAsset,
+      illustrationAsset:
+          illustrationAsset ?? 'assets/illustrations/empty_finances.svg',
     );
   }
 }

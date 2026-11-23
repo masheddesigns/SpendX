@@ -145,9 +145,7 @@ class SpendXGlassSheet extends StatelessWidget {
                           child: Text(
                             title!,
                             style: AppTextStyles.heading.copyWith(
-                              color: isDark
-                                  ? AppTheme.darkTextPrimary
-                                  : AppTheme.lightTextPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ),
@@ -157,9 +155,7 @@ class SpendXGlassSheet extends StatelessWidget {
                           icon: Icon(
                             Icons.close_rounded,
                             size: 20,
-                            color: isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF64748B),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           visualDensity: VisualDensity.compact,
                           onPressed: () => Navigator.of(context).pop(),

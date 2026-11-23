@@ -40,10 +40,7 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
     );
 
     _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _slideController,
-        curve: Curves.easeOutCubic,
-      ),
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
     );
 
     _pulseController = AnimationController(
@@ -70,14 +67,17 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
 
   void _handleSyncChange() {
     final state = SyncActivityService.instance.state;
-    if (state.isVisible && !_slideController.isCompleted && !_slideController.isAnimating) {
+    if (state.isVisible &&
+        !_slideController.isCompleted &&
+        !_slideController.isAnimating) {
       HapticService.instance.tap();
       _slideController.forward();
     } else if (!state.isVisible && _slideController.value > 0) {
       _slideController.reverse();
     }
 
-    if (state.stage == SyncStage.completed && _lastStage != SyncStage.completed) {
+    if (state.stage == SyncStage.completed &&
+        _lastStage != SyncStage.completed) {
       HapticService.instance.success();
     }
     _lastStage = state.stage;
@@ -100,18 +100,19 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
 
         final isCompleted = state.stage == SyncStage.completed;
         final isError = state.stage == SyncStage.error;
+        final colorScheme = Theme.of(context).colorScheme;
 
         final primaryGlow = isCompleted
-            ? const Color(0xFF10B981) // Emerald
+            ? colorScheme.secondary
             : isError
-                ? const Color(0xFFEF4444) // Red
-                : const Color(0xFF6366F1); // Indigo / Violet
+            ? colorScheme.error
+            : colorScheme.primary;
 
         final accentGlow = isCompleted
-            ? const Color(0xFF34D399)
+            ? colorScheme.secondary
             : isError
-                ? const Color(0xFFF87171)
-                : const Color(0xFF38BDF8); // Sky blue
+            ? colorScheme.error
+            : colorScheme.primary;
 
         return Transform.translate(
           offset: Offset(0, (1.0 - _slideAnimation.value) * -65),
@@ -121,7 +122,11 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
               scale: _scaleAnimation,
               child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 6.0, left: 16.0, right: 16.0),
+                  padding: const EdgeInsets.only(
+                    top: 6.0,
+                    left: 16.0,
+                    right: 16.0,
+                  ),
                   child: GestureDetector(
                     onTap: () {
                       HapticService.instance.tap();
@@ -133,17 +138,26 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A).withValues(alpha: 0.90), // Deep obsidian
+                            color: const Color(
+                              0xFF0F172A,
+                            ).withValues(alpha: 0.90), // Deep obsidian
                             borderRadius: BorderRadius.circular(26),
                             border: Border.all(
-                              color: primaryGlow.withValues(alpha: 0.35 + (_pulseController.value * 0.2)),
+                              color: primaryGlow.withValues(
+                                alpha: 0.35 + (_pulseController.value * 0.2),
+                              ),
                               width: 1.2,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: primaryGlow.withValues(alpha: 0.25 * _pulseController.value),
+                                color: primaryGlow.withValues(
+                                  alpha: 0.25 * _pulseController.value,
+                                ),
                                 blurRadius: 18,
                                 spreadRadius: 1,
                                 offset: const Offset(0, 4),
@@ -164,21 +178,29 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 // Left Icon / Indicator
-                                _buildStatusIndicator(isCompleted, isError, primaryGlow, accentGlow),
+                                _buildStatusIndicator(
+                                  isCompleted,
+                                  isError,
+                                  primaryGlow,
+                                  accentGlow,
+                                ),
                                 const SizedBox(width: 10),
 
                                 // Center Content
                                 Flexible(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Flexible(
                                             child: Text(
-                                              state.title.isNotEmpty ? state.title : 'Live Ingestion',
+                                              state.title.isNotEmpty
+                                                  ? state.title
+                                                  : 'Live Ingestion',
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
@@ -189,13 +211,21 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                                               ),
                                             ),
                                           ),
-                                          if (state.itemsCount > 0 && !isCompleted) ...[
+                                          if (state.itemsCount > 0 &&
+                                              !isCompleted) ...[
                                             const SizedBox(width: 6),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 1,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: primaryGlow.withValues(alpha: 0.2),
-                                                borderRadius: BorderRadius.circular(6),
+                                                color: primaryGlow.withValues(
+                                                  alpha: 0.2,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
                                               ),
                                               child: Text(
                                                 '${state.itemsCount}',
@@ -216,7 +246,9 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.70),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.70,
+                                            ),
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.w400,
                                           ),
@@ -229,7 +261,11 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                                 const SizedBox(width: 10),
 
                                 // Right Progress / Wave Indicator
-                                _buildRightTrailing(state, isCompleted, primaryGlow),
+                                _buildRightTrailing(
+                                  state,
+                                  isCompleted,
+                                  primaryGlow,
+                                ),
                               ],
                             ),
                           ),
@@ -260,11 +296,7 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
           color: primaryGlow.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
-        child: const Icon(
-          Icons.check_rounded,
-          color: Color(0xFF10B981),
-          size: 18,
-        ),
+        child: Icon(Icons.check_rounded, color: primaryGlow, size: 18),
       );
     }
 
@@ -276,11 +308,7 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
           color: primaryGlow.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
-        child: const Icon(
-          Icons.error_outline_rounded,
-          color: Color(0xFFEF4444),
-          size: 18,
-        ),
+        child: Icon(Icons.error_outline_rounded, color: primaryGlow, size: 18),
       );
     }
 
@@ -347,14 +375,21 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
     );
   }
 
-  Widget _buildRightTrailing(SyncActivityState state, bool isCompleted, Color primaryGlow) {
+  Widget _buildRightTrailing(
+    SyncActivityState state,
+    bool isCompleted,
+    Color primaryGlow,
+  ) {
     if (isCompleted) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(
           color: primaryGlow.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: primaryGlow.withValues(alpha: 0.3), width: 0.8),
+          border: Border.all(
+            color: primaryGlow.withValues(alpha: 0.3),
+            width: 0.8,
+          ),
         ),
         child: const Text(
           'Done',
@@ -387,7 +422,14 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: List.generate(3, (i) {
         final phaseOffset = i * (math.pi / 3);
-        final heightFactor = 0.3 + 0.7 * (0.5 + 0.5 * math.sin(_rotationController.value * 2 * math.pi + phaseOffset));
+        final heightFactor =
+            0.3 +
+            0.7 *
+                (0.5 +
+                    0.5 *
+                        math.sin(
+                          _rotationController.value * 2 * math.pi + phaseOffset,
+                        ));
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 1.2),
           width: 2.5,

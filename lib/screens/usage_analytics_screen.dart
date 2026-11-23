@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/app_session_service.dart';
 import 'package:intl/intl.dart';
+import '../shared/widgets/empty_state_widget.dart';
+import '../shared/widgets/error_state_widget.dart';
+import '../shared/widgets/loading_state_widget.dart';
 
 class UsageAnalyticsScreen extends StatelessWidget {
   const UsageAnalyticsScreen({super.key});
@@ -18,23 +21,21 @@ class UsageAnalyticsScreen extends StatelessWidget {
           future: AppSessionService.instance.getRecentSessions(50),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
+              if (snapshot.hasError) {
+                return ErrorStateWidget(error: snapshot.error!);
+              }
+              return const LoadingStateWidget(message: 'Loading activity…');
             }
-  
+
             final sessions = snapshot.data!;
             if (sessions.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.history, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.2)),
-                    const SizedBox(height: 16),
-                    Text('No session data yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, decoration: TextDecoration.none)),
-                  ],
-                ),
+              return const EmptyStateWidget(
+                icon: Icons.history_rounded,
+                title: 'No session data yet',
+                description: 'Your recent app activity will appear here.',
               );
             }
-  
+
             return ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: sessions.length,
@@ -42,7 +43,7 @@ class UsageAnalyticsScreen extends StatelessWidget {
                 final session = sessions[index];
                 final startTime = DateTime.parse(session['start_time']);
                 final duration = session['duration_seconds'] as int;
-  
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
@@ -55,10 +56,16 @@ class UsageAnalyticsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.bolt, color: Theme.of(context).colorScheme.primary, size: 20),
+                        child: Icon(
+                          Icons.bolt,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -67,11 +74,21 @@ class UsageAnalyticsScreen extends StatelessWidget {
                           children: [
                             Text(
                               DateFormat('EEEE, MMM d').format(startTime),
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, decoration: TextDecoration.none),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                decoration: TextDecoration.none,
+                              ),
                             ),
                             Text(
                               DateFormat('h:mm a').format(startTime),
-                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, decoration: TextDecoration.none),
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                                decoration: TextDecoration.none,
+                              ),
                             ),
                           ],
                         ),
@@ -81,11 +98,19 @@ class UsageAnalyticsScreen extends StatelessWidget {
                         children: [
                           Text(
                             _formatDuration(duration),
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, decoration: TextDecoration.none),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              decoration: TextDecoration.none,
+                            ),
                           ),
                           const Text(
                             'Duration',
-                            style: TextStyle(color: Colors.white24, fontSize: 10, decoration: TextDecoration.none),
+                            style: TextStyle(
+                              color: Colors.white24,
+                              fontSize: 10,
+                              decoration: TextDecoration.none,
+                            ),
                           ),
                         ],
                       ),

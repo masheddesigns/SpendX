@@ -9,11 +9,7 @@ class SpendXLoadingState extends StatefulWidget {
   final int count;
   final double itemHeight;
 
-  const SpendXLoadingState({
-    super.key,
-    this.count = 4,
-    this.itemHeight = 64,
-  });
+  const SpendXLoadingState({super.key, this.count = 4, this.itemHeight = 64});
 
   @override
   State<SpendXLoadingState> createState() => _SpendXLoadingStateState();
@@ -98,13 +94,12 @@ class SpendXEmptyState extends StatelessWidget {
     required this.subtitle,
     this.actionLabel,
     this.onAction,
-    this.illustrationAsset,
+    this.illustrationAsset = 'assets/illustrations/empty_finances.svg',
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Center(
@@ -124,23 +119,21 @@ class SpendXEmptyState extends StatelessWidget {
               )
             else
               Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? AppTheme.darkElevated.withValues(alpha: 0.6)
-                    : AppTheme.lightElevated.withValues(alpha: 0.8),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isDark ? AppTheme.glassDarkBorder : AppTheme.glassLightBorder,
-                  width: 0.5,
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppTheme.darkElevated.withValues(alpha: 0.6)
+                      : AppTheme.lightElevated.withValues(alpha: 0.8),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isDark
+                        ? AppTheme.glassDarkBorder
+                        : AppTheme.glassLightBorder,
+                    width: 0.5,
+                  ),
                 ),
-              ),
-              child: Icon(
-                icon,
-                size: 28,
-                color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-              ),
+                child: Icon(icon, size: 28, color: context.textMuted),
               ),
             const SizedBox(height: 14),
             Text(
@@ -149,7 +142,7 @@ class SpendXEmptyState extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: context.textPrimary,
                 letterSpacing: -0.2,
               ),
             ),
@@ -157,10 +150,7 @@ class SpendXEmptyState extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-              ),
+              style: TextStyle(fontSize: 13, color: context.textSecondary),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 18),
@@ -181,17 +171,19 @@ class SpendXEmptyState extends StatelessWidget {
 class SpendXErrorState extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
+  final String title;
+  final IconData icon;
 
   const SpendXErrorState({
     super.key,
     required this.message,
     this.onRetry,
+    this.title = 'Unable to load',
+    this.icon = Icons.error_outline_rounded,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -205,29 +197,22 @@ class SpendXErrorState extends StatelessWidget {
                 color: AppTheme.semanticExpense.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.error_outline_rounded,
-                size: 24,
-                color: AppTheme.semanticExpense,
-              ),
+              child: Icon(icon, size: 24, color: AppTheme.semanticExpense),
             ),
             const SizedBox(height: 12),
             Text(
-              'Unable to load',
+              title,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                color: context.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-              ),
+              style: TextStyle(fontSize: 12.5, color: context.textSecondary),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),

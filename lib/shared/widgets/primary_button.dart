@@ -50,8 +50,8 @@ class _PrimaryButtonState extends State<PrimaryButton> {
     final foregroundColor = widget.tone == PrimaryButtonTone.primary
         ? cs.onPrimary
         : (widget.tone == PrimaryButtonTone.outline
-              ? (isDark ? const Color(0xFF38BDF8) : cs.primary)
-              : (isDark ? Colors.white : const Color(0xFF0F172A)));
+              ? (isDark ? Theme.of(context).colorScheme.primary : cs.primary)
+              : (Theme.of(context).colorScheme.onSurface));
 
     final backgroundColor = widget.backgroundColor ??
         widget.color ??
@@ -62,7 +62,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
               : (isDark ? const Color(0x1FFFFFFF) : const Color(0x40FFFFFF))));
 
     final border = widget.tone == PrimaryButtonTone.outline
-        ? BorderSide(color: isDark ? const Color(0xFF38BDF8) : cs.primary, width: 1.25)
+        ? BorderSide(color: isDark ? Theme.of(context).colorScheme.primary : cs.primary, width: 1.25)
         : (widget.tone == PrimaryButtonTone.secondary
             ? BorderSide(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x1F000000), width: 0.75)
             : BorderSide.none);

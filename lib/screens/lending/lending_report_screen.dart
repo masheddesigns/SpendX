@@ -60,23 +60,27 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
       body: SafeArea(
         child: lendingState.isLoadingActive && lendingState.isLoadingSettled
             ? const SpendXLoadingState(count: 3, itemHeight: 90)
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSummaryCards(allLendings),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle('Top People I Lent To'),
-                    _buildPersonList(sortedLent, Colors.green),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle('Top People I Borrowed From'),
-                    _buildPersonList(sortedBorrowed, Colors.orange),
-                    const SizedBox(height: 24),
-                    _buildSectionTitle('Monthly Activity'),
-                    _buildMonthlyActivity(monthlyTrend),
-                    const SizedBox(height: 80),
-                  ],
+            : RefreshIndicator(
+                onRefresh: () => ref.read(lendingProvider.notifier).refresh(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSummaryCards(allLendings),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Top People I Lent To'),
+                      _buildPersonList(sortedLent, Colors.green),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Top People I Borrowed From'),
+                      _buildPersonList(sortedBorrowed, Colors.orange),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Monthly Activity'),
+                      _buildMonthlyActivity(monthlyTrend),
+                      const SizedBox(height: 80),
+                    ],
+                  ),
                 ),
               ),
       ),

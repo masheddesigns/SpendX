@@ -177,16 +177,22 @@ class _RecurringPaymentsScreenState
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Start Date',
-                                  style: Theme.of(dialogContext)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(color: cs.onSurfaceVariant)),
+                              Text(
+                                'Start Date',
+                                style: Theme.of(dialogContext)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(color: cs.onSurfaceVariant),
+                              ),
                               const SizedBox(height: 4),
                               Text(AppFormat.date(startDate)),
                             ],
                           ),
-                          Icon(Icons.calendar_today, size: 18, color: cs.onSurfaceVariant),
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color: cs.onSurfaceVariant,
+                          ),
                         ],
                       ),
                     ),
@@ -314,105 +320,131 @@ class _RecurringPaymentsScreenState
           ? const SpendXEmptyState(
               icon: Icons.repeat_rounded,
               title: 'No recurring payments',
-              subtitle: 'Tap the button below to add rent, subscriptions, salary etc.',
+              subtitle:
+                  'Tap the button below to add rent, subscriptions, salary etc.',
             )
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-              itemCount: templates.length,
-              itemBuilder: (context, index) {
-                final template = templates[index];
-                final category = template.categoryId != null
-                    ? categoriesMap[template.categoryId]
-                    : null;
-                final isExpense = template.type == 'expense';
-                final color = isExpense
-                    ? AppColors.danger
-                    : AppColors.success;
+          : RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(recurringProvider);
+                ref.invalidate(categoriesProvider);
+                await Future.wait([
+                  ref.read(recurringProvider.future),
+                  ref.read(categoriesProvider.future),
+                ]);
+              },
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                itemCount: templates.length,
+                itemBuilder: (context, index) {
+                  final template = templates[index];
+                  final category = template.categoryId != null
+                      ? categoriesMap[template.categoryId]
+                      : null;
+                  final isExpense = template.type == 'expense';
+                  final color = isExpense
+                      ? AppColors.danger
+                      : AppColors.success;
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: SpendXGlassSurface(
-                    level: SpendXGlassLevel.base,
-                    borderRadius: BorderRadius.circular(16),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: color.withValues(alpha: isDark ? 0.20 : 0.12),
-                          ),
-                          child: Icon(Icons.repeat_rounded, color: color, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                template.name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14.5,
-                                  color: AppColors.textPrimaryOf(context),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondaryOf(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount.abs())}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                                color: color,
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SpendXGlassSurface(
+                      level: SpendXGlassLevel.base,
+                      borderRadius: BorderRadius.circular(16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: color.withValues(
+                                alpha: isDark ? 0.20 : 0.12,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
+                            child: Icon(
+                              Icons.repeat_rounded,
+                              color: color,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                IconButton(
-                                  tooltip: 'Edit recurring payment',
-                                  onPressed: () => _showAddDialog(categoriesMap, template),
-                                  icon: Icon(
-                                    Icons.edit_outlined,
-                                    size: 17,
-                                    color: AppColors.textMutedOf(context),
+                                Text(
+                                  template.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14.5,
+                                    color: AppColors.textPrimaryOf(context),
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: 'Delete recurring payment',
-                                  onPressed: () => _deleteTemplate(template),
-                                  icon: Icon(
-                                    Icons.delete_outline_rounded,
-                                    size: 17,
-                                    color: AppColors.danger.withValues(alpha: 0.8),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondaryOf(context),
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount.abs())}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                  color: color,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Edit recurring payment',
+                                    onPressed: () =>
+                                        _showAddDialog(categoriesMap, template),
+                                    icon: Icon(
+                                      Icons.edit_outlined,
+                                      size: 17,
+                                      color: AppColors.textMutedOf(context),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Delete recurring payment',
+                                    onPressed: () => _deleteTemplate(template),
+                                    icon: Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 17,
+                                      color: AppColors.danger.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
     );
   }
@@ -438,7 +470,8 @@ class _TypeSegment extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           color: selected ? color : Colors.transparent,
           borderRadius: BorderRadius.circular(10),

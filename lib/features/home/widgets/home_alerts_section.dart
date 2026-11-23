@@ -61,21 +61,19 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [
-                          const Color(0x336366F1),
-                          const Color(0x1A6366F1),
-                        ]
+                      ? [const Color(0x336366F1), const Color(0x1A6366F1)]
                       : [
-                          const Color(0xFFEEF2FF),
-                          const Color(0xFFE0E7FF),
+                          Theme.of(context).colorScheme.primaryContainer,
+                          Theme.of(context).colorScheme.primaryContainer,
                         ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: const Color(0xFF6366F1)
-                      .withValues(alpha: isDark ? 0.45 : 0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: isDark ? 0.45 : 0.6),
                   width: 1.0,
                 ),
               ),
@@ -84,12 +82,14 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                   Container(
                     padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.system_update_rounded,
-                      color: Color(0xFF6366F1),
+                      color: Theme.of(context).colorScheme.primary,
                       size: 18,
                     ),
                   ),
@@ -103,9 +103,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                           style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? const Color(0xFFC7D2FE)
-                                : const Color(0xFF3730A3),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -115,7 +113,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                             fontSize: 11.5,
                             color: isDark
                                 ? const Color(0xFFD1D5DB)
-                                : const Color(0xFF4338CA),
+                                : Theme.of(context).colorScheme.primary,
                             height: 1.3,
                           ),
                         ),
@@ -145,21 +143,19 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [
-                          const Color(0x33F59E0B),
-                          const Color(0x1AF59E0B),
-                        ]
+                      ? [const Color(0x33F59E0B), const Color(0x1AF59E0B)]
                       : [
-                          const Color(0xFFFEF3C7),
-                          const Color(0xFFFFFBEB),
+                          Theme.of(context).colorScheme.tertiaryContainer,
+                          Theme.of(context).colorScheme.tertiaryContainer,
                         ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: const Color(0xFFF59E0B)
-                      .withValues(alpha: isDark ? 0.45 : 0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.tertiary.withValues(alpha: isDark ? 0.45 : 0.6),
                   width: 1.0,
                 ),
               ),
@@ -172,13 +168,14 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                       Container(
                         padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
-                          color:
-                              const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.tertiary.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.bolt_rounded,
-                          color: Color(0xFFD97706),
+                          color: Theme.of(context).colorScheme.tertiary,
                           size: 18,
                         ),
                       ),
@@ -192,9 +189,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                               style: TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
-                                color: isDark
-                                    ? const Color(0xFFFDE68A)
-                                    : const Color(0xFF92400E),
+                                color: Theme.of(context).colorScheme.tertiary,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -219,7 +214,9 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                           size: 16,
                           color: isDark
                               ? const Color(0xFF9CA3AF)
-                              : const Color(0xFF92400E),
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
                         ),
                         onPressed: () {
                           HapticService.instance.tap();
@@ -266,17 +263,20 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
   }
 
   Widget _buildFinancialAlertCard(
-      BuildContext context, AppAlert alert, bool isDark) {
+    BuildContext context,
+    AppAlert alert,
+    bool isDark,
+  ) {
     Color alertColor;
     IconData alertIcon;
 
     switch (alert.severity) {
       case AlertSeverity.critical:
-        alertColor = const Color(0xFFEF4444);
+        alertColor = Theme.of(context).colorScheme.error;
         alertIcon = Icons.error_outline_rounded;
         break;
       case AlertSeverity.warning:
-        alertColor = const Color(0xFFF59E0B);
+        alertColor = Theme.of(context).colorScheme.tertiary;
         alertIcon = Icons.warning_amber_rounded;
         break;
       case AlertSeverity.normal:
@@ -312,10 +312,12 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
               children: [
                 Text(
                   alert.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 1),
@@ -325,9 +327,7 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],

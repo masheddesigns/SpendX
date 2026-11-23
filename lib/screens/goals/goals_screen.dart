@@ -37,7 +37,9 @@ class GoalsScreen extends ConsumerWidget {
               onRefresh: () async => ref.invalidate(goalsProvider),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: [SizedBox(height: 320, child: _buildEmptyState(context))],
+                children: [
+                  SizedBox(height: 320, child: _buildEmptyState(context)),
+                ],
               ),
             );
           }
@@ -126,7 +128,7 @@ class GoalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final pct = progress.progressPct.clamp(0.0, 1.0);
-    final barColor = _progressColor(pct, progress.isOverBudget);
+    final barColor = _progressColor(context, pct, progress.isOverBudget);
     final pctText = (pct * 100).round();
 
     final IconData typeIcon;
@@ -155,13 +157,18 @@ class GoalCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       goal.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: barColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
@@ -201,8 +208,8 @@ class GoalCard extends StatelessWidget {
                       progress.isCompleted
                           ? 'Completed!'
                           : progress.isOverBudget
-                              ? 'Over budget by ${AppFormat.currency((progress.currentSpent ?? 0) - goal.targetAmount)}'
-                              : '${AppFormat.currency(progress.remaining)} left',
+                          ? 'Over budget by ${AppFormat.currency((progress.currentSpent ?? 0) - goal.targetAmount)}'
+                          : '${AppFormat.currency(progress.remaining)} left',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -210,9 +217,9 @@ class GoalCard extends StatelessWidget {
                   ),
                   Text(
                     '${progress.daysLeft} days left',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -227,7 +234,7 @@ class GoalCard extends StatelessWidget {
                       size: 14,
                       color: progress.isBehindSchedule
                           ? cs.error
-                          : const Color(0xFFF59E0B),
+                          : Theme.of(context).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -237,7 +244,7 @@ class GoalCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: progress.isBehindSchedule
                             ? cs.error
-                            : const Color(0xFFF59E0B),
+                            : Theme.of(context).colorScheme.tertiary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -251,11 +258,11 @@ class GoalCard extends StatelessWidget {
     );
   }
 
-  Color _progressColor(double pct, bool isOverBudget) {
-    if (isOverBudget) return const Color(0xFFEF4444);
-    if (pct >= 0.7) return const Color(0xFF22C55E);
-    if (pct >= 0.4) return const Color(0xFFF59E0B);
-    return const Color(0xFFEF4444);
+  Color _progressColor(BuildContext context, double pct, bool isOverBudget) {
+    if (isOverBudget) return Theme.of(context).colorScheme.error;
+    if (pct >= 0.7) return Theme.of(context).colorScheme.secondary;
+    if (pct >= 0.4) return Theme.of(context).colorScheme.tertiary;
+    return Theme.of(context).colorScheme.error;
   }
 }
 
@@ -286,22 +293,22 @@ class _NudgesBanner extends StatelessWidget {
                       nudge.type == NudgeType.positive
                           ? Icons.check_circle_rounded
                           : nudge.type == NudgeType.warning
-                              ? Icons.warning_amber_rounded
-                              : Icons.lightbulb_outline_rounded,
+                          ? Icons.warning_amber_rounded
+                          : Icons.lightbulb_outline_rounded,
                       size: 16,
                       color: nudge.type == NudgeType.positive
-                          ? const Color(0xFF22C55E)
+                          ? Theme.of(context).colorScheme.secondary
                           : nudge.type == NudgeType.warning
-                              ? const Color(0xFFF59E0B)
-                              : cs.primary,
+                          ? Theme.of(context).colorScheme.tertiary
+                          : cs.primary,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         nudge.text,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.onSurface,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: cs.onSurface),
                       ),
                     ),
                   ],

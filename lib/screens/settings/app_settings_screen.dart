@@ -41,26 +41,31 @@ class AppSettingsScreen extends StatelessWidget {
             children: [
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('App Theme',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                child: Text(
+                  'App Theme',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
               ),
               const SizedBox(height: 16),
-              ...[(ThemeMode.light, 'Light'), (ThemeMode.dark, 'Dark'),
-                  (ThemeMode.system, 'System')]
-                  .map((entry) {
+              ...[
+                (ThemeMode.light, 'Light'),
+                (ThemeMode.dark, 'Dark'),
+                (ThemeMode.system, 'System'),
+              ].map((entry) {
                 return ListTile(
                   leading: Icon(
                     entry.$1 == ThemeMode.light
                         ? Icons.light_mode_rounded
                         : entry.$1 == ThemeMode.dark
-                            ? Icons.dark_mode_rounded
-                            : Icons.auto_mode_rounded,
+                        ? Icons.dark_mode_rounded
+                        : Icons.auto_mode_rounded,
                   ),
                   title: Text(entry.$2),
                   trailing: settings.themeMode == entry.$1
-                      ? Icon(Icons.check_circle,
-                          color: Theme.of(context).colorScheme.primary)
+                      ? Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
                       : null,
                   onTap: () async {
                     await settings.setThemeMode(entry.$1);
@@ -91,8 +96,10 @@ class AppSettingsScreen extends StatelessWidget {
                 title: 'Currency',
                 subtitle:
                     '${settings.primaryCurrency} (${settings.currencySymbol})',
-                onTap: () => Navigator.push(context,
-                    AppPageRoute(builder: (_) => const CurrencySelectionScreen())),
+                onTap: () => Navigator.push(
+                  context,
+                  AppPageRoute(builder: (_) => const CurrencySelectionScreen()),
+                ),
               ),
             ),
             Consumer<SettingsService>(
@@ -100,7 +107,8 @@ class AppSettingsScreen extends StatelessWidget {
                 icon: Icons.brightness_6_outlined,
                 iconColor: Theme.of(context).colorScheme.primary,
                 title: 'App Theme',
-                subtitle: settings.themeMode.name[0].toUpperCase() +
+                subtitle:
+                    settings.themeMode.name[0].toUpperCase() +
                     settings.themeMode.name.substring(1),
                 onTap: () => _showThemeModePicker(context),
               ),
@@ -115,32 +123,40 @@ class AppSettingsScreen extends StatelessWidget {
               iconColor: Theme.of(context).colorScheme.primary,
               title: 'Categories',
               subtitle: 'Manage income & expense types',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const CategoryManagementScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const CategoryManagementScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.storage_outlined,
               iconColor: Theme.of(context).colorScheme.secondary,
               title: 'Database Tools',
               subtitle: 'Import, export, backup',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const DatabaseToolsScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const DatabaseToolsScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.tune_rounded,
               iconColor: Theme.of(context).colorScheme.tertiary,
               title: 'Feature Toggles',
               subtitle: 'Enable or disable experimental features',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const FeatureTogglesScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const FeatureTogglesScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.delete_outline_rounded,
               iconColor: Theme.of(context).colorScheme.error,
               title: 'Clear Data',
               subtitle: 'Erase transactions, accounts, salary',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const DataManagementScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const DataManagementScreen()),
+              ),
             ),
 
             const Divider(height: 32),
@@ -149,35 +165,43 @@ class AppSettingsScreen extends StatelessWidget {
             const _SectionHeader('Financial'),
             _SettingsTile(
               icon: Icons.payments_outlined,
-              iconColor: const Color(0xFF22C55E),
+              iconColor: Theme.of(context).colorScheme.secondary,
               title: 'Income & Salary',
               subtitle: 'Companies, pay cycles, salary',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const IncomeSalaryScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const IncomeSalaryScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.pie_chart_outline,
-              iconColor: const Color(0xFF0EA5E9),
+              iconColor: Theme.of(context).colorScheme.primary,
               title: 'Budget Management',
               subtitle: 'Set and track category budgets',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const BudgetManagementScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const BudgetManagementScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.label_outline_rounded,
-              iconColor: const Color(0xFF8B5CF6),
+              iconColor: Theme.of(context).colorScheme.primary,
               title: 'Tags',
               subtitle: 'Organize transactions with tags',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const TagManagementScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const TagManagementScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.history_rounded,
-              iconColor: const Color(0xFFF59E0B),
+              iconColor: Theme.of(context).colorScheme.tertiary,
               title: 'Credit History',
               subtitle: 'Statements and card history',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const CreditHistoryScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const CreditHistoryScreen()),
+              ),
             ),
 
             const Divider(height: 32),
@@ -189,16 +213,20 @@ class AppSettingsScreen extends StatelessWidget {
               iconColor: Theme.of(context).colorScheme.secondary,
               title: 'Notifications',
               subtitle: 'Reminders, alerts, quiet hours',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => NotificationSettingsScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => NotificationSettingsScreen()),
+              ),
             ),
             _SettingsTile(
               icon: Icons.help_outline_rounded,
               iconColor: Theme.of(context).colorScheme.secondary,
               title: 'Notification Help',
               subtitle: 'Fix missing or delayed notifications',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const NotificationHelpScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const NotificationHelpScreen()),
+              ),
             ),
 
             const Divider(height: 32),
@@ -210,8 +238,10 @@ class AppSettingsScreen extends StatelessWidget {
               iconColor: Theme.of(context).colorScheme.primary,
               title: 'Help & Guide',
               subtitle: 'How to use SpendX',
-              onTap: () => Navigator.push(context,
-                  AppPageRoute(builder: (_) => const HelpScreen())),
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const HelpScreen()),
+              ),
             ),
             FutureBuilder<PackageInfo>(
               future: PackageInfo.fromPlatform(),
@@ -222,7 +252,7 @@ class AppSettingsScreen extends StatelessWidget {
                   children: [
                     _SettingsTile(
                       icon: Icons.system_update_rounded,
-                      iconColor: const Color(0xFF6366F1),
+                      iconColor: Theme.of(context).colorScheme.primary,
                       title: 'Check for Updates',
                       subtitle: 'Version $version ($build) • Google Play Store',
                       onTap: () => _checkForUpdates(context),
@@ -263,10 +293,15 @@ class AppSettingsScreen extends StatelessWidget {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title:  Row(
             children: [
-              Icon(Icons.system_update_rounded, color: Color(0xFF6366F1)),
+              Icon(
+                Icons.system_update_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               SizedBox(width: 10),
               Text('Update Available'),
             ],
@@ -352,14 +387,21 @@ class _SettingsTile extends StatelessWidget {
         ),
         child: Icon(icon, color: iconColor, size: 22),
       ),
-      title: Text(title,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-      subtitle: Text(subtitle,
-          style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 13)),
-      trailing: Icon(Icons.chevron_right,
-          color: Theme.of(context).colorScheme.outlineVariant),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontSize: 13,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
       onTap: onTap,
     );
   }

@@ -3,9 +3,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../data/providers.dart' show cardsProvider, invalidateAllFinancialProviders;
+import '../../../data/providers.dart'
+    show cardsProvider, invalidateAllFinancialProviders;
 import '../../../models/transaction.dart';
-import '../../../screens/bank/account_list_screen.dart' show resolveAccountDisplayName;
+import '../../../screens/bank/account_list_screen.dart'
+    show resolveAccountDisplayName;
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/home/transactions_screen.dart';
 import '../../../services/live_sms_service.dart';
@@ -56,7 +58,8 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
 
   Future<void> _runStartupConsolidation() async {
     try {
-      final consolidated = await EntityConsolidationService.instance.consolidate();
+      final consolidated = await EntityConsolidationService.instance
+          .consolidate();
       if (consolidated > 0 && mounted) {
         invalidateAllFinancialProviders(ref);
       }
@@ -76,14 +79,22 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
       for (final a in (accountsAsync.valueOrNull ?? []))
         a.id: resolveAccountDisplayName(a.name),
       for (final c in (cardsAsync.valueOrNull ?? []))
-        c.id: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card'),
+        c.id: resolveAccountDisplayName(
+          c.name.isNotEmpty ? c.name : '${c.bank} Card',
+        ),
     };
 
     String resolveFlow(Transaction t) {
-      final fromName = accountsMap[t.accountId] ??
-          (t.accountId != null && t.accountId!.isNotEmpty ? resolveAccountDisplayName(t.accountId!) : null);
-      final toName = accountsMap[t.relatedEntityId] ??
-          (t.relatedEntityId != null && t.relatedEntityId!.isNotEmpty ? resolveAccountDisplayName(t.relatedEntityId!) : null);
+      final fromName =
+          accountsMap[t.accountId] ??
+          (t.accountId != null && t.accountId!.isNotEmpty
+              ? resolveAccountDisplayName(t.accountId!)
+              : null);
+      final toName =
+          accountsMap[t.relatedEntityId] ??
+          (t.relatedEntityId != null && t.relatedEntityId!.isNotEmpty
+              ? resolveAccountDisplayName(t.relatedEntityId!)
+              : null);
       if (t.isTransferType && toName != null) {
         if (fromName != null) {
           return '$fromName → $toName';
@@ -163,7 +174,8 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                 onAction: () => Navigator.push(
                   context,
                   AppPageRoute(
-                    builder: (_) => const TransactionListScreen(isFullScreen: true),
+                    builder: (_) =>
+                        const TransactionListScreen(isFullScreen: true),
                   ),
                 ),
               ),
@@ -180,14 +192,22 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
           if (!isLoading && recentTxns.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 28,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.45),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.45),
                       width: 0.8,
                     ),
                   ),
@@ -231,7 +251,10 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
           if (!isLoading && recentTxns.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
@@ -239,7 +262,7 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                     border: Border.all(
                       color: isDark
                           ? Colors.white.withValues(alpha: 0.08)
-                          : const Color(0xFFECE5D8),
+                          : Theme.of(context).colorScheme.outline,
                       width: 0.9,
                     ),
                     boxShadow: [
@@ -282,9 +305,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.8,
-                                      color: isDark
-                                          ? const Color(0xFF94A3B8)
-                                          : const Color(0xFF78716C),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ),
@@ -297,9 +320,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
-                                      color: isDark
-                                          ? const Color(0xFF94A3B8)
-                                          : const Color(0xFF78716C),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                               ],
@@ -309,7 +332,8 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                           // Transaction tiles
                           ...List.generate(txnsInGroup.length, (index) {
                             final t = txnsInGroup[index];
-                            final isLastInGroup = index == txnsInGroup.length - 1;
+                            final isLastInGroup =
+                                index == txnsInGroup.length - 1;
                             return SpendXTransactionTile(
                               transaction: t,
                               category: categoriesMap[t.categoryId],
@@ -326,7 +350,9 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
                                   ),
                                 );
                                 await ref
-                                    .read(paginatedTransactionsProvider.notifier)
+                                    .read(
+                                      paginatedTransactionsProvider.notifier,
+                                    )
                                     .refresh();
                               },
                             );

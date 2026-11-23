@@ -166,9 +166,7 @@ class SpendXTransactionTile extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? AppTheme.darkTextPrimary
-                                    : AppTheme.lightTextPrimary,
+                                color: context.textPrimary,
                                 letterSpacing: -0.2,
                               ),
                             ),
@@ -210,10 +208,10 @@ class SpendXTransactionTile extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0x1F6366F1) : const Color(0xFFEEF2FF),
+                                  color: isDark ? const Color(0x1F6366F1) : Theme.of(context).colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(AppRadius.xs),
                                   border: Border.all(
-                                    color: isDark ? const Color(0x40818CF8) : const Color(0xFFC7D2FE),
+                                    color: isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary,
                                     width: 0.5,
                                   ),
                                 ),
@@ -224,7 +222,7 @@ class SpendXTransactionTile extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w600,
-                                    color: isDark ? const Color(0xFFC7D2FE) : const Color(0xFF3730A3),
+                                    color: Theme.of(context).colorScheme.primary,
                                   ),
                                 ),
                               ),
@@ -234,7 +232,7 @@ class SpendXTransactionTile extends StatelessWidget {
                               child: Icon(
                                 Icons.arrow_forward_rounded,
                                 size: 10,
-                                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6366F1),
+                                color: isDark ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.primary,
                               ),
                             ),
                             Flexible(
@@ -242,13 +240,13 @@ class SpendXTransactionTile extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                 decoration: BoxDecoration(
                                   color: isCcPayment
-                                      ? (isDark ? const Color(0x2210B981) : const Color(0xFFECFDF5))
-                                      : (isDark ? const Color(0x1F6366F1) : const Color(0xFFEEF2FF)),
+                                      ? (isDark ? const Color(0x2210B981) : Theme.of(context).colorScheme.secondaryContainer)
+                                      : (isDark ? const Color(0x1F6366F1) : Theme.of(context).colorScheme.primaryContainer),
                                   borderRadius: BorderRadius.circular(AppRadius.xs),
                                   border: Border.all(
                                     color: isCcPayment
-                                        ? (isDark ? const Color(0x4034D399) : const Color(0xFFA7F3D0))
-                                        : (isDark ? const Color(0x40818CF8) : const Color(0xFFC7D2FE)),
+                                        ? (isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary)
+                                        : (isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary),
                                     width: 0.5,
                                   ),
                                 ),
@@ -260,8 +258,8 @@ class SpendXTransactionTile extends StatelessWidget {
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w600,
                                     color: isCcPayment
-                                        ? (isDark ? const Color(0xFF6EE7B7) : const Color(0xFF065F46))
-                                        : (isDark ? const Color(0xFFC7D2FE) : const Color(0xFF3730A3)),
+                                        ? (isDark ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSecondaryContainer)
+                                        : (Theme.of(context).colorScheme.primary),
                                   ),
                                 ),
                               ),
@@ -281,9 +279,7 @@ class SpendXTransactionTile extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w400,
-                                  color: isDark
-                                      ? AppTheme.darkTextSecondary
-                                      : AppTheme.lightTextSecondary,
+                                  color: context.textSecondary,
                                 ),
                               ),
                             ),
@@ -292,9 +288,7 @@ class SpendXTransactionTile extends StatelessWidget {
                               '•',
                               style: TextStyle(
                                 fontSize: 10,
-                                color: isDark
-                                    ? AppTheme.darkTextMuted
-                                    : AppTheme.lightTextMuted,
+                                color: context.textMuted,
                               ),
                             ),
                             const SizedBox(width: 5),
@@ -304,9 +298,7 @@ class SpendXTransactionTile extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w400,
-                              color: isDark
-                                  ? AppTheme.darkTextSecondary
-                                  : AppTheme.lightTextSecondary,
+                              color: context.textSecondary,
                             ),
                           ),
                         ],
@@ -326,7 +318,7 @@ class SpendXTransactionTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -344,13 +336,13 @@ class SpendXTransactionTile extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
                           color: isCcPayment
-                              ? (isDark ? const Color(0x2210B981) : const Color(0xFFECFDF5))
-                              : (isDark ? const Color(0x226366F1) : const Color(0xFFEEF2FF)),
+                              ? (isDark ? const Color(0x2210B981) : Theme.of(context).colorScheme.secondaryContainer)
+                              : (isDark ? const Color(0x226366F1) : Theme.of(context).colorScheme.primaryContainer),
                           borderRadius: BorderRadius.circular(AppRadius.xs),
                           border: Border.all(
                             color: isCcPayment
-                                ? (isDark ? const Color(0x4034D399) : const Color(0xFFA7F3D0))
-                                : (isDark ? const Color(0x40818CF8) : const Color(0xFFC7D2FE)),
+                                ? (isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary)
+                                : (isDark ? const Color(0x40818CF8) : Theme.of(context).colorScheme.primary),
                             width: 0.5,
                           ),
                         ),
@@ -360,8 +352,8 @@ class SpendXTransactionTile extends StatelessWidget {
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: isCcPayment
-                                ? (isDark ? const Color(0xFF6EE7B7) : const Color(0xFF065F46))
-                                : (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF3730A3)),
+                                ? (isDark ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSecondaryContainer)
+                                : (Theme.of(context).colorScheme.primary),
                             letterSpacing: 0.2,
                           ),
                         ),

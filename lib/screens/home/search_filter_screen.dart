@@ -50,17 +50,14 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
     final all = await TransactionRepo().getAll();
     final q = query.toLowerCase();
     final fetched = all.where((t) {
-      final matchesQuery =
-          q.isEmpty || t.notes.toLowerCase().contains(q);
+      final matchesQuery = q.isEmpty || t.notes.toLowerCase().contains(q);
       final matchesType = _selectedType == null || t.type == _selectedType;
       final matchesCategory =
           _selectedCategoryId == null || t.categoryId == _selectedCategoryId;
-      final matchesStart =
-          _startDate == null || !t.date.isBefore(_startDate!);
-      final matchesEnd = _endDate == null ||
-          t.date.isBefore(
-            _endDate!.add(const Duration(days: 1)),
-          );
+      final matchesStart = _startDate == null || !t.date.isBefore(_startDate!);
+      final matchesEnd =
+          _endDate == null ||
+          t.date.isBefore(_endDate!.add(const Duration(days: 1)));
       return matchesQuery &&
           matchesType &&
           matchesCategory &&
@@ -122,7 +119,8 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb) {
-      final categories = ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
+      final categories =
+          ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
       _categoriesMap = {for (final item in categories) item.id: item};
     }
     final isIncomeDisabled = context.watch<SettingsService>().isIncomeDisabled;
@@ -134,10 +132,7 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
         title: 'Search & Filter',
         actions: [
           IconButton(
-            icon: Icon(
-              Icons.refresh_rounded,
-              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-            ),
+            icon: Icon(Icons.refresh_rounded, color: context.textPrimary),
             tooltip: 'Reset Filters',
             onPressed: _resetFilters,
           ),
@@ -158,13 +153,15 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                   TextField(
                     controller: _searchController,
                     style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 15,
                     ),
                     decoration: InputDecoration(
                       hintText: 'Search notes, tags, descriptions...',
                       hintStyle: TextStyle(
-                        color: isDark ? const Color(0x7094A3B8) : const Color(0x8064748B),
+                        color: isDark
+                            ? const Color(0x7094A3B8)
+                            : const Color(0x8064748B),
                         fontSize: 14,
                       ),
                       prefixIcon: const Icon(
@@ -174,11 +171,13 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                       ),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
-                            tooltip: 'Clear search',
+                              tooltip: 'Clear search',
                               icon: Icon(
                                 Icons.clear_rounded,
                                 size: 18,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                               onPressed: () {
                                 _searchController.clear();
@@ -187,19 +186,28 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                             )
                           : null,
                       filled: true,
-                      fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      fillColor: isDark
+                          ? const Color(0x1AFFFFFF)
+                          : const Color(0x66FFFFFF),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
-                          color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                          color: isDark
+                              ? const Color(0x28FFFFFF)
+                              : const Color(0x18000000),
                           width: 0.75,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
-                          color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                          color: isDark
+                              ? const Color(0x28FFFFFF)
+                              : const Color(0x18000000),
                           width: 0.75,
                         ),
                       ),
@@ -298,16 +306,27 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                           borderRadius: BorderRadius.circular(14),
                           onTap: _selectDateRange,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: (_startDate != null)
-                                  ? AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.15)
-                                  : (isDark ? const Color(0x14FFFFFF) : const Color(0x40FFFFFF)),
+                                  ? AppTheme.primaryBlue.withValues(
+                                      alpha: isDark ? 0.20 : 0.15,
+                                    )
+                                  : (isDark
+                                        ? const Color(0x14FFFFFF)
+                                        : const Color(0x40FFFFFF)),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: (_startDate != null)
-                                    ? AppTheme.primaryBlue.withValues(alpha: isDark ? 0.60 : 0.45)
-                                    : (isDark ? const Color(0x24FFFFFF) : const Color(0x18000000)),
+                                    ? AppTheme.primaryBlue.withValues(
+                                        alpha: isDark ? 0.60 : 0.45,
+                                      )
+                                    : (isDark
+                                          ? const Color(0x24FFFFFF)
+                                          : const Color(0x18000000)),
                                 width: 0.75,
                               ),
                             ),
@@ -319,7 +338,9 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                                   size: 15,
                                   color: (_startDate != null)
                                       ? AppTheme.primaryBlue
-                                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                      : (Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -330,8 +351,10 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w600,
                                     color: (_startDate != null)
-                                        ? (isDark ? Colors.white : const Color(0xFF0F172A))
-                                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                        ? (Theme.of(context).colorScheme.onSurface)
+                                        : (Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant),
                                   ),
                                 ),
                               ],
@@ -346,42 +369,43 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
             ),
           ),
 
-            // Results
-            Expanded(
-              child: _isLoading
-                  ? const SpendXLoadingState(count: 4, itemHeight: 64)
-                  : _results.isEmpty
-                      ? const SpendXEmptyState(
-                          icon: Icons.search_off_rounded,
-                          title: 'No transactions found',
-                          subtitle: 'Try adjusting your search terms or filter range.',
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-                          itemCount: _results.length,
-                          itemBuilder: (context, index) {
-                            final t = _results[index];
-                            return SpendXTransactionTile(
-                              transaction: t,
-                              category: _categoriesMap[t.categoryId],
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  AppPageRoute(
-                                    builder: (_) => UnifiedTransactionDetailScreen(
-                                      transaction: t,
-                                      category: _categoriesMap[t.categoryId],
-                                    ),
-                                  ),
-                                );
-                                if (result == true) _performSearch();
-                              },
-                            );
-                          },
-                        ),
-            ),
-          ],
-        ),
+          // Results
+          Expanded(
+            child: _isLoading
+                ? const SpendXLoadingState(count: 4, itemHeight: 64)
+                : _results.isEmpty
+                ? const SpendXEmptyState(
+                    icon: Icons.search_off_rounded,
+                    title: 'No transactions found',
+                    subtitle:
+                        'Try adjusting your search terms or filter range.',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) {
+                      final t = _results[index];
+                      return SpendXTransactionTile(
+                        transaction: t,
+                        category: _categoriesMap[t.categoryId],
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            AppPageRoute(
+                              builder: (_) => UnifiedTransactionDetailScreen(
+                                transaction: t,
+                                category: _categoriesMap[t.categoryId],
+                              ),
+                            ),
+                          );
+                          if (result == true) _performSearch();
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

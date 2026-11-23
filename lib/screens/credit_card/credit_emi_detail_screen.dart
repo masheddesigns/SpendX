@@ -40,22 +40,32 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
       body: SafeArea(
         child: installmentsAsync.when(
           loading: () => const SkeletonLoader.transactions(),
-          error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(emiInstallmentsProvider(widget.emi.id))),
+          error: (error, _) => ErrorStateWidget(
+            error: error,
+            onRetry: () =>
+                ref.invalidate(emiInstallmentsProvider(widget.emi.id)),
+          ),
           data: (installments) => Column(
             children: [
               _buildSummaryCard(),
               Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: installments.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    return _buildInstallmentTile(
-                      installments[index],
-                      index + 1,
-                    );
-                  },
+                child: RefreshIndicator(
+                  onRefresh: () => ref
+                      .read(emiInstallmentsProvider(widget.emi.id).notifier)
+                      .refresh(),
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: installments.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (context, index) {
+                      return _buildInstallmentTile(
+                        installments[index],
+                        index + 1,
+                      );
+                    },
+                  ),
                 ),
               ),
             ],

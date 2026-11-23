@@ -24,16 +24,13 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'Select your primary display currency for account balances, safe-to-spend calculations, and totals.',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-            ),
+            style: TextStyle(fontSize: 13, color: context.textMuted),
           ),
           const SizedBox(height: 18),
           Expanded(
@@ -47,9 +44,14 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
 
                 return SpendXGlassSurface(
                   width: double.infinity,
-                  level: isSelected ? SpendXGlassLevel.elevated : SpendXGlassLevel.base,
+                  level: isSelected
+                      ? SpendXGlassLevel.elevated
+                      : SpendXGlassLevel.base,
                   borderRadius: BorderRadius.circular(AppRadius.m),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: InkWell(
                     onTap: () {
                       _updateState(() => _selectedCurrency = c['code']!);
@@ -64,14 +66,20 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: isSelected
-                                ? AppTheme.primaryBlue.withValues(alpha: isDark ? 0.3 : 0.15)
-                                : (isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000)),
+                                ? AppTheme.primaryBlue.withValues(
+                                    alpha: isDark ? 0.3 : 0.15,
+                                  )
+                                : (isDark
+                                      ? const Color(0x18FFFFFF)
+                                      : const Color(0x0A000000)),
                           ),
                           alignment: Alignment.center,
                           child: Text(
                             c['symbol']!,
                             style: TextStyle(
-                              color: isSelected ? AppTheme.primaryBlue : (isDark ? Colors.white : Colors.black),
+                              color: isSelected
+                                  ? AppTheme.primaryBlue
+                                  : (isDark ? Colors.white : Colors.black),
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
                             ),
@@ -85,15 +93,17 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                               Text(
                                 c['name']!,
                                 style: TextStyle(
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  color: context.textPrimary,
                                   fontSize: 14.5,
                                 ),
                               ),
                               Text(
                                 c['code']!,
                                 style: TextStyle(
-                                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                  color: context.textMuted,
                                   fontSize: 12,
                                 ),
                               ),
@@ -101,7 +111,11 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                           ),
                         ),
                         if (isSelected)
-                          const Icon(Icons.check_circle_rounded, color: AppTheme.primaryBlue, size: 22),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: AppTheme.primaryBlue,
+                            size: 22,
+                          ),
                       ],
                     ),
                   ),
@@ -115,5 +129,4 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
   }
 
   // ── 3. Automatic Ingestion & Permissions ───────────────────
-
 }

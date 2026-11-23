@@ -13,11 +13,19 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                color: AppTheme.primaryBlue.withValues(
+                  alpha: isDark ? 0.20 : 0.12,
+                ),
                 shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                ),
               ),
-              child: const Icon(Icons.rocket_launch_rounded, size: 40, color: AppTheme.primaryBlue),
+              child: const Icon(
+                Icons.rocket_launch_rounded,
+                size: 40,
+                color: AppTheme.primaryBlue,
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -27,17 +35,14 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
               fontSize: 26,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             'SpendX is configured and ready to autonomously manage your finances.',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-            ),
+            style: TextStyle(fontSize: 13, color: context.textMuted),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -53,10 +58,16 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                    color: AppTheme.primaryBlue.withValues(
+                      alpha: isDark ? 0.20 : 0.12,
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.history_rounded, color: AppTheme.primaryBlue, size: 20),
+                  child: const Icon(
+                    Icons.history_rounded,
+                    color: AppTheme.primaryBlue,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -68,7 +79,7 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -76,7 +87,7 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
                         'Import past transaction history to automatically reconstruct initial account balances.',
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.textMuted,
                         ),
                       ),
                     ],
@@ -104,7 +115,11 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.lightbulb_rounded, size: 16, color: Color(0xFFF59E0B)),
+                     Icon(
+                      Icons.lightbulb_rounded,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.tertiary,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -115,18 +130,27 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.textMuted,
                         ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                _tipRow(isDark, 'Tap the floating + to manually add an expense, income, or move funds between accounts.'),
+                _tipRow(
+                  isDark,
+                  'Tap the floating + to manually add an expense, income, or move funds between accounts.',
+                ),
                 const SizedBox(height: 8),
-                _tipRow(isDark, 'Check the Review Queue if a transaction needs manual account confirmation.'),
+                _tipRow(
+                  isDark,
+                  'Check the Review Queue if a transaction needs manual account confirmation.',
+                ),
                 const SizedBox(height: 8),
-                _tipRow(isDark, 'Set up Credit Cards and EMIs to enable your real-time Safe-to-Spend runway calculation.'),
+                _tipRow(
+                  isDark,
+                  'Set up Credit Cards and EMIs to enable your real-time Safe-to-Spend runway calculation.',
+                ),
               ],
             ),
           ),
@@ -153,10 +177,11 @@ extension _OnboardingFinishStep on _OnboardingScreenState {
             style: TextStyle(
               fontSize: 12,
               height: 1.4,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+              color: context.textMuted,
             ),
           ),
         ),
       ],
     );
-  }}
+  }
+}

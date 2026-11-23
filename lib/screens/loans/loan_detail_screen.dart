@@ -51,7 +51,9 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
           children: [
             Text(
               'Choose Payment Method',
-              style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
+              style: AppTextStyles.heading.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -95,7 +97,9 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             children: [
               Text(
                 'Select Bank Account',
-                style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
+                style: AppTextStyles.heading.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 16),
               StatefulBuilder(
@@ -131,10 +135,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
         if (!mounted) {
           return;
         }
-        CustomSnackBar.show(
-          context,
-          message: 'Payment recorded successfully',
-        );
+        CustomSnackBar.show(context, message: 'Payment recorded successfully');
         ref.invalidate(loanInstallmentsProvider(widget.loan.id));
         ref.invalidate(loansProvider);
       }
@@ -143,10 +144,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
       if (!mounted) {
         return;
       }
-      CustomSnackBar.show(
-        context,
-        message: 'Installment marked as paid',
-      );
+      CustomSnackBar.show(context, message: 'Installment marked as paid');
       ref.invalidate(loanInstallmentsProvider(widget.loan.id));
       ref.invalidate(loansProvider);
     }
@@ -172,7 +170,9 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
               height: 40,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.primary.withValues(alpha: isDark ? 0.20 : 0.12),
+                color: AppColors.primary.withValues(
+                  alpha: isDark ? 0.20 : 0.12,
+                ),
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
             ),
@@ -230,8 +230,11 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final loan = ref.watch(loanByIdProvider(widget.loan.id)) ?? widget.loan;
-    final installmentsAsync = ref.watch(loanInstallmentsProvider(widget.loan.id));
-    final allAccounts = ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final installmentsAsync = ref.watch(
+      loanInstallmentsProvider(widget.loan.id),
+    );
+    final allAccounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
     final accounts = allAccounts.where((a) => a.isAsset).toList();
     if (_selectedAccountId == null && accounts.isNotEmpty) {
       _selectedAccountId = accounts.first.id;
@@ -252,9 +255,7 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
             onPressed: () async {
               final result = await Navigator.push(
                 context,
-                AppPageRoute(
-                  builder: (_) => AddLoanScreen(loan: loan),
-                ),
+                AppPageRoute(builder: (_) => AddLoanScreen(loan: loan)),
               );
               if (result == true && mounted) {
                 ref.invalidate(loansProvider);
@@ -276,237 +277,262 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
           onRetry: () => ref.refresh(loanInstallmentsProvider(widget.loan.id)),
         ),
         data: (installments) => SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Overview Card
-                  SpendXGlassSurface(
-                    level: SpendXGlassLevel.elevated,
-                    borderRadius: BorderRadius.circular(20),
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Overview Card
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.elevated,
+                borderRadius: BorderRadius.circular(20),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Text(
+                      AppFormat.currency(remaining),
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        letterSpacing: -0.6,
+                        color: cs.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Remaining Balance',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        Text(
-                          AppFormat.currency(remaining),
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w700,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                            letterSpacing: -0.6,
-                            color: cs.primary,
-                          ),
+                        _buildInfoItem(
+                          'Principal',
+                          AppFormat.currency(loan.principalAmount),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Remaining Balance',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
+                        _buildInfoItem(
+                          'Paid',
+                          AppFormat.currency(loan.paidAmount),
                         ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildInfoItem(
-                              'Principal',
-                              AppFormat.currency(loan.principalAmount),
-                            ),
-                            _buildInfoItem(
-                              'Paid',
-                              AppFormat.currency(loan.paidAmount),
-                            ),
-                            _buildInfoItem(
-                              'EMI',
-                              AppFormat.currency(loan.monthlyInstallment),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildInfoItem(
-                              'Interest',
-                              '${loan.interestRate}%',
-                            ),
-                            _buildInfoItem('Tenure', '${loan.tenureMonths}m'),
-                            _buildInfoItem(
-                              'Started On',
-                              DateFormat(
-                                'MMM dd, yyyy',
-                              ).format(loan.startDate),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildInfoItem(
-                              'Next Due',
-                              loan.nextDueDate != null
-                                  ? DateFormat('MMM dd, yyyy').format(loan.nextDueDate!)
-                                  : 'N/A',
-                            ),
-                            _buildInfoItem(
-                              'Loan Type',
-                              loan.type.name.substring(0, 1).toUpperCase() +
-                                  loan.type.name.substring(1),
-                            ),
-                            _buildInfoItem(
-                              'Bank',
-                              loan.bank.isNotEmpty ? loan.bank : 'N/A',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: cs.surfaceContainerHighest,
-                          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                          minHeight: 6,
-                          borderRadius: BorderRadius.circular(AppRadius.s),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${(progress * 100).toStringAsFixed(0)}% Repaid',
-                              style: AppTextStyles.labelSmall,
-                            ),
-                            StatusChip(
-                              label: TextFormatter.toSmartTitleCase(
-                                loan.loanStatus,
-                              ),
-                              type: loan.loanStatus == 'active'
-                                  ? StatusChipType.success
-                                  : StatusChipType.info,
-                            ),
-                          ],
+                        _buildInfoItem(
+                          'EMI',
+                          AppFormat.currency(loan.monthlyInstallment),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInfoItem(
+                            'Interest',
+                            '${loan.interestRate}%',
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildInfoItem(
+                            'Tenure',
+                            '${loan.tenureMonths}m',
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildInfoItem(
+                            'Started On',
+                            DateFormat('MMM dd, yyyy').format(loan.startDate),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInfoItem(
+                            'Next Due',
+                            loan.nextDueDate != null
+                                ? DateFormat(
+                                    'MMM dd, yyyy',
+                                  ).format(loan.nextDueDate!)
+                                : 'N/A',
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildInfoItem(
+                            'Loan Type',
+                            loan.type.name.substring(0, 1).toUpperCase() +
+                                loan.type.name.substring(1),
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildInfoItem(
+                            'Bank',
+                            loan.bank.isNotEmpty ? loan.bank : 'N/A',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: cs.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(AppRadius.s),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${(progress * 100).toStringAsFixed(0)}% Repaid',
+                          style: AppTextStyles.labelSmall,
+                        ),
+                        StatusChip(
+                          label: TextFormatter.toSmartTitleCase(
+                            loan.loanStatus,
+                          ),
+                          type: loan.loanStatus == 'active'
+                              ? StatusChipType.success
+                              : StatusChipType.info,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
 
-                  const SizedBox(height: 28),
-                  Text(
-                    'Upcoming & History',
-                    style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 14),
+              const SizedBox(height: 28),
+              Text(
+                'Upcoming & History',
+                style: AppTextStyles.heading.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
 
-                  if (installments.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text('No installments generated yet.'),
-                      ),
-                    )
-                  else
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: installments.length,
-                      itemBuilder: (ctx, i) {
-                        final inst = installments[i];
-                        final isPaid = inst.status == 'paid';
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: SpendXGlassSurface(
-                            level: SpendXGlassLevel.base,
-                            borderRadius: BorderRadius.circular(16),
-                            padding: const EdgeInsets.all(14),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: isPaid
-                                      ? AppColors.success.withValues(alpha: 0.15)
-                                      : cs.primary.withValues(alpha: 0.12),
-                                  child: Icon(
-                                    isPaid ? Icons.check_rounded : Icons.schedule_rounded,
-                                    color: isPaid ? AppColors.success : cs.primary,
-                                    size: 18,
+              if (installments.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Text('No installments generated yet.'),
+                  ),
+                )
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: installments.length,
+                  itemBuilder: (ctx, i) {
+                    final inst = installments[i];
+                    final isPaid = inst.status == 'paid';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SpendXGlassSurface(
+                        level: SpendXGlassLevel.base,
+                        borderRadius: BorderRadius.circular(16),
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: isPaid
+                                  ? AppColors.success.withValues(alpha: 0.15)
+                                  : cs.primary.withValues(alpha: 0.12),
+                              child: Icon(
+                                isPaid
+                                    ? Icons.check_rounded
+                                    : Icons.schedule_rounded,
+                                color: isPaid ? AppColors.success : cs.primary,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Month ${i + 1}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Month ${i + 1}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        DateFormat(
-                                          'MMM dd, yyyy',
-                                        ).format(inst.dueDate),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondaryOf(context),
-                                        ),
-                                      ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    DateFormat(
+                                      'MMM dd, yyyy',
+                                    ).format(inst.dueDate),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondaryOf(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  AppFormat.currency(inst.amount),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures(),
                                     ],
                                   ),
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      AppFormat.currency(inst.amount),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14.5,
-                                        fontFeatures: [FontFeature.tabularFigures()],
+                                const SizedBox(height: 2),
+                                if (!isPaid)
+                                  GestureDetector(
+                                    onTap: () =>
+                                        _payInstallment(inst, accounts),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary.withValues(
+                                          alpha: 0.15,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'PAY',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: cs.primary,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    if (!isPaid)
-                                      GestureDetector(
-                                        onTap: () => _payInstallment(inst, accounts),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            'PAY',
-                                            style: TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: cs.primary,
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      const Text(
-                                        'PAID',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.success,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                  ],
-                                ),
+                                  )
+                                else
+                                  const Text(
+                                    'PAID',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.success,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                               ],
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -514,9 +540,18 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
   Widget _buildInfoItem(String label, String value) {
     return Column(
       children: [
-        Text(value, style: AppTextStyles.titleSmall),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: AppTextStyles.titleSmall,
+        ),
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: AppTextStyles.labelSmall.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),

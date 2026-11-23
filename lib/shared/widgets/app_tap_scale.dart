@@ -51,22 +51,25 @@ class _AppTapScaleState extends State<AppTapScale> {
         widget.onTap?.call();
       },
       onLongPress: widget.onLongPress,
-      child: Semantics(
-        label: widget.semanticLabel,
-        button: widget.onTap != null || widget.onLongPress != null,
-        enabled: widget.onTap != null || widget.onLongPress != null,
-        child: reduceMotion
-            ? widget.child
-            : AnimatedScale(
-                scale: _pressed ? 0.97 : 1.0,
-                duration: AppMotion.fast,
-                curve: AppMotion.curveSpring,
-                child: AnimatedOpacity(
-                  opacity: _pressed ? 0.85 : 1.0,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: Semantics(
+          label: widget.semanticLabel,
+          button: widget.onTap != null || widget.onLongPress != null,
+          enabled: widget.onTap != null || widget.onLongPress != null,
+          child: reduceMotion
+              ? widget.child
+              : AnimatedScale(
+                  scale: _pressed ? 0.97 : 1.0,
                   duration: AppMotion.fast,
-                  child: widget.child,
+                  curve: AppMotion.curveSpring,
+                  child: AnimatedOpacity(
+                    opacity: _pressed ? 0.85 : 1.0,
+                    duration: AppMotion.fast,
+                    child: widget.child,
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

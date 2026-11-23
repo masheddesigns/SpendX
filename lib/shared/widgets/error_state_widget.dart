@@ -20,6 +20,8 @@ class ErrorStateWidget extends StatelessWidget {
     return SpendXErrorState(
       message: error.toString(),
       onRetry: onRetry,
+      title: title,
+      icon: icon,
     );
   }
 }

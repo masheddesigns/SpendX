@@ -30,7 +30,11 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
       if (mounted) CustomSnackBar.show(context, message: '$label complete');
     } catch (e) {
       if (mounted) {
-        CustomSnackBar.show(context, message: '$label failed: $e', isError: true);
+        CustomSnackBar.show(
+          context,
+          message: '$label failed: $e',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -75,8 +79,10 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
         final container = mounted ? ProviderScope.containerOf(context) : null;
-        final success = await ImportService.instance
-            .importFromFile(file, container: container);
+        final success = await ImportService.instance.importFromFile(
+          file,
+          container: container,
+        );
         if (mounted) {
           if (success) {
             CustomSnackBar.show(context, message: 'Import complete');
@@ -91,7 +97,11 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        CustomSnackBar.show(context, message: 'Import error: $e', isError: true);
+        CustomSnackBar.show(
+          context,
+          message: 'Import error: $e',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -157,9 +167,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    AppPageRoute(
-                      builder: (_) => const SmartImportScreen(),
-                    ),
+                    AppPageRoute(builder: (_) => const SmartImportScreen()),
                   );
                 },
               ),
@@ -266,7 +274,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
               const SizedBox(height: 12),
               SettingsTile(
                 icon: Icons.account_balance_wallet_outlined,
-                color: const Color(0xFF8B5CF6),
+                color: Theme.of(context).colorScheme.primary,
                 title: 'Export Salary Report CSV',
                 subtitle: 'All salary payments as CSV',
                 onTap: () {
@@ -296,7 +304,7 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
               const SizedBox(height: 12),
               SettingsTile(
                 icon: Icons.notifications_outlined,
-                color: const Color(0xFFF59E0B),
+                color: Theme.of(context).colorScheme.tertiary,
                 title: 'Export Reminders CSV',
                 subtitle: 'All due reminders as CSV',
                 onTap: () {

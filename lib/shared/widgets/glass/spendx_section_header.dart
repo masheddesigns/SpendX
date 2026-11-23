@@ -32,11 +32,15 @@ class SpendXSectionHeader extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                title,
-                style: AppTextStyles.sectionHeading.copyWith(
-                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                  letterSpacing: 0.2,
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.sectionHeading.copyWith(
+                    color: context.textSecondary,
+                    letterSpacing: 0.2,
+                  ),
                 ),
               ),
               if (count != null) ...[
@@ -54,7 +58,7 @@ class SpendXSectionHeader extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                      color: context.textMuted,
                     ),
                   ),
                 ),
@@ -67,6 +71,8 @@ class SpendXSectionHeader extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               child: Text(
                 actionLabel!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,

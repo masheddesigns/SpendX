@@ -2,17 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:spend_x/widgets/spendx_app_bar.dart';
 
-
-
 class NotificationHelpScreen extends StatelessWidget {
   const NotificationHelpScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: SpendXAppBar(
-        title: 'Notification Help',
-      ),
+      appBar: SpendXAppBar(title: 'Notification Help'),
 
       body: SafeArea(
         child: SingleChildScrollView(
@@ -20,44 +16,73 @@ class NotificationHelpScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(context, 'Vivo / Oppo / Xiaomi Devices', Icons.phonelink_setup),
+              _buildHeader(
+                context,
+                'Vivo / Oppo / Xiaomi Devices',
+                Icons.phonelink_setup,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Some devices have aggressive battery optimizations that may block SpendX notifications. Please follow these steps to ensure reliable alerts:',
                 style: TextStyle(fontSize: 15, height: 1.5),
               ),
               const SizedBox(height: 24),
-              
-              _buildStep(context, '1', 'Enable Auto-start', 
-                'Go to Settings → App Manager → Autostart → Enable "SpendX".'),
-              
-              _buildStep(context, '2', 'Disable Battery Optimization', 
-                'Go to Settings → Battery → High Background Power Consumption → Enable "SpendX" OR Settings → Apps → SpendX → Battery → Don\'t Optimize.'),
-              
+
+              _buildStep(
+                context,
+                '1',
+                'Enable Auto-start',
+                'Go to Settings → App Manager → Autostart → Enable "SpendX".',
+              ),
+
+              _buildStep(
+                context,
+                '2',
+                'Disable Battery Optimization',
+                'Go to Settings → Battery → High Background Power Consumption → Enable "SpendX" OR Settings → Apps → SpendX → Battery → Don\'t Optimize.',
+              ),
+
               Padding(
                 padding: const EdgeInsets.only(left: 44, bottom: 20),
                 child: FilledButton.tonalIcon(
                   onPressed: () async {
                     await Permission.ignoreBatteryOptimizations.request();
                   },
-                  icon: const Icon(Icons.bolt_rounded, color: Color(0xFF8B5CF6)),
+                  icon:  Icon(
+                    Icons.bolt_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   label: const Text('Allow High Background Battery'),
                 ),
               ),
-              
-              _buildStep(context, '3', 'Lock SpendX in Recents', 
-                'Open the Recent Apps screen, find SpendX, and swipe down on the app card to lock it (a lock icon will appear).'),
-                
-              _buildStep(context, '4', 'Allow Notifications on Lock Screen', 
-                'Go to Settings → Status bar & Notification → Manage Notification → SpendX → Allow all notifications.'),
-  
+
+              _buildStep(
+                context,
+                '3',
+                'Lock SpendX in Recents',
+                'Open the Recent Apps screen, find SpendX, and swipe down on the app card to lock it (a lock icon will appear).',
+              ),
+
+              _buildStep(
+                context,
+                '4',
+                'Allow Notifications on Lock Screen',
+                'Go to Settings → Status bar & Notification → Manage Notification → SpendX → Allow all notifications.',
+              ),
+
               const SizedBox(height: 32),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: const Row(
                   children: [
@@ -66,7 +91,10 @@ class NotificationHelpScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'If you still don\'t receive notifications, try restarting your device after making these changes.',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -85,15 +113,24 @@ class NotificationHelpScreen extends StatelessWidget {
       children: [
         Icon(icon, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 12),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildStep(BuildContext context, String number, String title, String description) {
+  Widget _buildStep(
+    BuildContext context,
+    String number,
+    String title,
+    String description,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Row(
@@ -109,7 +146,11 @@ class NotificationHelpScreen extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               number,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -119,7 +160,10 @@ class NotificationHelpScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(

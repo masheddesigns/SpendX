@@ -22,9 +22,12 @@ class FinancialHealthScreen extends ConsumerWidget {
       body: SafeArea(
         child: scoreAsync.when(
           loading: () => const SkeletonLoader.summary(),
-          error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(financialHealthScoreProvider)),
+          error: (e, _) => ErrorStateWidget(
+            error: e,
+            onRetry: () => ref.invalidate(financialHealthScoreProvider),
+          ),
           data: (score) {
-            final color = _scoreColor(score.score);
+            final color = _scoreColor(context, score.score);
             final bd = score.breakdown;
 
             return SingleChildScrollView(
@@ -38,18 +41,24 @@ class FinancialHealthScreen extends ConsumerWidget {
                       children: [
                         _ScoreRing(score: score.score, color: color),
                         const SizedBox(height: 16),
-                        Text(score.level,
-                            style: TextStyle(
-                                color: color,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w600)),
+                        Text(
+                          score.level,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 8),
-                        Text('Your financial discipline score',
-                            style: TextStyle(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                                fontSize: 14)),
+                        Text(
+                          'Your financial discipline score',
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -59,30 +68,35 @@ class FinancialHealthScreen extends ConsumerWidget {
                   _sectionLabel(context, 'SCORE BREAKDOWN'),
                   const SizedBox(height: 20),
                   _MetricBar(
-                      label: 'Savings',
-                      score: bd.savingsScore,
-                      max: 30,
-                      color: Colors.green),
+                    label: 'Savings',
+                    score: bd.savingsScore,
+                    max: 30,
+                    color: Colors.green,
+                  ),
                   _MetricBar(
-                      label: 'Debt Management',
-                      score: bd.debtScore,
-                      max: 25,
-                      color: Colors.blue),
+                    label: 'Debt Management',
+                    score: bd.debtScore,
+                    max: 25,
+                    color: Colors.blue,
+                  ),
                   _MetricBar(
-                      label: 'Stability',
-                      score: bd.stabilityScore,
-                      max: 20,
-                      color: Colors.orange),
+                    label: 'Stability',
+                    score: bd.stabilityScore,
+                    max: 20,
+                    color: Colors.orange,
+                  ),
                   _MetricBar(
-                      label: 'Liquidity',
-                      score: bd.liquidityScore,
-                      max: 15,
-                      color: Colors.teal),
+                    label: 'Liquidity',
+                    score: bd.liquidityScore,
+                    max: 15,
+                    color: Colors.teal,
+                  ),
                   _MetricBar(
-                      label: 'Credit Usage',
-                      score: bd.utilizationScore,
-                      max: 10,
-                      color: Colors.purple),
+                    label: 'Credit Usage',
+                    score: bd.utilizationScore,
+                    max: 10,
+                    color: Colors.purple,
+                  ),
 
                   // ── Insights ────────────────────────────────
                   if (score.insights.isNotEmpty) ...[
@@ -101,18 +115,21 @@ class FinancialHealthScreen extends ConsumerWidget {
   }
 
   Widget _sectionLabel(BuildContext context, String text) {
-    return Text(text,
-        style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.5));
+    return Text(
+      text,
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1.5,
+      ),
+    );
   }
 
-  Color _scoreColor(int score) {
-    if (score >= 80) return const Color(0xFF22C55E);
-    if (score >= 60) return const Color(0xFF0EA5E9);
-    if (score >= 40) return const Color(0xFFF59E0B);
+  Color _scoreColor(BuildContext context, int score) {
+    if (score >= 80) return Theme.of(context).colorScheme.secondary;
+    if (score >= 60) return Theme.of(context).colorScheme.primary;
+    if (score >= 40) return Theme.of(context).colorScheme.tertiary;
     return Colors.redAccent;
   }
 }
@@ -144,15 +161,21 @@ class _ScoreRing extends StatelessWidget {
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('$score',
-                  style: TextStyle(
-                      fontSize: 44,
-                      fontWeight: FontWeight.w700,
-                      color: color)),
-              Text('/ 100',
-                  style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(
+                '$score',
+                style: TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              Text(
+                '/ 100',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
         ],
@@ -184,14 +207,27 @@ class _MetricBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w500, fontSize: 14)),
-              Text('$score / $max',
-                  style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$score / $max',
+                maxLines: 1,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -222,9 +258,9 @@ class _InsightTile extends StatelessWidget {
       HealthInsightType.actionable => Icons.lightbulb_outline_rounded,
     };
     final color = switch (insight.type) {
-      HealthInsightType.positive => const Color(0xFF22C55E),
-      HealthInsightType.warning => const Color(0xFFF59E0B),
-      HealthInsightType.actionable => const Color(0xFF0EA5E9),
+      HealthInsightType.positive => Theme.of(context).colorScheme.secondary,
+      HealthInsightType.warning => Theme.of(context).colorScheme.tertiary,
+      HealthInsightType.actionable => Theme.of(context).colorScheme.primary,
     };
 
     return Padding(
@@ -235,11 +271,14 @@ class _InsightTile extends StatelessWidget {
           Icon(icon, color: color, size: 18),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(insight.text,
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 13,
-                    height: 1.4)),
+            child: Text(
+              insight.text,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),

@@ -159,9 +159,7 @@ class SpendXGlassDialog extends StatelessWidget {
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
-                          color: isDark
-                              ? AppTheme.darkTextPrimary
-                              : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                         ),
                       ),
                       if (message != null) ...[
@@ -172,9 +170,7 @@ class SpendXGlassDialog extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             height: 1.4,
-                            color: isDark
-                                ? AppTheme.darkTextSecondary
-                                : AppTheme.lightTextSecondary,
+                            color: context.textSecondary,
                           ),
                         ),
                       ],

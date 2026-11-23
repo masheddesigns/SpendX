@@ -63,7 +63,7 @@ class SpendXGlassSegmentedControl<T> extends StatelessWidget {
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isSelected
                           ? (isDark ? Colors.white : AppTheme.primaryBlue)
-                          : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                          : (context.textSecondary),
                     ),
                   ),
                 ),
@@ -124,18 +124,22 @@ class SpendXGlassChip extends StatelessWidget {
                 size: 14,
                 color: isSelected
                     ? (isDark ? Colors.white : activeColor)
-                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+                    : (context.textSecondary),
               ),
               const SizedBox(width: 4),
             ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected
-                    ? (isDark ? Colors.white : activeColor)
-                    : (isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected
+                      ? (isDark ? Colors.white : activeColor)
+                      : (context.textSecondary),
+                ),
               ),
             ),
           ],

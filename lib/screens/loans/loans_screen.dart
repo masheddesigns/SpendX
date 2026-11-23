@@ -67,18 +67,23 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
             }
 
             // Use simple ListView — no fragile AnimatedList state
-            return ListView.builder(
-              padding: EdgeInsets.only(
-                left: AppSpacing.listHorizontalPadding,
-                right: AppSpacing.listHorizontalPadding,
-                top: AppSpacing.listHorizontalPadding,
-                bottom: 80, // space for FAB
+            return RefreshIndicator(
+              onRefresh: () =>
+                  ref.read(app_data.loansProvider.notifier).refresh(),
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(
+                  left: AppSpacing.listHorizontalPadding,
+                  right: AppSpacing.listHorizontalPadding,
+                  top: AppSpacing.listHorizontalPadding,
+                  bottom: 80, // space for FAB
+                ),
+                itemCount: loans.length,
+                itemBuilder: (context, index) {
+                  final loan = loans[index];
+                  return _buildLoanTile(context, loan);
+                },
               ),
-              itemCount: loans.length,
-              itemBuilder: (context, index) {
-                final loan = loans[index];
-                return _buildLoanTile(context, loan);
-              },
             );
           },
         ),
@@ -162,25 +167,31 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      loan.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        loan.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      loan.bank,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      const SizedBox(height: 4),
+                      Text(
+                        loan.bank,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(

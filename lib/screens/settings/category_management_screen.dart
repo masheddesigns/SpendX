@@ -50,136 +50,137 @@ class _CategoryManagementScreenState
             ),
             child: SingleChildScrollView(
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  existingCategory == null ? 'New Category' : 'Edit Category',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _TypeChip(
-                        label: 'Expense',
-                        isSelected: type == 'expense',
-                        onTap: () => setDialogState(() => type = 'expense'),
-                        color: Theme.of(context).colorScheme.error,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _TypeChip(
-                        label: 'Income',
-                        isSelected: type == 'income',
-                        onTap: () => setDialogState(() => type = 'income'),
-                        color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    existingCategory == null ? 'New Category' : 'Edit Category',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _TypeChip(
+                          label: 'Expense',
+                          isSelected: type == 'expense',
+                          onTap: () => setDialogState(() => type = 'expense'),
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _TypeChip(
+                          label: 'Income',
+                          isSelected: type == 'income',
+                          onTap: () => setDialogState(() => type = 'income'),
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Form(
+                    key: formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: TextFormField(
+                      controller: nameController,
+                      autofocus: existingCategory == null,
+                      decoration: InputDecoration(
+                        labelText: 'Category Name',
+                        hintText: 'e.g. Groceries',
+                        prefixIcon: Container(
+                          margin: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _hexToColor(color).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            widthFactor: 1,
+                            child: _buildIcon(icon, color, size: 20),
+                          ),
+                        ),
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Enter a category name'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  CategoryIconPicker(
+                    selectedIcon: icon,
+                    onIconSelected: (newIcon) =>
+                        setDialogState(() => icon = newIcon),
+                  ),
+                  const SizedBox(height: 24),
+                  CategoryColorPicker(
+                    selectedColor: color,
+                    onColorSelected: (newColor) =>
+                        setDialogState(() => color = newColor),
+                  ),
+                  const SizedBox(height: 32),
+                  PrimaryButton(
+                    onPressed: () async {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+
+                      final category = Category(
+                        id: existingCategory?.id ?? const Uuid().v4(),
+                        userId: existingCategory?.userId ?? 'offline_user',
+                        name: nameController.text.trim(),
+                        icon: icon,
+                        color: color,
+                        type: type,
+                      );
+
+                      if (existingCategory == null) {
+                        await ref.read(addCategoryProvider)(category);
+                      } else {
+                        await ref.read(updateCategoryProvider)(category);
+                      }
+
+                      if (sheetContext.mounted) {
+                        Navigator.pop(sheetContext);
+                      }
+                    },
+                    label: existingCategory == null
+                        ? 'Create Category'
+                        : 'Save Changes',
+                  ),
+                  if (existingCategory != null &&
+                      existingCategory.userId != 'default') ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          _deleteCategory(existingCategory);
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                        ),
+                        child: const Text('Delete Category'),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 24),
-                Form(
-                  key: formKey,
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  child: TextFormField(
-                    controller: nameController,
-                    autofocus: existingCategory == null,
-                    decoration: InputDecoration(
-                      labelText: 'Category Name',
-                      hintText: 'e.g. Groceries',
-                      prefixIcon: Container(
-                        margin: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: _hexToColor(color).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          widthFactor: 1,
-                          child: _buildIcon(icon, color, size: 20),
-                        ),
-                      ),
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Enter a category name'
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                CategoryIconPicker(
-                  selectedIcon: icon,
-                  onIconSelected: (newIcon) =>
-                      setDialogState(() => icon = newIcon),
-                ),
-                const SizedBox(height: 24),
-                CategoryColorPicker(
-                  selectedColor: color,
-                  onColorSelected: (newColor) =>
-                      setDialogState(() => color = newColor),
-                ),
-                const SizedBox(height: 32),
-                PrimaryButton(
-                  onPressed: () async {
-                    if (!(formKey.currentState?.validate() ?? false)) return;
-
-                    final category = Category(
-                      id: existingCategory?.id ?? const Uuid().v4(),
-                      userId: existingCategory?.userId ?? 'offline_user',
-                      name: nameController.text.trim(),
-                      icon: icon,
-                      color: color,
-                      type: type,
-                    );
-
-                    if (existingCategory == null) {
-                      await ref.read(addCategoryProvider)(category);
-                    } else {
-                      await ref.read(updateCategoryProvider)(category);
-                    }
-
-                    if (sheetContext.mounted) {
-                      Navigator.pop(sheetContext);
-                    }
-                  },
-                  label: existingCategory == null
-                      ? 'Create Category'
-                      : 'Save Changes',
-                ),
-                if (existingCategory != null &&
-                    existingCategory.userId != 'default') ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.pop(sheetContext);
-                        _deleteCategory(existingCategory);
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.error,
-                      ),
-                      child: const Text('Delete Category'),
-                    ),
-                  ),
                 ],
-              ],
-            ),
+              ),
             ),
           );
         },
@@ -285,9 +286,13 @@ class _CategoryManagementScreenState
     );
 
     return categoriesAsync.when(
-      loading: () =>
-          const Scaffold(body: SkeletonLoader.transactions()),
-      error: (error, _) => Scaffold(body: ErrorStateWidget(error: error, onRetry: () => ref.invalidate(categoriesProvider))),
+      loading: () => const Scaffold(body: SkeletonLoader.transactions()),
+      error: (error, _) => Scaffold(
+        body: ErrorStateWidget(
+          error: error,
+          onRetry: () => ref.invalidate(categoriesProvider),
+        ),
+      ),
       data: (categories) {
         final sorted = [...categories]
           ..sort((a, b) {
@@ -315,21 +320,28 @@ class _CategoryManagementScreenState
             onPressed: () => _showAddCategoryDialog(),
           ),
           body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              children: [
-                _buildCategorySection(
-                  'Income',
-                  incomeCategories,
-                  Theme.of(context).colorScheme.primary,
+            child: RefreshIndicator(
+              onRefresh: () => ref.refresh(categoriesProvider.future),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
-                const SizedBox(height: 24),
-                _buildCategorySection(
-                  'Expense',
-                  expenseCategories,
-                  Theme.of(context).colorScheme.error,
-                ),
-              ],
+                children: [
+                  _buildCategorySection(
+                    'Income',
+                    incomeCategories,
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildCategorySection(
+                    'Expense',
+                    expenseCategories,
+                    Theme.of(context).colorScheme.error,
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -455,7 +467,8 @@ class _TypeChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           color: isSelected
               ? color.withValues(alpha: 0.2)

@@ -12,14 +12,22 @@ extension _OnboardingBackupStep on _OnboardingScreenState {
             child: Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.15 : 0.10),
+                color: Theme.of(
+                  context,
+                ).colorScheme.tertiary.withValues(alpha: isDark ? 0.15 : 0.10),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.tertiary.withValues(alpha: 0.3),
                   width: 1.0,
                 ),
               ),
-              child: const Icon(Icons.cloud_sync_rounded, size: 48, color: Color(0xFFF59E0B)),
+              child:  Icon(
+                Icons.cloud_sync_rounded,
+                size: 48,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -28,7 +36,7 @@ extension _OnboardingBackupStep on _OnboardingScreenState {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             textAlign: TextAlign.center,
           ),
@@ -38,7 +46,7 @@ extension _OnboardingBackupStep on _OnboardingScreenState {
             style: TextStyle(
               fontSize: 13,
               height: 1.45,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+              color: context.textMuted,
             ),
             textAlign: TextAlign.center,
           ),
@@ -49,7 +57,8 @@ extension _OnboardingBackupStep on _OnboardingScreenState {
             icon: Icons.offline_pin_rounded,
             iconColor: AppTheme.semanticIncome,
             title: 'Full Offline Autonomy',
-            description: 'No internet connection needed. All ledger postings, calculations, and rules function seamlessly offline.',
+            description:
+                'No internet connection needed. All ledger postings, calculations, and rules function seamlessly offline.',
           ),
           const SizedBox(height: 10),
 
@@ -58,16 +67,18 @@ extension _OnboardingBackupStep on _OnboardingScreenState {
             icon: Icons.enhanced_encryption_rounded,
             iconColor: AppTheme.primaryBlue,
             title: 'AES-256 Client-Side Encryption',
-            description: 'Your database snapshot is encrypted on device using your personal passphrase before uploading to Drive.',
+            description:
+                'Your database snapshot is encrypted on device using your personal passphrase before uploading to Drive.',
           ),
           const SizedBox(height: 10),
 
           _buildFeatureCard(
             isDark: isDark,
             icon: Icons.devices_rounded,
-            iconColor: const Color(0xFF6366F1),
+            iconColor: Theme.of(context).colorScheme.primary,
             title: 'Seamless Cross-Device Restore',
-            description: 'Switching phones? Restore your complete double-entry database, rules, and settings in one tap.',
+            description:
+                'Switching phones? Restore your complete double-entry database, rules, and settings in one tap.',
           ),
         ],
       ),
@@ -75,5 +86,4 @@ extension _OnboardingBackupStep on _OnboardingScreenState {
   }
 
   // ── 5. Finish & Launch Setup ──────────────────────────────
-
 }

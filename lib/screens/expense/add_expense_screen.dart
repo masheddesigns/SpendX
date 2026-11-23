@@ -8,7 +8,11 @@ import '../../features/transactions/providers/transaction_providers.dart'
     hide financialTransactionServiceProvider;
 import '../../core/utils/category_classifier.dart';
 import '../../core/utils/merchant_extractor.dart';
-import '../../data/providers.dart' show cardsProvider, financialTransactionServiceProvider, invalidateAllFinancialProviders;
+import '../../data/providers.dart'
+    show
+        cardsProvider,
+        financialTransactionServiceProvider,
+        invalidateAllFinancialProviders;
 import '../../data/core/tracked_database_task_queue.dart';
 import '../../models/bank_account.dart';
 import '../../models/credit_card.dart';
@@ -87,7 +91,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _selectedCategoryId = widget.initialCategoryId;
     if (widget.existingTransaction != null) {
       final txn = widget.existingTransaction!;
-      _selectedType = (txn.type == 'credit_card_purchase') ? 'expense' : txn.type;
+      _selectedType = (txn.type == 'credit_card_purchase')
+          ? 'expense'
+          : txn.type;
       _amountController.text = txn.amount.toString();
       _notesController.text = txn.notes;
       _selectedDate = txn.date;
@@ -157,7 +163,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ...cards.map(
           (c) => PaymentMethodItem(
             id: c.id,
-            name: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card ••${c.last4}'),
+            name: resolveAccountDisplayName(
+              c.name.isNotEmpty ? c.name : '${c.bank} Card ••${c.last4}',
+            ),
             type: 'credit_card',
             icon: _getCardIcon(c.cardType),
           ),
@@ -183,7 +191,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         }
       }
 
-      if (_destinationPaymentMethodId == null && _availablePaymentMethods.length >= 2) {
+      if (_destinationPaymentMethodId == null &&
+          _availablePaymentMethods.length >= 2) {
         _destinationPaymentMethodId = _availablePaymentMethods
             .where((m) => m.id != _selectedPaymentMethodId)
             .firstOrNull
@@ -288,8 +297,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String get _appBarTitle {
     if (widget.existingTransaction != null) {
       final t = widget.existingTransaction!.type;
-      if (t == 'credit_payment' || t == 'credit_card_payment') return 'Edit Card Payment';
-      if (t == 'loan_repayment' || t == 'loan_payment') return 'Edit Loan Repayment';
+      if (t == 'credit_payment' || t == 'credit_card_payment')
+        return 'Edit Card Payment';
+      if (t == 'loan_repayment' || t == 'loan_payment')
+        return 'Edit Loan Repayment';
       if (t == 'loan_disbursement') return 'Edit Loan Disbursement';
       if (t == 'transfer') return 'Edit Transfer';
       return _selectedType == 'expense'
@@ -326,7 +337,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
 
     if (_selectedType == 'transfer') {
-      if (_selectedPaymentMethodId == null || _destinationPaymentMethodId == null) {
+      if (_selectedPaymentMethodId == null ||
+          _destinationPaymentMethodId == null) {
         CustomSnackBar.show(
           context,
           message: 'Please select both source and destination accounts',
@@ -343,7 +355,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         return;
       }
 
-      final destMethod = _availablePaymentMethods.where((m) => m.id == _destinationPaymentMethodId).firstOrNull;
+      final destMethod = _availablePaymentMethods
+          .where((m) => m.id == _destinationPaymentMethodId)
+          .firstOrNull;
       final isDestCreditCard = destMethod?.type == 'credit_card';
 
       if (isDestCreditCard) {
@@ -376,21 +390,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             newTransaction: tx,
           );
         } else {
-          await ref.read(financialTransactionServiceProvider).createTransfer(tx);
+          await ref
+              .read(financialTransactionServiceProvider)
+              .createTransfer(tx);
         }
       }
 
       invalidateAllFinancialProviders(ref);
       if (mounted) {
         Navigator.pop(context, true);
-        CustomSnackBar.show(context, message: 'Transfer recorded successfully ✓');
+        CustomSnackBar.show(
+          context,
+          message: 'Transfer recorded successfully ✓',
+        );
       }
       return;
     }
 
     // Account is optional — transaction can exist without a linked account
 
-    final selectedMethod = _availablePaymentMethods.where((m) => m.id == _selectedPaymentMethodId).firstOrNull;
+    final selectedMethod = _availablePaymentMethods
+        .where((m) => m.id == _selectedPaymentMethodId)
+        .firstOrNull;
     final isCreditCard = selectedMethod?.type == 'credit_card';
     String effectiveType;
     if (widget.existingTransaction != null &&
@@ -444,7 +465,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           accountId: _selectedPaymentMethodId,
         ),
       );
-      final cat = _availableCategories.where((c) => c.id == _selectedCategoryId).firstOrNull;
+      final cat = _availableCategories
+          .where((c) => c.id == _selectedCategoryId)
+          .firstOrNull;
       if (cat != null) {
         unawaited(
           SmartCategoryClassifier.instance.learn(
@@ -505,13 +528,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
 
     try {
-      final result = await GeminiService.instance.scanReceipt(File(picked.path));
+      final result = await GeminiService.instance.scanReceipt(
+        File(picked.path),
+      );
       if (mounted) Navigator.pop(context); // dismiss overlay
 
       if (result.containsKey('error')) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(result['error'] ?? 'Scan failed')));
+            SnackBar(content: Text(result['error'] ?? 'Scan failed')),
+          );
         }
         return;
       }
@@ -528,14 +554,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         });
         if (result['amount'] != null || result['merchant'] != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Receipt scanned successfully')));
+            const SnackBar(content: Text('Receipt scanned successfully')),
+          );
         }
       }
     } catch (e) {
       if (mounted) Navigator.pop(context); // dismiss overlay on error
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Scan failed: $e')));
       }
     }
   }
@@ -626,10 +654,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: isSelected
-                ? Border.all(
-                    color: color.withValues(alpha: 0.6),
-                    width: 1.0,
-                  )
+                ? Border.all(color: color.withValues(alpha: 0.6), width: 1.0)
                 : null,
           ),
           alignment: Alignment.center,
@@ -637,7 +662,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: isSelected ? color : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected
+                    ? color
+                    : (Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
@@ -647,7 +678,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: isSelected ? color : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    color: isSelected
+                        ? color
+                        : (Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ),
               ),
@@ -664,45 +697,71 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       runSpacing: 8,
       children: [
         _movementPresetChip('🏧 ATM Withdrawal', () {
-          final cash = _availablePaymentMethods.where((m) => m.id == 'acc_cash_default' || m.name.toLowerCase().contains('cash')).firstOrNull;
-          final bank = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').firstOrNull;
+          final cash = _availablePaymentMethods
+              .where(
+                (m) =>
+                    m.id == 'acc_cash_default' ||
+                    m.name.toLowerCase().contains('cash'),
+              )
+              .firstOrNull;
+          final bank = _availablePaymentMethods
+              .where((m) => m.type == 'bank' && m.id != 'acc_cash_default')
+              .firstOrNull;
           if (bank != null && cash != null) {
             setState(() {
               _selectedPaymentMethodId = bank.id;
               _destinationPaymentMethodId = cash.id;
-              if (_notesController.text.isEmpty) _notesController.text = 'ATM Cash Withdrawal';
+              if (_notesController.text.isEmpty)
+                _notesController.text = 'ATM Cash Withdrawal';
             });
           }
         }, isDark),
         _movementPresetChip('💳 Card Bill', () {
-          final card = _availablePaymentMethods.where((m) => m.type == 'credit_card').firstOrNull;
-          final bank = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').firstOrNull;
+          final card = _availablePaymentMethods
+              .where((m) => m.type == 'credit_card')
+              .firstOrNull;
+          final bank = _availablePaymentMethods
+              .where((m) => m.type == 'bank' && m.id != 'acc_cash_default')
+              .firstOrNull;
           if (bank != null && card != null) {
             setState(() {
               _selectedPaymentMethodId = bank.id;
               _destinationPaymentMethodId = card.id;
-              if (_notesController.text.isEmpty) _notesController.text = 'Credit Card Bill Payment';
+              if (_notesController.text.isEmpty)
+                _notesController.text = 'Credit Card Bill Payment';
             });
           }
         }, isDark),
         _movementPresetChip('🏦 Bank Transfer', () {
-          final banks = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').toList();
+          final banks = _availablePaymentMethods
+              .where((m) => m.type == 'bank' && m.id != 'acc_cash_default')
+              .toList();
           if (banks.length >= 2) {
             setState(() {
               _selectedPaymentMethodId = banks[0].id;
               _destinationPaymentMethodId = banks[1].id;
-              if (_notesController.text.isEmpty) _notesController.text = 'Inter-Bank Transfer';
+              if (_notesController.text.isEmpty)
+                _notesController.text = 'Inter-Bank Transfer';
             });
           }
         }, isDark),
         _movementPresetChip('💵 Cash Deposit', () {
-          final cash = _availablePaymentMethods.where((m) => m.id == 'acc_cash_default' || m.name.toLowerCase().contains('cash')).firstOrNull;
-          final bank = _availablePaymentMethods.where((m) => m.type == 'bank' && m.id != 'acc_cash_default').firstOrNull;
+          final cash = _availablePaymentMethods
+              .where(
+                (m) =>
+                    m.id == 'acc_cash_default' ||
+                    m.name.toLowerCase().contains('cash'),
+              )
+              .firstOrNull;
+          final bank = _availablePaymentMethods
+              .where((m) => m.type == 'bank' && m.id != 'acc_cash_default')
+              .firstOrNull;
           if (bank != null && cash != null) {
             setState(() {
               _selectedPaymentMethodId = cash.id;
               _destinationPaymentMethodId = bank.id;
-              if (_notesController.text.isEmpty) _notesController.text = 'Cash Deposit to Bank';
+              if (_notesController.text.isEmpty)
+                _notesController.text = 'Cash Deposit to Bank';
             });
           }
         }, isDark),
@@ -737,8 +796,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Widget _buildTransferSection(bool isDark, Color headerColor) {
-    final fromMethod = _availablePaymentMethods.where((m) => m.id == _selectedPaymentMethodId).firstOrNull;
-    final toMethod = _availablePaymentMethods.where((m) => m.id == _destinationPaymentMethodId).firstOrNull;
+    final fromMethod = _availablePaymentMethods
+        .where((m) => m.id == _selectedPaymentMethodId)
+        .firstOrNull;
+    final toMethod = _availablePaymentMethods
+        .where((m) => m.id == _destinationPaymentMethodId)
+        .firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -760,10 +823,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: modern_theme.AppTheme.primaryBlue.withValues(alpha: isDark ? 0.12 : 0.08),
+            color: modern_theme.AppTheme.primaryBlue.withValues(
+              alpha: isDark ? 0.12 : 0.08,
+            ),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: modern_theme.AppTheme.primaryBlue.withValues(alpha: isDark ? 0.28 : 0.20),
+              color: modern_theme.AppTheme.primaryBlue.withValues(
+                alpha: isDark ? 0.28 : 0.20,
+              ),
               width: 0.75,
             ),
           ),
@@ -773,9 +840,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 children: [
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.white,
+                        color: isDark
+                            ? Colors.black.withValues(alpha: 0.3)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -793,13 +865,22 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.arrow_forward_rounded, size: 16, color: modern_theme.AppTheme.primaryBlue),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: modern_theme.AppTheme.primaryBlue,
+                    ),
                   ),
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.white,
+                        color: isDark
+                            ? Colors.black.withValues(alpha: 0.3)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -841,10 +922,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ),
         const SizedBox(height: 10),
         AppPaymentMethodPicker(
-          availableMethods: _availablePaymentMethods.where((m) => m.type != 'credit_card').toList(),
+          availableMethods: _availablePaymentMethods
+              .where((m) => m.type != 'credit_card')
+              .toList(),
           selectedMethodId: _selectedPaymentMethodId,
           activeColor: headerColor,
-          onMethodSelected: (id) => setState(() => _selectedPaymentMethodId = id),
+          onMethodSelected: (id) =>
+              setState(() => _selectedPaymentMethodId = id),
         ),
 
         const SizedBox(height: 16),
@@ -861,7 +945,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           availableMethods: _availablePaymentMethods,
           selectedMethodId: _destinationPaymentMethodId,
           activeColor: headerColor,
-          onMethodSelected: (id) => setState(() => _destinationPaymentMethodId = id),
+          onMethodSelected: (id) =>
+              setState(() => _destinationPaymentMethodId = id),
         ),
       ],
     );
@@ -874,8 +959,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final headerColor = _isSpecialNonCategorizedType
         ? modern_theme.AppTheme.primaryBlue
         : (_selectedType == 'expense'
-            ? modern_theme.AppTheme.semanticExpense
-            : modern_theme.AppTheme.semanticIncome);
+              ? modern_theme.AppTheme.semanticExpense
+              : modern_theme.AppTheme.semanticIncome);
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
@@ -909,262 +994,308 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           key: _formKey,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Section 1: Type & Amount Card ────────────
-            SpendXGlassSurface(
-              level: SpendXGlassLevel.elevated,
-              borderRadius: BorderRadius.circular(AppRadius.l),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (!_isSpecialNonCategorizedType) ...[
-                    _buildTypeToggle(),
-                    const SizedBox(height: 16),
-                  ],
-                  Text(
-                    'Amount',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Section 1: Type & Amount Card ────────────
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.elevated,
+                borderRadius: BorderRadius.circular(AppRadius.l),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!_isSpecialNonCategorizedType) ...[
+                      _buildTypeToggle(),
+                      const SizedBox(height: 16),
+                    ],
+                    Text(
+                      'Amount',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  AppAmountField(
-                    controller: _amountController,
-                    amountColor: headerColor,
-                    validator: (value) {
-                      final amount = double.tryParse((value ?? '').trim());
-                      if (amount == null || !amount.isFinite || amount <= 0) {
-                        return 'Enter an amount greater than zero';
-                      }
-                      return null;
-                    },
-                  ),
-                  if (_recentAmounts.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _recentAmounts.map((amount) {
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () => _applyQuickAmount(amount),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0x1FFFFFFF) : const Color(0x40FFFFFF),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
-                                width: 0.75,
-                              ),
-                            ),
-                            child: Text(
-                              '${settings.currencySymbol}${_formatQuickAmount(amount)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                    const SizedBox(height: 8),
+                    AppAmountField(
+                      controller: _amountController,
+                      amountColor: headerColor,
+                      validator: (value) {
+                        final amount = double.tryParse((value ?? '').trim());
+                        if (amount == null || !amount.isFinite || amount <= 0) {
+                          return 'Enter an amount greater than zero';
+                        }
+                        return null;
+                      },
                     ),
-                  ],
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── Section 2: Category & Payment Source ────
-            SpendXGlassSurface(
-              level: SpendXGlassLevel.base,
-              borderRadius: BorderRadius.circular(AppRadius.l),
-              padding: const EdgeInsets.all(16),
-              child: _selectedType == 'transfer'
-                  ? _buildTransferSection(isDark, headerColor)
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (!_isSpecialNonCategorizedType) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Category',
+                    if (_recentAmounts.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _recentAmounts.map((amount) {
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () => _applyQuickAmount(amount),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0x1FFFFFFF)
+                                    : const Color(0x40FFFFFF),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isDark
+                                      ? const Color(0x28FFFFFF)
+                                      : const Color(0x18000000),
+                                  width: 0.75,
+                                ),
+                              ),
+                              child: Text(
+                                '${settings.currencySymbol}${_formatQuickAmount(amount)}',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                               ),
-                              InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () async {
-                                  final newCat = await showModalBottomSheet<Category>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    builder: (_) => AddCategorySheet(initialType: _selectedType),
-                                  );
-                                  if (newCat != null) {
-                                    await _loadInitialData();
-                                    setState(() {
-                                      _selectedCategoryId = newCat.id;
-                                      _didExplicitCategorySelection = true;
-                                    });
-                                  }
-                                },
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.add_circle_outline_rounded,
-                                        size: 16,
-                                        color: modern_theme.AppTheme.primaryBlue,
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Add New',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: modern_theme.AppTheme.primaryBlue,
-                                        ),
-                                      ),
-                                    ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // ── Section 2: Category & Payment Source ────
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.base,
+                borderRadius: BorderRadius.circular(AppRadius.l),
+                padding: const EdgeInsets.all(16),
+                child: _selectedType == 'transfer'
+                    ? _buildTransferSection(isDark, headerColor)
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (!_isSpecialNonCategorizedType) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Category',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          AppCategoryPicker(
-                            availableCategories: _availableCategories,
-                            selectedCategoryId: _selectedCategoryId,
-                            activeColor: headerColor,
-                            onCategorySelected: (id) => setState(() {
-                              _selectedCategoryId = id;
-                              _didExplicitCategorySelection = true;
-                            }),
-                          ),
-                          Container(
-                            margin: const EdgeInsets.symmetric(vertical: 16),
-                            height: 0.5,
-                            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-                          ),
-                        ],
-
-                        Text(
-                          _isSpecialNonCategorizedType ? 'Paid From Account' : 'Payment Source',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        if (_availablePaymentMethods.isNotEmpty)
-                          AppPaymentMethodPicker(
-                            availableMethods: _availablePaymentMethods,
-                            selectedMethodId: _selectedPaymentMethodId,
-                            activeColor: headerColor,
-                            onMethodSelected: (id) {
-                              setState(() {
-                                _selectedPaymentMethodId = id;
-                              });
-                            },
-                          )
-                        else
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0x14FFFFFF) : const Color(0x33000000),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'No accounts found.',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () async {
+                                    final newCat =
+                                        await showModalBottomSheet<Category>(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.transparent,
+                                          builder: (_) => AddCategorySheet(
+                                            initialType: _selectedType,
+                                          ),
+                                        );
+                                    if (newCat != null) {
+                                      await _loadInitialData();
+                                      setState(() {
+                                        _selectedCategoryId = newCat.id;
+                                        _didExplicitCategorySelection = true;
+                                      });
+                                    }
+                                  },
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.add_circle_outline_rounded,
+                                          size: 16,
+                                          color:
+                                              modern_theme.AppTheme.primaryBlue,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Add New',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: modern_theme
+                                                .AppTheme
+                                                .primaryBlue,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                                SpendXGlassButton(
-                                  variant: SpendXGlassButtonVariant.tonal,
-                                  onPressed: () async {
-                                    final result = await Navigator.push(
-                                      context,
-                                      AppPageRoute(builder: (_) => const AddBankAccountScreen()),
-                                    );
-                                    if (result == true) await _loadInitialData();
-                                  },
-                                  child: const Text('Add Account'),
-                                ),
                               ],
                             ),
+                            const SizedBox(height: 10),
+                            AppCategoryPicker(
+                              availableCategories: _availableCategories,
+                              selectedCategoryId: _selectedCategoryId,
+                              activeColor: headerColor,
+                              onCategorySelected: (id) => setState(() {
+                                _selectedCategoryId = id;
+                                _didExplicitCategorySelection = true;
+                              }),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 16),
+                              height: 0.5,
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.06),
+                            ),
+                          ],
+
+                          Text(
+                            _isSpecialNonCategorizedType
+                                ? 'Paid From Account'
+                                : 'Payment Source',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
-                      ],
-                    ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── Section 3: Date & Notes ───────────────────
-            SpendXGlassSurface(
-              level: SpendXGlassLevel.base,
-              borderRadius: BorderRadius.circular(AppRadius.l),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Transaction Date',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  AppDateSelector(
-                    selectedDate: _selectedDate,
-                    onDateSelected: (date) => setState(() => _selectedDate = date),
-                  ),
-                  const SizedBox(height: 16),
-                  shared.AppTextField(
-                    controller: _notesController,
-                    label: _selectedType == 'transfer' ? 'Transfer Note (Optional)' : 'Merchant / Payee Notes (Optional)',
-                    prefix: Icon(_selectedType == 'transfer' ? Icons.swap_horiz_rounded : Icons.notes_rounded),
-                  ),
-                ],
+                          const SizedBox(height: 10),
+                          if (_availablePaymentMethods.isNotEmpty)
+                            AppPaymentMethodPicker(
+                              availableMethods: _availablePaymentMethods,
+                              selectedMethodId: _selectedPaymentMethodId,
+                              activeColor: headerColor,
+                              onMethodSelected: (id) {
+                                setState(() {
+                                  _selectedPaymentMethodId = id;
+                                });
+                              },
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0x14FFFFFF)
+                                    : const Color(0x33000000),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'No accounts found.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                  SpendXGlassButton(
+                                    variant: SpendXGlassButtonVariant.tonal,
+                                    onPressed: () async {
+                                      final result = await Navigator.push(
+                                        context,
+                                        AppPageRoute(
+                                          builder: (_) =>
+                                              const AddBankAccountScreen(),
+                                        ),
+                                      );
+                                      if (result == true)
+                                        await _loadInitialData();
+                                    },
+                                    child: const Text('Add Account'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
               ),
-            ),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-            SpendXGlassButton(
-              variant: SpendXGlassButtonVariant.primary,
-              onPressed: _isValid ? _saveTransaction : null,
-              child: Text(
-                widget.existingTransaction != null
-                    ? 'Update Activity'
-                    : (_selectedType == 'transfer' ? 'Move Funds' : 'Save Activity'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              // ── Section 3: Date & Notes ───────────────────
+              SpendXGlassSurface(
+                level: SpendXGlassLevel.base,
+                borderRadius: BorderRadius.circular(AppRadius.l),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Transaction Date',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    AppDateSelector(
+                      selectedDate: _selectedDate,
+                      onDateSelected: (date) =>
+                          setState(() => _selectedDate = date),
+                    ),
+                    const SizedBox(height: 16),
+                    shared.AppTextField(
+                      controller: _notesController,
+                      label: _selectedType == 'transfer'
+                          ? 'Transfer Note (Optional)'
+                          : 'Merchant / Payee Notes (Optional)',
+                      prefix: Icon(
+                        _selectedType == 'transfer'
+                            ? Icons.swap_horiz_rounded
+                            : Icons.notes_rounded,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 24),
+
+              SpendXGlassButton(
+                variant: SpendXGlassButtonVariant.primary,
+                onPressed: _isValid ? _saveTransaction : null,
+                child: Text(
+                  widget.existingTransaction != null
+                      ? 'Update Activity'
+                      : (_selectedType == 'transfer'
+                            ? 'Move Funds'
+                            : 'Save Activity'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

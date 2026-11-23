@@ -96,8 +96,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     // Android-correct back navigation:
     // If not on Home tab (0), navigating back returns to Home first.
     return PopScope(
@@ -119,7 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 title: Text(
                   _titles[_currentIndex],
                   style: AppTextStyles.heading.copyWith(
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    color: context.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -131,16 +129,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onPressed: () => Navigator.push(
                         context,
                         AppPageRoute(
-                          builder: (_) => const TransactionListScreen(isFullScreen: true),
+                          builder: (_) =>
+                              const TransactionListScreen(isFullScreen: true),
                         ),
                       ),
                     ),
                 ],
               ),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _tabs,
-        ),
+        body: IndexedStack(index: _currentIndex, children: _tabs),
         floatingActionButton: Semantics(
           button: true,
           label: 'Add Transaction',
@@ -156,7 +152,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Navigator.push(
                 context,
                 AppPageRoute(
-                  builder: (_) => const AddExpenseScreen(initialType: 'expense'),
+                  builder: (_) =>
+                      const AddExpenseScreen(initialType: 'expense'),
                 ),
               );
             },

@@ -51,7 +51,7 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
               fontSize: 28,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.8,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             textAlign: TextAlign.center,
           ),
@@ -61,7 +61,7 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+              color: Theme.of(context).colorScheme.primary,
             ),
             textAlign: TextAlign.center,
           ),
@@ -90,7 +90,7 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
           _buildFeatureCard(
             isDark: isDark,
             icon: Icons.flight_takeoff_rounded,
-            iconColor: const Color(0xFFF59E0B),
+            iconColor: Theme.of(context).colorScheme.tertiary,
             title: 'Safe-to-Spend Runway',
             description:
                 'Dynamic real-time runway that deducts upcoming credit card statements, loan EMIs, and monthly fixed commitments before telling you what you can safely spend.',
@@ -100,7 +100,7 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
           _buildFeatureCard(
             isDark: isDark,
             icon: Icons.security_update_good_rounded,
-            iconColor: const Color(0xFF10B981),
+            iconColor: Theme.of(context).colorScheme.secondary,
             title: 'Smart Anti-Fraud Ingestion',
             description:
                 'Strictly parses alphanumeric TRAI banking headers (e.g. HDFCBK, ICICIB). Personal contacts and OTP verification codes are discarded automatically.',
@@ -143,9 +143,7 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? AppTheme.darkTextPrimary
-                        : AppTheme.lightTextPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -154,9 +152,7 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.4,
-                    color: isDark
-                        ? AppTheme.darkTextMuted
-                        : AppTheme.lightTextMuted,
+                    color: context.textMuted,
                   ),
                 ),
               ],

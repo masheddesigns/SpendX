@@ -74,9 +74,9 @@ class PlanTab extends ConsumerWidget {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Color(0xFF4F46E5),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -86,7 +86,7 @@ class PlanTab extends ConsumerWidget {
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.2,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -102,7 +102,10 @@ class PlanTab extends ConsumerWidget {
               final saveSug = saveSugAsync.valueOrNull;
               return SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: _FinancialHorizonCard(
                     identity: timeline.identity,
                     score: timeline.moneyScore,
@@ -117,7 +120,9 @@ class PlanTab extends ConsumerWidget {
                       if (reviewCount > 0) {
                         Navigator.push(
                           context,
-                          AppPageRoute(builder: (_) => const ReviewQueueScreen()),
+                          AppPageRoute(
+                            builder: (_) => const ReviewQueueScreen(),
+                          ),
                         );
                       } else {
                         Navigator.push(
@@ -163,10 +168,16 @@ class PlanTab extends ConsumerWidget {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
                       child: budgets.isEmpty
                           ? _EmptyBudgetCard(context: context, isDark: isDark)
-                          : _BudgetHorizonsList(budgets: budgets, isDark: isDark),
+                          : _BudgetHorizonsList(
+                              budgets: budgets,
+                              isDark: isDark,
+                            ),
                     ),
                   ],
                 ),
@@ -200,7 +211,10 @@ class PlanTab extends ConsumerWidget {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
                       child: goals.isEmpty
                           ? _EmptyGoalsCard(context: context, isDark: isDark)
                           : _GoalsLandmarkList(goals: goals, isDark: isDark),
@@ -225,22 +239,27 @@ class PlanTab extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SpendXSectionHeader(
-                  title: 'Foundations & Commitments',
-                ),
+                const SpendXSectionHeader(title: 'Foundations & Commitments'),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(24),
-                      color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+                      color: Theme.of(context).colorScheme.onSurface,
                       border: Border.all(
-                        color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Theme.of(context).colorScheme.outline,
                         width: 0.9,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: isDark ? Colors.black.withValues(alpha: 0.25) : const Color(0x081C1917),
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.25)
+                              : const Color(0x081C1917),
                           blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),
@@ -250,9 +269,10 @@ class PlanTab extends ConsumerWidget {
                       children: [
                         _FoundationsRowTile(
                           icon: Icons.repeat_rounded,
-                          iconColor: const Color(0xFF6366F1),
+                          iconColor: Theme.of(context).colorScheme.primary,
                           title: 'Subscriptions & Bills',
-                          subtitle: 'Manage upcoming recurring charges and bills',
+                          subtitle:
+                              'Manage upcoming recurring charges and bills',
                           isDark: isDark,
                           onTap: () => Navigator.push(
                             context,
@@ -273,15 +293,14 @@ class PlanTab extends ConsumerWidget {
                         ),
                         _FoundationsRowTile(
                           icon: Icons.payments_rounded,
-                          iconColor: const Color(0xFF10B981),
+                          iconColor: Theme.of(context).colorScheme.secondary,
                           title: 'Salary & Paycheck Structure',
-                          subtitle: 'Employer details, salary schedule, and deductions',
+                          subtitle:
+                              'Employer details, salary schedule, and deductions',
                           isDark: isDark,
                           onTap: () => Navigator.push(
                             context,
-                            AppPageRoute(
-                              builder: (_) => const SalaryScreen(),
-                            ),
+                            AppPageRoute(builder: (_) => const SalaryScreen()),
                           ),
                         ),
                       ],
@@ -295,7 +314,8 @@ class PlanTab extends ConsumerWidget {
           // Clearance tuned to floating glass navigation height + safe-area inset
           SliverToBoxAdapter(
             child: SizedBox(
-              height: (MediaQuery.paddingOf(context).bottom > 0
+              height:
+                  (MediaQuery.paddingOf(context).bottom > 0
                       ? MediaQuery.paddingOf(context).bottom + 72.0
                       : 80.0) +
                   16.0,
@@ -316,7 +336,7 @@ class PlanTab extends ConsumerWidget {
             'Planning',
             style: AppTextStyles.heading.copyWith(
               fontWeight: FontWeight.w700,
-              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+              color: context.textPrimary,
             ),
           ),
           actions: [
@@ -373,28 +393,34 @@ class _FinancialHorizonCard extends StatelessWidget {
     };
   }
 
-  Color _resolveIdentityColor(IdentityType type) {
+  Color _resolveIdentityColor(BuildContext context, IdentityType type) {
     return switch (type) {
-      IdentityType.disciplined => const Color(0xFF16A34A),
-      IdentityType.stable => const Color(0xFF0284C7),
-      IdentityType.improving => const Color(0xFF4F46E5),
-      IdentityType.impulsive => const Color(0xFFD97706),
-      IdentityType.atRisk => const Color(0xFFE11D48),
+      IdentityType.disciplined => Theme.of(context).colorScheme.secondary,
+      IdentityType.stable => Theme.of(context).colorScheme.primary,
+      IdentityType.improving => Theme.of(context).colorScheme.primary,
+      IdentityType.impulsive => Theme.of(context).colorScheme.tertiary,
+      IdentityType.atRisk => Theme.of(context).colorScheme.error,
     };
   }
 
   void _showHabitScoreExplanation(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? const Color(0xFF1E222D) : const Color(0xFFFFFFFF),
+      backgroundColor: isDark
+          ? const Color(0xFF1E222D)
+          : const Color(0xFFFFFFFF),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        final textPrimary = isDark ? Colors.white : const Color(0xFF1C1917);
-        final textSecondary = isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C);
-        final surface = isDark ? const Color(0xFF282D3C) : const Color(0xFFFAF7F2);
-        final border = isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFEDE6DA);
+        final textPrimary = Theme.of(context).colorScheme.onSurface;
+        final textSecondary = Theme.of(context).colorScheme.onSurfaceVariant;
+        final surface = isDark
+            ? const Color(0xFF282D3C)
+            : const Color(0xFFFAF7F2);
+        final border = isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : const Color(0xFFEDE6DA);
 
         return SafeArea(
           child: Padding(
@@ -421,12 +447,14 @@ class _FinancialHorizonCard extends StatelessWidget {
                       height: 36,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isDark ? const Color(0x204F46E5) : const Color(0xFFEEF2FF),
+                        color: isDark
+                            ? const Color(0x204F46E5)
+                            : Theme.of(context).colorScheme.primaryContainer,
                       ),
                       child: Icon(
                         Icons.track_changes_rounded,
                         size: 20,
-                        color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -527,21 +555,25 @@ class _FinancialHorizonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final identityColor = _resolveIdentityColor(identity.type);
+    final identityColor = _resolveIdentityColor(context, identity.type);
     final identityIcon = _resolveIdentityIcon(identity.type);
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.onSurface,
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Theme.of(context).colorScheme.outline,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withValues(alpha: 0.25) : const Color(0x081C1917),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.25)
+                : const Color(0x081C1917),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -562,7 +594,9 @@ class _FinancialHorizonCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: identityColor.withValues(alpha: isDark ? 0.20 : 0.12),
                   border: Border.all(
-                    color: identityColor.withValues(alpha: isDark ? 0.35 : 0.25),
+                    color: identityColor.withValues(
+                      alpha: isDark ? 0.35 : 0.25,
+                    ),
                     width: 0.8,
                   ),
                 ),
@@ -594,7 +628,9 @@ class _FinancialHorizonCard extends StatelessWidget {
                           height: 4,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: isDark ? const Color(0xFF64748B) : const Color(0xFFA8A29E),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -604,7 +640,9 @@ class _FinancialHorizonCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -618,7 +656,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                        color: Theme.of(context).colorScheme.onSurface,
                         height: 1.35,
                       ),
                     ),
@@ -638,7 +676,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : const Color(0xFF1C1917),
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontFeatures: const [FontFeature.tabularFigures()],
                         letterSpacing: -0.5,
                       ),
@@ -652,14 +690,16 @@ class _FinancialHorizonCard extends StatelessWidget {
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.4,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 3),
                         Icon(
                           Icons.info_outline_rounded,
                           size: 11,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ],
                     ),
@@ -670,15 +710,21 @@ class _FinancialHorizonCard extends StatelessWidget {
           ),
 
           // ── Forecast Metrics Grid ──────────────────────────
-          if (forecast != null && (forecast!.predictedExpense > 0 || forecast!.predictedIncome > 0)) ...[
+          if (forecast != null &&
+              (forecast!.predictedExpense > 0 ||
+                  forecast!.predictedIncome > 0)) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFFAF7F2),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.03)
+                    : const Color(0xFFFAF7F2),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFEDE6DA),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : const Color(0xFFEDE6DA),
                   width: 0.7,
                 ),
               ),
@@ -687,31 +733,37 @@ class _FinancialHorizonCard extends StatelessWidget {
                   _ForecastMetric(
                     label: 'EST. INFLOW',
                     amount: forecast!.predictedIncome,
-                    color: const Color(0xFF16A34A),
+                    color: Theme.of(context).colorScheme.secondary,
                     isDark: isDark,
                   ),
                   Container(
                     width: 0.5,
                     height: 24,
-                    color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2DDD2),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : const Color(0xFFE2DDD2),
                   ),
                   _ForecastMetric(
                     label: 'EST. OUTFLOW',
                     amount: forecast!.predictedExpense,
-                    color: const Color(0xFFE11D48),
+                    color: Theme.of(context).colorScheme.error,
                     isDark: isDark,
                   ),
                   Container(
                     width: 0.5,
                     height: 24,
-                    color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2DDD2),
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : const Color(0xFFE2DDD2),
                   ),
                   _ForecastMetric(
-                    label: forecast!.predictedSavings >= 0 ? 'EST. SURPLUS' : 'EST. SHORTFALL',
+                    label: forecast!.predictedSavings >= 0
+                        ? 'EST. SURPLUS'
+                        : 'EST. SHORTFALL',
                     amount: forecast!.predictedSavings.abs(),
                     color: forecast!.predictedSavings >= 0
-                        ? const Color(0xFF16A34A)
-                        : const Color(0xFFD97706),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.tertiary,
                     isDark: isDark,
                   ),
                 ],
@@ -725,12 +777,20 @@ class _FinancialHorizonCard extends StatelessWidget {
             GestureDetector(
               onTap: onActionTap,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0x184F46E5) : const Color(0xFFEEF2FF),
+                  color: isDark
+                      ? const Color(0x184F46E5)
+                      : Theme.of(context).colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isDark ? const Color(0x354F46E5) : const Color(0xFFC7D2FE),
+                    color: isDark
+                        ? const Color(0x354F46E5)
+                        : Theme.of(context).colorScheme.primary,
                     width: 0.6,
                   ),
                 ),
@@ -739,7 +799,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                     Icon(
                       Icons.auto_awesome_rounded,
                       size: 15,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -752,14 +812,18 @@ class _FinancialHorizonCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFFE0E7FF) : const Color(0xFF3730A3),
+                          color: isDark
+                              ? const Color(0xFFE0E7FF)
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
                         ),
                       ),
                     ),
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 16,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ],
                 ),
@@ -796,7 +860,7 @@ class _ForecastMetric extends StatelessWidget {
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 2),
@@ -832,7 +896,9 @@ class _HabitScoreDeltaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isPositive ? const Color(0xFF16A34A) : const Color(0xFFE11D48);
+    final color = isPositive
+        ? Theme.of(context).colorScheme.secondary
+        : Theme.of(context).colorScheme.error;
     return Row(
       children: [
         Container(
@@ -860,7 +926,7 @@ class _HabitScoreDeltaRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF44403C),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -877,10 +943,7 @@ class _BudgetHorizonsList extends StatelessWidget {
   final List<SmartBudget> budgets;
   final bool isDark;
 
-  const _BudgetHorizonsList({
-    required this.budgets,
-    required this.isDark,
-  });
+  const _BudgetHorizonsList({required this.budgets, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -892,14 +955,18 @@ class _BudgetHorizonsList extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.onSurface,
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Theme.of(context).colorScheme.outline,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withValues(alpha: 0.25) : const Color(0x081C1917),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.25)
+                : const Color(0x081C1917),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -935,10 +1002,7 @@ class _BudgetHorizonRow extends StatelessWidget {
   final SmartBudget budget;
   final bool isDark;
 
-  const _BudgetHorizonRow({
-    required this.budget,
-    required this.isDark,
-  });
+  const _BudgetHorizonRow({required this.budget, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -946,14 +1010,16 @@ class _BudgetHorizonRow extends StatelessWidget {
     final isClose = !isOver && budget.usagePct >= 0.85;
 
     final statusColor = isOver
-        ? const Color(0xFFE11D48)
-        : (isClose ? const Color(0xFFD97706) : const Color(0xFF16A34A));
+        ? Theme.of(context).colorScheme.error
+        : (isClose
+              ? Theme.of(context).colorScheme.tertiary
+              : Theme.of(context).colorScheme.secondary);
 
     final statusText = isOver
         ? 'Over by ${AppFormat.currency(budget.spent - budget.limit)}'
         : (isClose
-            ? '${AppFormat.currency(budget.remaining)} remaining (${(budget.usagePct * 100).toInt()}%)'
-            : '${AppFormat.currency(budget.remaining)} remaining');
+              ? '${AppFormat.currency(budget.remaining)} remaining (${(budget.usagePct * 100).toInt()}%)'
+              : '${AppFormat.currency(budget.remaining)} remaining');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -969,11 +1035,14 @@ class _BudgetHorizonRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 2.5,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: isDark ? 0.20 : 0.10),
                   borderRadius: BorderRadius.circular(8),
@@ -1010,7 +1079,7 @@ class _BudgetHorizonRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF44403C),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -1018,7 +1087,7 @@ class _BudgetHorizonRow extends StatelessWidget {
                 'Limit ${AppFormat.currency(budget.limit)}',
                 style: TextStyle(
                   fontSize: 11,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -1042,9 +1111,11 @@ class _EmptyBudgetCard extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Theme.of(context).colorScheme.outline,
           width: 0.8,
         ),
       ),
@@ -1055,12 +1126,14 @@ class _EmptyBudgetCard extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isDark ? const Color(0x204F46E5) : const Color(0xFFEEF2FF),
+              color: isDark
+                  ? const Color(0x204F46E5)
+                  : Theme.of(context).colorScheme.primaryContainer,
             ),
             child: Icon(
               Icons.tune_rounded,
               size: 20,
-              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
           const SizedBox(height: 10),
@@ -1069,7 +1142,7 @@ class _EmptyBudgetCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.w700,
-              color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 4),
@@ -1078,7 +1151,7 @@ class _EmptyBudgetCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -1090,7 +1163,9 @@ class _EmptyBudgetCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF4F46E5) : const Color(0xFF1C1917),
+                color: isDark
+                    ? Theme.of(context).colorScheme.primary
+                    : const Color(0xFF1C1917),
                 borderRadius: BorderRadius.circular(100),
               ),
               child: const Text(
@@ -1117,10 +1192,7 @@ class _GoalsLandmarkList extends ConsumerWidget {
   final List<Goal> goals;
   final bool isDark;
 
-  const _GoalsLandmarkList({
-    required this.goals,
-    required this.isDark,
-  });
+  const _GoalsLandmarkList({required this.goals, required this.isDark});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1129,14 +1201,18 @@ class _GoalsLandmarkList extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Theme.of(context).colorScheme.outline,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withValues(alpha: 0.25) : const Color(0x081C1917),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.25)
+                : const Color(0x081C1917),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -1156,9 +1232,7 @@ class _GoalsLandmarkList extends ConsumerWidget {
                 isDark: isDark,
                 onTap: () => Navigator.push(
                   context,
-                  AppPageRoute(
-                    builder: (_) => GoalDetailScreen(goal: goal),
-                  ),
+                  AppPageRoute(builder: (_) => GoalDetailScreen(goal: goal)),
                 ),
               ),
               if (!isLast)
@@ -1202,7 +1276,9 @@ class _GoalLandmarkRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.03),
+        splashColor: isDark
+            ? Colors.white10
+            : Colors.black.withValues(alpha: 0.03),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
@@ -1219,15 +1295,21 @@ class _GoalLandmarkRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2.5,
+                    ),
                     decoration: BoxDecoration(
-                      color: (isCompleted ? const Color(0xFF16A34A) : const Color(0xFF4F46E5))
-                          .withValues(alpha: isDark ? 0.20 : 0.10),
+                      color:
+                          (isCompleted
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : Theme.of(context).colorScheme.primary)
+                              .withValues(alpha: isDark ? 0.20 : 0.10),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -1235,7 +1317,9 @@ class _GoalLandmarkRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF4F46E5),
+                        color: isCompleted
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).colorScheme.primary,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -1247,7 +1331,9 @@ class _GoalLandmarkRow extends StatelessWidget {
               // Milestone Runway Path
               _MilestoneTrack(
                 progress: progress.progressPct,
-                activeColor: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF4F46E5),
+                activeColor: isCompleted
+                    ? Theme.of(context).colorScheme.secondary
+                    : Theme.of(context).colorScheme.primary,
                 isDark: isDark,
               ),
               const SizedBox(height: 6),
@@ -1261,7 +1347,7 @@ class _GoalLandmarkRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF44403C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -1269,7 +1355,7 @@ class _GoalLandmarkRow extends StatelessWidget {
                     'Target ${AppFormat.currency(goal.targetAmount)}',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -1295,9 +1381,11 @@ class _EmptyGoalsCard extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFECE5D8),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Theme.of(context).colorScheme.outline,
           width: 0.8,
         ),
       ),
@@ -1308,12 +1396,14 @@ class _EmptyGoalsCard extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isDark ? const Color(0x204F46E5) : const Color(0xFFEEF2FF),
+              color: isDark
+                  ? const Color(0x204F46E5)
+                  : Theme.of(context).colorScheme.primaryContainer,
             ),
             child: Icon(
               Icons.flag_outlined,
               size: 20,
-              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
           const SizedBox(height: 10),
@@ -1322,7 +1412,7 @@ class _EmptyGoalsCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.w700,
-              color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 4),
@@ -1331,7 +1421,7 @@ class _EmptyGoalsCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 12),
@@ -1343,7 +1433,7 @@ class _EmptyGoalsCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF4F46E5) : const Color(0xFF1C1917),
+                color: Theme.of(context).colorScheme.primary,
                 borderRadius: BorderRadius.circular(100),
               ),
               child: const Text(
@@ -1421,9 +1511,11 @@ class _MilestoneTrack extends StatelessWidget {
                   transform: Matrix4.rotationZ(0.785398),
                   transformAlignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF161922) : const Color(0xFFFFFFFF),
+                    color: Theme.of(context).colorScheme.onSurface,
                     border: Border.all(
-                      color: isOver ? const Color(0xFFE11D48) : activeColor,
+                      color: isOver
+                          ? Theme.of(context).colorScheme.error
+                          : activeColor,
                       width: 1.8,
                     ),
                   ),
@@ -1493,7 +1585,9 @@ class _FoundationsRowTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.03),
+        splashColor: isDark
+            ? Colors.white10
+            : Colors.black.withValues(alpha: 0.03),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
@@ -1517,7 +1611,7 @@ class _FoundationsRowTile extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1525,7 +1619,7 @@ class _FoundationsRowTile extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1535,7 +1629,7 @@ class _FoundationsRowTile extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: isDark ? const Color(0xFF64748B) : const Color(0xFFA8A29E),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ],
           ),

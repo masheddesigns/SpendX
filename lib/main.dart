@@ -6,12 +6,7 @@ import 'package:provider/provider.dart' as provider_pkg;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/logging/app_logger.dart';
 import 'screens/splash_screen.dart';
-import 'screens/home/transactions_screen.dart';
-import 'screens/expense/add_expense_screen.dart';
-import 'screens/reports_screen.dart';
-import 'screens/goals/goals_screen.dart';
-import 'screens/bank/account_list_screen.dart';
-import 'features/home/screens/home_screen.dart';
+import 'navigation/app_route_table.dart';
 import 'services/settings_service.dart';
 import 'services/auth_service.dart';
 import 'services/share_intent_service.dart';
@@ -68,7 +63,6 @@ void main() {
         AppLogger.e('NotificationService init failed', e, st);
       }
 
-
       if (AppEnv.enableDebugTools) {
         try {
           final db = await AppDatabase.instance.database;
@@ -98,7 +92,9 @@ void main() {
               provider_pkg.ChangeNotifierProvider.value(
                 value: SettingsService.instance,
               ),
-              provider_pkg.ChangeNotifierProvider.value(value: AuthService.instance),
+              provider_pkg.ChangeNotifierProvider.value(
+                value: AuthService.instance,
+              ),
             ],
             child: const MyApp(),
           ),
@@ -168,27 +164,30 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       context,
       listen: true,
     );
-    final routeBuilders = <String, WidgetBuilder>{
-      '/home': (_) => const HomeScreen(),
-      '/transactions': (_) => const TransactionListScreen(),
-      '/accounts': (_) => const AccountListScreen(),
-      '/goals': (_) => const GoalsScreen(),
-      '/reports': (_) => const ReportsScreen(),
-      '/add-expense': (_) => const AddExpenseScreen(),
-    };
+    final routeBuilders = AppRouteTable.routes;
 
     return MaterialApp(
       navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'SpendX',
       routes: routeBuilders,
+      onGenerateRoute: (routeSettings) {
+        final routeName = AppRouteTable.normalize(routeSettings.name);
+        final routeBuilder = routeBuilders[routeName];
+        if (routeBuilder == null) return null;
+        return MaterialPageRoute<void>(
+          settings: RouteSettings(name: routeName),
+          builder: routeBuilder,
+        );
+      },
       onGenerateInitialRoutes: (initialRoute) {
+        final routeName = AppRouteTable.normalize(initialRoute);
         final linkedRoute = settings.isOnboardingComplete
-            ? routeBuilders[initialRoute]
+            ? routeBuilders[routeName]
             : null;
         return [
           MaterialPageRoute<void>(
-            settings: RouteSettings(name: initialRoute),
+            settings: RouteSettings(name: routeName),
             builder: linkedRoute ?? (_) => const SplashScreen(),
           ),
         ];

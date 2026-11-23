@@ -37,7 +37,8 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final alertCount = ref.watch(activeAlertsProvider).valueOrNull?.length ?? 0;
     final reviewCount = ref.watch(reviewQueueCountProvider).valueOrNull ?? 0;
-    final ingestionStatus = ref.watch(ingestionStatusProvider).valueOrNull ??
+    final ingestionStatus =
+        ref.watch(ingestionStatusProvider).valueOrNull ??
         const AutomaticIngestionStatus();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -61,17 +62,19 @@ class MoreScreen extends ConsumerWidget {
                 children: [
                   _MoreGlassRow(
                     icon: Icons.bolt_rounded,
-                    iconColor: const Color(0xFF6366F1),
+                    iconColor: Theme.of(context).colorScheme.primary,
                     title: 'Automatic Ingestion',
                     subtitle: ingestionStatus.isFullyActive
                         ? (ingestionStatus.todayIngestedCount > 0
-                            ? '${ingestionStatus.todayIngestedCount} transaction${ingestionStatus.todayIngestedCount == 1 ? '' : 's'} auto-captured today'
-                            : 'Listening for Bank SMS & App Notifications')
+                              ? '${ingestionStatus.todayIngestedCount} transaction${ingestionStatus.todayIngestedCount == 1 ? '' : 's'} auto-captured today'
+                              : 'Listening for Bank SMS & App Notifications')
                         : 'Setup needed — Tap to enable real-time tracking',
-                    badgeText: ingestionStatus.isFullyActive ? 'Active' : 'Setup',
+                    badgeText: ingestionStatus.isFullyActive
+                        ? 'Active'
+                        : 'Setup',
                     badgeColor: ingestionStatus.isFullyActive
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFF59E0B),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.tertiary,
                     isDark: isDark,
                     onTap: () =>
                         _push(context, const AutomaticIngestionScreen()),
@@ -88,13 +91,14 @@ class MoreScreen extends ConsumerWidget {
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.notifications_rounded,
-                    iconColor: const Color(0xFFF59E0B),
+                    iconColor: Theme.of(context).colorScheme.tertiary,
                     title: 'Notifications & Alerts',
                     subtitle: 'Due reminders, recurring bills, and alerts',
                     badgeCount: alertCount > 0 ? alertCount : null,
                     badgeColor: AppTheme.semanticExpense,
                     isDark: isDark,
-                    onTap: () => _push(context, const NotificationsInboxScreen()),
+                    onTap: () =>
+                        _push(context, const NotificationsInboxScreen()),
                   ),
                   if (reviewCount > 0) ...[
                     _buildDivider(isDark),
@@ -102,7 +106,8 @@ class MoreScreen extends ConsumerWidget {
                       icon: Icons.rate_review_rounded,
                       iconColor: Colors.orange,
                       title: 'Review Queue',
-                      subtitle: '$reviewCount transaction${reviewCount == 1 ? '' : 's'} awaiting confirmation',
+                      subtitle:
+                          '$reviewCount transaction${reviewCount == 1 ? '' : 's'} awaiting confirmation',
                       badgeCount: reviewCount,
                       badgeColor: Colors.orange,
                       isDark: isDark,
@@ -112,7 +117,7 @@ class MoreScreen extends ConsumerWidget {
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.upload_file_rounded,
-                    iconColor: const Color(0xFF0EA5E9),
+                    iconColor: Theme.of(context).colorScheme.primary,
                     title: 'Smart Import',
                     subtitle: 'Import CSV bank statements or shared receipts',
                     isDark: isDark,
@@ -145,7 +150,8 @@ class MoreScreen extends ConsumerWidget {
                     icon: Icons.bar_chart_rounded,
                     iconColor: const Color(0xFF0D9488),
                     title: 'Reports & Cash Flow',
-                    subtitle: 'Income vs expense breakdown, monthly cash flow analysis',
+                    subtitle:
+                        'Income vs expense breakdown, monthly cash flow analysis',
                     isDark: isDark,
                     onTap: () => _push(context, const ReportsScreen()),
                   ),
@@ -154,18 +160,20 @@ class MoreScreen extends ConsumerWidget {
                     icon: Icons.auto_graph_rounded,
                     iconColor: AppTheme.primaryBlue,
                     title: 'Financial Health & Insights',
-                    subtitle: 'Health score, runway, net worth evolution, category breakdown',
+                    subtitle:
+                        'Health score, runway, net worth evolution, category breakdown',
                     isDark: isDark,
                     onTap: () => _push(context, const _InsightsScreen()),
                   ),
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.auto_stories_rounded,
-                    iconColor: const Color(0xFF8B5CF6),
+                    iconColor: Theme.of(context).colorScheme.primary,
                     title: 'Spending Wrapped',
                     subtitle: 'Annual and monthly spending recap & highlights',
                     isDark: isDark,
-                    onTap: () => _push(context, const WrappedScreen(period: 'month')),
+                    onTap: () =>
+                        _push(context, const WrappedScreen(period: 'month')),
                   ),
                 ],
               ),
@@ -192,9 +200,10 @@ class MoreScreen extends ConsumerWidget {
                 children: [
                   _MoreGlassRow(
                     icon: Icons.settings_rounded,
-                    iconColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
                     title: 'App Settings',
-                    subtitle: 'Categories, theme preferences, currency, notifications',
+                    subtitle:
+                        'Categories, theme preferences, currency, notifications',
                     isDark: isDark,
                     onTap: () => _push(context, const AppSettingsScreen()),
                   ),
@@ -210,9 +219,10 @@ class MoreScreen extends ConsumerWidget {
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.health_and_safety_outlined,
-                    iconColor: const Color(0xFF10B981),
+                    iconColor: Theme.of(context).colorScheme.secondary,
                     title: 'Data Health & Integrity',
-                    subtitle: 'Audit ledger parity, schema & inbox gap diagnostics',
+                    subtitle:
+                        'Audit ledger parity, schema & inbox gap diagnostics',
                     isDark: isDark,
                     onTap: () => _push(context, const DataHealthScreen()),
                   ),
@@ -229,7 +239,7 @@ class MoreScreen extends ConsumerWidget {
                     _buildDivider(isDark),
                     _MoreGlassRow(
                       icon: Icons.developer_mode_rounded,
-                      iconColor: const Color(0xFF6558E8),
+                      iconColor: Theme.of(context).colorScheme.primary,
                       title: 'Debug Hub (Developer)',
                       subtitle: 'Seed dummy data, stress tests & diagnostics',
                       isDark: isDark,
@@ -259,10 +269,7 @@ class MoreScreen extends ConsumerWidget {
   }
 
   void _push(BuildContext context, Widget screen) {
-    Navigator.push(
-      context,
-      AppPageRoute(builder: (_) => screen),
-    );
+    Navigator.push(context, AppPageRoute(builder: (_) => screen));
   }
 }
 
@@ -331,7 +338,7 @@ class _MoreGlassRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: context.textPrimary,
                       letterSpacing: -0.2,
                     ),
                   ),
@@ -343,7 +350,7 @@ class _MoreGlassRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w400,
-                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                      color: context.textSecondary,
                     ),
                   ),
                 ],
@@ -353,12 +360,19 @@ class _MoreGlassRow extends StatelessWidget {
             // Optional Badge Text Pill, Badge Count, or Chevron
             if (badgeText != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2.5,
+                ),
                 decoration: BoxDecoration(
-                  color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.25 : 0.15),
+                  color: (badgeColor ?? AppTheme.primaryBlue).withValues(
+                    alpha: isDark ? 0.25 : 0.15,
+                  ),
                   borderRadius: BorderRadius.circular(AppRadius.full),
                   border: Border.all(
-                    color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.5 : 0.3),
+                    color: (badgeColor ?? AppTheme.primaryBlue).withValues(
+                      alpha: isDark ? 0.5 : 0.3,
+                    ),
                     width: 0.5,
                   ),
                 ),
@@ -374,12 +388,19 @@ class _MoreGlassRow extends StatelessWidget {
               const SizedBox(width: 6),
             ] else if (badgeCount != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2.5,
+                ),
                 decoration: BoxDecoration(
-                  color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.25 : 0.15),
+                  color: (badgeColor ?? AppTheme.primaryBlue).withValues(
+                    alpha: isDark ? 0.25 : 0.15,
+                  ),
                   borderRadius: BorderRadius.circular(AppRadius.full),
                   border: Border.all(
-                    color: (badgeColor ?? AppTheme.primaryBlue).withValues(alpha: isDark ? 0.5 : 0.3),
+                    color: (badgeColor ?? AppTheme.primaryBlue).withValues(
+                      alpha: isDark ? 0.5 : 0.3,
+                    ),
                     width: 0.5,
                   ),
                 ),
@@ -399,7 +420,7 @@ class _MoreGlassRow extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               size: 18,
-              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ],
         ),

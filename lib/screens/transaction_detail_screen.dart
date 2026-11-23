@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../shared/widgets/loading_state_widget.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -22,9 +23,11 @@ import '../shared/widgets/glass/spendx_scaffold.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
 import '../shared/widgets/glass/spendx_glass_button.dart';
 import '../shared/widgets/glass/spendx_glass_sheet.dart';
-import '../shared/widgets/glass/spendx_transaction_tile.dart' show cleanTransactionDisplayTitle;
+import '../shared/widgets/glass/spendx_transaction_tile.dart'
+    show cleanTransactionDisplayTitle;
 import '../theme/app_theme.dart';
-import '../features/transactions/providers/transaction_providers.dart' show deleteTransactionProvider;
+import '../features/transactions/providers/transaction_providers.dart'
+    show deleteTransactionProvider;
 
 class UnifiedTransactionDetailScreen extends ConsumerStatefulWidget {
   final Transaction transaction;
@@ -69,7 +72,11 @@ class _UnifiedTransactionDetailScreenState
       final note = _tx.notes.toLowerCase();
       for (final loan in openLoans) {
         final pName = loan.personName.trim().toLowerCase();
-        if (pName.isNotEmpty && (note.contains(pName) || pName.split(' ').any((part) => part.length >= 3 && note.contains(part)))) {
+        if (pName.isNotEmpty &&
+            (note.contains(pName) ||
+                pName
+                    .split(' ')
+                    .any((part) => part.length >= 3 && note.contains(part)))) {
           if (mounted) {
             setState(() {
               _matchingOpenLoan = loan;
@@ -86,17 +93,35 @@ class _UnifiedTransactionDetailScreenState
     final cleaned = cleanTransactionDisplayTitle(
       text,
       categoryName: _cat?.name,
-      isCcPayment: _tx.type == 'credit_payment' || _tx.source == 'credit_card_payment',
+      isCcPayment:
+          _tx.type == 'credit_payment' || _tx.source == 'credit_card_payment',
       isTransfer: _tx.type == 'transfer' || _tx.source == 'transfer',
     );
-    if (cleaned.isNotEmpty && !cleaned.startsWith('{') && !cleaned.contains('debited for')) {
+    if (cleaned.isNotEmpty &&
+        !cleaned.startsWith('{') &&
+        !cleaned.contains('debited for')) {
       return cleaned;
     }
     var clean = text
-        .replaceAll(RegExp(r'^[{\["\s]*(?:body["\s:]+)?', caseSensitive: false), '')
+        .replaceAll(
+          RegExp(r'^[{\["\s]*(?:body["\s:]+)?', caseSensitive: false),
+          '',
+        )
         .replaceAll(RegExp(r'["}\]]+$'), '')
-        .replaceAll(RegExp(r'^(?:paid to|sent to|transfer to|to|from|received from)\s+', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\s+(?:via\s+upi|on\s+upi|upi|ref|ref\s*no|rrn|vpa).*$', caseSensitive: false), '')
+        .replaceAll(
+          RegExp(
+            r'^(?:paid to|sent to|transfer to|to|from|received from)\s+',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(
+          RegExp(
+            r'\s+(?:via\s+upi|on\s+upi|upi|ref|ref\s*no|rrn|vpa).*$',
+            caseSensitive: false,
+          ),
+          '',
+        )
         .replaceAll(RegExp(r'@[a-zA-Z0-9.-]+'), '')
         .replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '')
         .replaceAll(RegExp(r'[0-9]{4,}'), '')
@@ -152,7 +177,10 @@ class _UnifiedTransactionDetailScreenState
     }
   }
 
-  Future<void> _createLendingRecord(String type, String defaultPersonName) async {
+  Future<void> _createLendingRecord(
+    String type,
+    String defaultPersonName,
+  ) async {
     final nameCtrl = TextEditingController(text: defaultPersonName);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final verb = type == 'lent' ? 'Lent to' : 'Borrowed from';
@@ -179,7 +207,7 @@ class _UnifiedTransactionDetailScreenState
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: context.textPrimary,
                 ),
               ),
               const SizedBox(height: 14),
@@ -190,8 +218,12 @@ class _UnifiedTransactionDetailScreenState
                   labelText: 'Person Name',
                   hintText: 'Enter contact name',
                   filled: true,
-                  fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x0A000000),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  fillColor: isDark
+                      ? const Color(0x1AFFFFFF)
+                      : const Color(0x0A000000),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 18),
@@ -223,7 +255,9 @@ class _UnifiedTransactionDetailScreenState
       await _lendingRepo.insert(newLending);
 
       final updatedTx = _tx.copyWith(
-        notes: _tx.notes.isNotEmpty ? '${_tx.notes} ($verb $person)' : '$verb $person',
+        notes: _tx.notes.isNotEmpty
+            ? '${_tx.notes} ($verb $person)'
+            : '$verb $person',
       );
       await ref.read(transactionsProvider.notifier).replace(updatedTx);
       if (mounted) {
@@ -239,7 +273,8 @@ class _UnifiedTransactionDetailScreenState
   }
 
   Future<void> _loadCreditDetails() async {
-    final isCardTxn = _tx.type == 'credit_card_purchase' ||
+    final isCardTxn =
+        _tx.type == 'credit_card_purchase' ||
         _tx.source == 'credit_card_purchase' ||
         _tx.source == 'credit_purchase';
     if (isCardTxn) {
@@ -318,10 +353,7 @@ class _UnifiedTransactionDetailScreenState
             children: [
               Text(
                 'Converting ${AppFormat.currency(_tx.amount)}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
-                ),
+                style: TextStyle(fontSize: 13, color: context.textSecondary),
               ),
               const SizedBox(height: 16),
 
@@ -331,7 +363,7 @@ class _UnifiedTransactionDetailScreenState
                     'Use Defaults',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: context.textPrimary,
                     ),
                   ),
                   const Spacer(),
@@ -348,7 +380,7 @@ class _UnifiedTransactionDetailScreenState
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  color: context.textMuted,
                 ),
               ),
               const SizedBox(height: 6),
@@ -359,7 +391,9 @@ class _UnifiedTransactionDetailScreenState
                   child: DropdownButton<int>(
                     value: selectedTenure,
                     isExpanded: true,
-                    dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    dropdownColor: isDark
+                        ? const Color(0xFF1E293B)
+                        : Colors.white,
                     items: [3, 6, 9, 12, 18, 24, 36]
                         .map(
                           (t) => DropdownMenuItem(
@@ -367,7 +401,7 @@ class _UnifiedTransactionDetailScreenState
                             child: Text(
                               '$t Months',
                               style: TextStyle(
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -390,7 +424,7 @@ class _UnifiedTransactionDetailScreenState
                             'Interest (% p.a.)',
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -399,7 +433,9 @@ class _UnifiedTransactionDetailScreenState
                             decoration: InputDecoration(
                               hintText: '12.0',
                               filled: true,
-                              fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
+                              fillColor: isDark
+                                  ? const Color(0x1AFFFFFF)
+                                  : const Color(0x66FFFFFF),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -421,7 +457,7 @@ class _UnifiedTransactionDetailScreenState
                             'Fee (\u20b9)',
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -430,7 +466,9 @@ class _UnifiedTransactionDetailScreenState
                             decoration: InputDecoration(
                               hintText: '199',
                               filled: true,
-                              fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
+                              fillColor: isDark
+                                  ? const Color(0x1AFFFFFF)
+                                  : const Color(0x66FFFFFF),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -452,7 +490,7 @@ class _UnifiedTransactionDetailScreenState
                       'Apply 18% GST on Fee',
                       style: TextStyle(
                         fontSize: 13,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: context.textPrimary,
                       ),
                     ),
                     const Spacer(),
@@ -479,7 +517,7 @@ class _UnifiedTransactionDetailScreenState
                           'Monthly EMI',
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                            color: context.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -502,7 +540,7 @@ class _UnifiedTransactionDetailScreenState
                           'Total Interest',
                           style: TextStyle(
                             fontSize: 11.5,
-                            color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                            color: context.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -512,7 +550,7 @@ class _UnifiedTransactionDetailScreenState
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                             fontFeatures: const [FontFeature.tabularFigures()],
-                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                            color: context.textPrimary,
                           ),
                         ),
                       ],
@@ -523,10 +561,7 @@ class _UnifiedTransactionDetailScreenState
               const SizedBox(height: 8),
               Text(
                 'Processing Fee: ${AppFormat.currency(effectiveFee)} (One-time)',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                ),
+                style: TextStyle(fontSize: 11, color: context.textMuted),
               ),
               const SizedBox(height: 20),
               SpendXGlassButton(
@@ -561,7 +596,8 @@ class _UnifiedTransactionDetailScreenState
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isIncome = _tx.type == 'income';
-    final isCcPayment = _tx.type == 'credit_payment' || _tx.source == 'credit_card_payment';
+    final isCcPayment =
+        _tx.type == 'credit_payment' || _tx.source == 'credit_card_payment';
     final isTransfer = _tx.isTransferType || isCcPayment;
 
     final Color amountColor;
@@ -590,10 +626,16 @@ class _UnifiedTransactionDetailScreenState
     final cards = ref.watch(cardsProvider).valueOrNull ?? [];
     final accountMap = {
       for (final a in accounts) a.id: resolveAccountDisplayName(a.name),
-      for (final c in cards) c.id: resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Card'),
+      for (final c in cards)
+        c.id: resolveAccountDisplayName(
+          c.name.isNotEmpty ? c.name : '${c.bank} Card',
+        ),
     };
-    final fromName = accountMap[_tx.accountId] ?? (_tx.accountId != null ? 'Account' : null);
-    final toName = accountMap[_tx.relatedEntityId] ?? (_tx.relatedEntityId != null ? 'Card / Account' : null);
+    final fromName =
+        accountMap[_tx.accountId] ?? (_tx.accountId != null ? 'Account' : null);
+    final toName =
+        accountMap[_tx.relatedEntityId] ??
+        (_tx.relatedEntityId != null ? 'Card / Account' : null);
 
     // Route determination
     final String sourceLabel;
@@ -622,7 +664,9 @@ class _UnifiedTransactionDetailScreenState
       destColor = AppTheme.primaryBlue;
     } else if (isIncome) {
       sourceLabel = 'Received From';
-      sourceName = _tx.notes.isNotEmpty ? _extractPeerName(_tx.notes) : 'Income Source';
+      sourceName = _tx.notes.isNotEmpty
+          ? _extractPeerName(_tx.notes)
+          : 'Income Source';
       sourceIcon = Icons.arrow_downward_rounded;
       destLabel = 'Credited Into';
       destName = fromName ?? 'Primary Account';
@@ -631,9 +675,13 @@ class _UnifiedTransactionDetailScreenState
     } else {
       sourceLabel = 'Paid Via';
       sourceName = fromName ?? 'Account / Card';
-      sourceIcon = _tx.source.contains('credit') ? Icons.credit_card_rounded : Icons.account_balance_rounded;
+      sourceIcon = _tx.source.contains('credit')
+          ? Icons.credit_card_rounded
+          : Icons.account_balance_rounded;
       destLabel = 'Merchant / Payee';
-      destName = _tx.notes.isNotEmpty ? _extractPeerName(_tx.notes) : (_cat?.name ?? 'Merchant');
+      destName = _tx.notes.isNotEmpty
+          ? _extractPeerName(_tx.notes)
+          : (_cat?.name ?? 'Merchant');
       destIcon = Icons.storefront_rounded;
       destColor = AppTheme.semanticExpense;
     }
@@ -643,10 +691,7 @@ class _UnifiedTransactionDetailScreenState
         title: 'Transaction Details',
         actions: [
           IconButton(
-            icon: Icon(
-              Icons.edit_outlined,
-              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
-            ),
+            icon: Icon(Icons.edit_outlined, color: context.textPrimary),
             tooltip: 'Edit',
             onPressed: _editTransaction,
           ),
@@ -661,7 +706,7 @@ class _UnifiedTransactionDetailScreenState
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingStateWidget(message: 'Loading transaction…')
           : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
               child: Column(
@@ -672,7 +717,10 @@ class _UnifiedTransactionDetailScreenState
                     width: double.infinity,
                     level: SpendXGlassLevel.elevated,
                     borderRadius: BorderRadius.circular(AppRadius.l),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 24,
+                    ),
                     child: Column(
                       children: [
                         Container(
@@ -680,45 +728,61 @@ class _UnifiedTransactionDetailScreenState
                           height: 56,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: amountColor.withValues(alpha: isDark ? 0.18 : 0.12),
+                            color: amountColor.withValues(
+                              alpha: isDark ? 0.18 : 0.12,
+                            ),
                             border: Border.all(
-                              color: amountColor.withValues(alpha: isDark ? 0.40 : 0.25),
+                              color: amountColor.withValues(
+                                alpha: isDark ? 0.40 : 0.25,
+                              ),
                               width: 0.75,
                             ),
                           ),
-                          child: Icon(
-                            heroIcon,
-                            color: amountColor,
-                            size: 28,
-                          ),
+                          child: Icon(heroIcon, color: amountColor, size: 28),
                         ),
                         const SizedBox(height: 12),
                         () {
-                          final forex = AppFormat.extractForexDetails(_tx.notes, _tx.rawPayload);
+                          final forex = AppFormat.extractForexDetails(
+                            _tx.notes,
+                            _tx.rawPayload,
+                          );
                           final amtStr = forex != null
                               ? '$sign ${forex.formattedForeignAmount}'
                               : '$sign ${AppFormat.currency(_tx.amount.abs())}';
                           return Column(
                             children: [
-                              Text(
-                                amtStr,
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w700,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
-                                  letterSpacing: -0.8,
-                                  color: amountColor,
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  amtStr,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w700,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    letterSpacing: -0.8,
+                                    color: amountColor,
+                                  ),
                                 ),
                               ),
                               if (forex != null) ...[
                                 const SizedBox(height: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 3,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.20 : 0.12),
+                                    color: const Color(
+                                      0xFF0284C7,
+                                    ).withValues(alpha: isDark ? 0.20 : 0.12),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.35 : 0.25),
+                                      color: const Color(
+                                        0xFF0284C7,
+                                      ).withValues(alpha: isDark ? 0.35 : 0.25),
                                       width: 0.8,
                                     ),
                                   ),
@@ -727,7 +791,9 @@ class _UnifiedTransactionDetailScreenState
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
                                   ),
                                 ),
@@ -737,29 +803,45 @@ class _UnifiedTransactionDetailScreenState
                         }(),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: isDark ? const Color(0x1AFFFFFF) : const Color(0x33000000),
+                            color: isDark
+                                ? const Color(0x1AFFFFFF)
+                                : const Color(0x33000000),
                             borderRadius: BorderRadius.circular(AppRadius.full),
                             border: Border.all(
-                              color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                              color: isDark
+                                  ? const Color(0x28FFFFFF)
+                                  : const Color(0x18000000),
                               width: 0.75,
                             ),
                           ),
                           child: Text(
                             isCcPayment
                                 ? 'Credit Card Payment'
-                                : (isTransfer ? 'Transfer' : (_cat?.name ?? 'Uncategorized')),
+                                : (isTransfer
+                                      ? 'Transfer'
+                                      : (_cat?.name ?? 'Uncategorized')),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ),
                         const SizedBox(height: 12),
                         // Net Worth Impact Badge
-                        _buildImpactBadge(isDark, isIncome, isTransfer, isCcPayment),
+                        _buildImpactBadge(
+                          isDark,
+                          isIncome,
+                          isTransfer,
+                          isCcPayment,
+                        ),
                       ],
                     ),
                   ),
@@ -767,7 +849,10 @@ class _UnifiedTransactionDetailScreenState
                   const SizedBox(height: 14),
 
                   () {
-                    final forexDetails = AppFormat.extractForexDetails(_tx.notes, _tx.rawPayload);
+                    final forexDetails = AppFormat.extractForexDetails(
+                      _tx.notes,
+                      _tx.rawPayload,
+                    );
                     return Column(
                       children: [
                         // ── 2. Visual Transaction Route Diagram ──────────
@@ -784,18 +869,22 @@ class _UnifiedTransactionDetailScreenState
                                   Icon(
                                     Icons.alt_route_rounded,
                                     size: 15,
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
                                     isCcPayment
                                         ? 'BILL SETTLEMENT ROUTE'
-                                        : (isTransfer ? 'INTERNAL MOVEMENT ROUTE' : 'FUNDS FLOW ROUTE'),
+                                        : (isTransfer
+                                              ? 'INTERNAL MOVEMENT ROUTE'
+                                              : 'FUNDS FLOW ROUTE'),
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: 0.6,
-                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                      color: context.textMuted,
                                     ),
                                   ),
                                 ],
@@ -808,24 +897,33 @@ class _UnifiedTransactionDetailScreenState
                                     child: Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
+                                        color: isDark
+                                            ? const Color(0x18FFFFFF)
+                                            : const Color(0x0A000000),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
+                                          color: isDark
+                                              ? const Color(0x24FFFFFF)
+                                              : const Color(0x14000000),
                                           width: 0.75,
                                         ),
                                       ),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
                                         children: [
-                                          Icon(sourceIcon, size: 20, color: AppTheme.primaryBlue),
+                                          Icon(
+                                            sourceIcon,
+                                            size: 20,
+                                            color: AppTheme.primaryBlue,
+                                          ),
                                           const SizedBox(height: 6),
                                           Text(
                                             sourceLabel,
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.w600,
-                                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                              color: context.textMuted,
                                             ),
                                           ),
                                           const SizedBox(height: 2),
@@ -837,7 +935,7 @@ class _UnifiedTransactionDetailScreenState
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w700,
-                                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                              color: context.textPrimary,
                                             ),
                                           ),
                                         ],
@@ -846,17 +944,30 @@ class _UnifiedTransactionDetailScreenState
                                   ),
                                   // Direction Arrow & Flow Badge
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
                                     child: Column(
                                       children: [
-                                        Icon(Icons.arrow_forward_rounded, size: 20, color: amountColor),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 20,
+                                          color: amountColor,
+                                        ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          forexDetails != null ? forexDetails.formattedForeignAmount : AppFormat.currency(_tx.amount.abs()),
+                                          forexDetails != null
+                                              ? forexDetails
+                                                    .formattedForeignAmount
+                                              : AppFormat.currency(
+                                                  _tx.amount.abs(),
+                                                ),
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.w700,
-                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
                                             color: amountColor,
                                           ),
                                         ),
@@ -868,24 +979,33 @@ class _UnifiedTransactionDetailScreenState
                                     child: Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: isDark ? const Color(0x18FFFFFF) : const Color(0x0A000000),
+                                        color: isDark
+                                            ? const Color(0x18FFFFFF)
+                                            : const Color(0x0A000000),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: isDark ? const Color(0x24FFFFFF) : const Color(0x14000000),
+                                          color: isDark
+                                              ? const Color(0x24FFFFFF)
+                                              : const Color(0x14000000),
                                           width: 0.75,
                                         ),
                                       ),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
                                         children: [
-                                          Icon(destIcon, size: 20, color: destColor),
+                                          Icon(
+                                            destIcon,
+                                            size: 20,
+                                            color: destColor,
+                                          ),
                                           const SizedBox(height: 6),
                                           Text(
                                             destLabel,
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.w600,
-                                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                              color: context.textMuted,
                                             ),
                                           ),
                                           const SizedBox(height: 2),
@@ -897,7 +1017,7 @@ class _UnifiedTransactionDetailScreenState
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w700,
-                                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                              color: context.textPrimary,
                                             ),
                                           ),
                                         ],
@@ -920,22 +1040,32 @@ class _UnifiedTransactionDetailScreenState
                   }(),
 
                   // ── 3. Copyable External Reference Card (UTR / RRN) ─
-                  if (_tx.externalRef != null && _tx.externalRef!.isNotEmpty) ...[
+                  if (_tx.externalRef != null &&
+                      _tx.externalRef!.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     SpendXGlassSurface(
                       width: double.infinity,
                       level: SpendXGlassLevel.base,
                       borderRadius: BorderRadius.circular(AppRadius.m),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                              color: AppTheme.primaryBlue.withValues(
+                                alpha: isDark ? 0.20 : 0.12,
+                              ),
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Icon(Icons.tag_rounded, size: 18, color: AppTheme.primaryBlue),
+                            child: const Icon(
+                              Icons.tag_rounded,
+                              size: 18,
+                              color: AppTheme.primaryBlue,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -948,7 +1078,7 @@ class _UnifiedTransactionDetailScreenState
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 0.5,
-                                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                    color: context.textMuted,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -957,19 +1087,30 @@ class _UnifiedTransactionDetailScreenState
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
-                                    fontFeatures: const [FontFeature.tabularFigures()],
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    color: context.textPrimary,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.copy_rounded, size: 18, color: AppTheme.primaryBlue),
+                            icon: const Icon(
+                              Icons.copy_rounded,
+                              size: 18,
+                              color: AppTheme.primaryBlue,
+                            ),
                             tooltip: 'Copy Reference',
                             onPressed: () {
-                              Clipboard.setData(ClipboardData(text: _tx.externalRef!));
-                              CustomSnackBar.show(context, message: 'Reference copied to clipboard ✓');
+                              Clipboard.setData(
+                                ClipboardData(text: _tx.externalRef!),
+                              );
+                              CustomSnackBar.show(
+                                context,
+                                message: 'Reference copied to clipboard ✓',
+                              );
                             },
                           ),
                         ],
@@ -980,7 +1121,14 @@ class _UnifiedTransactionDetailScreenState
                   const SizedBox(height: 14),
 
                   // ── 4. Double-Entry Accounting Ledger Breakdown ──
-                  _buildLedgerBreakdown(isDark, fromName, toName, isIncome, isTransfer, isCcPayment),
+                  _buildLedgerBreakdown(
+                    isDark,
+                    fromName,
+                    toName,
+                    isIncome,
+                    isTransfer,
+                    isCcPayment,
+                  ),
 
                   const SizedBox(height: 14),
 
@@ -995,7 +1143,9 @@ class _UnifiedTransactionDetailScreenState
                         _buildDetailItem(
                           icon: Icons.calendar_today_rounded,
                           label: 'Date',
-                          value: DateFormat('EEEE, MMM dd, yyyy').format(_tx.date),
+                          value: DateFormat(
+                            'EEEE, MMM dd, yyyy',
+                          ).format(_tx.date),
                           isDark: isDark,
                         ),
                         _buildDivider(isDark),
@@ -1005,12 +1155,14 @@ class _UnifiedTransactionDetailScreenState
                           value: DateFormat('hh:mm a').format(_tx.date),
                           isDark: isDark,
                         ),
-                        if (isTransfer && (fromName != null || toName != null)) ...[
+                        if (isTransfer &&
+                            (fromName != null || toName != null)) ...[
                           _buildDivider(isDark),
                           _buildDetailItem(
                             icon: Icons.swap_horiz_rounded,
                             label: 'Flow',
-                            value: '${fromName ?? "Default"} → ${toName ?? "Destination"}',
+                            value:
+                                '${fromName ?? "Default"} → ${toName ?? "Destination"}',
                             isDark: isDark,
                           ),
                         ] else if (fromName != null) ...[
@@ -1066,7 +1218,7 @@ class _UnifiedTransactionDetailScreenState
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -1093,7 +1245,10 @@ class _UnifiedTransactionDetailScreenState
                     SpendXGlassSurface(
                       level: SpendXGlassLevel.base,
                       borderRadius: BorderRadius.circular(AppRadius.m),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       child: Row(
                         children: [
                           const Icon(
@@ -1107,7 +1262,7 @@ class _UnifiedTransactionDetailScreenState
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                         ],
@@ -1132,7 +1287,12 @@ class _UnifiedTransactionDetailScreenState
     );
   }
 
-  Widget _buildImpactBadge(bool isDark, bool isIncome, bool isTransfer, bool isCcPayment) {
+  Widget _buildImpactBadge(
+    bool isDark,
+    bool isIncome,
+    bool isTransfer,
+    bool isCcPayment,
+  ) {
     final String impactText;
     final IconData impactIcon;
     final Color impactColor;
@@ -1143,13 +1303,19 @@ class _UnifiedTransactionDetailScreenState
 
     if (forex != null) {
       final signStr = isIncome ? '+' : '-';
-      impactText = 'Net Worth Impact: $signStr${forex.formattedForeignAmount} (≈ ${AppFormat.currency(forex.estimatedInr)})';
-      impactIcon = isIncome ? Icons.trending_up_rounded : Icons.trending_down_rounded;
-      impactColor = isIncome ? AppTheme.semanticIncome : AppTheme.semanticExpense;
+      impactText =
+          'Net Worth Impact: $signStr${forex.formattedForeignAmount} (≈ ${AppFormat.currency(forex.estimatedInr)})';
+      impactIcon = isIncome
+          ? Icons.trending_up_rounded
+          : Icons.trending_down_rounded;
+      impactColor = isIncome
+          ? AppTheme.semanticIncome
+          : AppTheme.semanticExpense;
       impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
       impactBorder = impactColor.withValues(alpha: isDark ? 0.32 : 0.20);
     } else if (isCcPayment || isTransfer) {
-      impactText = 'Net Worth Impact: ${AppFormat.currency(0)} (Neutral • Internal Movement)';
+      impactText =
+          'Net Worth Impact: ${AppFormat.currency(0)} (Neutral • Internal Movement)';
       impactIcon = Icons.swap_horiz_rounded;
       impactColor = Theme.of(context).colorScheme.primary;
       impactBg = impactColor.withValues(alpha: isDark ? 0.16 : 0.08);
@@ -1228,8 +1394,12 @@ class _UnifiedTransactionDetailScreenState
     } else {
       debitAccount = _cat?.name ?? 'Expense Category';
       debitType = 'Expense Incurred (+)';
-      creditAccount = fromName ?? (_tx.source.contains('credit') ? 'Credit Card' : 'Bank Account');
-      creditType = _tx.source.contains('credit') ? 'Liability Increased (+)' : 'Asset Decreased (-)';
+      creditAccount =
+          fromName ??
+          (_tx.source.contains('credit') ? 'Credit Card' : 'Bank Account');
+      creditType = _tx.source.contains('credit')
+          ? 'Liability Increased (+)'
+          : 'Asset Decreased (-)';
     }
 
     return SpendXGlassSurface(
@@ -1257,7 +1427,7 @@ class _UnifiedTransactionDetailScreenState
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.6,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                    color: context.textMuted,
                   ),
                 ),
               ),
@@ -1265,7 +1435,9 @@ class _UnifiedTransactionDetailScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0x2010B981) : const Color(0x1510B981),
+                  color: isDark
+                      ? const Color(0x2010B981)
+                      : const Color(0x1510B981),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
@@ -1290,7 +1462,10 @@ class _UnifiedTransactionDetailScreenState
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.primaryBlue.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
@@ -1314,7 +1489,7 @@ class _UnifiedTransactionDetailScreenState
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1323,19 +1498,21 @@ class _UnifiedTransactionDetailScreenState
                         debitType,
                         style: TextStyle(
                           fontSize: 10,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.textMuted,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Text(
-                  forex != null ? forex.formattedForeignAmount : AppFormat.currency(_tx.amount.abs()),
+                  forex != null
+                      ? forex.formattedForeignAmount
+                      : AppFormat.currency(_tx.amount.abs()),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     fontFeatures: const [FontFeature.tabularFigures()],
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
               ],
@@ -1352,17 +1529,22 @@ class _UnifiedTransactionDetailScreenState
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.tertiary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
+                  child:  Text(
                     'CR',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFFF59E0B),
+                      color: Theme.of(context).colorScheme.tertiary,
                     ),
                   ),
                 ),
@@ -1376,7 +1558,7 @@ class _UnifiedTransactionDetailScreenState
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1385,19 +1567,21 @@ class _UnifiedTransactionDetailScreenState
                         creditType,
                         style: TextStyle(
                           fontSize: 10,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.textMuted,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Text(
-                  forex != null ? forex.formattedForeignAmount : AppFormat.currency(_tx.amount.abs()),
+                  forex != null
+                      ? forex.formattedForeignAmount
+                      : AppFormat.currency(_tx.amount.abs()),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     fontFeatures: const [FontFeature.tabularFigures()],
-                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
               ],
@@ -1408,12 +1592,18 @@ class _UnifiedTransactionDetailScreenState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0x1038BDF8) : const Color(0x0C0284C7),
+                color: isDark
+                    ? const Color(0x1038BDF8)
+                    : const Color(0x0C0284C7),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 13, color: Color(0xFF0284C7)),
+                   Icon(
+                    Icons.info_outline_rounded,
+                    size: 13,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1448,10 +1638,16 @@ class _UnifiedTransactionDetailScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.22 : 0.12),
+                  color: const Color(
+                    0xFF0284C7,
+                  ).withValues(alpha: isDark ? 0.22 : 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.currency_exchange_rounded, size: 19, color: Color(0xFF0284C7)),
+                child:  Icon(
+                  Icons.currency_exchange_rounded,
+                  size: 19,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1464,7 +1660,7 @@ class _UnifiedTransactionDetailScreenState
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.6,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1480,21 +1676,28 @@ class _UnifiedTransactionDetailScreenState
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 3.5,
+                ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.20 : 0.12),
+                  color: const Color(
+                    0xFF0284C7,
+                  ).withValues(alpha: isDark ? 0.20 : 0.12),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: const Color(0xFF0284C7).withValues(alpha: isDark ? 0.40 : 0.25),
+                    color: const Color(
+                      0xFF0284C7,
+                    ).withValues(alpha: isDark ? 0.40 : 0.25),
                     width: 0.8,
                   ),
                 ),
                 child: Text(
                   forex.rateDisplay,
-                  style: const TextStyle(
+                  style:  TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF0284C7),
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -1507,7 +1710,9 @@ class _UnifiedTransactionDetailScreenState
               color: isDark ? const Color(0x14FFFFFF) : const Color(0x06000000),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFE2E8F0),
                 width: 0.8,
               ),
             ),
@@ -1523,7 +1728,7 @@ class _UnifiedTransactionDetailScreenState
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.textMuted,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1532,7 +1737,7 @@ class _UnifiedTransactionDetailScreenState
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                         ),
                       ),
                     ],
@@ -1556,16 +1761,16 @@ class _UnifiedTransactionDetailScreenState
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
-                          color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                          color: context.textMuted,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         AppFormat.currency(forex.estimatedInr),
-                        style: const TextStyle(
+                        style:  TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF16A34A),
+                          color: Theme.of(context).colorScheme.secondary,
                         ),
                       ),
                     ],
@@ -1594,10 +1799,10 @@ class _UnifiedTransactionDetailScreenState
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0x1F10B981) : const Color(0xFFECFDF5),
+        color: isDark ? const Color(0x1F10B981) : Theme.of(context).colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(AppRadius.l),
         border: Border.all(
-          color: isDark ? const Color(0x4034D399) : const Color(0xFFA7F3D0),
+          color: isDark ? const Color(0x4034D399) : Theme.of(context).colorScheme.secondary,
           width: 0.8,
         ),
       ),
@@ -1610,12 +1815,14 @@ class _UnifiedTransactionDetailScreenState
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isDark ? const Color(0x3010B981) : const Color(0xFFD1FAE5),
+                  color: isDark
+                      ? const Color(0x3010B981)
+                      : const Color(0xFFD1FAE5),
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.handshake_rounded,
                   size: 18,
-                  color: Color(0xFF059669),
+                  color: Theme.of(context).colorScheme.secondary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1628,14 +1835,18 @@ class _UnifiedTransactionDetailScreenState
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF065F46),
+                        color: isDark
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).colorScheme.onSecondaryContainer,
                       ),
                     ),
                     Text(
                       'Outstanding loan: ${AppFormat.currency(loan.remainingAmount)} remaining',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                        color: isDark
+                            ? Theme.of(context).colorScheme.secondary
+                            : const Color(0xFF047857),
                       ),
                     ),
                   ],
@@ -1655,7 +1866,13 @@ class _UnifiedTransactionDetailScreenState
                     children: [
                       Icon(Icons.check_circle_outline_rounded, size: 16),
                       SizedBox(width: 6),
-                      Text('Mark Loan Repaid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text(
+                        'Mark Loan Repaid',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1665,10 +1882,7 @@ class _UnifiedTransactionDetailScreenState
                 onPressed: () => setState(() => _matchingOpenLoan = null),
                 child: Text(
                   'Dismiss',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                  ),
+                  style: TextStyle(fontSize: 12, color: context.textMuted),
                 ),
               ),
             ],
@@ -1694,7 +1908,7 @@ class _UnifiedTransactionDetailScreenState
               Icon(
                 Icons.handshake_outlined,
                 size: 16,
-                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 8),
               Text(
@@ -1702,7 +1916,7 @@ class _UnifiedTransactionDetailScreenState
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                  color: context.textMuted,
                 ),
               ),
             ],
@@ -1712,7 +1926,9 @@ class _UnifiedTransactionDetailScreenState
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0x1F6366F1) : const Color(0xFFEEF2FF),
+                color: isDark
+                    ? const Color(0x1F6366F1)
+                    : Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -1722,7 +1938,9 @@ class _UnifiedTransactionDetailScreenState
                       'Payment note mentions a loan keyword. Track under Friends & Family?',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? const Color(0xFFE0E7FF) : const Color(0xFF3730A3),
+                        color: isDark
+                            ? const Color(0xFFE0E7FF)
+                            : Theme.of(context).colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ),
@@ -1732,14 +1950,17 @@ class _UnifiedTransactionDetailScreenState
                     child: Tooltip(
                       message: 'Dismiss suggestion',
                       child: InkWell(
-                        onTap: () => setState(() => _dismissedLoanPrompt = true),
+                        onTap: () =>
+                            setState(() => _dismissedLoanPrompt = true),
                         child: SizedBox(
                           width: 48,
                           height: 48,
                           child: Icon(
                             Icons.close,
                             size: 16,
-                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6366F1),
+                            color: isDark
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ),
@@ -1759,14 +1980,21 @@ class _UnifiedTransactionDetailScreenState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.arrow_upward_rounded, size: 14, color: Color(0xFFE11D48)),
+                       Icon(
+                        Icons.arrow_upward_rounded,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           '🤝 Lent to $peerName',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -1781,14 +2009,21 @@ class _UnifiedTransactionDetailScreenState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.arrow_downward_rounded, size: 14, color: Color(0xFF16A34A)),
+                       Icon(
+                        Icons.arrow_downward_rounded,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
                           '🤝 Borrowed from $peerName',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -1827,11 +2062,7 @@ class _UnifiedTransactionDetailScreenState
             color: isDark ? const Color(0x1AFFFFFF) : const Color(0x33000000),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: AppTheme.primaryBlue,
-          ),
+          child: Icon(icon, size: 18, color: AppTheme.primaryBlue),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -1843,7 +2074,7 @@ class _UnifiedTransactionDetailScreenState
                 style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w500,
-                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                  color: context.textSecondary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -1852,7 +2083,7 @@ class _UnifiedTransactionDetailScreenState
                 style: TextStyle(
                   fontSize: 14.5,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                  color: context.textPrimary,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,

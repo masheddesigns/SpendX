@@ -23,7 +23,7 @@ class AppAmountField extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final effectiveColor =
         amountColor ??
-        (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7));
+        (isDark ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.primary);
 
     final fillColor = isDark
         ? const Color(0x1AFFFFFF) // ~10% white

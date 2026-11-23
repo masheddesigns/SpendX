@@ -12,16 +12,13 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'SpendX can capture your transactions instantly using local Android events. Configure your ingestion streams below:',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-            ),
+            style: TextStyle(fontSize: 13, color: context.textMuted),
           ),
           const SizedBox(height: 20),
 
@@ -40,10 +37,16 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryBlue.withValues(alpha: isDark ? 0.20 : 0.12),
+                        color: AppTheme.primaryBlue.withValues(
+                          alpha: isDark ? 0.20 : 0.12,
+                        ),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.notifications_active_rounded, color: AppTheme.primaryBlue, size: 20),
+                      child: const Icon(
+                        Icons.notifications_active_rounded,
+                        color: AppTheme.primaryBlue,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -58,7 +61,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    color: context.textPrimary,
                                   ),
                                 ),
                               ),
@@ -72,7 +75,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                             style: TextStyle(
                               fontSize: 12,
                               height: 1.4,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                         ],
@@ -85,21 +88,35 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                   SpendXGlassButton(
                     variant: SpendXGlassButtonVariant.tonal,
                     onPressed: () async {
-                      await LiveSmsService.instance.openNotificationListenerSettings();
+                      await LiveSmsService.instance
+                          .openNotificationListenerSettings();
                       await _checkPermissions();
                     },
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.tune_rounded, size: 16, color: AppTheme.primaryBlue),
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 16,
+                          color: AppTheme.primaryBlue,
+                        ),
                         SizedBox(width: 6),
-                        Text('Enable Notification Listener', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Enable Notification Listener',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.semanticIncome.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
@@ -107,12 +124,20 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: AppTheme.semanticIncome,
+                        ),
                         SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             'Active: Capturing payments from GPay, PhonePe & Paytm',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.semanticIncome,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -140,10 +165,15 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.20 : 0.12),
+                        color: Theme.of(context).colorScheme.secondary
+                            .withValues(alpha: isDark ? 0.20 : 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.sms_rounded, color: Color(0xFF10B981), size: 20),
+                      child:  Icon(
+                        Icons.sms_rounded,
+                        color: Theme.of(context).colorScheme.secondary,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -158,7 +188,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    color: context.textPrimary,
                                   ),
                                 ),
                               ),
@@ -172,7 +202,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                             style: TextStyle(
                               fontSize: 12,
                               height: 1.4,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                         ],
@@ -188,18 +218,31 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                       await Permission.sms.request();
                       await _checkPermissions();
                     },
-                    child: const Row(
+                    child:  Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.lock_open_rounded, size: 16, color: Color(0xFF10B981)),
+                        Icon(
+                          Icons.lock_open_rounded,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
                         SizedBox(width: 6),
-                        Text('Grant SMS Permission', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Grant SMS Permission',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.semanticIncome.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
@@ -207,12 +250,20 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: AppTheme.semanticIncome,
+                        ),
                         SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             'Active: Monitoring official bank and card SMS',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.semanticIncome,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -240,10 +291,15 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.20 : 0.12),
+                        color: Theme.of(context).colorScheme.tertiary
+                            .withValues(alpha: isDark ? 0.20 : 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.alarm_rounded, color: Color(0xFFF59E0B), size: 20),
+                      child:  Icon(
+                        Icons.alarm_rounded,
+                        color: Theme.of(context).colorScheme.tertiary,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -258,7 +314,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    color: context.textPrimary,
                                   ),
                                 ),
                               ),
@@ -272,7 +328,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                             style: TextStyle(
                               fontSize: 12,
                               height: 1.4,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                         ],
@@ -288,18 +344,31 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                       await NotificationServiceV2().requestPermissions();
                       await _checkPermissions();
                     },
-                    child: const Row(
+                    child:  Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_active_rounded, size: 16, color: Color(0xFFF59E0B)),
+                        Icon(
+                          Icons.notifications_active_rounded,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.tertiary,
+                        ),
                         SizedBox(width: 6),
-                        Text('Allow System Notifications', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Allow System Notifications',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.semanticIncome.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
@@ -307,12 +376,20 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: AppTheme.semanticIncome,
+                        ),
                         SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             'Active: Bill reminders and runway alerts enabled',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.semanticIncome,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -340,10 +417,16 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF8B5CF6).withValues(alpha: isDark ? 0.20 : 0.12),
+                        color: const Color(
+                          0xFF8B5CF6,
+                        ).withValues(alpha: isDark ? 0.20 : 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.battery_charging_full_rounded, color: Color(0xFF8B5CF6), size: 20),
+                      child:  Icon(
+                        Icons.battery_charging_full_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -358,7 +441,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                                    color: context.textPrimary,
                                   ),
                                 ),
                               ),
@@ -372,7 +455,7 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                             style: TextStyle(
                               fontSize: 12,
                               height: 1.4,
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                             ),
                           ),
                         ],
@@ -388,18 +471,31 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                       await Permission.ignoreBatteryOptimizations.request();
                       await _checkPermissions();
                     },
-                    child: const Row(
+                    child:  Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.bolt_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                        Icon(
+                          Icons.bolt_rounded,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                         SizedBox(width: 6),
-                        Text('Unrestrict Battery Usage', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Unrestrict Battery Usage',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.semanticIncome.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
@@ -407,12 +503,20 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.semanticIncome),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: AppTheme.semanticIncome,
+                        ),
                         SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             'Active: Unrestricted background execution enabled',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.semanticIncome),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.semanticIncome,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -441,14 +545,11 @@ extension _OnboardingIngestionStep on _OnboardingScreenState {
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: isEnabled
-              ? AppTheme.semanticIncome
-              : (isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted),
+          color: isEnabled ? AppTheme.semanticIncome : (context.textMuted),
         ),
       ),
     );
   }
 
   // ── 4. Encrypted Google Drive Backup ───────────────────────
-
 }

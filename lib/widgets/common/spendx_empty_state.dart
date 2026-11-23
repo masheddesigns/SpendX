@@ -28,7 +28,8 @@ class SpendXEmptyState extends StatelessWidget {
       description: description,
       ctaLabel: actionLabel,
       onCtaTap: onActionPressed,
-      illustrationAsset: illustrationAsset,
+      illustrationAsset:
+          illustrationAsset ?? 'assets/illustrations/empty_finances.svg',
     );
   }
 }

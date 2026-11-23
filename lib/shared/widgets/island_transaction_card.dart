@@ -32,9 +32,9 @@ class IslandTransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isExpense = event.isExpense;
-    final accentColor = isExpense ? const Color(0xFFF43F5E) : const Color(0xFF10B981);
+    final accentColor = isExpense ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.secondary;
     final darkAccent = isExpense ? const Color(0xFF881337) : const Color(0xFF064E3B);
-    final lightColor = isExpense ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7);
+    final lightColor = isExpense ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.secondary;
 
     final rawAmount = event.amount;
     final cleanAmount = rawAmount.startsWith('₹') ? rawAmount.substring(1) : rawAmount;
@@ -189,7 +189,7 @@ class IslandTransactionCard extends StatelessWidget {
                           icon: Icons.check_circle_rounded,
                           label: 'Status',
                           value: 'Recorded',
-                          valueColor: const Color(0xFF10B981),
+                          valueColor: Theme.of(context).colorScheme.secondary,
                         ),
                       ],
                     ),

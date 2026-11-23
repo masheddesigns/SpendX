@@ -68,9 +68,7 @@ class _AutomaticIngestionScreenState
     final reviewCount = ref.watch(reviewQueueCountProvider).valueOrNull ?? 0;
 
     return SpendXScaffold(
-      appBar: const SpendXAppBar(
-        title: 'Automatic Ingestion',
-      ),
+      appBar: const SpendXAppBar(title: 'Automatic Ingestion'),
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(ingestionStatusProvider.notifier).refresh();
@@ -92,7 +90,7 @@ class _AutomaticIngestionScreenState
                   // 1. Bank App Notifications
                   _buildChannelTile(
                     icon: Icons.notifications_active_rounded,
-                    iconColor: const Color(0xFF6366F1),
+                    iconColor: Theme.of(context).colorScheme.primary,
                     title: 'Bank App Notifications',
                     subtitle:
                         'Instant capture from Google Pay, PhonePe, Paytm, CRED, SBI, HDFC, ICICI, etc.',
@@ -100,11 +98,11 @@ class _AutomaticIngestionScreenState
                         ? 'Active'
                         : 'Action Needed',
                     badgeColor: status.isNotificationListenerEnabled
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFF59E0B),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.tertiary,
                     trailing: Switch.adaptive(
                       value: status.isNotificationListenerEnabled,
-                      activeTrackColor: const Color(0xFF6366F1),
+                      activeTrackColor: Theme.of(context).colorScheme.primary,
                       onChanged: (v) async {
                         await LiveSmsService.instance
                             .openNotificationListenerSettings();
@@ -127,22 +125,23 @@ class _AutomaticIngestionScreenState
                   // 2. Live Bank SMS Detection
                   _buildChannelTile(
                     icon: Icons.sms_rounded,
-                    iconColor: const Color(0xFF0EA5E9),
+                    iconColor: Theme.of(context).colorScheme.primary,
                     title: 'Live SMS Detection',
                     subtitle:
                         'Captures debit, credit, ATM, and salary SMS as they arrive.',
-                    badgeText: (status.isLiveSmsEnabled && status.hasSmsPermission)
+                    badgeText:
+                        (status.isLiveSmsEnabled && status.hasSmsPermission)
                         ? 'Active'
                         : (!status.hasSmsPermission
-                            ? 'Permission Needed'
-                            : 'Disabled'),
+                              ? 'Permission Needed'
+                              : 'Disabled'),
                     badgeColor:
                         (status.isLiveSmsEnabled && status.hasSmsPermission)
-                            ? const Color(0xFF10B981)
-                            : const Color(0xFFF59E0B),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.tertiary,
                     trailing: Switch.adaptive(
                       value: status.isLiveSmsEnabled,
-                      activeTrackColor: const Color(0xFF0EA5E9),
+                      activeTrackColor: Theme.of(context).colorScheme.primary,
                       onChanged: (v) async {
                         await LiveSmsService.instance.setEnabled(v);
                         if (v && !status.hasSmsPermission) {
@@ -170,7 +169,7 @@ class _AutomaticIngestionScreenState
                   // 3. Background Battery Reliability
                   _buildChannelTile(
                     icon: Icons.battery_charging_full_rounded,
-                    iconColor: const Color(0xFF10B981),
+                    iconColor: Theme.of(context).colorScheme.secondary,
                     title: 'Background Process Reliability',
                     subtitle:
                         'Prevents OEM battery savers (Vivo, Samsung, Xiaomi) from terminating listeners.',
@@ -178,8 +177,8 @@ class _AutomaticIngestionScreenState
                         ? 'Unrestricted'
                         : 'Restricted',
                     badgeColor: status.isBatteryOptimizationIgnored
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFFF59E0B),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.tertiary,
                     trailing: TextButton(
                       onPressed: () async {
                         await Permission.ignoreBatteryOptimizations.request();
@@ -195,7 +194,7 @@ class _AutomaticIngestionScreenState
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: status.isBatteryOptimizationIgnored
-                              ? const Color(0xFF10B981)
+                              ? Theme.of(context).colorScheme.secondary
                               : AppTheme.primaryBlue,
                         ),
                       ),
@@ -217,17 +216,17 @@ class _AutomaticIngestionScreenState
                   // WhatsApp Banking Alerts
                   _buildChannelTile(
                     icon: Icons.chat_bubble_outline_rounded,
-                    iconColor: const Color(0xFF22C55E),
+                    iconColor: Theme.of(context).colorScheme.secondary,
                     title: 'WhatsApp Banking Alerts',
                     subtitle:
                         'Capture e-receipts and transactions from verified official bank bots.',
                     badgeText: status.isWhatsAppEnabled ? 'Enabled' : 'Off',
                     badgeColor: status.isWhatsAppEnabled
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF94A3B8),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                     trailing: Switch.adaptive(
                       value: status.isWhatsAppEnabled,
-                      activeTrackColor: const Color(0xFF22C55E),
+                      activeTrackColor: Theme.of(context).colorScheme.secondary,
                       onChanged: (v) async {
                         await SettingsService.instance
                             .setWhatsAppIngestionEnabled(v);
@@ -247,15 +246,19 @@ class _AutomaticIngestionScreenState
                     title: 'Live Gmail Notifications',
                     subtitle:
                         'Instantly capture bank debit/credit emails from the notification tray (100% on-device).',
-                    badgeText: status.isGmailNotificationEnabled ? 'Active' : 'Off',
+                    badgeText: status.isGmailNotificationEnabled
+                        ? 'Active'
+                        : 'Off',
                     badgeColor: status.isGmailNotificationEnabled
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF94A3B8),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                     trailing: Switch.adaptive(
                       value: status.isGmailNotificationEnabled,
                       activeTrackColor: const Color(0xFFEA4335),
                       onChanged: (v) async {
-                        await SettingsService.instance.setGmailPreviewEnabled(v);
+                        await SettingsService.instance.setGmailPreviewEnabled(
+                          v,
+                        );
                         await ref
                             .read(ingestionStatusProvider.notifier)
                             .refresh();
@@ -275,8 +278,8 @@ class _AutomaticIngestionScreenState
                         : 'Connect read-only access to auto-scan past statements & card bills.',
                     badgeText: status.isGmailConnected ? 'Connected' : 'Off',
                     badgeColor: status.isGmailConnected
-                        ? const Color(0xFF10B981)
-                        : const Color(0xFF94A3B8),
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                     trailing: status.isGmailConnected
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
@@ -287,25 +290,43 @@ class _AutomaticIngestionScreenState
                                     : () async {
                                         setState(() => _isSyncingGmail = true);
                                         try {
-                                          final res = await GmailIntegrationService.instance.syncFinancialEmails();
+                                          final res =
+                                              await GmailIntegrationService
+                                                  .instance
+                                                  .syncFinancialEmails();
                                           if (context.mounted) {
                                             if (res.error != null) {
-                                              CustomSnackBar.show(context, message: 'Gmail sync: ${res.error}');
+                                              CustomSnackBar.show(
+                                                context,
+                                                message:
+                                                    'Gmail sync: ${res.error}',
+                                              );
                                             } else {
                                               CustomSnackBar.show(
                                                 context,
-                                                message: 'Gmail sync: ${res.scanned} scanned, ${res.ingested} new transactions ingested.',
+                                                message:
+                                                    'Gmail sync: ${res.scanned} scanned, ${res.ingested} new transactions ingested.',
                                               );
                                             }
                                           }
                                         } catch (e) {
                                           if (context.mounted) {
-                                            CustomSnackBar.show(context, message: 'Sync error: $e');
+                                            CustomSnackBar.show(
+                                              context,
+                                              message: 'Sync error: $e',
+                                            );
                                           }
                                         } finally {
                                           if (context.mounted) {
-                                            setState(() => _isSyncingGmail = false);
-                                            ref.read(ingestionStatusProvider.notifier).refresh();
+                                            setState(
+                                              () => _isSyncingGmail = false,
+                                            );
+                                            ref
+                                                .read(
+                                                  ingestionStatusProvider
+                                                      .notifier,
+                                                )
+                                                .refresh();
                                           }
                                         }
                                       },
@@ -319,26 +340,43 @@ class _AutomaticIngestionScreenState
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.link_off_rounded, size: 18),
+                                icon: const Icon(
+                                  Icons.link_off_rounded,
+                                  size: 18,
+                                ),
                                 tooltip: 'Disconnect Gmail',
                                 onPressed: () async {
-                                  await GmailIntegrationService.instance.disconnect();
-                                  await ref.read(ingestionStatusProvider.notifier).refresh();
+                                  await GmailIntegrationService.instance
+                                      .disconnect();
+                                  await ref
+                                      .read(ingestionStatusProvider.notifier)
+                                      .refresh();
                                 },
                               ),
                             ],
                           )
                         : TextButton(
                             onPressed: () async {
-                              final connected = await GmailIntegrationService.instance.connect();
+                              final connected = await GmailIntegrationService
+                                  .instance
+                                  .connect();
                               if (connected && context.mounted) {
-                                CustomSnackBar.show(context, message: 'Connected Gmail for read-only statement sync.');
+                                CustomSnackBar.show(
+                                  context,
+                                  message:
+                                      'Connected Gmail for read-only statement sync.',
+                                );
                               }
-                              await ref.read(ingestionStatusProvider.notifier).refresh();
+                              await ref
+                                  .read(ingestionStatusProvider.notifier)
+                                  .refresh();
                             },
                             child: const Text(
                               'Connect',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                     isDark: isDark,
@@ -358,15 +396,20 @@ class _AutomaticIngestionScreenState
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.shield_outlined,
-                          size: 18, color: Color(0xFF6366F1)),
+                       Icon(
+                        Icons.shield_outlined,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Zero-Cloud On-Device Guarantee',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : const Color(0xFF1E293B),
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF1E293B),
                         ),
                       ),
                     ],
@@ -376,7 +419,7 @@ class _AutomaticIngestionScreenState
                     'All SMS and notifications are parsed 100% locally on your phone. Personal messages and OTPs are strictly excluded.',
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -413,7 +456,9 @@ class _AutomaticIngestionScreenState
                                     if (context.mounted) {
                                       setState(() => _isAuditing = false);
                                       ref
-                                          .read(ingestionStatusProvider.notifier)
+                                          .read(
+                                            ingestionStatusProvider.notifier,
+                                          )
                                           .refresh();
                                     }
                                   }
@@ -467,21 +512,17 @@ class _AutomaticIngestionScreenState
 
   Widget _buildHeroStatusCard(AutomaticIngestionStatus status, bool isDark) {
     final active = status.isFullyActive;
-    final color = active ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final color = active
+        ? Theme.of(context).colorScheme.secondary
+        : Theme.of(context).colorScheme.tertiary;
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
-              ? [
-                  color.withValues(alpha: 0.18),
-                  color.withValues(alpha: 0.06),
-                ]
-              : [
-                  color.withValues(alpha: 0.14),
-                  color.withValues(alpha: 0.04),
-                ],
+              ? [color.withValues(alpha: 0.18), color.withValues(alpha: 0.06)]
+              : [color.withValues(alpha: 0.14), color.withValues(alpha: 0.04)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -545,8 +586,8 @@ class _AutomaticIngestionScreenState
                     label: !status.isNotificationListenerEnabled
                         ? 'Enable Notification Access'
                         : (!status.hasSmsPermission
-                            ? 'Grant SMS Permission'
-                            : 'Resume Live Detection'),
+                              ? 'Grant SMS Permission'
+                              : 'Resume Live Detection'),
                     icon: Icons.check_circle_outline_rounded,
                     height: 38,
                     variant: SpendXGlassButtonVariant.primary,
@@ -583,7 +624,7 @@ class _AutomaticIngestionScreenState
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.9,
-          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -628,16 +669,16 @@ class _AutomaticIngestionScreenState
                           style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? Colors.white
-                                : const Color(0xFF0F172A),
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: badgeColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
@@ -658,9 +699,7 @@ class _AutomaticIngestionScreenState
                     subtitle,
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       height: 1.3,
                     ),
                   ),

@@ -55,17 +55,21 @@ class AppCategoryPicker extends StatelessWidget {
                   size: 16,
                   color: selected
                       ? tintColor
-                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      : (Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  category.name,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    color: selected
-                        ? (isDark ? Colors.white : const Color(0xFF0F172A))
-                        : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155)),
+                Flexible(
+                  child: Text(
+                    category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected
+                          ? (Theme.of(context).colorScheme.onSurface)
+                          : (Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
                   ),
                 ),
               ],

@@ -150,7 +150,7 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
           tintColor = isDark
               ? Colors.white.withValues(alpha: _isPressed ? 0.16 : 0.09)
               : Colors.black.withValues(alpha: _isPressed ? 0.10 : 0.05);
-          textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
+          textColor = context.textPrimary;
           border = Border.all(
             color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.12),
             width: 0.5,

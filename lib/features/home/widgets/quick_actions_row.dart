@@ -44,14 +44,16 @@ class QuickActionsRow extends ConsumerWidget {
     final rhythmDays = [
       _RhythmDayData(
         date: today.subtract(const Duration(days: 2)),
-        isCompleted: countActivityOnDay(today.subtract(const Duration(days: 2))) > 0,
+        isCompleted:
+            countActivityOnDay(today.subtract(const Duration(days: 2))) > 0,
         isToday: false,
         isFuture: false,
         count: countActivityOnDay(today.subtract(const Duration(days: 2))),
       ),
       _RhythmDayData(
         date: today.subtract(const Duration(days: 1)),
-        isCompleted: countActivityOnDay(today.subtract(const Duration(days: 1))) > 0,
+        isCompleted:
+            countActivityOnDay(today.subtract(const Duration(days: 1))) > 0,
         isToday: false,
         isFuture: false,
         count: countActivityOnDay(today.subtract(const Duration(days: 1))),
@@ -86,7 +88,8 @@ class QuickActionsRow extends ConsumerWidget {
           ? "$streak-day rhythm active • Momentum is strong"
           : "Today's money story has started";
     } else if (streak > 0) {
-      rhythmCaption = "Keep your $streak-day rhythm alive — log today's activity";
+      rhythmCaption =
+          "Keep your $streak-day rhythm alive — log today's activity";
     } else {
       rhythmCaption = "Log your first activity to start your financial rhythm";
     }
@@ -96,10 +99,7 @@ class QuickActionsRow extends ConsumerWidget {
       child: Column(
         children: [
           // ── Prominent Tactile Action: "[ + Log activity ]" ──
-          _HeroLogButton(
-            isDark: isDark,
-            onTap: () => _openScreen(context, 'expense'),
-          ),
+          _HeroLogButton(onTap: () => _openScreen(context, 'expense')),
 
           const SizedBox(height: 8),
 
@@ -110,8 +110,7 @@ class QuickActionsRow extends ConsumerWidget {
                 child: _QuickChip(
                   label: 'Spent',
                   iconData: Icons.arrow_outward_rounded,
-                  accentColor: const Color(0xFFE11D48),
-                  isDark: isDark,
+                  accentColor: Theme.of(context).colorScheme.error,
                   onTap: () => _openScreen(context, 'expense'),
                 ),
               ),
@@ -120,8 +119,7 @@ class QuickActionsRow extends ConsumerWidget {
                 child: _QuickChip(
                   label: 'Received',
                   iconData: Icons.arrow_downward_rounded,
-                  accentColor: const Color(0xFF16A34A),
-                  isDark: isDark,
+                  accentColor: Theme.of(context).colorScheme.secondary,
                   onTap: () => _openScreen(context, 'income'),
                 ),
               ),
@@ -130,8 +128,7 @@ class QuickActionsRow extends ConsumerWidget {
                 child: _QuickChip(
                   label: 'Moved',
                   iconData: Icons.swap_horiz_rounded,
-                  accentColor: const Color(0xFF4F46E5),
-                  isDark: isDark,
+                  accentColor: Theme.of(context).colorScheme.primary,
                   onTap: () => _openScreen(context, 'transfer', ref: ref),
                 ),
               ),
@@ -163,15 +160,13 @@ class QuickActionsRow extends ConsumerWidget {
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.0,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF78716C),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _SpendXRhythmVectorToken(streak: streak, isDark: isDark),
+                        _SpendXRhythmVectorToken(streak: streak),
                         const SizedBox(width: 6),
                         Text(
                           '$streak ${streak == 1 ? 'DAY' : 'DAYS'}',
@@ -179,7 +174,7 @@ class QuickActionsRow extends ConsumerWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.6,
-                            color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                            color: Theme.of(context).colorScheme.tertiary,
                           ),
                         ),
                       ],
@@ -201,7 +196,7 @@ class QuickActionsRow extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -232,7 +227,7 @@ class QuickActionsRow extends ConsumerWidget {
               margin: const EdgeInsets.only(top: 9, left: 24, right: 24),
               color: isDark
                   ? Colors.white.withValues(alpha: 0.12)
-                  : const Color(0xFFE2DDD2),
+                  : Theme.of(context).colorScheme.outline,
             ),
 
             // 5 Rolling Rhythm Nodes
@@ -241,7 +236,6 @@ class QuickActionsRow extends ConsumerWidget {
               children: rhythmDays.map((day) {
                 return _RhythmNode(
                   day: day,
-                  isDark: isDark,
                   onTap: () => _onTapNode(context, day),
                 );
               }).toList(),
@@ -258,7 +252,9 @@ class QuickActionsRow extends ConsumerWidget {
       if (day.isCompleted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Today: ${day.count} transaction${day.count > 1 ? 's' : ''} logged ✓'),
+            content: Text(
+              'Today: ${day.count} transaction${day.count > 1 ? 's' : ''} logged ✓',
+            ),
             duration: const Duration(milliseconds: 1800),
             behavior: SnackBarBehavior.floating,
           ),
@@ -269,7 +265,9 @@ class QuickActionsRow extends ConsumerWidget {
     } else if (day.isFuture) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${DateFormat('EEEE').format(day.date)}: Upcoming day in your rhythm'),
+          content: Text(
+            '${DateFormat('EEEE').format(day.date)}: Upcoming day in your rhythm',
+          ),
           duration: const Duration(milliseconds: 1500),
           behavior: SnackBarBehavior.floating,
         ),
@@ -293,9 +291,7 @@ class QuickActionsRow extends ConsumerWidget {
     HapticService.instance.tap();
     Navigator.push(
       context,
-      AppPageRoute(
-        builder: (_) => AddExpenseScreen(initialType: type),
-      ),
+      AppPageRoute(builder: (_) => AddExpenseScreen(initialType: type)),
     );
   }
 }
@@ -318,14 +314,9 @@ class _RhythmDayData {
 
 class _RhythmNode extends StatelessWidget {
   final _RhythmDayData day;
-  final bool isDark;
   final VoidCallback? onTap;
 
-  const _RhythmNode({
-    required this.day,
-    required this.isDark,
-    this.onTap,
-  });
+  const _RhythmNode({required this.day, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -340,16 +331,18 @@ class _RhythmNode extends StatelessWidget {
         height: 18,
         decoration: BoxDecoration(
           color: day.isCompleted
-              ? const Color(0xFF4F46E5)
-              : (isDark ? const Color(0xFF1E2330) : Colors.white),
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.surface,
           shape: BoxShape.circle,
           border: Border.all(
-            color: const Color(0xFF818CF8),
+            color: Theme.of(context).colorScheme.primary,
             width: 2.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.35),
               blurRadius: 6,
               offset: const Offset(0, 1),
             ),
@@ -366,11 +359,13 @@ class _RhythmNode extends StatelessWidget {
         width: 16,
         height: 16,
         decoration: BoxDecoration(
-          color: const Color(0xFF10B981),
+          color: Theme.of(context).colorScheme.secondary,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF10B981).withValues(alpha: 0.30),
+              color: Theme.of(
+                context,
+              ).colorScheme.secondary.withValues(alpha: 0.30),
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -385,12 +380,10 @@ class _RhythmNode extends StatelessWidget {
         width: 11,
         height: 11,
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2DDD2),
+          color: Theme.of(context).colorScheme.surfaceContainer,
           shape: BoxShape.circle,
           border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : const Color(0xFFD6CEBF),
+            color: Theme.of(context).colorScheme.outline,
             width: 1.2,
           ),
         ),
@@ -403,10 +396,7 @@ class _RhythmNode extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            height: 20,
-            child: Center(child: nodeCircle),
-          ),
+          SizedBox(height: 20, child: Center(child: nodeCircle)),
           const SizedBox(height: 5),
           Text(
             weekdayLabel,
@@ -415,8 +405,8 @@ class _RhythmNode extends StatelessWidget {
               fontWeight: day.isToday ? FontWeight.w800 : FontWeight.w600,
               letterSpacing: 0.5,
               color: day.isToday
-                  ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
-                  : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                  ? (Theme.of(context).colorScheme.primary)
+                  : (Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -433,27 +423,35 @@ class _RhythmNode extends StatelessWidget {
 /// Day 7+: Radiant constellation token (✦╱╲✦)
 class _SpendXRhythmVectorToken extends StatelessWidget {
   final int streak;
-  final bool isDark;
 
-  const _SpendXRhythmVectorToken({
-    required this.streak,
-    required this.isDark,
-  });
+  const _SpendXRhythmVectorToken({required this.streak});
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: const Size(18, 18),
-      painter: _RhythmTokenPainter(streak: streak, isDark: isDark),
+      painter: _RhythmTokenPainter(
+        streak: streak,
+        warningColor: Theme.of(context).colorScheme.tertiary,
+        successColor: Theme.of(context).colorScheme.secondary,
+        surfaceColor: Theme.of(context).colorScheme.surface,
+      ),
     );
   }
 }
 
 class _RhythmTokenPainter extends CustomPainter {
   final int streak;
-  final bool isDark;
+  final Color warningColor;
+  final Color successColor;
+  final Color surfaceColor;
 
-  _RhythmTokenPainter({required this.streak, required this.isDark});
+  _RhythmTokenPainter({
+    required this.streak,
+    required this.warningColor,
+    required this.successColor,
+    required this.surfaceColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -461,7 +459,7 @@ class _RhythmTokenPainter extends CustomPainter {
     final cy = size.height / 2;
     final center = Offset(cx, cy);
 
-    final color = isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final color = warningColor;
 
     if (streak >= 7) {
       // ✦ Established Rhythm: Radiant 4-point constellation mark
@@ -480,13 +478,13 @@ class _RhythmTokenPainter extends CustomPainter {
 
       // Inner dot
       final innerPaint = Paint()
-        ..color = isDark ? const Color(0xFF161922) : Colors.white
+        ..color = surfaceColor
         ..style = PaintingStyle.fill;
       canvas.drawCircle(center, 2.0, innerPaint);
     } else if (streak >= 3) {
       // ○╱╲ Growing Rhythm: Dual climbing sprout mark
       final strokePaint = Paint()
-        ..color = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A)
+        ..color = successColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.8
         ..strokeCap = StrokeCap.round;
@@ -502,41 +500,43 @@ class _RhythmTokenPainter extends CustomPainter {
       canvas.drawPath(rightLeaf, strokePaint);
 
       final baseDot = Paint()
-        ..color = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A)
+        ..color = successColor
         ..style = PaintingStyle.fill;
       canvas.drawCircle(Offset(cx, size.height - 2), 1.8, baseDot);
     } else {
       // ○╱ Starting Rhythm: Emerging seed & diagonal trail mark
       final circlePaint = Paint()
-        ..color = isDark ? const Color(0xFFFB923C) : const Color(0xFFEA580C)
+        ..color = warningColor
         ..style = PaintingStyle.fill;
       canvas.drawCircle(Offset(cx - 3, cy + 3), 3.0, circlePaint);
 
       final ascentPaint = Paint()
-        ..color = isDark ? const Color(0xFFFB923C) : const Color(0xFFEA580C)
+        ..color = warningColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.8
         ..strokeCap = StrokeCap.round;
-      canvas.drawLine(Offset(cx - 1, cy + 1), Offset(cx + 5, cy - 5), ascentPaint);
+      canvas.drawLine(
+        Offset(cx - 1, cy + 1),
+        Offset(cx + 5, cy - 5),
+        ascentPaint,
+      );
       canvas.drawCircle(Offset(cx + 5, cy - 5), 1.5, circlePaint);
     }
   }
 
   @override
   bool shouldRepaint(covariant _RhythmTokenPainter oldDelegate) {
-    return oldDelegate.streak != streak || oldDelegate.isDark != isDark;
+    return oldDelegate.streak != streak ||
+        oldDelegate.warningColor != warningColor ||
+        oldDelegate.successColor != successColor ||
+        oldDelegate.surfaceColor != surfaceColor;
   }
 }
 
-
 class _HeroLogButton extends StatefulWidget {
-  final bool isDark;
   final VoidCallback onTap;
 
-  const _HeroLogButton({
-    required this.isDark,
-    required this.onTap,
-  });
+  const _HeroLogButton({required this.onTap});
 
   @override
   State<_HeroLogButton> createState() => _HeroLogButtonState();
@@ -547,10 +547,9 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.isDark
-        ? const Color(0xFF1E2330)
-        : const Color(0xFF1C1917);
-    final fg = Colors.white;
+    final colorScheme = Theme.of(context).colorScheme;
+    final bg = colorScheme.primary;
+    final fg = colorScheme.onPrimary;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -569,9 +568,7 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: widget.isDark
-                    ? Colors.black.withValues(alpha: 0.35)
-                    : const Color(0x201C1917),
+                color: colorScheme.shadow.withValues(alpha: 0.25),
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
@@ -584,13 +581,13 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
+                  color: colorScheme.onPrimary.withValues(alpha: 0.16),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.add_rounded,
                   size: 16,
-                  color: Colors.white,
+                  color: colorScheme.onPrimary,
                 ),
               ),
               const SizedBox(width: 8),
@@ -615,14 +612,12 @@ class _QuickChip extends StatefulWidget {
   final String label;
   final IconData iconData;
   final Color accentColor;
-  final bool isDark;
   final VoidCallback onTap;
 
   const _QuickChip({
     required this.label,
     required this.iconData,
     required this.accentColor,
-    required this.isDark,
     required this.onTap,
   });
 
@@ -635,12 +630,9 @@ class _QuickChipState extends State<_QuickChip> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.isDark
-        ? const Color(0xFF161922)
-        : const Color(0xFFFFFFFF);
-    final border = widget.isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : const Color(0xFFECE5D8);
+    final colorScheme = Theme.of(context).colorScheme;
+    final bg = colorScheme.surface;
+    final border = colorScheme.outline;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -660,9 +652,7 @@ class _QuickChipState extends State<_QuickChip> {
             border: Border.all(color: border, width: 0.9),
             boxShadow: [
               BoxShadow(
-                color: widget.isDark
-                    ? Colors.black.withValues(alpha: 0.18)
-                    : const Color(0x061C1917),
+                color: colorScheme.shadow.withValues(alpha: 0.12),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -675,7 +665,9 @@ class _QuickChipState extends State<_QuickChip> {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: widget.accentColor.withValues(alpha: widget.isDark ? 0.20 : 0.12),
+                  color: widget.accentColor.withValues(
+                    alpha: 0.16,
+                  ),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -692,9 +684,7 @@ class _QuickChipState extends State<_QuickChip> {
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.2,
-                    color: widget.isDark
-                        ? Colors.white.withValues(alpha: 0.95)
-                        : const Color(0xFF1C1917),
+                    color: colorScheme.onSurface,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),

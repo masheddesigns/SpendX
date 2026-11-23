@@ -71,8 +71,12 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
           title: _titleCtrl.text.trim(),
           type: _type,
           targetAmount: _parsedAmount!,
-          endDate: widget.existing!.startDate.add(Duration(days: _durationDays)),
-          categoryId: _type == GoalType.spendingLimit ? _selectedCategoryId : null,
+          endDate: widget.existing!.startDate.add(
+            Duration(days: _durationDays),
+          ),
+          categoryId: _type == GoalType.spendingLimit
+              ? _selectedCategoryId
+              : null,
         );
         await ref.read(goalRepoProvider).update(updated);
         debugPrint('🎯 Goal updated: ${updated.title}');
@@ -83,7 +87,9 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
           targetAmount: _parsedAmount!,
           startDate: DateTime.now(),
           endDate: DateTime.now().add(Duration(days: _durationDays)),
-          categoryId: _type == GoalType.spendingLimit ? _selectedCategoryId : null,
+          categoryId: _type == GoalType.spendingLimit
+              ? _selectedCategoryId
+              : null,
         );
         await ref.read(goalRepoProvider).insert(goal);
         debugPrint('🎯 Goal created: ${goal.title}');
@@ -92,9 +98,9 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
       debugPrint('🎯 Goal save FAILED: $e');
       debugPrint('$st');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save goal: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save goal: $e')));
       }
       return;
     }
@@ -107,7 +113,9 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final categories = ref.watch(categoriesProvider).valueOrNull ?? [];
-    final expenseCategories = categories.where((c) => c.type == 'expense').toList();
+    final expenseCategories = categories
+        .where((c) => c.type == 'expense')
+        .toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? 'Edit Goal' : 'Create Goal')),
@@ -118,158 +126,94 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
             key: _formKey,
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Goal Type ──────────────────────────────────────────
-              Text(
-                'What is your goal?',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Goal Type ──────────────────────────────────────────
+                Text(
+                  'What is your goal?',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: GoalType.values.map((t) {
-                  final selected = _type == t;
-                  final String label;
-                  final IconData icon;
-                  switch (t) {
-                    case GoalType.savings:
-                      label = 'Save Money';
-                      icon = Icons.savings_rounded;
-                    case GoalType.spendingLimit:
-                      label = 'Limit Spending';
-                      icon = Icons.speed_rounded;
-                    case GoalType.debtPayoff:
-                      label = 'Pay Off Debt';
-                      icon = Icons.credit_score_rounded;
-                  }
-                  return GestureDetector(
-                    onTap: () => setState(() => _type = t),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? cs.primary.withValues(alpha: 0.12)
-                            : cs.surfaceContainer,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected ? cs.primary : cs.outlineVariant,
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: GoalType.values.map((t) {
+                    final selected = _type == t;
+                    final String label;
+                    final IconData icon;
+                    switch (t) {
+                      case GoalType.savings:
+                        label = 'Save Money';
+                        icon = Icons.savings_rounded;
+                      case GoalType.spendingLimit:
+                        label = 'Limit Spending';
+                        icon = Icons.speed_rounded;
+                      case GoalType.debtPayoff:
+                        label = 'Pay Off Debt';
+                        icon = Icons.credit_score_rounded;
+                    }
+                    return GestureDetector(
+                      onTap: () => setState(() => _type = t),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? cs.primary.withValues(alpha: 0.12)
+                              : cs.surfaceContainer,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: selected ? cs.primary : cs.outlineVariant,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              icon,
+                              size: 18,
+                              color: selected
+                                  ? cs.primary
+                                  : cs.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              label,
+                              style: TextStyle(
+                                color: selected
+                                    ? cs.primary
+                                    : cs.onSurfaceVariant,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(icon, size: 18,
-                              color: selected ? cs.primary : cs.onSurfaceVariant),
-                          const SizedBox(width: 8),
-                          Text(
-                            label,
-                            style: TextStyle(
-                              color: selected ? cs.primary : cs.onSurfaceVariant,
-                              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 24),
-
-              // ── Title ──────────────────────────────────────────────
-              TextFormField(
-                controller: _titleCtrl,
-                validator: (value) => (value == null || value.trim().isEmpty)
-                    ? 'Enter a goal title'
-                    : null,
-                decoration: InputDecoration(
-                  labelText: 'Goal title',
-                  hintText: _type == GoalType.savings
-                      ? 'e.g. Emergency Fund'
-                      : _type == GoalType.spendingLimit
-                          ? 'e.g. Food Budget'
-                          : 'e.g. Clear HDFC Card',
-                  filled: true,
-                  fillColor: cs.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
+                    );
+                  }).toList(),
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-              // ── Amount ─────────────────────────────────────────────
-              TextFormField(
-                controller: _amountCtrl,
-                validator: (value) {
-                  final amount = double.tryParse(
-                    (value ?? '').trim().replaceAll(',', '').replaceAll(' ', ''),
-                  );
-                  if (amount == null || !amount.isFinite || amount <= 0) {
-                    return 'Amount must be greater than zero';
-                  }
-                  return null;
-                },
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
-                decoration: InputDecoration(
-                  labelText: _type == GoalType.spendingLimit
-                      ? 'Monthly limit'
-                      : 'Target amount',
-                  prefixText: '\u20b9 ',
-                  hintText: '0.00',
-                  filled: true,
-                  fillColor: cs.surfaceContainer,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── Duration ───────────────────────────────────────────
-              Text(
-                'Duration',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _DurationChip(days: 30, label: '1 month', selected: _durationDays == 30,
-                      onTap: () => setState(() => _durationDays = 30)),
-                  _DurationChip(days: 90, label: '3 months', selected: _durationDays == 90,
-                      onTap: () => setState(() => _durationDays = 90)),
-                  _DurationChip(days: 180, label: '6 months', selected: _durationDays == 180,
-                      onTap: () => setState(() => _durationDays = 180)),
-                  _DurationChip(days: 365, label: '1 year', selected: _durationDays == 365,
-                      onTap: () => setState(() => _durationDays = 365)),
-                ],
-              ),
-
-              // ── Category (spending limit only) ─────────────────────
-              if (_type == GoalType.spendingLimit) ...[
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategoryId,
+                // ── Title ──────────────────────────────────────────────
+                TextFormField(
+                  controller: _titleCtrl,
+                  validator: (value) => (value == null || value.trim().isEmpty)
+                      ? 'Enter a goal title'
+                      : null,
                   decoration: InputDecoration(
-                    labelText: 'Category',
+                    labelText: 'Goal title',
+                    hintText: _type == GoalType.savings
+                        ? 'e.g. Emergency Fund'
+                        : _type == GoalType.spendingLimit
+                        ? 'e.g. Food Budget'
+                        : 'e.g. Clear HDFC Card',
                     filled: true,
                     fillColor: cs.surfaceContainer,
                     border: OutlineInputBorder(
@@ -277,19 +221,122 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                       borderSide: BorderSide.none,
                     ),
                   ),
-                  dropdownColor: cs.surfaceContainerHigh,
-                  items: expenseCategories.map((c) {
-                    return DropdownMenuItem(
-                      value: c.id,
-                      child: Text(c.name),
-                    );
-                  }).toList(),
-                  onChanged: (v) => setState(() => _selectedCategoryId = v),
+                  onChanged: (_) => setState(() {}),
                 ),
-              ],
 
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(height: 16),
+
+                // ── Amount ─────────────────────────────────────────────
+                TextFormField(
+                  controller: _amountCtrl,
+                  validator: (value) {
+                    final amount = double.tryParse(
+                      (value ?? '')
+                          .trim()
+                          .replaceAll(',', '')
+                          .replaceAll(' ', ''),
+                    );
+                    if (amount == null || !amount.isFinite || amount <= 0) {
+                      return 'Amount must be greater than zero';
+                    }
+                    return null;
+                  },
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,2}'),
+                    ),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: _type == GoalType.spendingLimit
+                        ? 'Monthly limit'
+                        : 'Target amount',
+                    prefixText: '\u20b9 ',
+                    hintText: '0.00',
+                    filled: true,
+                    fillColor: cs.surfaceContainer,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Duration ───────────────────────────────────────────
+                Text(
+                  'Duration',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _DurationChip(
+                      days: 30,
+                      label: '1 month',
+                      selected: _durationDays == 30,
+                      onTap: () => setState(() => _durationDays = 30),
+                    ),
+                    _DurationChip(
+                      days: 90,
+                      label: '3 months',
+                      selected: _durationDays == 90,
+                      onTap: () => setState(() => _durationDays = 90),
+                    ),
+                    _DurationChip(
+                      days: 180,
+                      label: '6 months',
+                      selected: _durationDays == 180,
+                      onTap: () => setState(() => _durationDays = 180),
+                    ),
+                    _DurationChip(
+                      days: 365,
+                      label: '1 year',
+                      selected: _durationDays == 365,
+                      onTap: () => setState(() => _durationDays = 365),
+                    ),
+                  ],
+                ),
+
+                // ── Category (spending limit only) ─────────────────────
+                if (_type == GoalType.spendingLimit) ...[
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedCategoryId,
+                    decoration: InputDecoration(
+                      labelText: 'Category',
+                      filled: true,
+                      fillColor: cs.surfaceContainer,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    dropdownColor: cs.surfaceContainerHigh,
+                    items: expenseCategories.map((c) {
+                      return DropdownMenuItem(
+                        value: c.id,
+                        child: Text(
+                          c.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (v) => setState(() => _selectedCategoryId = v),
+                  ),
+                ],
+
+                const SizedBox(height: 32),
+              ],
             ),
           ),
         ),

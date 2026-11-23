@@ -31,11 +31,7 @@ class AppShadows {
       offset: Offset(0, 4),
       spreadRadius: -2,
     ),
-    BoxShadow(
-      color: Color(0x0518274B),
-      blurRadius: 6,
-      offset: Offset(0, 1),
-    ),
+    BoxShadow(color: Color(0x0518274B), blurRadius: 6, offset: Offset(0, 1)),
   ];
 
   static const List<BoxShadow> floating = [
@@ -45,27 +41,15 @@ class AppShadows {
       offset: Offset(0, 8),
       spreadRadius: -4,
     ),
-    BoxShadow(
-      color: Color(0x0818274B),
-      blurRadius: 8,
-      offset: Offset(0, 2),
-    ),
+    BoxShadow(color: Color(0x0818274B), blurRadius: 8, offset: Offset(0, 2)),
   ];
 
   static const List<BoxShadow> glow = [
-    BoxShadow(
-      color: Color(0x256558E8),
-      blurRadius: 16,
-      offset: Offset(0, 4),
-    ),
+    BoxShadow(color: Color(0x256558E8), blurRadius: 16, offset: Offset(0, 4)),
   ];
 
   static const List<BoxShadow> darkCard = [
-    BoxShadow(
-      color: Color(0x40000000),
-      blurRadius: 16,
-      offset: Offset(0, 4),
-    ),
+    BoxShadow(color: Color(0x40000000), blurRadius: 16, offset: Offset(0, 4)),
   ];
 }
 
@@ -163,37 +147,41 @@ class AppColors {
   // Adaptive theme-aware resolvers
   static Color textPrimaryOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? AppTheme.darkTextPrimary
-          : AppTheme.lightTextPrimary;
+      ? AppTheme.darkTextPrimary
+      : AppTheme.lightTextPrimary;
 
   static Color textSecondaryOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? AppTheme.darkTextSecondary
-          : AppTheme.lightTextSecondary;
+      ? AppTheme.darkTextSecondary
+      : AppTheme.lightTextSecondary;
 
   static Color textMutedOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? AppTheme.darkTextMuted
-          : AppTheme.lightTextMuted;
+      ? AppTheme.darkTextMuted
+      : AppTheme.lightTextMuted;
 
   static Color surfaceOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? AppTheme.darkSurface
-          : AppTheme.lightSurface;
+      ? AppTheme.darkSurface
+      : AppTheme.lightSurface;
 
   static Color borderOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? AppTheme.darkBorder
-          : AppTheme.lightBorder;
+      ? AppTheme.darkBorder
+      : AppTheme.lightBorder;
 }
 
 /// Ergonomic context extension for unified theme access across widgets
 extension SpendXThemeContext on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
-  Color get textPrimary => isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
-  Color get textSecondary => isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary;
-  Color get textMuted => isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted;
-  Color get surfaceColor => isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
+  Color get textPrimary =>
+      isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
+  Color get textSecondary =>
+      isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary;
+  Color get textMuted =>
+      isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted;
+  Color get surfaceColor =>
+      isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
   Color get canvasColor => isDark ? AppTheme.darkCanvas : AppTheme.lightCanvas;
   Color get borderColor => isDark ? AppTheme.darkBorder : AppTheme.lightBorder;
 }
@@ -267,8 +255,16 @@ class AppTheme extends ChangeNotifier {
   static const double glassControlBlur = 12.0;
 
   static const List<Map<String, dynamic>> availableThemes = [
-    {'id': 'spendx_modern', 'name': 'SpendX Modern', 'color': Color(0xFF6558E8)},
-    {'id': 'liquid_glass_dark', 'name': 'Liquid Glass Dark', 'color': Color(0xFF6558E8)},
+    {
+      'id': 'spendx_modern',
+      'name': 'SpendX Modern',
+      'color': Color(0xFF6558E8),
+    },
+    {
+      'id': 'liquid_glass_dark',
+      'name': 'Liquid Glass Dark',
+      'color': Color(0xFF6558E8),
+    },
     {'id': 'premium_dark', 'name': 'Premium Dark', 'color': Color(0xFF6558E8)},
   ];
 
@@ -296,8 +292,9 @@ class AppTheme extends ChangeNotifier {
   static Color get chartIncome => successGreen;
   static Color get chartExpense => dangerRed;
 
-  static LinearGradient get primaryGradient =>
-      LinearGradient(colors: [primaryColor, primaryColor.withValues(alpha: 0.7)]);
+  static LinearGradient get primaryGradient => LinearGradient(
+    colors: [primaryColor, primaryColor.withValues(alpha: 0.7)],
+  );
   static LinearGradient get secondaryGradient =>
       LinearGradient(colors: [primaryBlue, primaryBlue.withValues(alpha: 0.7)]);
 
@@ -330,7 +327,6 @@ class AppTheme extends ChangeNotifier {
   }
 
   static ThemeData _staticGetTheme({String mode = 'dark'}) {
-
     Color bg, surface, card, primary;
     final bool isLight = mode == 'light';
 
@@ -346,8 +342,18 @@ class AppTheme extends ChangeNotifier {
         onPrimary: Colors.white,
         secondary: successGreen,
         onSecondary: Colors.white,
+        tertiary: semanticWarning,
+        onTertiary: lightTextPrimary,
         error: dangerRed,
         onError: Colors.white,
+        primaryContainer: const Color(0xFFEEF2FF),
+        onPrimaryContainer: const Color(0xFF3730A3),
+        secondaryContainer: const Color(0xFFECFDF5),
+        onSecondaryContainer: const Color(0xFF065F46),
+        tertiaryContainer: const Color(0xFFFEF3C7),
+        onTertiaryContainer: const Color(0xFF92400E),
+        errorContainer: const Color(0xFFFFF1F2),
+        onErrorContainer: const Color(0xFF9F1239),
         surface: surface,
         onSurface: lightTextPrimary,
         onSurfaceVariant: lightTextSecondary,
@@ -423,7 +429,9 @@ class AppTheme extends ChangeNotifier {
             systemNavigationBarColor: Colors.transparent,
             systemNavigationBarIconBrightness: Brightness.dark,
           ),
-          titleTextStyle: AppTextStyles.heading.copyWith(color: lightTextPrimary),
+          titleTextStyle: AppTextStyles.heading.copyWith(
+            color: lightTextPrimary,
+          ),
           iconTheme: const IconThemeData(color: lightTextPrimary),
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
@@ -447,8 +455,18 @@ class AppTheme extends ChangeNotifier {
       onPrimary: Colors.white,
       secondary: successGreen,
       onSecondary: Colors.white,
+      tertiary: semanticWarning,
+      onTertiary: darkTextPrimary,
       error: dangerRed,
       onError: Colors.white,
+      primaryContainer: const Color(0xFF252157),
+      onPrimaryContainer: const Color(0xFFC7D2FE),
+      secondaryContainer: const Color(0xFF064E3B),
+      onSecondaryContainer: const Color(0xFFA7F3D0),
+      tertiaryContainer: const Color(0xFF78350F),
+      onTertiaryContainer: const Color(0xFFFDE68A),
+      errorContainer: const Color(0xFF4C1D24),
+      onErrorContainer: const Color(0xFFFDA4AF),
       surface: surface,
       onSurface: darkTextPrimary,
       onSurfaceVariant: darkTextSecondary,

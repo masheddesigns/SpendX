@@ -17,10 +17,10 @@ class ManageCompanyScreen extends ConsumerWidget {
     final async = ref.watch(salaryLedgerProvider);
 
     return Scaffold(
-      
       appBar: AppBar(
-          title: Text('Manage Companies'),
-          backgroundColor: Colors.transparent),
+        title: Text('Manage Companies'),
+        backgroundColor: Colors.transparent,
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(context, ref),
         backgroundColor: Colors.blueAccent,
@@ -29,7 +29,10 @@ class ManageCompanyScreen extends ConsumerWidget {
       ),
       body: async.when(
         loading: () => const SkeletonLoader.transactions(),
-        error: (e, _) => ErrorStateWidget(error: e, onRetry: () => ref.invalidate(salaryLedgerProvider)),
+        error: (e, _) => ErrorStateWidget(
+          error: e,
+          onRetry: () => ref.invalidate(salaryLedgerProvider),
+        ),
         data: (state) {
           final companies = state.companies;
           final selectedId = state.selectedCompanyId;
@@ -39,151 +42,191 @@ class ManageCompanyScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.apartment_outlined,
-                      size: 56,
-                      color: Colors.grey.shade600),
+                  Icon(
+                    Icons.apartment_outlined,
+                    size: 56,
+                    color: Colors.grey.shade600,
+                  ),
                   const SizedBox(height: 12),
-                  Text('No companies yet',
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    'No companies yet',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Add your employer to start salary tracking',
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+                  Text(
+                    'Add your employer to start salary tracking',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: companies.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (_, i) {
-              final company = companies[i];
-              final isSelected = company.id == selectedId;
+          return RefreshIndicator(
+            onRefresh: () => ref.read(salaryLedgerProvider.notifier).refresh(),
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              itemCount: companies.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (_, i) {
+                final company = companies[i];
+                final isSelected = company.id == selectedId;
 
-              return Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? Colors.blueAccent.withValues(alpha: 0.5)
-                        : Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.blueAccent.withValues(alpha: 0.5)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.outline.withValues(alpha: 0.15),
+                    ),
                   ),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  onTap: () => ref
-                      .read(salaryLedgerProvider.notifier)
-                      .selectCompany(company.id),
-                  leading: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: isSelected
-                        ? Colors.blueAccent.withValues(alpha: 0.15)
-                        : const Color(0xFF2A2A2A),
-                    child: Icon(Icons.apartment_rounded,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    onTap: () => ref
+                        .read(salaryLedgerProvider.notifier)
+                        .selectCompany(company.id),
+                    leading: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: isSelected
+                          ? Colors.blueAccent.withValues(alpha: 0.15)
+                          : const Color(0xFF2A2A2A),
+                      child: Icon(
+                        Icons.apartment_rounded,
                         color: isSelected
                             ? Colors.blueAccent
                             : Colors.grey.shade400,
-                        size: 20),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(company.name,
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface)),
+                        size: 20,
                       ),
-                      if (isSelected)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blueAccent.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            company.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                           ),
-                          child: Text('Active',
-                              style: TextStyle(
-                                  color: Colors.blueAccent,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600)),
                         ),
-                    ],
-                  ),
-                  subtitle: Text(
+                        if (isSelected)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blueAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Active',
+                              style: TextStyle(
+                                color: Colors.blueAccent,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    subtitle: Text(
                       'Pay day: ${company.salaryCreditDay} \u00b7 Joined ${_formatDate(company.createdAt)}',
                       style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-                  trailing: PopupMenuButton<String>(
-                    iconColor: Colors.grey.shade400,
-                    onSelected: (action) {
-                      if (action == 'edit') {
-                        _openEditor(context, ref, existing: company);
-                      }
-                      if (action == 'update_salary') {
-                        _showUpdateSalarySheet(context, ref, company);
-                      }
-                      if (action == 'delete') {
-                        _confirmDelete(context, ref, company);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: PopupMenuButton<String>(
+                      iconColor: Colors.grey.shade400,
+                      onSelected: (action) {
+                        if (action == 'edit') {
+                          _openEditor(context, ref, existing: company);
+                        }
+                        if (action == 'update_salary') {
+                          _showUpdateSalarySheet(context, ref, company);
+                        }
+                        if (action == 'delete') {
+                          _confirmDelete(context, ref, company);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(
                           value: 'update_salary',
-                          child: Text('Update Salary')),
-                      PopupMenuItem(
+                          child: Text('Update Salary'),
+                        ),
+                        PopupMenuItem(
                           value: 'delete',
-                          child: Text('Delete',
-                              style: TextStyle(color: Colors.red))),
-                    ],
+                          child: Text(
+                            'Delete',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           );
         },
       ),
     );
   }
 
-  String _formatDate(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}';
+  String _formatDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
-  Future<void> _openEditor(BuildContext context, WidgetRef ref,
-      {Company? existing}) async {
+  Future<void> _openEditor(
+    BuildContext context,
+    WidgetRef ref, {
+    Company? existing,
+  }) async {
     final notifier = ref.read(salaryLedgerProvider.notifier);
     final result = await Navigator.push<bool>(
       context,
-      AppPageRoute(
-          builder: (_) => _CompanyEditorScreen(existing: existing)),
+      AppPageRoute(builder: (_) => _CompanyEditorScreen(existing: existing)),
     );
     if (result == true) {
       notifier.refresh();
     }
   }
 
-  void _confirmDelete(
-      BuildContext context, WidgetRef ref, Company company) {
+  void _confirmDelete(BuildContext context, WidgetRef ref, Company company) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-        title: Text('Delete Company',
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+        title: Text(
+          'Delete Company',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+        ),
         content: Text(
-            'Delete ${company.name}? All salary months and payments will be removed.',
-            style: TextStyle(color: Colors.grey.shade300)),
+          'Delete ${company.name}? All salary months and payments will be removed.',
+          style: TextStyle(color: Colors.grey.shade300),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               final notifier = ref.read(salaryLedgerProvider.notifier);
@@ -191,8 +234,7 @@ class ManageCompanyScreen extends ConsumerWidget {
               HapticService.instance.critical();
               Future.microtask(() => notifier.deleteCompany(company.id));
             },
-            child:
-                Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -200,14 +242,18 @@ class ManageCompanyScreen extends ConsumerWidget {
   }
 
   void _showUpdateSalarySheet(
-      BuildContext context, WidgetRef ref, Company company) {
+    BuildContext context,
+    WidgetRef ref,
+    Company company,
+  ) {
     if (ModalRoute.of(context)?.isCurrent != true) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => _UpdateSalarySheet(company: company),
     );
   }
@@ -220,8 +266,7 @@ class _UpdateSalarySheet extends ConsumerStatefulWidget {
   const _UpdateSalarySheet({required this.company});
 
   @override
-  ConsumerState<_UpdateSalarySheet> createState() =>
-      _UpdateSalarySheetState();
+  ConsumerState<_UpdateSalarySheet> createState() => _UpdateSalarySheetState();
 }
 
 class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
@@ -252,8 +297,7 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
       helpText: 'Effective from which month?',
     );
     if (picked != null && mounted) {
-      setState(
-          () => _effectiveFrom = DateTime(picked.year, picked.month, 1));
+      setState(() => _effectiveFrom = DateTime(picked.year, picked.month, 1));
     }
   }
 
@@ -265,92 +309,128 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
     final from = _effectiveFrom;
     // Pop first, then update
     Navigator.pop(context);
-    Future.microtask(() => notifier.updateSalary(
-          companyId: companyId,
-          newSalary: salary,
-          effectiveFrom: from,
-        ));
+    Future.microtask(
+      () => notifier.updateSalary(
+        companyId: companyId,
+        newSalary: salary,
+        effectiveFrom: from,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(
-              child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.outline,
-                      borderRadius: BorderRadius.circular(2)))),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.outline,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
-          Text('Update Salary',
-              style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface)),
+          Text(
+            'Update Salary',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('${widget.company.name} \u2014 salary hike',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+          Text(
+            '${widget.company.name} \u2014 salary hike',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 13,
+            ),
+          ),
           const SizedBox(height: 20),
           TextField(
             controller: _salaryCtrl,
             autofocus: true,
             keyboardType: TextInputType.number,
             onChanged: (_) => setState(() {}),
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 20),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 20,
+            ),
             decoration: InputDecoration(
               labelText: 'New Monthly Salary',
-              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              labelStyle: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               prefixText: '\u20b9 ',
-              prefixStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 20),
+              prefixStyle: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 20,
+              ),
               filled: true,
               fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
           ),
           const SizedBox(height: 14),
           GestureDetector(
             onTap: _pickDate,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  Text('Effective From',
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
+                  Text(
+                    'Effective From',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 14,
+                    ),
+                  ),
                   const Spacer(),
-                  Text(DateFormat('MMM yyyy').format(_effectiveFrom),
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500)),
+                  Text(
+                    DateFormat('MMM yyyy').format(_effectiveFrom),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  Icon(Icons.calendar_month_rounded,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant, size: 18),
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    size: 18,
+                  ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-              'Old months keep their original salary. Only unpaid future months will update.',
-              style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 11)),
+            'Old months keep their original salary. Only unpaid future months will update.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.outline,
+              fontSize: 11,
+            ),
+          ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -358,11 +438,15 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
             child: FilledButton(
               onPressed: _parsed > 0 ? _submit : null,
               style: FilledButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14))),
-              child: Text('Apply Salary Change',
-                  style: TextStyle(fontSize: 16)),
+                backgroundColor: Colors.blueAccent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                'Apply Salary Change',
+                style: TextStyle(fontSize: 16),
+              ),
             ),
           ),
         ],
@@ -394,7 +478,8 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
     _dayCtrl = TextEditingController(
-        text: (widget.existing?.salaryCreditDay ?? 5).toString());
+      text: (widget.existing?.salaryCreditDay ?? 5).toString(),
+    );
     _joinedDate = widget.existing?.createdAt ?? DateTime.now();
     _empType = widget.existing?.employmentType ?? EmploymentType.fullTime;
     _payCycle = widget.existing?.payCycle ?? PayCycle.monthly;
@@ -443,8 +528,9 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
       return;
     }
@@ -457,10 +543,10 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
     final isEditing = widget.existing != null;
 
     return Scaffold(
-      
       appBar: AppBar(
-          title: Text(isEditing ? 'Edit Company' : 'Add Company'),
-          backgroundColor: Colors.transparent),
+        title: Text(isEditing ? 'Edit Company' : 'Add Company'),
+        backgroundColor: Colors.transparent,
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -468,8 +554,13 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Employment Type ───────────────────────
-              Text('Employment Type',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+              Text(
+                'Employment Type',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -479,20 +570,31 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
-                        label: Text(Company(name: '', salaryCreditDay: 1, employmentType: t).employmentLabel),
+                        label: Text(
+                          Company(
+                            name: '',
+                            salaryCreditDay: 1,
+                            employmentType: t,
+                          ).employmentLabel,
+                        ),
                         selected: sel,
                         onSelected: (_) => setState(() => _empType = t),
                         selectedColor: Colors.blueAccent,
-                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
                         labelStyle: TextStyle(
-                            color: sel ? Colors.white : Colors.grey.shade400,
-                            fontSize: 12),
+                          color: sel ? Colors.white : Colors.grey.shade400,
+                          fontSize: 12,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                         side: BorderSide(
-                            color: sel
-                                ? Colors.blueAccent
-                                : Colors.white.withValues(alpha: 0.1)),
+                          color: sel
+                              ? Colors.blueAccent
+                              : Colors.white.withValues(alpha: 0.1),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -501,40 +603,62 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
               const SizedBox(height: 16),
 
               // ── Pay Cycle ─────────────────────────────
-              Text('Pay Cycle',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+              Text(
+                'Pay Cycle',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
               const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: [
-                    PayCycle.monthly,
-                    PayCycle.weekly,
-                    PayCycle.biWeekly,
-                    PayCycle.daily,
-                    if (_empType == EmploymentType.freelance) PayCycle.perProject,
-                  ].map((c) {
-                    final sel = _payCycle == c;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(Company(name: '', salaryCreditDay: 1, payCycle: c).payCycleLabel),
-                        selected: sel,
-                        onSelected: (_) => setState(() => _payCycle = c),
-                        selectedColor: Colors.tealAccent.withValues(alpha: 0.3),
-                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        labelStyle: TextStyle(
-                            color: sel ? Colors.tealAccent : Colors.grey.shade400,
-                            fontSize: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        side: BorderSide(
-                            color: sel
-                                ? Colors.tealAccent.withValues(alpha: 0.5)
-                                : Colors.white.withValues(alpha: 0.1)),
-                      ),
-                    );
-                  }).toList(),
+                  children:
+                      [
+                        PayCycle.monthly,
+                        PayCycle.weekly,
+                        PayCycle.biWeekly,
+                        PayCycle.daily,
+                        if (_empType == EmploymentType.freelance)
+                          PayCycle.perProject,
+                      ].map((c) {
+                        final sel = _payCycle == c;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(
+                              Company(
+                                name: '',
+                                salaryCreditDay: 1,
+                                payCycle: c,
+                              ).payCycleLabel,
+                            ),
+                            selected: sel,
+                            onSelected: (_) => setState(() => _payCycle = c),
+                            selectedColor: Colors.tealAccent.withValues(
+                              alpha: 0.3,
+                            ),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            labelStyle: TextStyle(
+                              color: sel
+                                  ? Colors.tealAccent
+                                  : Colors.grey.shade400,
+                              fontSize: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            side: BorderSide(
+                              color: sel
+                                  ? Colors.tealAccent.withValues(alpha: 0.5)
+                                  : Colors.white.withValues(alpha: 0.1),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -553,18 +677,24 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                       ? 'e.g. Acme Design Co'
                       : 'e.g. Infosys, TCS',
                   hintStyle: TextStyle(color: Colors.grey.shade600),
-                  labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  labelStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  fillColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
 
               // ── Pay Day (hidden for daily/perProject) ─
-              if (_payCycle != PayCycle.daily && _payCycle != PayCycle.perProject)
+              if (_payCycle != PayCycle.daily &&
+                  _payCycle != PayCycle.perProject)
                 TextField(
                   controller: _dayCtrl,
                   keyboardType: TextInputType.number,
@@ -573,12 +703,17 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                     labelText: 'Salary Credit Day (1-28)',
                     hintText: '5',
                     hintStyle: TextStyle(color: Colors.grey.shade600),
-                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    labelStyle: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    fillColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -587,25 +722,39 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                 onTap: _pickJoinedDate,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 16),
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      Text('Joined Date',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
+                      Text(
+                        'Joined Date',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
                       const Spacer(),
-                      Text(DateFormat('dd MMM yyyy').format(_joinedDate),
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500)),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(_joinedDate),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       const SizedBox(width: 6),
-                      Icon(Icons.calendar_month_rounded,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant, size: 18),
+                      Icon(
+                        Icons.calendar_month_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 18,
+                      ),
                     ],
                   ),
                 ),
@@ -619,10 +768,13 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  child: Text(isEditing ? 'Save Changes' : 'Add Company',
-                      style: const TextStyle(fontSize: 16)),
+                  child: Text(
+                    isEditing ? 'Save Changes' : 'Add Company',
+                    style: const TextStyle(fontSize: 16),
+                  ),
                 ),
               ),
             ],

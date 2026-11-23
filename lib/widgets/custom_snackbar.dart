@@ -22,20 +22,20 @@ class CustomSnackBar {
     final Color bgColor = isError
         ? Theme.of(context).colorScheme.error
         : isWarning
-            ? Theme.of(context).colorScheme.secondary
-            : Theme.of(context).colorScheme.primary;
+        ? Theme.of(context).colorScheme.tertiary
+        : Theme.of(context).colorScheme.secondary;
 
     final IconData icon = isError
         ? Icons.error_outline_rounded
         : isWarning
-            ? Icons.warning_amber_rounded
-            : Icons.check_circle_outline_rounded;
+        ? Icons.warning_amber_rounded
+        : Icons.check_circle_outline_rounded;
 
     final Duration duration = isError
         ? const Duration(seconds: 5)
         : isWarning
-            ? const Duration(seconds: 4)
-            : const Duration(seconds: 3);
+        ? const Duration(seconds: 4)
+        : const Duration(seconds: 3);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -53,9 +53,7 @@ class CustomSnackBar {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xD41A2333)
-                  : const Color(0xEEFFFFFF),
+              color: isDark ? const Color(0xD41A2333) : const Color(0xEEFFFFFF),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isDark
@@ -95,7 +93,7 @@ class CustomSnackBar {
                   child: Text(
                     message,
                     style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                       height: 1.3,

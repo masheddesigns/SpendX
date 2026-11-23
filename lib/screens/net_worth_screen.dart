@@ -123,15 +123,17 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       final summary = ref.read(netWorthSummaryProvider).value;
       if (summary == null) return;
 
-      await ref.read(netWorthHistoryProvider.notifier).add(
-        NetWorthSnapshotRecord(
-          id: const Uuid().v4(),
-          netWorth: summary.netWorth,
-          assets: summary.assets,
-          liabilities: summary.liabilities,
-          timestamp: finalTimestamp,
-        ),
-      );
+      await ref
+          .read(netWorthHistoryProvider.notifier)
+          .add(
+            NetWorthSnapshotRecord(
+              id: const Uuid().v4(),
+              netWorth: summary.netWorth,
+              assets: summary.assets,
+              liabilities: summary.liabilities,
+              timestamp: finalTimestamp,
+            ),
+          );
       await SettingsService.instance.setNetWorthLastUpdated(finalTimestamp);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -159,21 +161,39 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     final totalLiabilities = summaryAsync.valueOrNull?.liabilities ?? 0.0;
 
     final liquidAccounts = accounts
-        .where((a) =>
-            a.isAsset &&
-            !const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf']
-                .contains(a.accountType))
+        .where(
+          (a) =>
+              a.isAsset &&
+              !const [
+                'stock',
+                'mutual_fund',
+                'gold',
+                'real_estate',
+                'ppf',
+              ].contains(a.accountType),
+        )
         .toList();
     final investmentAccounts = accounts
-        .where((a) =>
-            a.isAsset &&
-            const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf']
-                .contains(a.accountType))
+        .where(
+          (a) =>
+              a.isAsset &&
+              const [
+                'stock',
+                'mutual_fund',
+                'gold',
+                'real_estate',
+                'ppf',
+              ].contains(a.accountType),
+        )
         .toList();
-    final totalLiquid =
-        liquidAccounts.fold<double>(0.0, (s, a) => s + a.balance);
-    final totalInvestments =
-        investmentAccounts.fold<double>(0.0, (s, a) => s + a.balance);
+    final totalLiquid = liquidAccounts.fold<double>(
+      0.0,
+      (s, a) => s + a.balance,
+    );
+    final totalInvestments = investmentAccounts.fold<double>(
+      0.0,
+      (s, a) => s + a.balance,
+    );
 
     listenForUndoSnackbars(
       ref,
@@ -182,7 +202,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       onUndone: (_) => _refreshData(),
     );
 
-    if (accountsAsync.isLoading || cardsAsync.isLoading || loansAsync.isLoading) {
+    if (accountsAsync.isLoading ||
+        cardsAsync.isLoading ||
+        loansAsync.isLoading) {
       return const Scaffold(body: SkeletonLoader.summary());
     }
 
@@ -256,9 +278,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               SliverToBoxAdapter(child: _buildNetWorthHero()),
 
               // ─── Investments Guiding Banner ───
-              SliverToBoxAdapter(
-                child: _buildInvestmentsGuidanceCard(context),
-              ),
+              SliverToBoxAdapter(child: _buildInvestmentsGuidanceCard(context)),
 
               // ─── Liquid Cash & Bank Accounts ───
               SliverToBoxAdapter(
@@ -301,7 +321,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 child: _buildSectionHeader(
                   'Investments & Portfolio',
                   totalInvestments,
-                  const Color(0xFF6366F1),
+                  Theme.of(context).colorScheme.primary,
                   isAsset: true,
                 ),
               ),
@@ -345,13 +365,12 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               // Credit card outstanding
               if (cards.where((c) => c.outstanding > 0).isNotEmpty)
                 SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) {
-                      final activeCards = cards.where((c) => c.outstanding > 0).toList();
-                      return _buildCcLiabilityTile(activeCards[i]);
-                    },
-                    childCount: cards.where((c) => c.outstanding > 0).length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((ctx, i) {
+                    final activeCards = cards
+                        .where((c) => c.outstanding > 0)
+                        .toList();
+                    return _buildCcLiabilityTile(activeCards[i]);
+                  }, childCount: cards.where((c) => c.outstanding > 0).length),
                 ),
 
               // Borrowed lendings
@@ -398,7 +417,11 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.check_circle_outline_rounded, size: 16, color: AppTheme.semanticIncome),
+                          Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 16,
+                            color: AppTheme.semanticIncome,
+                          ),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -435,7 +458,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final nonNegativeAssets = data.assets < 0 ? 0.0 : data.assets;
         final totalCapital = nonNegativeAssets + data.liabilities;
-        final double assetPct = totalCapital > 0 ? (nonNegativeAssets / totalCapital).clamp(0.0, 1.0) : 1.0;
+        final double assetPct = totalCapital > 0
+            ? (nonNegativeAssets / totalCapital).clamp(0.0, 1.0)
+            : 1.0;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -453,14 +478,17 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                     Text(
                       'TOTAL NET WORTH',
                       style: TextStyle(
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                         fontSize: 11,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: isSolvent
                             ? const Color(0x1F10B981)
@@ -477,9 +505,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isSolvent ? Icons.verified_rounded : Icons.warning_amber_rounded,
+                            isSolvent
+                                ? Icons.verified_rounded
+                                : Icons.warning_amber_rounded,
                             size: 13,
-                            color: isSolvent ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                            color: isSolvent
+                                ? AppTheme.semanticIncome
+                                : AppTheme.semanticExpense,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -487,7 +519,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: isSolvent ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                              color: isSolvent
+                                  ? AppTheme.semanticIncome
+                                  : AppTheme.semanticExpense,
                             ),
                           ),
                         ],
@@ -500,7 +534,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   '${data.netWorth < 0 ? '-' : ''}${AppFormat.currency(data.netWorth.abs())}',
                   style: TextStyle(
                     color: isSolvent
-                        ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                        ? (Theme.of(context).colorScheme.onSurface)
                         : AppTheme.semanticExpense,
                     fontSize: 36,
                     fontWeight: FontWeight.w800,
@@ -514,7 +548,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                     child: Text(
                       'Synced ${DateFormat('dd MMM, hh:mm a').format(SettingsService.instance.netWorthLastUpdated!)}',
                       style: TextStyle(
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                         fontSize: 11.5,
                       ),
                     ),
@@ -553,7 +587,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       child: Container(
                         height: 7,
                         width: double.infinity,
-                        color: isDark ? const Color(0x22FFFFFF) : const Color(0x18000000),
+                        color: isDark
+                            ? const Color(0x22FFFFFF)
+                            : const Color(0x18000000),
                         child: Row(
                           children: [
                             Expanded(
@@ -562,8 +598,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                             ),
                             if (data.liabilities > 0)
                               Expanded(
-                                flex: (((1.0 - assetPct) * 1000).round()).clamp(1, 999),
-                                child: Container(color: AppTheme.semanticExpense),
+                                flex: (((1.0 - assetPct) * 1000).round()).clamp(
+                                  1,
+                                  999,
+                                ),
+                                child: Container(
+                                  color: AppTheme.semanticExpense,
+                                ),
                               ),
                           ],
                         ),
@@ -579,12 +620,19 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppTheme.semanticIncome.withValues(alpha: isDark ? 0.12 : 0.08),
+                          color: AppTheme.semanticIncome.withValues(
+                            alpha: isDark ? 0.12 : 0.08,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppTheme.semanticIncome.withValues(alpha: isDark ? 0.25 : 0.15),
+                            color: AppTheme.semanticIncome.withValues(
+                              alpha: isDark ? 0.25 : 0.15,
+                            ),
                             width: 0.75,
                           ),
                         ),
@@ -593,7 +641,11 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.arrow_upward_rounded, size: 14, color: AppTheme.semanticIncome),
+                                const Icon(
+                                  Icons.arrow_upward_rounded,
+                                  size: 14,
+                                  color: AppTheme.semanticIncome,
+                                ),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
@@ -603,7 +655,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                      color: context.textMuted,
                                     ),
                                   ),
                                 ),
@@ -626,12 +678,19 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.12 : 0.08),
+                          color: AppTheme.semanticExpense.withValues(
+                            alpha: isDark ? 0.12 : 0.08,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.25 : 0.15),
+                            color: AppTheme.semanticExpense.withValues(
+                              alpha: isDark ? 0.25 : 0.15,
+                            ),
                             width: 0.75,
                           ),
                         ),
@@ -640,7 +699,11 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.arrow_downward_rounded, size: 14, color: AppTheme.semanticExpense),
+                                const Icon(
+                                  Icons.arrow_downward_rounded,
+                                  size: 14,
+                                  color: AppTheme.semanticExpense,
+                                ),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
@@ -650,7 +713,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                      color: context.textMuted,
                                     ),
                                   ),
                                 ),
@@ -684,16 +747,30 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                         onPressed: () async {
                           final res = await Navigator.push(
                             context,
-                            AppPageRoute(builder: (_) => const AddExpenseScreen(initialType: 'transfer')),
+                            AppPageRoute(
+                              builder: (_) => const AddExpenseScreen(
+                                initialType: 'transfer',
+                              ),
+                            ),
                           );
                           if (res == true) _refreshData();
                         },
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.swap_horiz_rounded, size: 16, color: AppTheme.primaryBlue),
+                            Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 16,
+                              color: AppTheme.primaryBlue,
+                            ),
                             SizedBox(width: 6),
-                            Text('Move Funds', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                            Text(
+                              'Move Funds',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -710,24 +787,35 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title, double total, Color color, {required bool isAsset}) =>
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTheme.darkTextMuted
-                    : AppTheme.lightTextMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.0,
-              ),
+  Widget _buildSectionHeader(
+    String title,
+    double total,
+    Color color, {
+    required bool isAsset,
+  }) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: context.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
             ),
-            Text(
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
               AppFormat.currency(isAsset ? (total < 0 ? 0 : total) : total),
               style: TextStyle(
                 color: color,
@@ -736,17 +824,27 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _buildInvestmentsGuidanceCard(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accounts = ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
-    final hasInvestments = accounts.any((a) =>
-        a.isAsset &&
-        const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf']
-            .contains(a.accountType));
+    final accounts =
+        ref.watch(accountsProvider).valueOrNull ?? const <BankAccount>[];
+    final hasInvestments = accounts.any(
+      (a) =>
+          a.isAsset &&
+          const [
+            'stock',
+            'mutual_fund',
+            'gold',
+            'real_estate',
+            'ppf',
+          ].contains(a.accountType),
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -758,13 +856,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   const Color(0xFF1E1B4B).withValues(alpha: 0.6),
                   const Color(0xFF0F172A).withValues(alpha: 0.8),
                 ]
-              : [const Color(0xFFEEF2FF), const Color(0xFFF8FAFC)],
+              : [Theme.of(context).colorScheme.primaryContainer, const Color(0xFFF8FAFC)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -776,13 +874,15 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.auto_graph_rounded,
                   size: 20,
-                  color: Color(0xFF818CF8),
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -791,11 +891,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      hasInvestments ? 'Your Investment Portfolio' : 'Complete Your Net Worth',
+                      hasInvestments
+                          ? 'Your Investment Portfolio'
+                          : 'Complete Your Net Worth',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -805,9 +907,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                           : 'Bank SMS only covers cash. Add your stocks, mutual funds, EPF & gold to track your true wealth.',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark
-                            ? AppTheme.darkTextMuted
-                            : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                       ),
                     ),
                   ],
@@ -832,14 +932,14 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 label: 'Stocks',
                 icon: Icons.trending_up_rounded,
                 type: 'stock',
-                color: const Color(0xFF10B981),
+                color: Theme.of(context).colorScheme.secondary,
               ),
               _buildQuickAddPill(
                 context,
                 label: 'Gold',
                 icon: Icons.monetization_on_outlined,
                 type: 'gold',
-                color: const Color(0xFFF59E0B),
+                color: Theme.of(context).colorScheme.tertiary,
               ),
               _buildQuickAddPill(
                 context,
@@ -853,7 +953,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 label: 'Real Estate',
                 icon: Icons.home_work_outlined,
                 type: 'real_estate',
-                color: const Color(0xFF6366F1),
+                color: Theme.of(context).colorScheme.primary,
               ),
             ],
           ),
@@ -873,11 +973,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       onTap: () async {
         final res = await Navigator.push(
           context,
-          AppPageRoute(
-            builder: (_) => AddBankAccountScreen(
-              initialType: type,
-            ),
-          ),
+          AppPageRoute(builder: (_) => AddBankAccountScreen(initialType: type)),
         );
         if (res == true) {
           _refreshData();
@@ -913,7 +1009,8 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
   Widget _buildAccountTile(BankAccount a) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final displayName = resolveAccountDisplayName(a.name);
-    final isCash = a.id == 'acc_cash_default' ||
+    final isCash =
+        a.id == 'acc_cash_default' ||
         a.accountType.toLowerCase().contains('cash') ||
         a.name.toLowerCase().contains('cash');
 
@@ -922,7 +1019,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     switch (a.accountType) {
       case 'stock':
         iconData = Icons.trending_up_rounded;
-        tileColor = const Color(0xFF10B981);
+        tileColor = Theme.of(context).colorScheme.secondary;
         break;
       case 'mutual_fund':
         iconData = Icons.pie_chart_rounded;
@@ -930,7 +1027,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         break;
       case 'gold':
         iconData = Icons.monetization_on_rounded;
-        tileColor = const Color(0xFFF59E0B);
+        tileColor = Theme.of(context).colorScheme.tertiary;
         break;
       case 'ppf':
         iconData = Icons.savings_rounded;
@@ -938,11 +1035,11 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         break;
       case 'real_estate':
         iconData = Icons.home_work_rounded;
-        tileColor = const Color(0xFF6366F1);
+        tileColor = Theme.of(context).colorScheme.primary;
         break;
       case 'fd':
         iconData = Icons.lock_clock_rounded;
-        tileColor = const Color(0xFFF59E0B);
+        tileColor = Theme.of(context).colorScheme.tertiary;
         break;
       case 'cash':
         iconData = Icons.payments_rounded;
@@ -950,24 +1047,42 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         break;
       case 'wallet':
         iconData = Icons.account_balance_wallet_rounded;
-        tileColor = const Color(0xFF8B5CF6);
+        tileColor = Theme.of(context).colorScheme.primary;
         break;
       case 'current':
         iconData = Icons.business_center_rounded;
         tileColor = const Color(0xFF3B82F6);
         break;
       default:
-        iconData = isCash ? Icons.payments_rounded : Icons.account_balance_rounded;
+        iconData = isCash
+            ? Icons.payments_rounded
+            : Icons.account_balance_rounded;
         tileColor = isCash ? AppTheme.semanticIncome : AppTheme.primaryBlue;
     }
 
     final bankName = isCash
         ? 'Physical Cash'
-        : (['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf'].contains(a.accountType)
-            ? (a.bank.isNotEmpty && a.bank != a.name ? TextFormatter.toSmartTitleCase(a.bank) : 'Portfolio Asset')
-            : (a.bank == 'acc_cash_default' ? 'Bank Account' : TextFormatter.toSmartTitleCase(a.bank)));
+        : ([
+                'stock',
+                'mutual_fund',
+                'gold',
+                'real_estate',
+                'ppf',
+              ].contains(a.accountType)
+              ? (a.bank.isNotEmpty && a.bank != a.name
+                    ? TextFormatter.toSmartTitleCase(a.bank)
+                    : 'Portfolio Asset')
+              : (a.bank == 'acc_cash_default'
+                    ? 'Bank Account'
+                    : TextFormatter.toSmartTitleCase(a.bank)));
 
-    final isInvestment = const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf'].contains(a.accountType);
+    final isInvestment = const [
+      'stock',
+      'mutual_fund',
+      'gold',
+      'real_estate',
+      'ppf',
+    ].contains(a.accountType);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -998,11 +1113,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   color: tileColor.withValues(alpha: isDark ? 0.20 : 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  iconData,
-                  color: tileColor,
-                  size: 20,
-                ),
+                child: Icon(iconData, color: tileColor, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1014,7 +1125,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: context.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1024,7 +1135,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       '$bankName • ${TextFormatter.toSmartTitleCase(a.accountType)}',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1045,8 +1156,8 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       fontWeight: FontWeight.w700,
                       fontFeatures: const [FontFeature.tabularFigures()],
                       color: a.balance < 0
-                          ? const Color(0xFFD97706)
-                          : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
+                          ? Theme.of(context).colorScheme.tertiary
+                          : (context.textPrimary),
                     ),
                   ),
                   if (isInvestment) ...[
@@ -1079,7 +1190,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
   Widget _buildCcLiabilityTile(CreditCard c) {
     if (c.outstanding <= 0) return const SizedBox.shrink();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardName = resolveAccountDisplayName(c.name.isNotEmpty ? c.name : '${c.bank} Credit Card');
+    final cardName = resolveAccountDisplayName(
+      c.name.isNotEmpty ? c.name : '${c.bank} Credit Card',
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1092,7 +1205,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
           onTap: () async {
             final res = await Navigator.push(
               context,
-              AppPageRoute(builder: (_) => const AddExpenseScreen(initialType: 'transfer')),
+              AppPageRoute(
+                builder: (_) => const AddExpenseScreen(initialType: 'transfer'),
+              ),
             );
             if (res == true) _refreshData();
           },
@@ -1102,7 +1217,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.semanticExpense.withValues(alpha: isDark ? 0.20 : 0.12),
+                  color: AppTheme.semanticExpense.withValues(
+                    alpha: isDark ? 0.20 : 0.12,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -1121,7 +1238,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                        color: context.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1131,7 +1248,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       '${c.bank} • ••${c.last4}',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                       ),
                     ),
                   ],
@@ -1155,7 +1272,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ],
@@ -1184,12 +1301,14 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.20 : 0.12),
+                color: Theme.of(
+                  context,
+                ).colorScheme.tertiary.withValues(alpha: isDark ? 0.20 : 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
+              child:  Icon(
                 Icons.handshake_rounded,
-                color: Color(0xFFF59E0B),
+                color: Theme.of(context).colorScheme.tertiary,
                 size: 20,
               ),
             ),
@@ -1203,7 +1322,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                      color: context.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1211,21 +1330,18 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   const SizedBox(height: 2),
                   Text(
                     'Peer Borrowing • Repayment Due',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: context.textMuted),
                   ),
                 ],
               ),
             ),
             Text(
               '−${AppFormat.currency(remaining)}',
-              style: const TextStyle(
+              style:  TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w700,
                 fontFeatures: [FontFeature.tabularFigures()],
-                color: Color(0xFFF59E0B),
+                color: Theme.of(context).colorScheme.tertiary,
               ),
             ),
           ],
@@ -1233,6 +1349,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       ),
     );
   }
+
   void _showUpdateAssetValuationSheet(BankAccount a) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final ctrl = TextEditingController(
@@ -1247,7 +1364,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     switch (a.accountType) {
       case 'stock':
         assetIcon = Icons.trending_up_rounded;
-        assetColor = const Color(0xFF10B981);
+        assetColor = Theme.of(context).colorScheme.secondary;
         break;
       case 'mutual_fund':
         assetIcon = Icons.pie_chart_rounded;
@@ -1255,7 +1372,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         break;
       case 'gold':
         assetIcon = Icons.monetization_on_rounded;
-        assetColor = const Color(0xFFF59E0B);
+        assetColor = Theme.of(context).colorScheme.tertiary;
         break;
       case 'ppf':
         assetIcon = Icons.savings_rounded;
@@ -1263,7 +1380,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         break;
       case 'real_estate':
         assetIcon = Icons.home_work_rounded;
-        assetColor = const Color(0xFF6366F1);
+        assetColor = Theme.of(context).colorScheme.primary;
         break;
       default:
         assetIcon = Icons.account_balance_rounded;
@@ -1277,7 +1394,8 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
-            final enteredVal = double.tryParse(ctrl.text.trim()) ?? initialBalance;
+            final enteredVal =
+                double.tryParse(ctrl.text.trim()) ?? initialBalance;
             final diff = enteredVal - initialBalance;
             final isDiffNonZero = diff.abs() >= 0.01;
             final isPositive = diff > 0;
@@ -1289,7 +1407,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1E222D) : Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.25),
@@ -1335,7 +1455,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
-                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1345,7 +1465,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                 '${TextFormatter.toSmartTitleCase(a.accountType)} • Current: ${AppFormat.currency(initialBalance)}',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                                  color: context.textMuted,
                                 ),
                               ),
                             ],
@@ -1368,18 +1488,20 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: ctrl,
                       autofocus: true,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                       decoration: InputDecoration(
                         prefixText: '₹ ',
@@ -1389,12 +1511,17 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                           color: assetColor,
                         ),
                         filled: true,
-                        fillColor: isDark ? const Color(0xFF141822) : const Color(0xFFF1F5F9),
+                        fillColor: isDark
+                            ? const Color(0xFF141822)
+                            : const Color(0xFFF1F5F9),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                       ),
                       onChanged: (_) => setSheetState(() {}),
                     ),
@@ -1403,9 +1530,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       Row(
                         children: [
                           Icon(
-                            isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                            isPositive
+                                ? Icons.trending_up_rounded
+                                : Icons.trending_down_rounded,
                             size: 16,
-                            color: isPositive ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                            color: isPositive
+                                ? AppTheme.semanticIncome
+                                : AppTheme.semanticExpense,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -1413,7 +1544,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: isPositive ? AppTheme.semanticIncome : AppTheme.semanticExpense,
+                              color: isPositive
+                                  ? AppTheme.semanticIncome
+                                  : AppTheme.semanticExpense,
                             ),
                           ),
                         ],
@@ -1425,7 +1558,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                        color: context.textMuted,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1433,10 +1566,18 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        for (final delta in [5000.0, 10000.0, 25000.0, 50000.0, 100000.0])
+                        for (final delta in [
+                          5000.0,
+                          10000.0,
+                          25000.0,
+                          50000.0,
+                          100000.0,
+                        ])
                           InkWell(
                             onTap: () {
-                              final curr = double.tryParse(ctrl.text.trim()) ?? initialBalance;
+                              final curr =
+                                  double.tryParse(ctrl.text.trim()) ??
+                                  initialBalance;
                               final next = curr + delta;
                               ctrl.text = next == next.roundToDouble()
                                   ? next.toStringAsFixed(0)
@@ -1445,9 +1586,14 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                             },
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
-                                color: isDark ? const Color(0x1AFFFFFF) : const Color(0xFFE2E8F0),
+                                color: isDark
+                                    ? const Color(0x1AFFFFFF)
+                                    : const Color(0xFFE2E8F0),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
@@ -1455,7 +1601,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                  color: isDark
+                                      ? Colors.white70
+                                      : const Color(0xFF334155),
                                 ),
                               ),
                             ),
@@ -1469,13 +1617,17 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                         final parsed = double.tryParse(ctrl.text.trim());
                         if (parsed == null || parsed < 0) return;
                         Navigator.pop(ctx);
-                        await ref.read(accountRepoProvider).updateBalance(a.id, parsed);
+                        await ref
+                            .read(accountRepoProvider)
+                            .updateBalance(a.id, parsed);
                         await ref.read(accountsProvider.notifier).refresh();
                         _refreshData();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Updated ${a.name} valuation to ${AppFormat.currency(parsed)}'),
+                              content: Text(
+                                'Updated ${a.name} valuation to ${AppFormat.currency(parsed)}',
+                              ),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -1494,7 +1646,13 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
   }
 
   void _showAccountMenu(BankAccount a) {
-    final isInvestment = const ['stock', 'mutual_fund', 'gold', 'real_estate', 'ppf'].contains(a.accountType);
+    final isInvestment = const [
+      'stock',
+      'mutual_fund',
+      'gold',
+      'real_estate',
+      'ppf',
+    ].contains(a.accountType);
 
     showModalBottomSheet(
       context: context,
@@ -1528,9 +1686,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               Navigator.pop(context);
               final res = await Navigator.push(
                 context,
-                AppPageRoute(
-                  builder: (_) => AddBankAccountScreen(existing: a),
-                ),
+                AppPageRoute(builder: (_) => AddBankAccountScreen(existing: a)),
               );
               if (res == true) _refreshData();
             },

@@ -59,7 +59,7 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
       appBar: SpendXAppBar(
         leading: _isSelectionMode
             ? IconButton(
-              tooltip: 'Close',
+                tooltip: 'Close',
                 icon: const Icon(Icons.close),
                 onPressed: _clearSelection,
               )
@@ -102,9 +102,13 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                       },
                       itemBuilder: (_) => const [
                         PopupMenuItem(
-                            value: 'approve_all', child: Text('Approve All')),
+                          value: 'approve_all',
+                          child: Text('Approve All'),
+                        ),
                         PopupMenuItem(
-                            value: 'reject_all', child: Text('Reject All')),
+                          value: 'reject_all',
+                          child: Text('Reject All'),
+                        ),
                       ],
                     )
                   : const SizedBox.shrink();
@@ -142,20 +146,26 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline,
-                              size: 16, color: cs.onSurfaceVariant),
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: cs.onSurfaceVariant,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               '${items.length} transaction${items.length == 1 ? '' : 's'} need your review. '
                               'Long-press to select multiple.',
                               style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 12,
-                                  height: 1.4),
+                                color: cs.onSurfaceVariant,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ],
@@ -173,16 +183,16 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                       padding: const EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          Icon(Icons.auto_awesome,
-                              size: 18, color: cs.primary),
+                          Icon(Icons.auto_awesome, size: 18, color: cs.primary),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               '${smartSuggestion.count} similar ${smartSuggestion.merchant} transactions found',
                               style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: cs.onSurface),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: cs.onSurface,
+                              ),
                             ),
                           ),
                           TextButton(
@@ -191,8 +201,10 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                                 _selected.addAll(smartSuggestion.ids);
                               });
                             },
-                            child: const Text('Select all',
-                                style: TextStyle(fontSize: 12)),
+                            child: const Text(
+                              'Select all',
+                              style: TextStyle(fontSize: 12),
+                            ),
                           ),
                         ],
                       ),
@@ -200,19 +212,28 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
                   ),
                 ),
               Expanded(
-                child: ListView.separated(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, hasItems && !_isSelectionMode ? 110 : 24),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return _ReviewCard(
-                      item: item,
-                      isSelected: _selected.contains(item.id),
-                      isSelectionMode: _isSelectionMode,
-                      onSelect: () => _toggleSelect(item.id),
-                    );
-                  },
+                child: RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(reviewQueueProvider),
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      16,
+                      16,
+                      hasItems && !_isSelectionMode ? 110 : 24,
+                    ),
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return _ReviewCard(
+                        item: item,
+                        isSelected: _selected.contains(item.id),
+                        isSelectionMode: _isSelectionMode,
+                        onSelect: () => _toggleSelect(item.id),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -266,10 +287,9 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
       if (m == null || m.isEmpty) continue;
       byMerchant.putIfAbsent(m, () => []).add(item);
     }
-    final candidates = byMerchant.entries
-        .where((e) => e.value.length >= 2)
-        .toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+    final candidates =
+        byMerchant.entries.where((e) => e.value.length >= 2).toList()
+          ..sort((a, b) => b.value.length.compareTo(a.value.length));
     if (candidates.isEmpty) return null;
     final top = candidates.first;
     return _SmartGroup(
@@ -307,43 +327,52 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
     }
     if (mounted) {
       ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${selected.length} rejected')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${selected.length} rejected')));
     }
     _clearSelection();
   }
 
   Future<void> _confirmBulkApprove(
-      BuildContext context, WidgetRef ref, int count) async {
+    BuildContext context,
+    WidgetRef ref,
+    int count,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Approve All?'),
-        content:
-            Text('Auto-insert $count transactions with detected settings?'),
+        content: Text(
+          'Auto-insert $count transactions with detected settings?',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Approve All')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Approve All'),
+          ),
         ],
       ),
     );
     if (confirm == true) {
       await ref.read(bulkApproveReviewProvider)();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$count transactions approved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$count transactions approved')));
       }
     }
   }
 
   Future<void> _confirmRejectAll(
-      BuildContext context, WidgetRef ref, int count) async {
+    BuildContext context,
+    WidgetRef ref,
+    int count,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -351,11 +380,13 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
         content: Text('Discard $count pending transactions?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Reject All')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reject All'),
+          ),
         ],
       ),
     );
@@ -441,7 +472,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
     final kindLabel = _methodLabel(parsed.method);
 
     return SpendXGlassSurface(
-      level: widget.isSelected ? SpendXGlassLevel.elevated : SpendXGlassLevel.base,
+      level: widget.isSelected
+          ? SpendXGlassLevel.elevated
+          : SpendXGlassLevel.base,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: widget.isSelectionMode ? widget.onSelect : null,
@@ -466,9 +499,10 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                     Text(
                       widget.isSelected ? 'Selected' : 'Tap to select',
                       style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500),
+                        color: cs.onSurfaceVariant,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -476,35 +510,46 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
 
               // Why this is here (trust signal) — clickable
               GestureDetector(
-                onTap: () => setState(() => _showWhyDetected = !_showWhyDetected),
+                onTap: () =>
+                    setState(() => _showWhyDetected = !_showWhyDetected),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.amber.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: Colors.amber.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.help_outline,
-                          size: 13, color: Colors.amber),
+                      const Icon(
+                        Icons.help_outline,
+                        size: 13,
+                        color: Colors.amber,
+                      ),
                       const SizedBox(width: 4),
-                      Text(reasonLabel,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.amber,
-                              fontWeight: FontWeight.w600)),
+                      Text(
+                        reasonLabel,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.amber,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       Icon(
-                          _showWhyDetected
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          size: 14,
-                          color: Colors.amber),
+                        _showWhyDetected
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        size: 14,
+                        color: Colors.amber,
+                      ),
                     ],
                   ),
                 ),
@@ -522,26 +567,33 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: _explanationPoints(parsed)
-                        .map((p) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text('• ',
-                                      style: TextStyle(
-                                          color: cs.onSurfaceVariant,
-                                          fontSize: 11)),
-                                  Expanded(
-                                    child: Text(p,
-                                        style: TextStyle(
-                                            color: cs.onSurfaceVariant,
-                                            fontSize: 11,
-                                            height: 1.4)),
+                        .map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '• ',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 11,
                                   ),
-                                ],
-                              ),
-                            ))
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    p,
+                                    style: TextStyle(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 11,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
@@ -550,49 +602,61 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
               Row(
                 children: [
                   Icon(
-                      isExpense
-                          ? Icons.arrow_upward_rounded
-                          : Icons.arrow_downward_rounded,
-                      color: amountColor,
-                      size: 20),
+                    isExpense
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    color: amountColor,
+                    size: 20,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       '${isExpense ? "-" : "+"} ${AppFormat.currency(parsed.amount)}',
                       style: TextStyle(
-                          color: amountColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                          fontFeatures: const [FontFeature.tabularFigures()]),
+                        color: amountColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                   if (kindLabel != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       margin: const EdgeInsets.only(right: 6),
                       decoration: BoxDecoration(
                         color: cs.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(kindLabel,
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: cs.primary,
-                              fontWeight: FontWeight.w600)),
+                      child: Text(
+                        kindLabel,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: cs.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: confColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('$confidencePct% $confLabel',
-                        style: TextStyle(
-                            color: confColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600)),
+                    child: Text(
+                      '$confidencePct% $confLabel',
+                      style: TextStyle(
+                        color: confColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -601,18 +665,36 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
               if (parsed.merchant != null && parsed.merchant!.isNotEmpty)
                 _fieldRow(context, Icons.store, 'Merchant', parsed.merchant!),
               if (CategoryClassifier.detect(
-                text: '${parsed.rawText} ${parsed.merchant ?? ''}',
-                type: parsed.isCredit ? 'income' : 'expense',
-              ) case final detectedCat?)
-                _fieldRow(context, Icons.category_outlined, 'Category', detectedCat),
+                    text: '${parsed.rawText} ${parsed.merchant ?? ''}',
+                    type: parsed.isCredit ? 'income' : 'expense',
+                  )
+                  case final detectedCat?)
+                _fieldRow(
+                  context,
+                  Icons.category_outlined,
+                  'Category',
+                  detectedCat,
+                ),
               if (parsed.bankName != null)
-                _fieldRow(context, Icons.account_balance, 'Bank',
-                    parsed.bankName!),
+                _fieldRow(
+                  context,
+                  Icons.account_balance,
+                  'Bank',
+                  parsed.bankName!,
+                ),
               if (parsed.last4 != null)
-                _fieldRow(context, Icons.credit_card, 'Account',
-                    '••••${parsed.last4}'),
-              _fieldRow(context, Icons.calendar_today, 'Date',
-                  AppFormat.date(parsed.date)),
+                _fieldRow(
+                  context,
+                  Icons.credit_card,
+                  'Account',
+                  '••••${parsed.last4}',
+                ),
+              _fieldRow(
+                context,
+                Icons.calendar_today,
+                'Date',
+                AppFormat.date(parsed.date),
+              ),
 
               const SizedBox(height: 8),
 
@@ -627,7 +709,10 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: cs.onSurfaceVariant, fontSize: 11, height: 1.4),
+                    color: cs.onSurfaceVariant,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
                 ),
               ),
 
@@ -650,14 +735,30 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    _quickChip(context, 'Recharge', Icons.phone_iphone,
-                        () => _rejectWithReason('recharge')),
-                    _quickChip(context, 'Promotion', Icons.campaign,
-                        () => _rejectWithReason('promotion')),
-                    _quickChip(context, 'OTP', Icons.lock,
-                        () => _rejectWithReason('otp')),
-                    _quickChip(context, 'Other', Icons.close,
-                        () => _rejectWithReason('other')),
+                    _quickChip(
+                      context,
+                      'Recharge',
+                      Icons.phone_iphone,
+                      () => _rejectWithReason('recharge'),
+                    ),
+                    _quickChip(
+                      context,
+                      'Promotion',
+                      Icons.campaign,
+                      () => _rejectWithReason('promotion'),
+                    ),
+                    _quickChip(
+                      context,
+                      'OTP',
+                      Icons.lock,
+                      () => _rejectWithReason('otp'),
+                    ),
+                    _quickChip(
+                      context,
+                      'Other',
+                      Icons.close,
+                      () => _rejectWithReason('other'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -671,8 +772,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                       child: SpendXGlassButton(
                         onPressed: () {
                           ref.read(rejectReviewProvider)(item.id);
-                          RetentionEvents.instance
-                              .log(RetentionEvent.reviewItemRejected);
+                          RetentionEvents.instance.log(
+                            RetentionEvent.reviewItemRejected,
+                          );
                         },
                         icon: Icons.close_rounded,
                         variant: SpendXGlassButtonVariant.secondary,
@@ -685,8 +787,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                       child: SpendXGlassButton(
                         onPressed: () async {
                           await ref.read(approveReviewProvider)(item);
-                          RetentionEvents.instance
-                              .log(RetentionEvent.reviewItemApproved);
+                          RetentionEvents.instance.log(
+                            RetentionEvent.reviewItemApproved,
+                          );
                           if (context.mounted) {
                             RetentionService.rewardAction(
                               context: context,
@@ -729,7 +832,11 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
   }
 
   Widget _quickChip(
-      BuildContext context, String label, IconData icon, VoidCallback onTap) {
+    BuildContext context,
+    String label,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
     final cs = Theme.of(context).colorScheme;
     return ActionChip(
       avatar: Icon(icon, size: 14, color: cs.onSurfaceVariant),
@@ -740,7 +847,11 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
   }
 
   Widget _fieldRow(
-      BuildContext context, IconData icon, String label, String value) {
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -750,12 +861,16 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
           const SizedBox(width: 6),
           SizedBox(
             width: 65,
-            child: Text(label,
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+            child: Text(
+              label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12)),
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -769,7 +884,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
   }
 
   String _reviewReason(ReviewItem item) {
-    if (item.confidence < 0.50) return 'Very low confidence — needs verification';
+    if (item.confidence < 0.50)
+      return 'Very low confidence — needs verification';
     if (item.confidence < 0.70) return 'Medium confidence — please verify';
     if (item.parsed.merchant == null) return 'Merchant not detected';
     if (item.parsed.last4 == null) return 'Account not identified';
@@ -779,9 +895,11 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
   /// Plain-English explanation. Reads like trust signals, not debug output.
   List<String> _explanationPoints(ParsedTransaction parsed) {
     final points = <String>[];
-    points.add(parsed.isCredit
-        ? 'This looks like money you received'
-        : 'This looks like money you paid');
+    points.add(
+      parsed.isCredit
+          ? 'This looks like money you received'
+          : 'This looks like money you paid',
+    );
     points.add('I found ${AppFormat.currency(parsed.amount)}');
     if (parsed.merchant != null && parsed.merchant!.isNotEmpty) {
       points.add('It looks like ${parsed.merchant}');
@@ -810,7 +928,6 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
     };
   }
 }
-
 
 class _SmartGroup {
   final String merchant;

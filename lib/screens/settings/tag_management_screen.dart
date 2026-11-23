@@ -136,30 +136,34 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
                     title: 'No tags yet',
                     description: 'Create tags to organize your transactions.',
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.m,
-                      AppSpacing.s,
-                      AppSpacing.m,
-                      AppSpacing.xxl,
+                : RefreshIndicator(
+                    onRefresh: () => ref.read(tagsProvider.notifier).refresh(),
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.m,
+                        AppSpacing.s,
+                        AppSpacing.m,
+                        AppSpacing.xxl,
+                      ),
+                      itemCount: sortedTags.length,
+                      itemBuilder: (context, index) {
+                        final tag = sortedTags[index];
+                        return ListTile(
+                          leading: Icon(
+                            Icons.tag,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          title: Text(tag.name),
+                          onTap: () => _showAddTagDialog(tag),
+                          trailing: IconButton(
+                            tooltip: 'Delete',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _deleteTag(tag),
+                          ),
+                        );
+                      },
                     ),
-                    itemCount: sortedTags.length,
-                    itemBuilder: (context, index) {
-                      final tag = sortedTags[index];
-                      return ListTile(
-                        leading: Icon(
-                          Icons.tag,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        title: Text(tag.name),
-                        onTap: () => _showAddTagDialog(tag),
-                        trailing: IconButton(
-                          tooltip: 'Delete',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _deleteTag(tag),
-                        ),
-                      );
-                    },
                   ),
           ),
         );

@@ -6,7 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../data/core/app_database.dart';
 import '../../../data/core/tables.dart';
 import '../../../data/providers.dart'
-    show safeToSpendProvider, cardsProvider, accountsProvider, remindersProvider;
+    show
+        safeToSpendProvider,
+        cardsProvider,
+        accountsProvider,
+        remindersProvider;
 import '../../../data/repositories/credit_repo.dart';
 import '../../../data/repositories/recurring_repo.dart';
 import '../../../data/repositories/reminder_repo.dart';
@@ -98,7 +102,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           'Taking a gentle pause. Your records are safe.',
           style: TextStyle(
             fontSize: 13,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
         ),
@@ -137,8 +141,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
 
     // The forward journey nodes strictly track FUTURE milestones
     final CommitmentItem? nextBill = futureItems.firstOrNull;
-    final CommitmentItem? secondBill =
-        futureItems.length > 1 ? futureItems[1] : null;
+    final CommitmentItem? secondBill = futureItems.length > 1
+        ? futureItems[1]
+        : null;
 
     final hasOverdue = overdueItems.isNotEmpty;
     final hasDueToday = dueTodayItems.isNotEmpty;
@@ -160,7 +165,10 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
       final suffix = remainingCount > 0 ? " (+$remainingCount more)" : "";
       statusLine =
           "${primary.title} is $overdueDays ${overdueDays == 1 ? 'day' : 'days'} overdue$suffix";
-      final overdueTotal = overdueItems.fold<double>(0.0, (sum, i) => sum + i.amount.toRupees);
+      final overdueTotal = overdueItems.fold<double>(
+        0.0,
+        (sum, i) => sum + i.amount.toRupees,
+      );
       displayAmount = overdueTotal > 0 ? overdueTotal : primary.amount.toRupees;
       amountCaption = "unpaid obligations need coverage";
     } else if (hasDueToday) {
@@ -193,8 +201,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     } else {
       statusLine = "Clear sailing through the week";
       displayAmount = safeAmount;
-      amountCaption =
-          safeAmount > 0 ? "comfortable to spend" : "breathing room ready";
+      amountCaption = safeAmount > 0
+          ? "comfortable to spend"
+          : "breathing room ready";
     }
 
     return Padding(
@@ -209,7 +218,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 2.2,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
 
@@ -242,7 +251,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     hasOverdue: hasOverdue,
                     hasDueToday: hasDueToday,
                     pulse: _pulseAnimation.value,
-                    isDark: isDark,
+                    colorScheme: Theme.of(context).colorScheme,
                   ),
                   child: staticOverlay,
                 ),
@@ -256,7 +265,11 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: calc.commitmentItems.isNotEmpty
-                ? () => _showCommitmentDetails(context, calc.commitmentItems, isDark)
+                ? () => _showCommitmentDetails(
+                    context,
+                    calc.commitmentItems,
+                    isDark,
+                  )
                 : () => _showBreakdownSheet(context, calc, isDark),
             child: Container(
               width: double.infinity,
@@ -271,7 +284,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     style: TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF44403C),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       letterSpacing: -0.2,
                     ),
                     textAlign: TextAlign.center,
@@ -280,7 +293,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   Icon(
                     Icons.chevron_right_rounded,
                     size: 15,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),
@@ -293,7 +306,11 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: calc.commitmentItems.any((c) => c.isOverdue)
-                ? () => _showCommitmentDetails(context, calc.commitmentItems, isDark)
+                ? () => _showCommitmentDetails(
+                    context,
+                    calc.commitmentItems,
+                    isDark,
+                  )
                 : () => _showBreakdownSheet(context, calc, isDark),
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -308,17 +325,21 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white.withValues(alpha: 0.9) : const Color(0xFF1C1917),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(width: 2),
                   Text(
-                    AppFormat.currency(displayAmount).replaceAll('₹', '').trim(),
+                    AppFormat.currency(
+                      displayAmount,
+                    ).replaceAll('₹', '').trim(),
                     style: TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1.0,
-                      color: isDark ? Colors.white : const Color(0xFF1C1917),
+                      color: isDark ? Colors.white : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ],
@@ -334,7 +355,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
 
@@ -342,11 +363,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           if (hasOverdue)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => _showCommitmentDetails(
-                context,
-                calc.commitmentItems,
-                isDark,
-              ),
+              onTap: () =>
+                  _showCommitmentDetails(context, calc.commitmentItems, isDark),
               child: Container(
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.symmetric(
@@ -354,30 +372,30 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF2E151B)
-                      : const Color(0xFFFFF1F2),
+                  color: Theme.of(context).colorScheme.errorContainer,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: const Color(0xFFE11D48).withValues(alpha: 0.4),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.error.withValues(alpha: 0.4),
                     width: 0.8,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline_rounded,
                       size: 13,
-                      color: Color(0xFFE11D48),
+                      color: Theme.of(context).colorScheme.error,
                     ),
                     const SizedBox(width: 5),
                     Text(
                       '${overdueItems.length} overdue obligation${overdueItems.length > 1 ? 's require' : ' requires'} coverage',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFFE11D48),
+                        color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ],
@@ -387,14 +405,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           else if (hasShortfall)
             Container(
               margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF22161A)
-                    : const Color(0xFFFBF1EE),
+                color: Theme.of(context).colorScheme.errorContainer,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isDark
@@ -409,9 +422,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   Icon(
                     Icons.pause_circle_outline_rounded,
                     size: 13,
-                    color: isDark
-                        ? const Color(0xFFFCA5A5)
-                        : const Color(0xFFE11D48),
+                    color: Theme.of(context).colorScheme.error,
                   ),
                   const SizedBox(width: 5),
                   Text(
@@ -420,7 +431,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: isDark
-                          ? const Color(0xFFFCA5A5)
+                          ? Theme.of(context).colorScheme.error
                           : const Color(0xFFBE123C),
                     ),
                   ),
@@ -472,10 +483,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         color: hasDueToday
-                            ? const Color(0xFFD97706)
-                            : (isDark
-                                ? const Color(0xFFA5B4FC)
-                                : const Color(0xFF4F46E5)),
+                            ? Theme.of(context).colorScheme.tertiary
+                            : (Theme.of(context).colorScheme.primary),
                       ),
                     ),
                     Text(
@@ -484,15 +493,12 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           : '${now.day} ${DateFormat('MMM').format(now)}',
                       style: TextStyle(
                         fontSize: 9,
-                        fontWeight:
-                            hasDueToday ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: hasDueToday
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: hasDueToday
-                            ? (isDark
-                                ? const Color(0xFFFBBF24)
-                                : const Color(0xFFD97706))
-                            : (isDark
-                                ? const Color(0xFF64748B)
-                                : const Color(0xFF94A3B8)),
+                            ? (Theme.of(context).colorScheme.tertiary)
+                            : (Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -508,8 +514,11 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: nextBill != null
-                    ? () =>
-                        _showCommitmentDetails(context, allCommitments, isDark)
+                    ? () => _showCommitmentDetails(
+                        context,
+                        allCommitments,
+                        isDark,
+                      )
                     : null,
                 child: Container(
                   width: 100,
@@ -518,15 +527,15 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 36), // Clearance below diamond node
+                      const SizedBox(
+                        height: 36,
+                      ), // Clearance below diamond node
                       Text(
                         nextBill != null ? 'Next bill' : 'Milestone',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: isDark
-                              ? const Color(0xFFFBBF24)
-                              : const Color(0xFFD97706),
+                          color: Theme.of(context).colorScheme.tertiary,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -537,9 +546,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF78716C),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -556,8 +563,11 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: secondBill != null
-                    ? () =>
-                        _showCommitmentDetails(context, allCommitments, isDark)
+                    ? () => _showCommitmentDetails(
+                        context,
+                        allCommitments,
+                        isDark,
+                      )
                     : null,
                 child: SizedBox(
                   width: 90,
@@ -572,12 +582,10 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: secondBill != null
-                              ? (isDark
-                                  ? const Color(0xFFA5B4FC)
-                                  : const Color(0xFF4F46E5))
-                              : (isDark
-                                  ? const Color(0xFF94A3B8)
-                                  : const Color(0xFF78716C)),
+                              ? (Theme.of(context).colorScheme.primary)
+                              : (Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -587,9 +595,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                             : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
                         style: TextStyle(
                           fontSize: 9,
-                          color: isDark
-                              ? const Color(0xFF64748B)
-                              : const Color(0xFF94A3B8),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -613,9 +619,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? const Color(0xFF64748B)
-                            : const Color(0xFF94A3B8),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -623,9 +627,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       '$daysInMonth ${DateFormat('MMM').format(now)}',
                       style: TextStyle(
                         fontSize: 9,
-                        color: isDark
-                            ? const Color(0xFF64748B)
-                            : const Color(0xFF94A3B8),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -668,104 +670,108 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-              if (overdue.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE11D48),
-                          shape: BoxShape.circle,
-                        ),
+            if (overdue.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.error,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'OVERDUE OBLIGATIONS (${overdue.length})',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                          color: Color(0xFFE11D48),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                ...overdue.map((c) => _buildCommitmentTile(
-                      context,
-                      sheetContext,
-                      c,
-                      isDark,
-                      isOverdue: true,
-                    )),
-                const SizedBox(height: 12),
-              ],
-              if (dueToday.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFD97706),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'DUE TODAY (${dueToday.length})',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                          color: Color(0xFFD97706),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                ...dueToday.map((c) => _buildCommitmentTile(
-                      context,
-                      sheetContext,
-                      c,
-                      isDark,
-                      isOverdue: false,
-                    )),
-                const SizedBox(height: 12),
-              ],
-              if (upcoming.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Text(
-                    'UPCOMING IN 14 DAYS (${upcoming.length})',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                      color: isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF78716C),
                     ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'OVERDUE OBLIGATIONS (${overdue.length})',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...overdue.map(
+                (c) => _buildCommitmentTile(
+                  context,
+                  sheetContext,
+                  c,
+                  isDark,
+                  isOverdue: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (dueToday.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.tertiary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'DUE TODAY (${dueToday.length})',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: Theme.of(context).colorScheme.tertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...dueToday.map(
+                (c) => _buildCommitmentTile(
+                  context,
+                  sheetContext,
+                  c,
+                  isDark,
+                  isOverdue: false,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (upcoming.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  'UPCOMING IN 14 DAYS (${upcoming.length})',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                ...upcoming.map((c) => _buildCommitmentTile(
-                      context,
-                      sheetContext,
-                      c,
-                      isDark,
-                      isOverdue: false,
-                    )),
-              ],
+              ),
+              ...upcoming.map(
+                (c) => _buildCommitmentTile(
+                  context,
+                  sheetContext,
+                  c,
+                  isDark,
+                  isOverdue: false,
+                ),
+              ),
             ],
-          );
-        },
-      );
-    }
+          ],
+        );
+      },
+    );
+  }
 
   Widget _buildCommitmentTile(
     BuildContext rootContext,
@@ -778,23 +784,25 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     final String dueLabel = isOverdue
         ? '${daysUntil.abs()}d overdue • ${DateFormat('d MMM').format(c.dueDate)}'
         : daysUntil == 0
-            ? 'Due today'
-            : daysUntil == 1
-                ? 'Due tomorrow'
-                : 'Due in ${daysUntil}d • ${DateFormat('d MMM').format(c.dueDate)}';
+        ? 'Due today'
+        : daysUntil == 1
+        ? 'Due tomorrow'
+        : 'Due in ${daysUntil}d • ${DateFormat('d MMM').format(c.dueDate)}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isOverdue
-            ? (isDark ? const Color(0xFF2A151A) : const Color(0xFFFFF1F2))
-            : (isDark ? const Color(0xFF1A1F2C) : const Color(0xFFFAF7F2)),
+            ? (Theme.of(context).colorScheme.errorContainer)
+            : (Theme.of(context).colorScheme.surfaceContainer),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isOverdue
               ? (isDark ? const Color(0x60E11D48) : const Color(0x50FCA5A5))
-              : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFEBE5D8)),
+              : (isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Theme.of(context).colorScheme.outline),
         ),
       ),
       child: Column(
@@ -807,8 +815,12 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 height: 36,
                 decoration: BoxDecoration(
                   color: isOverdue
-                      ? const Color(0xFFE11D48).withValues(alpha: 0.15)
-                      : const Color(0xFFD97706).withValues(alpha: 0.15),
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.error.withValues(alpha: 0.15)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.tertiary.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -816,7 +828,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       ? Icons.credit_card_rounded
                       : Icons.calendar_today_rounded,
                   size: 16,
-                  color: isOverdue ? const Color(0xFFE11D48) : const Color(0xFFD97706),
+                  color: isOverdue
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).colorScheme.tertiary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -829,7 +843,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : const Color(0xFF1C1917),
+                        color: isDark ? Colors.white : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -839,8 +853,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: isOverdue
-                            ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48))
-                            : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C)),
+                            ? (Theme.of(context).colorScheme.error)
+                            : (Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                     ),
                   ],
@@ -852,8 +866,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: isOverdue
-                      ? const Color(0xFFE11D48)
-                      : (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48)),
+                      ? Theme.of(context).colorScheme.error
+                      : (Theme.of(context).colorScheme.error),
                 ),
               ),
             ],
@@ -869,10 +883,13 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    foregroundColor: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    foregroundColor: Theme.of(
+                      context,
+                    ).colorScheme.onSurfaceVariant,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                   ),
                   icon: const Icon(Icons.cancel_outlined, size: 14),
                   label: const Text(
@@ -889,12 +906,22 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       String targetCardId = c.id ?? '';
                       try {
                         final allCards = await CreditRepo().getAll();
-                        final match = allCards.where((card) =>
-                          card.id == targetCardId ||
-                          card.name.toLowerCase() == c.title.toLowerCase() ||
-                          ReminderRepo.areMerchantsEquivalent(card.name, c.title) ||
-                          (card.bank.isNotEmpty && c.title.toLowerCase().contains(card.bank.toLowerCase()))
-                        ).firstOrNull;
+                        final match = allCards
+                            .where(
+                              (card) =>
+                                  card.id == targetCardId ||
+                                  card.name.toLowerCase() ==
+                                      c.title.toLowerCase() ||
+                                  ReminderRepo.areMerchantsEquivalent(
+                                    card.name,
+                                    c.title,
+                                  ) ||
+                                  (card.bank.isNotEmpty &&
+                                      c.title.toLowerCase().contains(
+                                        card.bank.toLowerCase(),
+                                      )),
+                            )
+                            .firstOrNull;
                         if (match != null) targetCardId = match.id;
                       } catch (_) {}
 
@@ -903,17 +930,23 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
                           [targetCardId],
                         );
-                        final cycleKey = 'card_settled_${targetCardId}_${c.dueDate.year}_${c.dueDate.month}';
+                        final cycleKey =
+                            'card_settled_${targetCardId}_${c.dueDate.year}_${c.dueDate.month}';
                         await prefs.setBool(cycleKey, true);
 
-                        await db.rawUpdate('''
+                        await db.rawUpdate(
+                          '''
                           UPDATE ${Tables.reminders}
                           SET is_completed = 1, record_status = 'done'
                           WHERE linked_entity_id = ? OR id = ? OR id = ?
-                        ''', [targetCardId, c.id, 'credit_due_$targetCardId']);
+                        ''',
+                          [targetCardId, c.id, 'credit_due_$targetCardId'],
+                        );
                       }
                       if (c.id != null) {
-                        try { await ReminderRepo().deleteGlobalReminder(c.id!); } catch (_) {}
+                        try {
+                          await ReminderRepo().deleteGlobalReminder(c.id!);
+                        } catch (_) {}
                       }
                     } else if (c.type == 'recurring') {
                       try {
@@ -922,13 +955,17 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         for (final rec in allRec) {
                           if (rec.id == c.id ||
                               rec.name.toLowerCase() == c.title.toLowerCase() ||
-                              ReminderRepo.areMerchantsEquivalent(rec.name, c.title)) {
+                              ReminderRepo.areMerchantsEquivalent(
+                                rec.name,
+                                c.title,
+                              )) {
                             await recRepo.update(rec.copyWith(isActive: false));
                           }
                         }
                       } catch (_) {}
                       if (c.id != null) {
-                        final cycleKey = 'recurring_settled_${c.id}_${c.dueDate.year}_${c.dueDate.month}';
+                        final cycleKey =
+                            'recurring_settled_${c.id}_${c.dueDate.year}_${c.dueDate.month}';
                         await prefs.setBool(cycleKey, true);
                       }
                     } else {
@@ -939,8 +976,12 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         final recRepo = RecurringRepo();
                         final allRec = await recRepo.getAll();
                         for (final rec in allRec) {
-                          if (rec.name.toLowerCase().contains(c.title.toLowerCase()) ||
-                              c.title.toLowerCase().contains(rec.name.toLowerCase())) {
+                          if (rec.name.toLowerCase().contains(
+                                c.title.toLowerCase(),
+                              ) ||
+                              c.title.toLowerCase().contains(
+                                rec.name.toLowerCase(),
+                              )) {
                             await recRepo.update(rec.copyWith(isActive: false));
                           }
                         }
@@ -953,7 +994,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('${c.title} obligation cancelled & removed ✓'),
+                          content: Text(
+                            '${c.title} obligation cancelled & removed ✓',
+                          ),
                           duration: const Duration(seconds: 2),
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -965,11 +1008,20 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    foregroundColor: const Color(0xFF16A34A),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    foregroundColor: Theme.of(context).colorScheme.secondary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                   ),
-                  icon: const Icon(Icons.check_circle_outline_rounded, size: 14),
-                  label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  icon: const Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 14,
+                  ),
+                  label: const Text(
+                    'Mark Paid',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
                   onPressed: () async {
                     HapticService.instance.tap();
                     Navigator.of(sheetContext).pop();
@@ -980,12 +1032,22 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       String targetCardId = c.id ?? '';
                       try {
                         final allCards = await CreditRepo().getAll();
-                        final match = allCards.where((card) =>
-                          card.id == targetCardId ||
-                          card.name.toLowerCase() == c.title.toLowerCase() ||
-                          ReminderRepo.areMerchantsEquivalent(card.name, c.title) ||
-                          (card.bank.isNotEmpty && c.title.toLowerCase().contains(card.bank.toLowerCase()))
-                        ).firstOrNull;
+                        final match = allCards
+                            .where(
+                              (card) =>
+                                  card.id == targetCardId ||
+                                  card.name.toLowerCase() ==
+                                      c.title.toLowerCase() ||
+                                  ReminderRepo.areMerchantsEquivalent(
+                                    card.name,
+                                    c.title,
+                                  ) ||
+                                  (card.bank.isNotEmpty &&
+                                      c.title.toLowerCase().contains(
+                                        card.bank.toLowerCase(),
+                                      )),
+                            )
+                            .firstOrNull;
                         if (match != null) targetCardId = match.id;
                       } catch (_) {}
 
@@ -994,21 +1056,33 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
                           [targetCardId],
                         );
-                        final cycleKey = 'card_settled_${targetCardId}_${c.dueDate.year}_${c.dueDate.month}';
+                        final cycleKey =
+                            'card_settled_${targetCardId}_${c.dueDate.year}_${c.dueDate.month}';
                         await prefs.setBool(cycleKey, true);
 
-                        await db.rawUpdate('''
+                        await db.rawUpdate(
+                          '''
                           UPDATE ${Tables.reminders}
                           SET is_completed = 1, record_status = 'done', last_triggered_at = ?
                           WHERE linked_entity_id = ? OR id = ? OR id = ?
-                        ''', [DateTime.now().toIso8601String(), targetCardId, c.id, 'credit_due_$targetCardId']);
+                        ''',
+                          [
+                            DateTime.now().toIso8601String(),
+                            targetCardId,
+                            c.id,
+                            'credit_due_$targetCardId',
+                          ],
+                        );
                       }
                       if (c.id != null) {
-                        try { await ReminderRepo().markReminderPaid(c.id!); } catch (_) {}
+                        try {
+                          await ReminderRepo().markReminderPaid(c.id!);
+                        } catch (_) {}
                       }
                     } else if (c.type == 'recurring') {
                       if (c.id != null) {
-                        final cycleKey = 'recurring_settled_${c.id}_${c.dueDate.year}_${c.dueDate.month}';
+                        final cycleKey =
+                            'recurring_settled_${c.id}_${c.dueDate.year}_${c.dueDate.month}';
                         await prefs.setBool(cycleKey, true);
                       }
                     } else {
@@ -1017,16 +1091,26 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       }
                       try {
                         final allCards = await CreditRepo().getAll();
-                        final matchedCard = allCards.where((card) =>
-                          card.name.toLowerCase() == c.title.toLowerCase() ||
-                          ReminderRepo.areMerchantsEquivalent(card.name, c.title)
-                        ).firstOrNull;
+                        final matchedCard = allCards
+                            .where(
+                              (card) =>
+                                  card.name.toLowerCase() ==
+                                      c.title.toLowerCase() ||
+                                  ReminderRepo.areMerchantsEquivalent(
+                                    card.name,
+                                    c.title,
+                                  ),
+                            )
+                            .firstOrNull;
                         if (matchedCard != null) {
                           await db.rawUpdate(
                             'UPDATE ${Tables.creditCards} SET last_statement_balance = 0 WHERE id = ?',
                             [matchedCard.id],
                           );
-                          await prefs.setBool('card_settled_${matchedCard.id}_${c.dueDate.year}_${c.dueDate.month}', true);
+                          await prefs.setBool(
+                            'card_settled_${matchedCard.id}_${c.dueDate.year}_${c.dueDate.month}',
+                            true,
+                          );
                         }
                       } catch (_) {}
                     }
@@ -1053,15 +1137,23 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   side: BorderSide(
-                    color: isDark ? const Color(0xFF4F46E5) : const Color(0xFF6366F1),
+                    color: isDark
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.primary,
                     width: 1.0,
                   ),
-                  foregroundColor: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                  foregroundColor: Theme.of(context).colorScheme.primary,
                 ),
                 icon: const Icon(Icons.payment_rounded, size: 14),
-                label: const Text('Pay / Log', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                label: const Text(
+                  'Pay / Log',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
                 onPressed: () async {
                   HapticService.instance.tap();
                   Navigator.of(sheetContext).pop();
@@ -1069,12 +1161,22 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   if (c.type == 'credit_card') {
                     try {
                       final allCards = await CreditRepo().getAll();
-                      final matchedCard = allCards.where((card) =>
-                        card.id == c.id ||
-                        card.name.toLowerCase() == c.title.toLowerCase() ||
-                        ReminderRepo.areMerchantsEquivalent(card.name, c.title) ||
-                        (card.bank.isNotEmpty && c.title.toLowerCase().contains(card.bank.toLowerCase()))
-                      ).firstOrNull;
+                      final matchedCard = allCards
+                          .where(
+                            (card) =>
+                                card.id == c.id ||
+                                card.name.toLowerCase() ==
+                                    c.title.toLowerCase() ||
+                                ReminderRepo.areMerchantsEquivalent(
+                                  card.name,
+                                  c.title,
+                                ) ||
+                                (card.bank.isNotEmpty &&
+                                    c.title.toLowerCase().contains(
+                                      card.bank.toLowerCase(),
+                                    )),
+                          )
+                          .firstOrNull;
 
                       if (matchedCard != null && rootContext.mounted) {
                         final paid = await Navigator.push<bool>(
@@ -1149,12 +1251,24 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.45,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF57534E),
+                  color: isDark
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 20),
-              _buildBreakdownRow('Total Liquid Assets', calc.liquidAssets.toRupees, isDark, isPositive: true),
-              _buildBreakdownRow('14-Day Commitments', calc.knownCommitments14d.toRupees, isDark, isNegative: true),
+              _buildBreakdownRow(
+                'Total Liquid Assets',
+                calc.liquidAssets.toRupees,
+                isDark,
+                isPositive: true,
+              ),
+              _buildBreakdownRow(
+                '14-Day Commitments',
+                calc.knownCommitments14d.toRupees,
+                isDark,
+                isNegative: true,
+              ),
               if (calc.commitmentItems.any((c) => c.isOverdue)) ...[
                 Builder(
                   builder: (_) {
@@ -1162,17 +1276,25 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         .where((c) => c.isOverdue)
                         .fold<double>(0.0, (sum, i) => sum + i.amount.toRupees);
                     return Padding(
-                      padding: const EdgeInsets.only(left: 4, top: 2, bottom: 4),
+                      padding: const EdgeInsets.only(
+                        left: 4,
+                        top: 2,
+                        bottom: 4,
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFE11D48)),
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 13,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                           const SizedBox(width: 5),
                           Text(
                             'Includes ${AppFormat.currency(overdueSum)} in overdue obligations',
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48),
+                              color: Theme.of(context).colorScheme.error,
                             ),
                           ),
                         ],
@@ -1186,28 +1308,49 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1A1F2C) : const Color(0xFFF8FAFC),
+                    color: Theme.of(context).colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isDark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFE2E8F0),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Theme.of(context).colorScheme.outline,
                     ),
                   ),
                   child: Column(
                     children: [
                       ...calc.commitmentItems.map((item) {
-                        final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-                        final itemDay = DateTime(item.dueDate.year, item.dueDate.month, item.dueDate.day);
+                        final today = DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        );
+                        final itemDay = DateTime(
+                          item.dueDate.year,
+                          item.dueDate.month,
+                          item.dueDate.day,
+                        );
                         final diff = itemDay.difference(today).inDays;
-                        final dueStr = diff == 0 ? 'Due today' : diff < 0 ? '${diff.abs()}d overdue' : 'Due in ${diff}d';
+                        final dueStr = diff == 0
+                            ? 'Due today'
+                            : diff < 0
+                            ? '${diff.abs()}d overdue'
+                            : 'Due in ${diff}d';
                         final isOverdue = diff < 0;
                         return InkWell(
                           onTap: () {
                             Navigator.of(ctx).pop();
-                            _showCommitmentDetails(context, calc.commitmentItems, isDark);
+                            _showCommitmentDetails(
+                              context,
+                              calc.commitmentItems,
+                              isDark,
+                            );
                           },
                           borderRadius: BorderRadius.circular(8),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 6,
+                              horizontal: 4,
+                            ),
                             child: Row(
                               children: [
                                 Icon(
@@ -1216,8 +1359,10 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                                       : Icons.payment_rounded,
                                   size: 14,
                                   color: isOverdue
-                                      ? const Color(0xFFE11D48)
-                                      : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                      ? Theme.of(context).colorScheme.error
+                                      : (Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -1227,8 +1372,12 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                                       fontSize: 12.5,
                                       fontWeight: FontWeight.w500,
                                       color: isOverdue
-                                          ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48))
-                                          : (isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155)),
+                                          ? (Theme.of(
+                                              context,
+                                            ).colorScheme.error)
+                                          : (Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant),
                                     ),
                                   ),
                                 ),
@@ -1237,14 +1386,16 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                                   style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w600,
-                                    color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFE11D48),
+                                    color: Theme.of(context).colorScheme.error,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
                                 Icon(
                                   Icons.chevron_right_rounded,
                                   size: 14,
-                                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                               ],
                             ),
@@ -1255,14 +1406,18 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       GestureDetector(
                         onTap: () {
                           Navigator.of(ctx).pop();
-                          _showCommitmentDetails(context, calc.commitmentItems, isDark);
+                          _showCommitmentDetails(
+                            context,
+                            calc.commitmentItems,
+                            isDark,
+                          );
                         },
                         child: Text(
                           'Tap any obligation above to cancel or mark as paid →',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -1271,9 +1426,16 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   ),
                 ),
               ],
-              _buildBreakdownRow('Active Goal Earmarks', calc.activeEarmarks.toRupees, isDark, isNegative: true),
+              _buildBreakdownRow(
+                'Active Goal Earmarks',
+                calc.activeEarmarks.toRupees,
+                isDark,
+                isNegative: true,
+              ),
               Divider(
-                color: isDark ? Colors.white.withValues(alpha: 0.10) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Theme.of(context).colorScheme.outline,
                 height: 24,
               ),
               if (calc.hasShortfall)
@@ -1308,9 +1470,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
   }) {
     Color amountColor;
     if (isDeficit) {
-      amountColor = isDark ? const Color(0xFFF87171) : const Color(0xFFE11D48);
+      amountColor = Theme.of(context).colorScheme.error;
     } else if (isSafeToSpend) {
-      amountColor = isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
+      amountColor = Theme.of(context).colorScheme.secondary;
     } else {
       amountColor = isDark ? Colors.white : const Color(0xFF0F172A);
     }
@@ -1320,20 +1482,35 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: isSafeToSpend || isDeficit ? 14 : 13,
-              fontWeight: isSafeToSpend || isDeficit ? FontWeight.w700 : FontWeight.w500,
-              color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: isSafeToSpend || isDeficit ? 14 : 13,
+                fontWeight: isSafeToSpend || isDeficit
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
-          Text(
-            '${isNegative && amount > 0 ? "- " : ""}${AppFormat.currency(amount)}',
-            style: TextStyle(
-              fontSize: isSafeToSpend || isDeficit ? 16 : 13.5,
-              fontWeight: isSafeToSpend || isDeficit ? FontWeight.w800 : FontWeight.w600,
-              color: amountColor,
+          const SizedBox(width: 8),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${isNegative && amount > 0 ? "- " : ""}${AppFormat.currency(amount)}',
+                style: TextStyle(
+                  fontSize: isSafeToSpend || isDeficit ? 16 : 13.5,
+                  fontWeight: isSafeToSpend || isDeficit
+                      ? FontWeight.w800
+                      : FontWeight.w600,
+                  color: amountColor,
+                ),
+              ),
             ),
           ),
         ],
@@ -1352,7 +1529,7 @@ class _OrganicPathPainter extends CustomPainter {
   final bool hasOverdue;
   final bool hasDueToday;
   final double pulse;
-  final bool isDark;
+  final ColorScheme colorScheme;
 
   _OrganicPathPainter({
     required this.now,
@@ -1363,7 +1540,7 @@ class _OrganicPathPainter extends CustomPainter {
     this.hasOverdue = false,
     this.hasDueToday = false,
     required this.pulse,
-    required this.isDark,
+    required this.colorScheme,
   });
 
   @override
@@ -1390,14 +1567,12 @@ class _OrganicPathPainter extends CustomPainter {
     final activePaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          hasDueToday
-              ? const Color(0xFFD97706)
-              : const Color(0xFF4F46E5),
+          hasDueToday ? colorScheme.tertiary : colorScheme.primary,
           hasOverdue
-              ? const Color(0xFFE11D48)
+              ? colorScheme.error
               : hasShortfall
-                  ? (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706))
-                  : (isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A)),
+              ? colorScheme.tertiary
+              : colorScheme.secondary,
         ],
       ).createShader(Rect.fromPoints(p0, p1))
       ..style = PaintingStyle.stroke
@@ -1426,9 +1601,7 @@ class _OrganicPathPainter extends CustomPainter {
     );
 
     final futurePaint = Paint()
-      ..color = isDark
-          ? Colors.white.withValues(alpha: 0.15)
-          : const Color(0xFFDDD6C9)
+      ..color = colorScheme.outline.withValues(alpha: 0.55)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
@@ -1437,11 +1610,11 @@ class _OrganicPathPainter extends CustomPainter {
 
     // ── 3. Draw Node 1: Today (Glowing Concentric Pulsing Halo) ──
     final Color todayBaseColor = hasDueToday
-        ? const Color(0xFFD97706)
-        : (hasOverdue ? const Color(0xFFE11D48) : const Color(0xFF4F46E5));
+        ? colorScheme.tertiary
+        : (hasOverdue ? colorScheme.error : colorScheme.primary);
     final Color todayBorderColor = hasDueToday
-        ? const Color(0xFFFBBF24)
-        : (hasOverdue ? const Color(0xFFFCA5A5) : const Color(0xFF818CF8));
+        ? colorScheme.tertiary
+        : (hasOverdue ? colorScheme.error : colorScheme.primary);
 
     final haloRadius = 13.0 + (pulse * 3.5);
     final haloPaint = Paint()
@@ -1469,11 +1642,9 @@ class _OrganicPathPainter extends CustomPainter {
       ..lineTo(p1.dx - diamondRadius, p1.dy)
       ..close();
 
-    final diamondHaloColor = (isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706))
-        .withValues(alpha: 0.20);
-
-    final diamondStrokeColor =
-        isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+    final diamondHaloColor =
+        colorScheme.tertiary.withValues(alpha: 0.20);
+    final diamondStrokeColor = colorScheme.tertiary;
 
     final diamondHalo = Paint()
       ..color = diamondHaloColor
@@ -1481,7 +1652,7 @@ class _OrganicPathPainter extends CustomPainter {
     canvas.drawCircle(p1, 12, diamondHalo);
 
     final diamondFill = Paint()
-      ..color = isDark ? const Color(0xFF1E2330) : Colors.white
+      ..color = colorScheme.surfaceContainer
       ..style = PaintingStyle.fill;
     canvas.drawPath(diamondPath, diamondFill);
 
@@ -1508,33 +1679,33 @@ class _OrganicPathPainter extends CustomPainter {
         ..close();
 
       final smHalo = Paint()
-        ..color = const Color(0xFF4F46E5).withValues(alpha: 0.18)
+        ..color = colorScheme.primary.withValues(alpha: 0.18)
         ..style = PaintingStyle.fill;
       canvas.drawCircle(p2, 10, smHalo);
 
       final smFill = Paint()
-        ..color = isDark ? const Color(0xFF1E2330) : Colors.white
+        ..color = colorScheme.surfaceContainer
         ..style = PaintingStyle.fill;
       canvas.drawPath(smPath, smFill);
 
       final smStroke = Paint()
-        ..color = isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5)
+        ..color = colorScheme.primary
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
       canvas.drawPath(smPath, smStroke);
 
       final smDot = Paint()
-        ..color = isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5)
+        ..color = colorScheme.primary
         ..style = PaintingStyle.fill;
       canvas.drawCircle(p2, 2.0, smDot);
     } else {
       final inflowFill = Paint()
-        ..color = isDark ? const Color(0xFF1E2330) : Colors.white
+        ..color = colorScheme.surfaceContainer
         ..style = PaintingStyle.fill;
       canvas.drawCircle(p2, 5.5, inflowFill);
 
       final inflowBorder = Paint()
-        ..color = isDark ? const Color(0xFF64748B) : const Color(0xFFA8A29E)
+        ..color = colorScheme.onSurfaceVariant
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.8;
       canvas.drawCircle(p2, 5.5, inflowBorder);
@@ -1542,12 +1713,12 @@ class _OrganicPathPainter extends CustomPainter {
 
     // ── 6. Draw Node 4: Month End Open Ring ○ ──
     final monthEndFill = Paint()
-      ..color = isDark ? const Color(0xFF161922) : const Color(0xFFFAF7F2)
+      ..color = colorScheme.surface
       ..style = PaintingStyle.fill;
     canvas.drawCircle(p3, 6.0, monthEndFill);
 
     final monthEndBorder = Paint()
-      ..color = isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1)
+      ..color = colorScheme.outline
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8;
     canvas.drawCircle(p3, 6.0, monthEndBorder);
@@ -1560,6 +1731,6 @@ class _OrganicPathPainter extends CustomPainter {
         oldDelegate.nextBill != nextBill ||
         oldDelegate.secondBill != secondBill ||
         oldDelegate.hasShortfall != hasShortfall ||
-        oldDelegate.isDark != isDark;
+        oldDelegate.colorScheme != colorScheme;
   }
 }

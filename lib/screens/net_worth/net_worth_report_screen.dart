@@ -89,7 +89,10 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
       body: SafeArea(
         child: historyAsync.when(
           loading: () => const SkeletonLoader.transactions(),
-          error: (error, _) => ErrorStateWidget(error: error, onRetry: () => ref.invalidate(netWorthHistoryProvider)),
+          error: (error, _) => ErrorStateWidget(
+            error: error,
+            onRetry: () => ref.invalidate(netWorthHistoryProvider),
+          ),
           data: (history) {
             if (history.isEmpty) {
               return const Center(
@@ -150,81 +153,87 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
     List<_SnapshotViewItem> items, {
     required bool isSnapshots,
   }) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(netWorthHistoryProvider.future),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          ),
-          child: Column(
-            children: [
-              ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-                title: Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+                  title: Text(
+                    item.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: Text(
+                    item.subtitle,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                  trailing: isSnapshots
+                      ? IconButton(
+                          tooltip: 'Delete',
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.redAccent,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              _deleteSnapshot(item.originalSnapshot!),
+                        )
+                      : (item.change != null
+                            ? _changePill(item.change!)
+                            : null),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Column(
+                    children: [
+                      const Divider(color: Colors.white12, height: 1),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _dataItem(
+                            'Net Worth',
+                            AppFormat.currency(item.netWorth),
+                            item.netWorth >= 0 ? Colors.blueAccent : Colors.red,
+                            large: true,
+                          ),
+                          _dataItem(
+                            'Assets',
+                            AppFormat.currency(item.assets),
+                            Colors.green,
+                          ),
+                          _dataItem(
+                            'Liabilities',
+                            AppFormat.currency(item.liabilities),
+                            Colors.redAccent,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                subtitle: Text(
-                  item.subtitle,
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                ),
-                trailing: isSnapshots
-                    ? IconButton(
-                      tooltip: 'Delete',
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.redAccent,
-                          size: 20,
-                        ),
-                        onPressed: () =>
-                            _deleteSnapshot(item.originalSnapshot!),
-                      )
-                    : (item.change != null ? _changePill(item.change!) : null),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Column(
-                  children: [
-                    const Divider(color: Colors.white12, height: 1),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _dataItem(
-                          'Net Worth',
-                          AppFormat.currency(item.netWorth),
-                          item.netWorth >= 0 ? Colors.blueAccent : Colors.red,
-                          large: true,
-                        ),
-                        _dataItem(
-                          'Assets',
-                          AppFormat.currency(item.assets),
-                          Colors.green,
-                        ),
-                        _dataItem(
-                          'Liabilities',
-                          AppFormat.currency(item.liabilities),
-                          Colors.redAccent,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

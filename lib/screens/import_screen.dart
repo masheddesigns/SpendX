@@ -12,6 +12,7 @@ import '../widgets/custom_snackbar.dart';
 import '../services/export_service.dart';
 import '../services/import_service.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/loading_state_widget.dart';
 
 class ImportScreen extends ConsumerStatefulWidget {
   final String? initialMethod; // 'ai', 'csv', 'csv_generic'
@@ -154,7 +155,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     if (widget.initialMethod == 'ai') title = 'AI Bank Import';
 
     final content = _loading
-        ? const Center(child: CircularProgressIndicator())
+        ? const LoadingStateWidget(message: 'Preparing import…')
         : _done
         ? _buildResultView()
         : widget.initialMethod == 'csv_generic'

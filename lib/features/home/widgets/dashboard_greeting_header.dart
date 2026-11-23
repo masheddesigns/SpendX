@@ -52,7 +52,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                         width: 6,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+                          color: Theme.of(context).colorScheme.tertiary,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -66,7 +66,9 @@ class DashboardGreetingHeader extends ConsumerWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.9,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -90,14 +92,19 @@ class DashboardGreetingHeader extends ConsumerWidget {
                         );
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E2330) : const Color(0xFFEEF2FF),
+                          color: isDark
+                              ? const Color(0xFF1E2330)
+                              : Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isDark
                                 ? Colors.white.withValues(alpha: 0.08)
-                                : const Color(0xFFC7D2FE),
+                                : Theme.of(context).colorScheme.primary,
                             width: 0.8,
                           ),
                         ),
@@ -107,7 +114,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                             Icon(
                               Icons.shield_outlined,
                               size: 13,
-                              color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -115,7 +122,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
-                                color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF3730A3),
+                                color: Theme.of(context).colorScheme.primary,
                                 letterSpacing: -0.2,
                               ),
                             ),
@@ -137,7 +144,9 @@ class DashboardGreetingHeader extends ConsumerWidget {
                 fontSize: 27,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.7,
-                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1C1917),
+                color: isDark
+                    ? const Color(0xFFF8FAFC)
+                    : const Color(0xFF1C1917),
               ),
             ),
           ],

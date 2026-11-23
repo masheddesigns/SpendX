@@ -9,29 +9,30 @@ class AppPageRoute<T> extends PageRouteBuilder<T> {
   final WidgetBuilder builder;
 
   AppPageRoute({required this.builder})
-      : super(
-          transitionDuration: AppMotion.normal,
-          reverseTransitionDuration: const Duration(milliseconds: 180),
-          pageBuilder: (context, _, _) => builder(context),
-          transitionsBuilder: (_, animation, _, child) {
-            final curved = CurvedAnimation(
-              parent: animation,
-              curve: AppMotion.curveEnter,
-            );
+    : super(
+        transitionDuration: AppMotion.normal,
+        reverseTransitionDuration: const Duration(milliseconds: 180),
+        pageBuilder: (context, _, _) => builder(context),
+        transitionsBuilder: (context, animation, _, child) {
+          if (MediaQuery.disableAnimationsOf(context)) return child;
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: AppMotion.curveEnter,
+          );
 
-            return FadeTransition(
-              opacity: curved,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.03, 0),
-                    end: Offset.zero,
-                  ).animate(curved),
-                  child: child,
-                ),
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.98, end: 1.0).animate(curved),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.03, 0),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
               ),
-            );
-          },
-        );
+            ),
+          );
+        },
+      );
 }

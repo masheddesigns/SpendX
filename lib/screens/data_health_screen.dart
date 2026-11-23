@@ -106,10 +106,10 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     final scoreColor = scoreVal >= 90
         ? Colors.green
         : scoreVal >= 75
-            ? cs.primary
-            : scoreVal >= 60
-                ? Colors.orange
-                : cs.error;
+        ? cs.primary
+        : scoreVal >= 60
+        ? Colors.orange
+        : cs.error;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -154,30 +154,36 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
           ),
           if (score != null && score.breakdown.isNotEmpty) ...[
             const SizedBox(height: 12),
-            ...score.breakdown.map((b) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '-${b.penalty.toStringAsFixed(0)}',
-                        style: TextStyle(
-                          color: cs.error,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+            ...score.breakdown.map(
+              (b) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '-${b.penalty.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: cs.error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
                         b.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ],
       ),
@@ -197,14 +203,14 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     final cardBorder = isClean
         ? Colors.green.withValues(alpha: 0.3)
         : hasMissed
-            ? Colors.orange.withValues(alpha: 0.4)
-            : cs.outline.withValues(alpha: 0.15);
+        ? Colors.orange.withValues(alpha: 0.4)
+        : cs.outline.withValues(alpha: 0.15);
 
     final cardBg = isClean
         ? Colors.green.withValues(alpha: 0.05)
         : hasMissed
-            ? Colors.orange.withValues(alpha: 0.06)
-            : cs.surfaceContainer;
+        ? Colors.orange.withValues(alpha: 0.06)
+        : cs.surfaceContainer;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -221,7 +227,9 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (hasMissed ? Colors.orange : Colors.blue).withValues(alpha: 0.15),
+                  color: (hasMissed ? Colors.orange : Colors.blue).withValues(
+                    alpha: 0.15,
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -254,7 +262,10 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
               ),
               if (isClean)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -262,7 +273,11 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_circle_rounded, color: Colors.green, size: 14),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.green,
+                        size: 14,
+                      ),
                       SizedBox(width: 4),
                       Text(
                         '100% Captured',
@@ -327,7 +342,11 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange,
+                        size: 18,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '${result.missedCount} uncaptured transaction${result.missedCount == 1 ? '' : 's'} found!',
@@ -349,35 +368,44 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
             ),
             const SizedBox(height: 12),
             // Preview list of missed alerts
-            ...result.missedItems.take(3).map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(
-                        item.isCredit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                        color: item.isCredit ? Colors.green : Colors.red,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          item.merchant ?? item.bankName ?? item.sender,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+            ...result.missedItems
+                .take(3)
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          item.isCredit
+                              ? Icons.arrow_downward_rounded
+                              : Icons.arrow_upward_rounded,
+                          color: item.isCredit ? Colors.green : Colors.red,
+                          size: 14,
                         ),
-                      ),
-                      Text(
-                        '${item.isCredit ? '+' : '-'}₹${item.amount.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          color: item.isCredit ? Colors.green : cs.onSurface,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            item.merchant ?? item.bankName ?? item.sender,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                        Text(
+                          '${item.isCredit ? '+' : '-'}₹${item.amount.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: item.isCredit ? Colors.green : cs.onSurface,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )),
+                ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -428,7 +456,9 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                   onPressed: _runInboxScan,
                   icon: const Icon(Icons.refresh_rounded, size: 15),
                   label: const Text('Scan Again'),
-                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ],
             ),
@@ -468,10 +498,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
           children: [
             const Text(
               'Ledger Data Integrity',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
             const Spacer(),
             if (totalIssues > 0)
@@ -502,7 +529,11 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.verified_rounded, color: Colors.green, size: 22),
+                const Icon(
+                  Icons.verified_rounded,
+                  color: Colors.green,
+                  size: 22,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -514,13 +545,15 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
             ),
           )
         else
-          ...issues.map((issue) => _IssueCard(
-                issue: issue,
-                onFix: () => _handleFix(issue),
-                onAutoCategorize: issue.type == 'uncategorized'
-                    ? () => _autoCategorizeAll(issue.transactionIds)
-                    : null,
-              )),
+          ...issues.map(
+            (issue) => _IssueCard(
+              issue: issue,
+              onFix: () => _handleFix(issue),
+              onAutoCategorize: issue.type == 'uncategorized'
+                  ? () => _autoCategorizeAll(issue.transactionIds)
+                  : null,
+            ),
+          ),
       ],
     );
   }
@@ -531,7 +564,8 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     int resolved = 0;
     for (final id in transactionIds) {
       final tx = await txRepo.getById(id);
-      if (tx == null || (tx.categoryId != null && tx.categoryId!.isNotEmpty)) continue;
+      if (tx == null || (tx.categoryId != null && tx.categoryId!.isNotEmpty))
+        continue;
       final resolution = await resolveCategoryForText(
         rawText: tx.rawPayload ?? tx.notes,
         merchant: tx.notes,
@@ -546,7 +580,9 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     if (mounted) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Auto-categorized $resolved transaction${resolved == 1 ? '' : 's'} with smart memory!'),
+          content: Text(
+            'Auto-categorized $resolved transaction${resolved == 1 ? '' : 's'} with smart memory!',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -625,7 +661,10 @@ class _IssueCard extends StatelessWidget {
               children: [
                 Text(
                   issue.title,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -663,9 +702,14 @@ class _IssueCard extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: _severityColor(issue.severity).withValues(alpha: 0.12),
+                        color: _severityColor(
+                          issue.severity,
+                        ).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -684,7 +728,10 @@ class _IssueCard extends StatelessWidget {
                         icon: const Icon(Icons.auto_fix_high_rounded, size: 13),
                         label: const Text('Auto-Fix All'),
                         style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 0,
+                          ),
                           visualDensity: VisualDensity.compact,
                           textStyle: const TextStyle(
                             fontSize: 11,
@@ -720,8 +767,8 @@ class _IssueCard extends StatelessWidget {
   }
 
   Color _severityColor(AuditSeverity s) => switch (s) {
-        AuditSeverity.low => Colors.grey,
-        AuditSeverity.medium => Colors.orange,
-        AuditSeverity.high => Colors.red,
-      };
+    AuditSeverity.low => Colors.grey,
+    AuditSeverity.medium => Colors.orange,
+    AuditSeverity.high => Colors.red,
+  };
 }

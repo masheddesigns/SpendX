@@ -42,34 +42,38 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
       appBar: const SpendXAppBar(title: 'Monthly Report'),
       body: _isLoading
           ? const SpendXLoadingState(count: 3, itemHeight: 80)
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _MetricCard(
-                  label: 'Income',
-                  value: AppFormat.currency(
-                    (_summary?['income'] as num?)?.toDouble() ?? 0,
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _MetricCard(
+                    label: 'Income',
+                    value: AppFormat.currency(
+                      (_summary?['income'] as num?)?.toDouble() ?? 0,
+                    ),
+                    color: Colors.green,
+                    icon: Icons.trending_up,
                   ),
-                  color: Colors.green,
-                  icon: Icons.trending_up,
-                ),
-                _MetricCard(
-                  label: 'Expenses',
-                  value: AppFormat.currency(
-                    (_summary?['expenses'] as num?)?.toDouble() ?? 0,
+                  _MetricCard(
+                    label: 'Expenses',
+                    value: AppFormat.currency(
+                      (_summary?['expenses'] as num?)?.toDouble() ?? 0,
+                    ),
+                    color: Theme.of(context).colorScheme.error,
+                    icon: Icons.trending_down,
                   ),
-                  color: Theme.of(context).colorScheme.error,
-                  icon: Icons.trending_down,
-                ),
-                _MetricCard(
-                  label: 'Savings',
-                  value: AppFormat.currency(
-                    (_summary?['savings'] as num?)?.toDouble() ?? 0,
+                  _MetricCard(
+                    label: 'Savings',
+                    value: AppFormat.currency(
+                      (_summary?['savings'] as num?)?.toDouble() ?? 0,
+                    ),
+                    color: Theme.of(context).colorScheme.primary,
+                    icon: Icons.savings_outlined,
                   ),
-                  color: Theme.of(context).colorScheme.primary,
-                  icon: Icons.savings_outlined,
-                ),
-              ],
+                ],
+              ),
             ),
     );
   }
@@ -108,20 +112,30 @@ class _MetricCard extends StatelessWidget {
                 child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 14),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-              const Spacer(),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              const SizedBox(width: 12),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
                 ),
               ),
             ],

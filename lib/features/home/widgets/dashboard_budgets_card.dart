@@ -34,21 +34,24 @@ class DashboardBudgetsCard extends ConsumerWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isDark
-                ? const [Color(0xFF161922), Color(0xFF13151E)]
-                : const [Color(0xFFFFFFFF), Color(0xFFFAF7F0)],
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainerLow,
+            ],
           ),
           border: Border.all(
             color: isDark
                 ? Colors.white.withValues(alpha: 0.10)
-                : const Color(0xFFECE5D8),
+                : Theme.of(context).colorScheme.outline,
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
               color: isDark
                   ? Colors.black.withValues(alpha: 0.30)
-                  : const Color(0x0A1C1917),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.shadow.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -68,7 +71,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
                       Icon(
                         Icons.account_balance_wallet_outlined,
                         size: 16,
-                        color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -80,7 +83,9 @@ class DashboardBudgetsCard extends ConsumerWidget {
                             fontSize: 11.5,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.0,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -96,7 +101,9 @@ class DashboardBudgetsCard extends ConsumerWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        AppPageRoute(builder: (_) => const BudgetManagementScreen()),
+                        AppPageRoute(
+                          builder: (_) => const BudgetManagementScreen(),
+                        ),
                       );
                     },
                     child: Row(
@@ -107,14 +114,14 @@ class DashboardBudgetsCard extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(width: 2),
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 15,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ],
                     ),
@@ -138,13 +145,15 @@ class DashboardBudgetsCard extends ConsumerWidget {
                 final color = isOver
                     ? const Color(0xFFE05260)
                     : (ratio > 0.8
-                        ? const Color(0xFFF59E0B)
-                        : (isDark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A)));
+                          ? Theme.of(context).colorScheme.tertiary
+                          : (Theme.of(context).colorScheme.secondary));
 
                 final icon = CategoryIconPicker.iconForKey(item.category.icon);
 
                 return Padding(
-                  padding: EdgeInsets.only(bottom: index == displayItems.length - 1 ? 0 : 14),
+                  padding: EdgeInsets.only(
+                    bottom: index == displayItems.length - 1 ? 0 : 14,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -154,7 +163,9 @@ class DashboardBudgetsCard extends ConsumerWidget {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: color.withValues(alpha: isDark ? 0.20 : 0.12),
+                              color: color.withValues(
+                                alpha: isDark ? 0.20 : 0.12,
+                              ),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(icon, size: 16, color: color),
@@ -171,7 +182,9 @@ class DashboardBudgetsCard extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -182,17 +195,26 @@ class DashboardBudgetsCard extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
-                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
-                              color: color.withValues(alpha: isDark ? 0.16 : 0.10),
-                              borderRadius: BorderRadius.circular(AppRadius.full),
+                              color: color.withValues(
+                                alpha: isDark ? 0.16 : 0.10,
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.full,
+                              ),
                             ),
                             child: Text(
                               isOver

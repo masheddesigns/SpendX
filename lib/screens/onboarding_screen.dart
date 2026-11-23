@@ -48,7 +48,9 @@ class _OnboardingStepIndicator extends StatelessWidget {
             final decoration = BoxDecoration(
               color: selected
                   ? AppTheme.primaryBlue
-                  : (isDark ? const Color(0x33FFFFFF) : const Color(0x22000000)),
+                  : (isDark
+                        ? const Color(0x33FFFFFF)
+                        : const Color(0x22000000)),
               borderRadius: BorderRadius.circular(3),
             );
             final margin = const EdgeInsets.symmetric(horizontal: 4);
@@ -77,7 +79,15 @@ class _OnboardingStepIndicator extends StatelessWidget {
 class _OnboardingScreenState extends State<OnboardingScreen>
     with WidgetsBindingObserver {
   static const _supportedCurrencies = {
-    'INR', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'AED', 'SGD',
+    'INR',
+    'USD',
+    'EUR',
+    'GBP',
+    'JPY',
+    'AUD',
+    'CAD',
+    'AED',
+    'SGD',
   };
 
   final PageController _pageController = PageController();
@@ -165,7 +175,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Future<void> _finishOnboarding() async {
     if (!_supportedCurrencies.contains(_selectedCurrency)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose a supported currency to continue')),
+        const SnackBar(
+          content: Text('Choose a supported currency to continue'),
+        ),
       );
       return;
     }
@@ -187,9 +199,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         AppPageRoute(builder: (_) => const OnboardingSmsSyncScreen()),
       );
     } else {
-      Navigator.of(context).pushReplacement(
-        AppPageRoute(builder: (_) => const HomeScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(AppPageRoute(builder: (_) => const HomeScreen()));
     }
   }
 
@@ -205,21 +217,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F111A) : const Color(0xFFF8FAFC),
+      backgroundColor: isDark
+          ? const Color(0xFF0F111A)
+          : const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _currentPage > 0
                       ? IconButton(
-                        tooltip: 'Arrow Back',
+                          tooltip: 'Arrow Back',
                           icon: Icon(
                             Icons.arrow_back_rounded,
-                            color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
+                            color: context.textPrimary,
                           ),
                           onPressed: _previousPage,
                         )
@@ -231,7 +248,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           child: Text(
                             'Skip',
                             style: TextStyle(
-                              color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+                              color: context.textMuted,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -267,9 +284,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     _currentPage == 0
                         ? 'Get Started'
                         : (_currentPage == _totalPages - 1
-                            ? 'Finish & Launch 🚀'
-                            : 'Continue'),
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                              ? 'Finish & Launch 🚀'
+                              : 'Continue'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -281,6 +301,4 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   // ── 1. Welcome & Core Architecture Sayings ──────────────────
-
-
 }

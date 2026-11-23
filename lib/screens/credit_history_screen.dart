@@ -298,35 +298,44 @@ class _CreditHistoryScreenState extends ConsumerState<CreditHistoryScreen> {
                       _applyFilters();
                     },
                   )
-                : ListView.builder(
-                    itemCount: _filteredTransactions.length,
-                    itemBuilder: (ctx, i) {
-                      final txn = _filteredTransactions[i];
-                      Category? category;
-                      for (final item in _categories) {
-                        if (item.id == txn.categoryId) {
-                          category = item;
-                          break;
+                : RefreshIndicator(
+                    onRefresh: _loadData,
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: _filteredTransactions.length,
+                      itemBuilder: (ctx, i) {
+                        final txn = _filteredTransactions[i];
+                        Category? category;
+                        for (final item in _categories) {
+                          if (item.id == txn.categoryId) {
+                            category = item;
+                            break;
+                          }
                         }
-                      }
-                      final isPaymentOrCredit = txn.type == 'payment' || txn.type == 'refund' || txn.type == 'credit';
-                      // Wrap in spx.Transaction for tile compatibility
-                      final displayTxn = spx.Transaction(
-                        id: txn.id,
-                        userId: 'offline_user',
-                        type: isPaymentOrCredit ? 'income' : 'expense',
-                        categoryId: txn.categoryId,
-                        amount: txn.amount,
-                        date: txn.date,
-                        notes: txn.note ?? '',
-                        source: isPaymentOrCredit ? 'credit_card_payment' : 'credit_purchase',
-                        relatedEntityId: txn.id,
-                      );
-                      return TransactionTile(
-                        transaction: displayTxn,
-                        category: category,
-                      );
-                    },
+                        final isPaymentOrCredit =
+                            txn.type == 'payment' ||
+                            txn.type == 'refund' ||
+                            txn.type == 'credit';
+                        // Wrap in spx.Transaction for tile compatibility
+                        final displayTxn = spx.Transaction(
+                          id: txn.id,
+                          userId: 'offline_user',
+                          type: isPaymentOrCredit ? 'income' : 'expense',
+                          categoryId: txn.categoryId,
+                          amount: txn.amount,
+                          date: txn.date,
+                          notes: txn.note ?? '',
+                          source: isPaymentOrCredit
+                              ? 'credit_card_payment'
+                              : 'credit_purchase',
+                          relatedEntityId: txn.id,
+                        );
+                        return TransactionTile(
+                          transaction: displayTxn,
+                          category: category,
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

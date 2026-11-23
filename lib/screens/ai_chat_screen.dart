@@ -157,11 +157,13 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     if (action != null) {
       if (mounted) {
         setState(() {
-          _messages.add(_ChatMsg(
-            text: action.confirmationText,
-            isUser: false,
-            pendingAction: action,
-          ));
+          _messages.add(
+            _ChatMsg(
+              text: action.confirmationText,
+              isUser: false,
+              pendingAction: action,
+            ),
+          );
           _isLoading = false;
         });
       }
@@ -203,7 +205,9 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
             .where((item) => item.status.name != 'inactive')
             .map((item) => '\u2022 ${item.title}')
             .join('\n');
-        domainResponse = pending.isEmpty ? 'No pending payments found.' : pending;
+        domainResponse = pending.isEmpty
+            ? 'No pending payments found.'
+            : pending;
       }
 
       if (domainResponse != null) {
@@ -225,7 +229,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
             for (final match in matches) {
               try {
-                final data = jsonDecode(match.group(0)!) as Map<String, dynamic>;
+                final data =
+                    jsonDecode(match.group(0)!) as Map<String, dynamic>;
                 if (data['action'] == 'add_transaction') {
                   final double amount = (data['amount'] as num).toDouble();
                   final String type = data['type'] ?? 'expense';
@@ -234,20 +239,23 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                   String? categoryId;
                   try {
                     final catMatch = categories.firstWhere(
-                      (c) => c.name.toLowerCase().contains(catName.toLowerCase()),
+                      (c) =>
+                          c.name.toLowerCase().contains(catName.toLowerCase()),
                     );
                     categoryId = catMatch.id;
                   } catch (_) {}
 
-                  actions.add(AIAction(
-                    type: type == 'income'
-                        ? AIActionType.addIncome
-                        : AIActionType.addExpense,
-                    amount: amount,
-                    categoryName: catName,
-                    categoryId: categoryId,
-                    note: data['notes'] as String?,
-                  ));
+                  actions.add(
+                    AIAction(
+                      type: type == 'income'
+                          ? AIActionType.addIncome
+                          : AIActionType.addExpense,
+                      amount: amount,
+                      categoryName: catName,
+                      categoryId: categoryId,
+                      note: data['notes'] as String?,
+                    ),
+                  );
                 }
               } catch (_) {}
             }
@@ -255,11 +263,13 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
             if (actions.isNotEmpty && mounted) {
               setState(() {
                 for (final action in actions) {
-                  _messages.add(_ChatMsg(
-                    text: action.confirmationText,
-                    isUser: false,
-                    pendingAction: action,
-                  ));
+                  _messages.add(
+                    _ChatMsg(
+                      text: action.confirmationText,
+                      isUser: false,
+                      pendingAction: action,
+                    ),
+                  );
                 }
                 _isLoading = false;
               });
@@ -512,30 +522,32 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                         icon: Container(
                           width: 48,
                           height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(context).colorScheme.secondary,
-                            ],
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.primary,
+                                Theme.of(context).colorScheme.secondary,
+                              ],
+                            ),
+                            shape: BoxShape.circle,
                           ),
-                          shape: BoxShape.circle,
-                        ),
                           child: _isLoading
-                            ? Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: CircularProgressIndicator(
+                              ? Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: CircularProgressIndicator(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimary,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.send,
                                   color: Theme.of(
                                     context,
                                   ).colorScheme.onPrimary,
-                                  strokeWidth: 2,
+                                  size: 20,
                                 ),
-                              )
-                            : Icon(
-                                Icons.send,
-                                color: Theme.of(context).colorScheme.onPrimary,
-                                size: 20,
-                              ),
                         ),
                       ),
                     ),
@@ -595,7 +607,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     final action = msg.pendingAction!;
     final cs = Theme.of(context).colorScheme;
     final isExpense = action.type == AIActionType.addExpense;
-    final typeColor = isExpense ? cs.error : const Color(0xFF22C55E);
+    final typeColor = isExpense ? cs.error : cs.secondary;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -656,10 +668,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                 child: Text(
                   'Category: ${action.categoryName}',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ),
             if (action.accountName != null)
@@ -667,10 +676,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
                 child: Text(
                   'Account: ${action.accountName}',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ),
             const SizedBox(height: 12),
@@ -772,9 +778,5 @@ class _ChatMsg {
   /// Whether this action has been resolved (confirmed or cancelled).
   bool actionResolved = false;
 
-  _ChatMsg({
-    required this.text,
-    required this.isUser,
-    this.pendingAction,
-  });
+  _ChatMsg({required this.text, required this.isUser, this.pendingAction});
 }

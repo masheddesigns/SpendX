@@ -40,11 +40,16 @@ class HomeReviewIndicator extends ConsumerWidget {
               gradient: LinearGradient(
                 colors: isDark
                     ? [const Color(0x33F59E0B), const Color(0x1AF59E0B)]
-                    : [const Color(0xFFFEF3C7), const Color(0xFFFFFBEB)],
+                    : [
+                        Theme.of(context).colorScheme.tertiaryContainer,
+                        const Color(0xFFFFFBEB),
+                      ],
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFF59E0B).withValues(alpha: isDark ? 0.4 : 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.tertiary.withValues(alpha: isDark ? 0.4 : 0.6),
                 width: 1.0,
               ),
             ),
@@ -53,12 +58,14 @@ class HomeReviewIndicator extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.tertiary.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.pending_actions_rounded,
-                    color: Color(0xFFD97706),
+                    color: Theme.of(context).colorScheme.tertiary,
                     size: 18,
                   ),
                 ),
@@ -74,7 +81,7 @@ class HomeReviewIndicator extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                          color: Theme.of(context).colorScheme.tertiary,
                         ),
                       ),
                       const SizedBox(height: 1),
@@ -82,16 +89,25 @@ class HomeReviewIndicator extends ConsumerWidget {
                         'Tap to verify instrument and details',
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: isDark ? const Color(0xFFD1D5DB) : const Color(0xFFB45309),
+                          color: isDark
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
                         ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B),
+                    color: Theme.of(context).colorScheme.tertiary,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -106,7 +122,7 @@ class HomeReviewIndicator extends ConsumerWidget {
                 const SizedBox(width: 4),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                  color: Theme.of(context).colorScheme.tertiary,
                   size: 18,
                 ),
               ],

@@ -41,8 +41,6 @@ class SpendXFinancialAmount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     Color color;
     if (colorOverride != null) {
       color = colorOverride!;
@@ -61,7 +59,7 @@ class SpendXFinancialAmount extends StatelessWidget {
           color = AppTheme.semanticShortfall;
           break;
         case FinancialSemanticType.neutral:
-          color = isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
+          color = context.textPrimary;
           break;
       }
     }

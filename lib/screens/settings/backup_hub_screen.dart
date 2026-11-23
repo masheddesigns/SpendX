@@ -166,8 +166,9 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
           builder: (ctx) => AlertDialog(
             title: const Text('Restore Skipped'),
             content: const Text(
-                'Local data appears to be up-to-date. '
-                'Would you like to force restore from the cloud backup anyway?'),
+              'Local data appears to be up-to-date. '
+              'Would you like to force restore from the cloud backup anyway?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
@@ -183,13 +184,16 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
 
         if (forceRestore == true && mounted) {
           CustomSnackBar.show(context, message: '⬇ Force restoring...');
-          final forceSuccess =
-              await SyncEngine.instance.manualRestore(force: true);
+          final forceSuccess = await SyncEngine.instance.manualRestore(
+            force: true,
+          );
           if (!mounted) return;
           if (!forceSuccess) {
-            CustomSnackBar.show(context,
-                message: 'Restore failed. Check your connection.',
-                isError: true);
+            CustomSnackBar.show(
+              context,
+              message: 'Restore failed. Check your connection.',
+              isError: true,
+            );
             return;
           }
         } else {
@@ -205,8 +209,9 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text('Restore Complete'),
           content: const Text(
-              'Your data has been restored successfully. '
-              'Please restart the app to load all restored data.'),
+            'Your data has been restored successfully. '
+            'Please restart the app to load all restored data.',
+          ),
           actions: [
             FilledButton(
               onPressed: () {
@@ -454,9 +459,19 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
           const SizedBox(height: 4),
           _buildInfoRow('Encryption', 'AES-256-GCM (End-to-End)'),
           const SizedBox(height: 4),
-          _buildInfoRow('Auto-Backup', SettingsService.instance.autoBackupEnabled ? 'On (30s debounce)' : 'Off'),
+          _buildInfoRow(
+            'Auto-Backup',
+            SettingsService.instance.autoBackupEnabled
+                ? 'On (30s debounce)'
+                : 'Off',
+          ),
           const SizedBox(height: 4),
-          _buildInfoRow('Auto-Restore', SettingsService.instance.autoRestoreEnabled ? 'On (on launch)' : 'Off'),
+          _buildInfoRow(
+            'Auto-Restore',
+            SettingsService.instance.autoRestoreEnabled
+                ? 'On (on launch)'
+                : 'Off',
+          ),
           const SizedBox(height: 4),
           _buildInfoRow('Integrity Check', 'Verified (SHA-256)'),
         ],
@@ -469,13 +484,23 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+          ),
         ),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );
@@ -648,9 +673,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildMiniStat('Security', 'AES-256'),
-                  ),
+                  Expanded(child: _buildMiniStat('Security', 'AES-256')),
                 ],
               ),
             ],
@@ -726,17 +749,21 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
               color: colorScheme.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(Icons.auto_awesome_rounded,
-                color: colorScheme.primary, size: 22),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: colorScheme.primary,
+              size: 22,
+            ),
           ),
-          title: const Text('Auto-Backup on Changes',
-              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+          title: const Text(
+            'Auto-Backup on Changes',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+          ),
           subtitle: Text(
             SettingsService.instance.autoBackupEnabled
                 ? 'Backs up 30s after any data change'
                 : 'Manual backup only',
-            style: TextStyle(
-                color: colorScheme.onSurfaceVariant, fontSize: 13),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
           ),
           value: SettingsService.instance.autoBackupEnabled,
           onChanged: (val) async {
@@ -751,9 +778,13 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
             child: Row(
               children: [
                 Flexible(
-                  child: Text('Backup every:',
-                      style: TextStyle(
-                          color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                  child: Text(
+                    'Backup every:',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 SegmentedButton<int>(
@@ -762,7 +793,9 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                     ButtonSegment(value: 6, label: Text('6h')),
                     ButtonSegment(value: 24, label: Text('24h')),
                   ],
-                  selected: {SettingsService.instance.backupIntervalHours.clamp(1, 24)},
+                  selected: {
+                    SettingsService.instance.backupIntervalHours.clamp(1, 24),
+                  },
                   onSelectionChanged: (val) async {
                     final prefs = await SharedPreferences.getInstance();
                     await prefs.setInt('backup_auto_interval', val.first);
@@ -771,8 +804,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                   },
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
-                    textStyle: WidgetStatePropertyAll(
-                        TextStyle(fontSize: 12)),
+                    textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
                   ),
                 ),
               ],
@@ -787,17 +819,21 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
               color: colorScheme.secondary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(Icons.cloud_download_rounded,
-                color: colorScheme.secondary, size: 22),
+            child: Icon(
+              Icons.cloud_download_rounded,
+              color: colorScheme.secondary,
+              size: 22,
+            ),
           ),
-          title: const Text('Auto-Restore on Launch',
-              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+          title: const Text(
+            'Auto-Restore on Launch',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+          ),
           subtitle: Text(
             SettingsService.instance.autoRestoreEnabled
                 ? 'Pulls latest backup when newer version found'
                 : 'Manual restore only',
-            style: TextStyle(
-                color: colorScheme.onSurfaceVariant, fontSize: 13),
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
           ),
           value: SettingsService.instance.autoRestoreEnabled,
           onChanged: (val) async {
@@ -828,10 +864,17 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
             final devices = snapshot.data ?? [];
             if (devices.isEmpty) {
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('No devices synced yet',
-                    style: TextStyle(
-                        color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Text(
+                  'No devices synced yet',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
               );
             }
             return Column(
@@ -845,39 +888,53 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                   dense: true,
                   leading: Icon(
                     isCurrent ? Icons.phone_android : Icons.devices_other,
-                    color: isCurrent ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                    color: isCurrent
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
                     size: 22,
                   ),
                   title: Row(
                     children: [
                       Expanded(
-                        child: Text(d['name'] as String? ?? 'Unknown',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
-                                color: isCurrent
-                                    ? colorScheme.primary
-                                    : colorScheme.onSurface)),
+                        child: Text(
+                          d['name'] as String? ?? 'Unknown',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            color: isCurrent
+                                ? colorScheme.primary
+                                : colorScheme.onSurface,
+                          ),
+                        ),
                       ),
                       if (isCurrent)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: colorScheme.primary.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text('This device',
-                              style: TextStyle(
-                                  color: colorScheme.primary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600)),
+                          child: Text(
+                            'This device',
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                     ],
                   ),
-                  subtitle: Text('Last active: $timeAgo',
-                      style: TextStyle(
-                          color: colorScheme.onSurfaceVariant, fontSize: 11)),
+                  subtitle: Text(
+                    'Last active: $timeAgo',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
                 );
               }).toList(),
             );
@@ -902,23 +959,30 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.lock_rounded,
-                        color: Colors.green, size: 20),
+                    const Icon(
+                      Icons.lock_rounded,
+                      color: Colors.green,
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('End-to-End Encrypted',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13)),
+                          const Text(
+                            'End-to-End Encrypted',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                           Text(
                             'Backups are encrypted with AES-256-GCM before upload. Only this device can decrypt them.',
                             style: TextStyle(
-                                fontSize: 11,
-                                color: colorScheme.onSurfaceVariant,
-                                height: 1.4),
+                              fontSize: 11,
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
                           ),
                         ],
                       ),
@@ -938,23 +1002,30 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.auto_awesome_rounded,
-                        color: colorScheme.tertiary, size: 20),
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      color: colorScheme.tertiary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Smart Auto-Backup',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13)),
+                          const Text(
+                            'Smart Auto-Backup',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                           Text(
                             'Auto-backup: 30s after changes. Auto-restore: pulls latest on launch if newer.',
                             style: TextStyle(
-                                fontSize: 11,
-                                color: colorScheme.onSurfaceVariant,
-                                height: 1.4),
+                              fontSize: 11,
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
                           ),
                         ],
                       ),

@@ -44,7 +44,11 @@ class AppPaymentMethodPicker extends StatelessWidget {
             size: 16,
             color: selected ? Colors.white : cs.onSurfaceVariant,
           ),
-          label: Text(method.name),
+          label: Text(
+            method.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           selected: selected,
           onSelected: (_) => onMethodSelected(method.id),
           selectedColor: highlight,

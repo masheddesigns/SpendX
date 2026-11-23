@@ -61,8 +61,8 @@ class AppTextField extends StatelessWidget {
         : const Color(0x1F000000); // ~12% black
 
     final focusColor = isDark
-        ? const Color(0xFF38BDF8) // AppTheme.accentCyan
-        : const Color(0xFF0284C7); // AppTheme.darkAccentCyan
+        ? Theme.of(context).colorScheme.primary // AppTheme.accentCyan
+        : Theme.of(context).colorScheme.primary; // AppTheme.darkAccentCyan
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,9 +73,7 @@ class AppTextField extends StatelessWidget {
             child: Text(
               label,
               style: textTheme.labelLarge?.copyWith(
-                color: isDark
-                    ? const Color(0xFF94A3B8)
-                    : const Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
                 letterSpacing: -0.1,
               ),
@@ -94,7 +92,7 @@ class AppTextField extends StatelessWidget {
           readOnly: readOnly,
           onTap: onTap,
           style: textTheme.bodyLarge?.copyWith(
-            color: isDark ? Colors.white : const Color(0xFF0F172A),
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w500,
           ),
           decoration: InputDecoration(
@@ -105,9 +103,7 @@ class AppTextField extends StatelessWidget {
                 (prefixIcon is IconData
                     ? Icon(
                         prefixIcon as IconData,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       )
                     : prefixIcon as Widget?),
             suffixIcon: suffix ?? suffixIcon,

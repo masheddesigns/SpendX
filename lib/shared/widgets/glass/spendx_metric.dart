@@ -25,8 +25,6 @@ class SpendXMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -34,7 +32,7 @@ class SpendXMetric extends StatelessWidget {
         Text(
           label,
           style: AppTextStyles.caption.copyWith(
-            color: isDark ? AppTheme.darkTextMuted : AppTheme.lightTextMuted,
+            color: context.textMuted,
           ),
         ),
         const SizedBox(height: 4),
@@ -60,7 +58,7 @@ class SpendXMetric extends StatelessWidget {
             subtitle!,
             style: TextStyle(
               fontSize: 11,
-              color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+              color: context.textSecondary,
             ),
           ),
         ],

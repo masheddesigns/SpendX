@@ -43,13 +43,15 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
       ),
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheet) {
-          final isValid = name.trim().isNotEmpty &&
-              (double.tryParse(amount) ?? 0) > 0;
+          final isValid =
+              name.trim().isNotEmpty && (double.tryParse(amount) ?? 0) > 0;
           final cs = Theme.of(ctx).colorScheme;
 
           return Padding(
             padding: EdgeInsets.only(
-              left: 20, right: 20, top: 16,
+              left: 20,
+              right: 20,
+              top: 16,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             ),
             child: Column(
@@ -58,7 +60,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
               children: [
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: cs.outlineVariant,
                       borderRadius: BorderRadius.circular(2),
@@ -75,7 +78,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                         label: 'You Gave',
                         subtitle: 'They owe you',
                         icon: Icons.arrow_upward_rounded,
-                        color: const Color(0xFF22C55E),
+                        color: Theme.of(context).colorScheme.secondary,
                         selected: type == 'lent',
                         onTap: () => setSheet(() => type = 'lent'),
                       ),
@@ -100,7 +103,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                   optionsBuilder: (v) {
                     if (v.text.isEmpty) return uniqueNames;
                     return uniqueNames.where(
-                        (n) => n.toLowerCase().contains(v.text.toLowerCase()));
+                      (n) => n.toLowerCase().contains(v.text.toLowerCase()),
+                    );
                   },
                   onSelected: (s) => setSheet(() => name = s),
                   fieldViewBuilder: (_, ctrl, focus, _) {
@@ -168,7 +172,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                             firstDate: DateTime(2020),
                             lastDate: DateTime.now(),
                           );
-                          if (picked != null) setSheet(() => givenDate = picked);
+                          if (picked != null)
+                            setSheet(() => givenDate = picked);
                         },
                       ),
                     ),
@@ -181,7 +186,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: ctx,
-                            initialDate: dueDate ?? DateTime.now().add(const Duration(days: 30)),
+                            initialDate:
+                                dueDate ??
+                                DateTime.now().add(const Duration(days: 30)),
                             firstDate: DateTime.now(),
                             lastDate: DateTime(2030),
                           );
@@ -203,15 +210,22 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                     onPressed: isValid
                         ? () async {
                             final parsedAmount = double.tryParse(amount);
-                            if (parsedAmount == null || parsedAmount <= 0) return;
-                            await ref.read(lendingProvider.notifier).add(
+                            if (parsedAmount == null || parsedAmount <= 0)
+                              return;
+                            await ref
+                                .read(lendingProvider.notifier)
+                                .add(
                                   Lending(
-                                    personName: TextFormatter.normalizeName(name),
+                                    personName: TextFormatter.normalizeName(
+                                      name,
+                                    ),
                                     type: type,
                                     originalAmount: parsedAmount,
                                     date: givenDate,
                                     dueDate: dueDate,
-                                    notes: notes.trim().isEmpty ? null : notes.trim(),
+                                    notes: notes.trim().isEmpty
+                                        ? null
+                                        : notes.trim(),
                                   ),
                                 );
                             if (sheetCtx.mounted) Navigator.pop(sheetCtx);
@@ -256,10 +270,14 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
           final isValid = parsedCustom > 0 && parsedCustom <= remaining;
 
           Future<void> record(double amt) async {
-            final newPaid = (lending.paidAmount + amt)
-                .clamp(0.0, lending.originalAmount);
+            final newPaid = (lending.paidAmount + amt).clamp(
+              0.0,
+              lending.originalAmount,
+            );
             final settled = newPaid >= lending.originalAmount;
-            await ref.read(lendingProvider.notifier).replace(
+            await ref
+                .read(lendingProvider.notifier)
+                .replace(
                   lending.copyWith(paidAmount: newPaid, isSettled: settled),
                 );
             if (sheetCtx.mounted) Navigator.pop(sheetCtx);
@@ -268,7 +286,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
 
           return Padding(
             padding: EdgeInsets.only(
-              left: 20, right: 20, top: 16,
+              left: 20,
+              right: 20,
+              top: 16,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             ),
             child: Column(
@@ -277,7 +297,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
               children: [
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: cs.outlineVariant,
                       borderRadius: BorderRadius.circular(2),
@@ -287,21 +308,23 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 const SizedBox(height: 16),
                 Text(
                   isLent ? 'Collect from' : 'Pay back',
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
+                  style: Theme.of(
+                    ctx,
+                  ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
                 Text(
                   TextFormatter.toSmartTitleCase(lending.personName),
-                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(
+                    ctx,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Remaining: ${AppFormat.currency(remaining)}',
                   style: TextStyle(
-                    color: isLent ? const Color(0xFF22C55E) : cs.error,
+                    color: isLent
+                        ? Theme.of(context).colorScheme.secondary
+                        : cs.error,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -310,9 +333,15 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 // Quick buttons
                 Row(
                   children: [
-                    _QuickBtn(label: '25%', onTap: () => record(remaining * 0.25)),
+                    _QuickBtn(
+                      label: '25%',
+                      onTap: () => record(remaining * 0.25),
+                    ),
                     const SizedBox(width: 8),
-                    _QuickBtn(label: '50%', onTap: () => record(remaining * 0.5)),
+                    _QuickBtn(
+                      label: '50%',
+                      onTap: () => record(remaining * 0.5),
+                    ),
                     const SizedBox(width: 8),
                     _QuickBtn(label: 'Full', onTap: () => record(remaining)),
                   ],
@@ -345,7 +374,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: Text(isLent ? 'Record Collection' : 'Record Payment'),
+                    child: Text(
+                      isLent ? 'Record Collection' : 'Record Payment',
+                    ),
                   ),
                 ),
               ],
@@ -380,7 +411,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
       case 'get':
         filtered = state.activeItems.where((l) => l.type == 'lent').toList();
       case 'owe':
-        filtered = state.activeItems.where((l) => l.type == 'borrowed').toList();
+        filtered = state.activeItems
+            .where((l) => l.type == 'borrowed')
+            .toList();
       case 'settled':
         filtered = state.settledItems;
       default:
@@ -394,8 +427,10 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
           IconButton(
             icon: const Icon(Icons.bar_chart_rounded),
             tooltip: 'Lending Report',
-            onPressed: () => Navigator.push(context,
-                AppPageRoute(builder: (_) => const LendingReportScreen())),
+            onPressed: () => Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => const LendingReportScreen()),
+            ),
           ),
         ],
       ),
@@ -416,7 +451,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                     child: _SummaryTile(
                       label: "You'll get",
                       amount: youWillGet,
-                      color: const Color(0xFF22C55E),
+                      color: Theme.of(context).colorScheme.secondary,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -436,7 +471,9 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
               child: Text(
                 'Net: ${net > 0 ? '+' : ''}${AppFormat.currency(net)}',
                 style: TextStyle(
-                  color: net > 0 ? const Color(0xFF22C55E) : cs.error,
+                  color: net > 0
+                      ? Theme.of(context).colorScheme.secondary
+                      : cs.error,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -457,15 +494,19 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: "You'll get",
-                  count: state.activeItems.where((l) => l.type == 'lent').length,
+                  count: state.activeItems
+                      .where((l) => l.type == 'lent')
+                      .length,
                   selected: _filter == 'get',
-                  color: const Color(0xFF22C55E),
+                  color: Theme.of(context).colorScheme.secondary,
                   onTap: () => setState(() => _filter = 'get'),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: 'You owe',
-                  count: state.activeItems.where((l) => l.type == 'borrowed').length,
+                  count: state.activeItems
+                      .where((l) => l.type == 'borrowed')
+                      .length,
                   selected: _filter == 'owe',
                   color: cs.error,
                   onTap: () => setState(() => _filter = 'owe'),
@@ -509,17 +550,22 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.handshake_outlined, size: 56,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+          Icon(
+            Icons.handshake_outlined,
+            size: 56,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+          ),
           const SizedBox(height: 12),
           Text(
             _filter == 'get'
                 ? 'No one owes you'
                 : _filter == 'owe'
-                    ? 'You don\'t owe anyone'
-                    : _filter == 'settled'
-                        ? 'No settled records'
-                        : 'No lending records',
+                ? 'You don\'t owe anyone'
+                : _filter == 'settled'
+                ? 'No settled records'
+                : 'No lending records',
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 4),
@@ -583,10 +629,7 @@ class _TypeButton extends StatelessWidget {
             ),
             Text(
               subtitle,
-              style: TextStyle(
-                color: cs.onSurfaceVariant,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
             ),
           ],
         ),
@@ -607,7 +650,7 @@ class _LendingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isLent = lending.type == 'lent';
-    final color = isLent ? const Color(0xFF22C55E) : cs.error;
+    final color = isLent ? Theme.of(context).colorScheme.secondary : cs.error;
     final remaining = lending.originalAmount - lending.paidAmount;
     final progress = lending.originalAmount > 0
         ? lending.paidAmount / lending.originalAmount
@@ -645,14 +688,18 @@ class _LendingCard extends StatelessWidget {
                       children: [
                         Text(
                           TextFormatter.toSmartTitleCase(lending.personName),
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
                         ),
                         Text(
                           isLent ? 'They owe you' : 'You owe them',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: color,
+                                fontWeight: FontWeight.w500,
+                              ),
                         ),
                       ],
                     ),
@@ -671,10 +718,11 @@ class _LendingCard extends StatelessWidget {
                       if (lending.paidAmount > 0)
                         Text(
                           'of ${AppFormat.currency(lending.originalAmount)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 11,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 11,
+                              ),
                         ),
                     ],
                   ),
@@ -700,18 +748,30 @@ class _LendingCard extends StatelessWidget {
                     style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   ),
                   if (lending.dueDate != null) ...[
-                    Text(' → ', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                    Text(
+                      ' → ',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                     Icon(
-                      lending.isOverdue ? Icons.warning_amber_rounded : Icons.calendar_today,
+                      lending.isOverdue
+                          ? Icons.warning_amber_rounded
+                          : Icons.calendar_today,
                       size: 12,
-                      color: lending.isOverdue ? Colors.orange : cs.onSurfaceVariant,
+                      color: lending.isOverdue
+                          ? Colors.orange
+                          : cs.onSurfaceVariant,
                     ),
                     const SizedBox(width: 3),
                     Text(
                       DateFormat('dd MMM').format(lending.dueDate!),
                       style: TextStyle(
                         fontSize: 11,
-                        color: lending.isOverdue ? Colors.orange : cs.onSurfaceVariant,
+                        color: lending.isOverdue
+                            ? Colors.orange
+                            : cs.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -720,9 +780,16 @@ class _LendingCard extends StatelessWidget {
                     const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 14,
+                          color: Colors.green,
+                        ),
                         SizedBox(width: 4),
-                        Text('Settled', style: TextStyle(fontSize: 11, color: Colors.green)),
+                        Text(
+                          'Settled',
+                          style: TextStyle(fontSize: 11, color: Colors.green),
+                        ),
                       ],
                     ),
                   if (!lending.isSettled)
@@ -747,7 +814,11 @@ class _SummaryTile extends StatelessWidget {
   final double amount;
   final Color color;
 
-  const _SummaryTile({required this.label, required this.amount, required this.color});
+  const _SummaryTile({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -760,12 +831,22 @@ class _SummaryTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(AppFormat.currency(amount),
-              style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 18)),
+          Text(
+            AppFormat.currency(amount),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
         ],
       ),
     );
@@ -797,13 +878,14 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? activeColor.withValues(alpha: 0.12) : Colors.transparent,
+          color: selected
+              ? activeColor.withValues(alpha: 0.12)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? activeColor : cs.outlineVariant,
-          ),
+          border: Border.all(color: selected ? activeColor : cs.outlineVariant),
         ),
         child: Text(
           count > 0 ? '$label ($count)' : label,
@@ -833,9 +915,14 @@ class _QuickBtn extends StatelessWidget {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
@@ -873,18 +960,24 @@ class _DateField extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.calendar_today_rounded,
-                size: 16, color: cs.onSurfaceVariant),
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 16,
+              color: cs.onSurfaceVariant,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500)),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     hasValue
@@ -893,7 +986,9 @@ class _DateField extends StatelessWidget {
                     style: TextStyle(
                       color: hasValue ? cs.onSurface : cs.onSurfaceVariant,
                       fontSize: 13,
-                      fontWeight: hasValue ? FontWeight.w500 : FontWeight.normal,
+                      fontWeight: hasValue
+                          ? FontWeight.w500
+                          : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -902,8 +997,17 @@ class _DateField extends StatelessWidget {
             if (onClear != null)
               GestureDetector(
                 onTap: onClear,
-                child: Icon(Icons.close_rounded,
-                    size: 16, color: cs.onSurfaceVariant),
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Center(
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               ),
           ],
         ),

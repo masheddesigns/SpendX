@@ -18,7 +18,8 @@ class AnimatedScaleWrapper extends StatefulWidget {
   State<AnimatedScaleWrapper> createState() => _AnimatedScaleWrapperState();
 }
 
-class _AnimatedScaleWrapperState extends State<AnimatedScaleWrapper> with SingleTickerProviderStateMixin {
+class _AnimatedScaleWrapperState extends State<AnimatedScaleWrapper>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -26,9 +27,10 @@ class _AnimatedScaleWrapperState extends State<AnimatedScaleWrapper> with Single
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration);
-    _scaleAnimation = Tween<double>(begin: 1.0, end: widget.scaleTarget).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: widget.scaleTarget,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -38,6 +40,7 @@ class _AnimatedScaleWrapperState extends State<AnimatedScaleWrapper> with Single
   }
 
   void _onTapDown(TapDownDetails details) {
+    if (MediaQuery.disableAnimationsOf(context)) return;
     _controller.forward();
   }
 
@@ -56,10 +59,7 @@ class _AnimatedScaleWrapperState extends State<AnimatedScaleWrapper> with Single
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: widget.child,
-      ),
+      child: ScaleTransition(scale: _scaleAnimation, child: widget.child),
     );
   }
 }
@@ -86,18 +86,32 @@ class CountUpText extends StatefulWidget {
   State<CountUpText> createState() => _CountUpTextState();
 }
 
-class _CountUpTextState extends State<CountUpText> with SingleTickerProviderStateMixin {
+class _CountUpTextState extends State<CountUpText>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
+  bool _initialMotionConfigured = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration);
-    _animation = Tween<double>(begin: 0.0, end: widget.value.toDouble()).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _controller.forward();
+    _animation = Tween<double>(
+      begin: 0.0,
+      end: widget.value.toDouble(),
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialMotionConfigured) return;
+    _initialMotionConfigured = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
   }
 
   @override
@@ -109,7 +123,11 @@ class _CountUpTextState extends State<CountUpText> with SingleTickerProviderStat
         end: widget.value.toDouble(),
       ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
       _controller.reset();
-      _controller.forward();
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _controller.value = 1;
+      } else {
+        _controller.forward();
+      }
     }
   }
 

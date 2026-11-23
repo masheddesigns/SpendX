@@ -46,7 +46,7 @@ class AppDateSelector extends StatelessWidget {
             Icon(
               Icons.calendar_today_rounded,
               size: 20,
-              color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+              color: Theme.of(context).colorScheme.secondary,
             ),
             const SizedBox(width: 12),
             Text(
@@ -54,14 +54,14 @@ class AppDateSelector extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const Spacer(),
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 20,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ],
         ),

@@ -94,7 +94,7 @@ class _GlassNavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeColor = AppTheme.primaryBlue;
     final inactiveColor =
-        isDark ? const Color(0xFF8896AB) : const Color(0xFF64748B);
+        isDark ? const Color(0xFF8896AB) : Theme.of(context).colorScheme.onSurfaceVariant;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

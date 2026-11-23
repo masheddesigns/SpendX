@@ -37,7 +37,9 @@ String resolveAccountDisplayName(String rawName) {
   if (trimmed == 'acc_cash_default' || trimmed == 'Asset acc_cash_default') {
     return 'Cash';
   }
-  if (trimmed == 'sys_suspense_transfer' || trimmed.startsWith('sys_suspense') || trimmed.startsWith('sys_')) {
+  if (trimmed == 'sys_suspense_transfer' ||
+      trimmed.startsWith('sys_suspense') ||
+      trimmed.startsWith('sys_')) {
     return 'Unlinked Account';
   }
   // Match only auto-generated system keys like "Asset acc_123" or "acc_123"
@@ -106,10 +108,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
     final cardsAsync = ref.watch(creditCardsProvider);
     final loansAsync = ref.watch(loansProvider);
 
-    if (accountsAsync.isLoading || cardsAsync.isLoading || loansAsync.isLoading) {
-      return const Center(
-        child: SpendXLoadingState(count: 5, itemHeight: 70),
-      );
+    if (accountsAsync.isLoading ||
+        cardsAsync.isLoading ||
+        loansAsync.isLoading) {
+      return const Center(child: SpendXLoadingState(count: 5, itemHeight: 70));
     }
 
     if (accountsAsync.hasError) {
@@ -165,9 +167,9 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
+                    decoration:  BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Color(0xFF4F46E5),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -216,7 +218,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
           if (accounts.isEmpty && cards.isEmpty && loans.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: _EmptyStateCard(
                   isDark: isDark,
                   onAddAccount: () => _openAddAccount(context, ref),
@@ -237,7 +242,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
@@ -245,7 +253,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                     border: Border.all(
                       color: isDark
                           ? Colors.white.withValues(alpha: 0.08)
-                          : const Color(0xFFECE5D8),
+                          : Theme.of(context).colorScheme.outline,
                       width: 0.9,
                     ),
                     boxShadow: [
@@ -275,7 +283,8 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                             ),
                           );
                         },
-                        onOptionsTap: () => _showAccountOptionsSheet(context, ref, acc),
+                        onOptionsTap: () =>
+                            _showAccountOptionsSheet(context, ref, acc),
                       );
                     }),
                   ),
@@ -297,12 +306,17 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
           if (cards.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Column(
                   children: List.generate(cards.length, (index) {
                     final card = cards[index];
                     return Padding(
-                      padding: EdgeInsets.only(bottom: index == cards.length - 1 ? 0 : 12),
+                      padding: EdgeInsets.only(
+                        bottom: index == cards.length - 1 ? 0 : 12,
+                      ),
                       child: _CreditCardInstrument(
                         card: card,
                         isDark: isDark,
@@ -311,7 +325,8 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                           Navigator.push(
                             context,
                             AppPageRoute(
-                              builder: (_) => CreditCardScreen(initialCardId: card.id),
+                              builder: (_) =>
+                                  CreditCardScreen(initialCardId: card.id),
                             ),
                           );
                         },
@@ -327,7 +342,8 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                             ),
                           );
                         },
-                        onOptionsTap: () => _showCardOptionsSheet(context, ref, card),
+                        onOptionsTap: () =>
+                            _showCardOptionsSheet(context, ref, card),
                       ),
                     );
                   }),
@@ -337,7 +353,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
           else
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: _EmptyCardPlaceholder(
                   isDark: isDark,
                   onAddCard: () => _openAddCreditCard(context, ref),
@@ -367,7 +386,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   border: Border.all(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.08)
-                        : const Color(0xFFECE5D8),
+                        : Theme.of(context).colorScheme.outline,
                     width: 0.9,
                   ),
                   boxShadow: [
@@ -386,9 +405,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                     // 1. Peer Lending & Borrowing Link
                     _NavigationLinkRow(
                       icon: Icons.handshake_outlined,
-                      iconColor: const Color(0xFF6366F1),
+                      iconColor: Theme.of(context).colorScheme.primary,
                       title: 'Lending & Borrowing',
-                      subtitle: 'Track money you lent to others & personal debts',
+                      subtitle:
+                          'Track money you lent to others & personal debts',
                       showDivider: loans.isNotEmpty,
                       isDark: isDark,
                       onTap: () => Navigator.push(
@@ -409,9 +429,9 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.8,
-                                color: isDark
-                                    ? const Color(0xFF94A3B8)
-                                    : const Color(0xFF78716C),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const Spacer(),
@@ -431,8 +451,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                       ...List.generate(loans.length, (index) {
                         final loan = loans[index];
                         final isLast = index == loans.length - 1;
-                        final remaining = (loan.total - loan.paidAmount)
-                            .clamp(0.0, double.infinity);
+                        final remaining = (loan.total - loan.paidAmount).clamp(
+                          0.0,
+                          double.infinity,
+                        );
                         return _LoanAmortizationRow(
                           loan: loan,
                           remaining: remaining,
@@ -454,7 +476,8 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
           // Tuned bottom clearance matching navigation bar & safe area insets
           SliverToBoxAdapter(
             child: SizedBox(
-              height: (MediaQuery.paddingOf(context).bottom > 0
+              height:
+                  (MediaQuery.paddingOf(context).bottom > 0
                       ? MediaQuery.paddingOf(context).bottom + 72.0
                       : 80.0) +
                   16.0,
@@ -481,7 +504,8 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
               tooltip: 'Consolidate & Deduplicate',
               onPressed: () async {
                 HapticService.instance.medium();
-                final count = await EntityConsolidationService.instance.consolidate();
+                final count = await EntityConsolidationService.instance
+                    .consolidate();
                 ref.invalidate(accountsProvider);
                 ref.invalidate(creditCardsProvider);
                 ref.invalidate(loansProvider);
@@ -532,9 +556,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
   ) async {
     final result = await Navigator.push(
       context,
-      AppPageRoute(
-        builder: (_) => AddBankAccountScreen(existing: account),
-      ),
+      AppPageRoute(builder: (_) => AddBankAccountScreen(existing: account)),
     );
     if (result == true) {
       ref.invalidate(accountsProvider);
@@ -561,9 +583,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
   ) async {
     final result = await Navigator.push(
       context,
-      AppPageRoute(
-        builder: (_) => AddCreditCardScreen(existingCard: card),
-      ),
+      AppPageRoute(builder: (_) => AddCreditCardScreen(existingCard: card)),
     );
     if (result == true) {
       ref.invalidate(creditCardsProvider);
@@ -612,17 +632,19 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
               const SizedBox(height: 16),
               Text(
                 resolveAccountDisplayName(account.name),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark
-                      ? AppTheme.darkTextPrimary
-                      : AppTheme.lightTextPrimary,
+                  color: context.textPrimary,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 '${account.bank.isNotEmpty ? '${account.bank} • ' : ''}${account.accountType.replaceAll('_', ' ').toUpperCase()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -719,17 +741,19 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
               const SizedBox(height: 16),
               Text(
                 card.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark
-                      ? AppTheme.darkTextPrimary
-                      : AppTheme.lightTextPrimary,
+                  color: context.textPrimary,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 '${card.bank} • •••• ${card.last4}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -737,9 +761,9 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
-                leading: const Icon(
+                leading:  Icon(
                   Icons.payment_rounded,
-                  color: Color(0xFF10B981),
+                  color: Theme.of(context).colorScheme.secondary,
                 ),
                 title: const Text(
                   'Pay Card / Record Repayment',
@@ -753,7 +777,11 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                     AppPageRoute(
                       builder: (_) => PayCreditCardScreen(
                         card: card,
-                        outstanding: ref.read(creditOutstandingProvider(card.id)).valueOrNull ?? card.outstanding,
+                        outstanding:
+                            ref
+                                .read(creditOutstandingProvider(card.id))
+                                .valueOrNull ??
+                            card.outstanding,
                       ),
                     ),
                   );
@@ -1018,15 +1046,21 @@ class _NetPositionHorizonCard extends ConsumerWidget {
       final accountLiabilities = accounts
           .where((a) => !a.isAsset)
           .fold<double>(0, (sum, a) => sum + a.balance.abs());
-      final cardOutstanding =
-          cards.fold<double>(0, (sum, c) => sum + c.usedAmount);
+      final cardOutstanding = cards.fold<double>(
+        0,
+        (sum, c) => sum + c.usedAmount,
+      );
       final loanOutstanding = loans.fold<double>(
         0,
         (sum, loan) =>
             sum + (loan.total - loan.paidAmount).clamp(0, double.infinity),
       );
       assets = positiveAssets;
-      liabilities = accountLiabilities + accountOverdrafts + cardOutstanding + loanOutstanding;
+      liabilities =
+          accountLiabilities +
+          accountOverdrafts +
+          cardOutstanding +
+          loanOutstanding;
       netWorth = assets - liabilities;
     }
 
@@ -1040,7 +1074,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
-              : const Color(0xFFECE5D8),
+              : Theme.of(context).colorScheme.outline,
           width: 0.9,
         ),
         boxShadow: [
@@ -1074,24 +1108,31 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: isSolvent
                             ? (isDark
-                                ? const Color(0xFF064E3B).withValues(alpha: 0.5)
-                                : const Color(0xFFDCFCE7))
+                                  ? const Color(
+                                      0xFF064E3B,
+                                    ).withValues(alpha: 0.5)
+                                  : const Color(0xFFDCFCE7))
                             : (isDark
-                                ? const Color(0xFF7F1D1D).withValues(alpha: 0.4)
-                                : const Color(0xFFFEE2E2)),
+                                  ? const Color(
+                                      0xFF7F1D1D,
+                                    ).withValues(alpha: 0.4)
+                                  : const Color(0xFFFEE2E2)),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
                           color: isSolvent
                               ? (isDark
-                                  ? const Color(0xFF059669)
-                                  : const Color(0xFF86EFAC))
+                                    ? Theme.of(context).colorScheme.secondary
+                                    : Theme.of(context).colorScheme.secondary)
                               : (isDark
-                                  ? const Color(0xFFDC2626)
-                                  : const Color(0xFFFCA5A5)),
+                                    ? const Color(0xFFDC2626)
+                                    : Theme.of(context).colorScheme.error),
                           width: 0.6,
                         ),
                       ),
@@ -1104,8 +1145,8 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isSolvent
-                                  ? const Color(0xFF10B981)
-                                  : const Color(0xFFEF4444),
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : Theme.of(context).colorScheme.error,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -1117,11 +1158,13 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                               letterSpacing: 0.6,
                               color: isSolvent
                                   ? (isDark
-                                      ? const Color(0xFF6EE7B7)
-                                      : const Color(0xFF166534))
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.secondary
+                                        : const Color(0xFF166534))
                                   : (isDark
-                                      ? const Color(0xFFFCA5A5)
-                                      : const Color(0xFF991B1B)),
+                                        ? Theme.of(context).colorScheme.error
+                                        : const Color(0xFF991B1B)),
                             ),
                           ),
                         ],
@@ -1135,18 +1178,14 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? const Color(0xFF818CF8)
-                                : const Color(0xFF4F46E5),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(width: 2),
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 16,
-                          color: isDark
-                              ? const Color(0xFF818CF8)
-                              : const Color(0xFF4F46E5),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ],
                     ),
@@ -1164,7 +1203,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                     fontSize: 11,
                     color: isDark
                         ? const Color(0xFFCBD5E1)
-                        : const Color(0xFF64748B),
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
 
@@ -1186,9 +1225,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                   'Combined balance across liquid assets & active liabilities',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF78716C),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
 
@@ -1228,9 +1265,9 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
-                                  color: isDark
-                                      ? const Color(0xFF94A3B8)
-                                      : const Color(0xFF64748B),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -1244,9 +1281,11 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                               fontSize: 14.5,
                               fontWeight: FontWeight.w700,
                               color: isDark
-                                  ? const Color(0xFF34D399)
-                                  : const Color(0xFF16A34A),
-                              fontFeatures: const [FontFeature.tabularFigures()],
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : Theme.of(context).colorScheme.secondary,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                         ],
@@ -1272,9 +1311,9 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: isDark
-                                  ? const Color(0xFF94A3B8)
-                                  : const Color(0xFF64748B),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -1283,10 +1322,10 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                             style: TextStyle(
                               fontSize: 14.5,
                               fontWeight: FontWeight.w700,
-                              color: isDark
-                                  ? const Color(0xFFF87171)
-                                  : const Color(0xFFE11D48),
-                              fontFeatures: const [FontFeature.tabularFigures()],
+                              color: Theme.of(context).colorScheme.error,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                         ],
@@ -1327,7 +1366,7 @@ class _AccountsActionHub extends StatelessWidget {
           Expanded(
             child: _ActionPillButton(
               icon: Icons.account_balance_rounded,
-              iconColor: const Color(0xFF4F46E5),
+              iconColor: Theme.of(context).colorScheme.primary,
               label: '+ Account',
               isDark: isDark,
               onTap: onAddAccount,
@@ -1337,7 +1376,7 @@ class _AccountsActionHub extends StatelessWidget {
           Expanded(
             child: _ActionPillButton(
               icon: Icons.credit_card_rounded,
-              iconColor: const Color(0xFFE11D48),
+              iconColor: Theme.of(context).colorScheme.error,
               label: '+ Card',
               isDark: isDark,
               onTap: onAddCard,
@@ -1347,7 +1386,7 @@ class _AccountsActionHub extends StatelessWidget {
           Expanded(
             child: _ActionPillButton(
               icon: Icons.trending_up_rounded,
-              iconColor: const Color(0xFF10B981),
+              iconColor: Theme.of(context).colorScheme.secondary,
               label: '+ Invest',
               isDark: isDark,
               onTap: () async {
@@ -1365,7 +1404,7 @@ class _AccountsActionHub extends StatelessWidget {
           Expanded(
             child: _ActionPillButton(
               icon: Icons.handshake_outlined,
-              iconColor: const Color(0xFFD97706),
+              iconColor: Theme.of(context).colorScheme.tertiary,
               label: 'Lending',
               isDark: isDark,
               onTap: onOpenLending,
@@ -1411,7 +1450,7 @@ class _ActionPillButton extends StatelessWidget {
             border: Border.all(
               color: isDark
                   ? Colors.white.withValues(alpha: 0.08)
-                  : const Color(0xFFECE5D8),
+                  : Theme.of(context).colorScheme.outline,
               width: 0.8,
             ),
             boxShadow: [
@@ -1437,9 +1476,7 @@ class _ActionPillButton extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark
-                        ? AppTheme.darkTextPrimary
-                        : AppTheme.lightTextPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
               ),
@@ -1472,8 +1509,8 @@ class _BankAccountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isNegative = account.balance < 0;
     final balanceColor = isNegative
-        ? (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706))
-        : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary);
+        ? (Theme.of(context).colorScheme.tertiary)
+        : (context.textPrimary);
 
     final iconData = _iconForAccount(account.icon);
     final displayName = resolveAccountDisplayName(account.name);
@@ -1504,16 +1541,22 @@ class _BankAccountRow extends StatelessWidget {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: (isNegative
-                                    ? const Color(0xFFF59E0B)
-                                    : const Color(0xFF4F46E5))
-                                .withValues(alpha: isDark ? 0.16 : 0.10),
+                            color:
+                                (isNegative
+                                        ? Theme.of(context).colorScheme.tertiary
+                                        : Theme.of(context).colorScheme.primary)
+                                    .withValues(alpha: isDark ? 0.16 : 0.10),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: (isNegative
-                                      ? const Color(0xFFF59E0B)
-                                      : const Color(0xFF4F46E5))
-                                  .withValues(alpha: isDark ? 0.28 : 0.18),
+                              color:
+                                  (isNegative
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.tertiary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary)
+                                      .withValues(alpha: isDark ? 0.28 : 0.18),
                               width: 0.6,
                             ),
                           ),
@@ -1521,8 +1564,8 @@ class _BankAccountRow extends StatelessWidget {
                             iconData,
                             size: 20,
                             color: isNegative
-                                ? const Color(0xFFF59E0B)
-                                : const Color(0xFF4F46E5),
+                                ? Theme.of(context).colorScheme.tertiary
+                                : Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1540,9 +1583,7 @@ class _BankAccountRow extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? AppTheme.darkTextPrimary
-                                      : AppTheme.lightTextPrimary,
+                                  color: context.textPrimary,
                                   letterSpacing: -0.2,
                                 ),
                               ),
@@ -1569,9 +1610,7 @@ class _BankAccountRow extends StatelessWidget {
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.3,
-                                        color: isDark
-                                            ? AppTheme.darkTextSecondary
-                                            : AppTheme.lightTextSecondary,
+                                        color: context.textSecondary,
                                       ),
                                     ),
                                   ),
@@ -1583,9 +1622,10 @@ class _BankAccountRow extends StatelessWidget {
                                       ),
                                       decoration: BoxDecoration(
                                         color: isDark
-                                            ? const Color(0xFF78350F)
-                                                .withValues(alpha: 0.5)
-                                            : const Color(0xFFFEF3C7),
+                                            ? const Color(
+                                                0xFF78350F,
+                                              ).withValues(alpha: 0.5)
+                                            : Theme.of(context).colorScheme.tertiaryContainer,
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
@@ -1596,7 +1636,7 @@ class _BankAccountRow extends StatelessWidget {
                                           letterSpacing: 0.4,
                                           color: isDark
                                               ? const Color(0xFFFCD34D)
-                                              : const Color(0xFF92400E),
+                                              : Theme.of(context).colorScheme.onTertiaryContainer,
                                         ),
                                       ),
                                     ),
@@ -1606,9 +1646,7 @@ class _BankAccountRow extends StatelessWidget {
                                       '••${account.last4}',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: isDark
-                                            ? AppTheme.darkTextMuted
-                                            : AppTheme.lightTextMuted,
+                                        color: context.textMuted,
                                       ),
                                     ),
                                 ],
@@ -1623,13 +1661,24 @@ class _BankAccountRow extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              AppFormat.currency(account.balance),
-                              style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w700,
-                                color: balanceColor,
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                            SizedBox(
+                              width: 120,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  AppFormat.currency(account.balance),
+                                  maxLines: 1,
+                                  textAlign: TextAlign.end,
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: balanceColor,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -1649,13 +1698,14 @@ class _BankAccountRow extends StatelessWidget {
                   onOptionsTap();
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 12,
+                  ),
                   child: Icon(
                     Icons.more_vert_rounded,
                     size: 18,
-                    color: isDark
-                        ? const Color(0xFF64748B)
-                        : const Color(0xFF94A3B8),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1668,7 +1718,7 @@ class _BankAccountRow extends StatelessWidget {
             height: 0.5,
             color: isDark
                 ? Colors.white.withValues(alpha: 0.08)
-                : const Color(0xFFECE5D8),
+                : Theme.of(context).colorScheme.outline,
           ),
       ],
     );
@@ -1719,7 +1769,9 @@ class _CreditCardInstrument extends StatelessWidget {
 
     final utilizationColor = isHighUtilization
         ? const Color(0xFFF87171)
-        : (isMidUtilization ? const Color(0xFFFBBF24) : const Color(0xFF34D399));
+        : (isMidUtilization
+              ? Theme.of(context).colorScheme.tertiary
+              : Theme.of(context).colorScheme.secondary);
 
     final daysUntilDue = card.nextDueDate.difference(DateTime.now()).inDays;
     final dueText = daysUntilDue <= 0
@@ -1733,14 +1785,8 @@ class _CreditCardInstrument extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [
-                  const Color(0xFF1E2230),
-                  const Color(0xFF12151E),
-                ]
-              : [
-                  const Color(0xFF232A3B),
-                  const Color(0xFF141824),
-                ],
+              ? [const Color(0xFF1E2230), const Color(0xFF12151E)]
+              : [const Color(0xFF232A3B), const Color(0xFF141824)],
         ),
         border: Border.all(
           color: isDark
@@ -1776,11 +1822,16 @@ class _CreditCardInstrument extends StatelessWidget {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: const Color(0xFFFBBF24).withValues(alpha: 0.8),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.tertiary.withValues(alpha: 0.8),
                               width: 1.0,
                             ),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+                            gradient:  LinearGradient(
+                              colors: [
+                                Color(0xFFFDE68A),
+                                Theme.of(context).colorScheme.tertiary,
+                              ],
                             ),
                           ),
                         ),
@@ -1791,11 +1842,11 @@ class _CreditCardInstrument extends StatelessWidget {
                                 .toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style:  TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.1,
-                              color: Color(0xFF94A3B8),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -1805,7 +1856,7 @@ class _CreditCardInstrument extends StatelessWidget {
                   const SizedBox(width: 8),
                   Row(
                     children: [
-                      _buildCardBrandBadge(card.cardType),
+                      _buildCardBrandBadge(context, card.cardType),
                       const SizedBox(width: 4),
                       Semantics(
                         button: true,
@@ -1816,12 +1867,15 @@ class _CreditCardInstrument extends StatelessWidget {
                             HapticService.instance.tap();
                             onOptionsTap();
                           },
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          child:  Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             child: Icon(
                               Icons.more_vert_rounded,
                               size: 18,
-                              color: Color(0xFF94A3B8),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -1862,10 +1916,10 @@ class _CreditCardInstrument extends StatelessWidget {
                           ),
                           Text(
                             '•••• ${card.last4.isNotEmpty ? card.last4 : '••••'}',
-                            style: const TextStyle(
+                            style:  TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF94A3B8),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
@@ -1889,11 +1943,11 @@ class _CreditCardInstrument extends StatelessWidget {
                                       : 'OUTSTANDING BALANCE',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style:  TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 0.8,
-                                    color: Color(0xFF94A3B8),
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1903,16 +1957,25 @@ class _CreditCardInstrument extends StatelessWidget {
                                   child: Text(
                                     card.usedAmount < -0.05
                                         ? '+${AppFormat.currency(card.usedAmount.abs())}'
-                                        : AppFormat.currency(card.usedAmount.clamp(0.0, double.infinity)),
+                                        : AppFormat.currency(
+                                            card.usedAmount.clamp(
+                                              0.0,
+                                              double.infinity,
+                                            ),
+                                          ),
                                     style: TextStyle(
                                       fontSize: 19,
                                       fontWeight: FontWeight.w700,
                                       color: card.usedAmount > 0.05
-                                          ? const Color(0xFFFCA5A5)
+                                          ? Theme.of(context).colorScheme.error
                                           : (card.usedAmount < -0.05
-                                              ? const Color(0xFF34D399)
-                                              : Colors.white),
-                                      fontFeatures: const [FontFeature.tabularFigures()],
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.secondary
+                                                : Colors.white),
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -1924,7 +1987,7 @@ class _CreditCardInstrument extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text(
+                                 Text(
                                   'AVAILABLE LIMIT',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1932,7 +1995,7 @@ class _CreditCardInstrument extends StatelessWidget {
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 0.8,
-                                    color: Color(0xFF94A3B8),
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1941,13 +2004,17 @@ class _CreditCardInstrument extends StatelessWidget {
                                   alignment: Alignment.centerRight,
                                   child: Text(
                                     card.limitAmount > 0
-                                        ? AppFormat.currency(card.availableLimit)
+                                        ? AppFormat.currency(
+                                            card.availableLimit,
+                                          )
                                         : 'Not set',
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.white,
-                                      fontFeatures: [FontFeature.tabularFigures()],
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures(),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -1967,8 +2034,10 @@ class _CreditCardInstrument extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.12),
                           child: LayoutBuilder(
                             builder: (context, constraints) {
-                              final progress =
-                                  (utilization / 100).clamp(0.0, 1.0);
+                              final progress = (utilization / 100).clamp(
+                                0.0,
+                                1.0,
+                              );
                               return Align(
                                 alignment: Alignment.centerLeft,
                                 child: Container(
@@ -2018,11 +2087,11 @@ class _CreditCardInstrument extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
+                             Text(
                               '◇',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFFFBBF24),
+                                color: Theme.of(context).colorScheme.tertiary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -2048,22 +2117,26 @@ class _CreditCardInstrument extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981)
-                                  .withValues(alpha: 0.25),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.25),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: const Color(0xFF10B981)
-                                    .withValues(alpha: 0.6),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.6),
                                 width: 0.8,
                               ),
                             ),
-                            child: const Row(
+                            child:  Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   Icons.payment_rounded,
                                   size: 11,
-                                  color: Color(0xFF34D399),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary,
                                 ),
                                 SizedBox(width: 3),
                                 Text(
@@ -2071,7 +2144,9 @@ class _CreditCardInstrument extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF34D399),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
                                   ),
                                 ),
                               ],
@@ -2090,7 +2165,7 @@ class _CreditCardInstrument extends StatelessWidget {
     );
   }
 
-  Widget _buildCardBrandBadge(String cardType) {
+  Widget _buildCardBrandBadge(BuildContext context, String cardType) {
     final type = cardType.toLowerCase();
     String brandText = 'CARD';
     Color brandColor = Colors.white70;
@@ -2103,10 +2178,10 @@ class _CreditCardInstrument extends StatelessWidget {
       brandColor = const Color(0xFFFB923C);
     } else if (type.contains('rupay')) {
       brandText = 'RuPay';
-      brandColor = const Color(0xFF34D399);
+      brandColor = Theme.of(context).colorScheme.secondary;
     } else if (type.contains('amex')) {
       brandText = 'AMEX';
-      brandColor = const Color(0xFF38BDF8);
+      brandColor = Theme.of(context).colorScheme.primary;
     }
 
     return Container(
@@ -2151,8 +2226,9 @@ class _LoanAmortizationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paidProgress =
-        loan.total > 0 ? (loan.paidAmount / loan.total).clamp(0.0, 1.0) : 0.0;
+    final paidProgress = loan.total > 0
+        ? (loan.paidAmount / loan.total).clamp(0.0, 1.0)
+        : 0.0;
     final paidPct = (paidProgress * 100).toStringAsFixed(0);
 
     return InkWell(
@@ -2172,19 +2248,19 @@ class _LoanAmortizationRow extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B)
+                        color: Theme.of(context).colorScheme.tertiary
                             .withValues(alpha: isDark ? 0.16 : 0.10),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: const Color(0xFFF59E0B)
+                          color: Theme.of(context).colorScheme.tertiary
                               .withValues(alpha: isDark ? 0.28 : 0.18),
                           width: 0.6,
                         ),
                       ),
-                      child: const Icon(
+                      child:  Icon(
                         Icons.account_balance_outlined,
                         size: 19,
-                        color: Color(0xFFF59E0B),
+                        color: Theme.of(context).colorScheme.tertiary,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2199,19 +2275,20 @@ class _LoanAmortizationRow extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? AppTheme.darkTextPrimary
-                                  : AppTheme.lightTextPrimary,
+                              color: context.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${loan.bank.isNotEmpty ? '${loan.bank} • ' : ''}Total ${AppFormat.currency(loan.total)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
                             style: TextStyle(
                               fontSize: 11,
-                              color: isDark
-                                  ? const Color(0xFF94A3B8)
-                                  : const Color(0xFF64748B),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -2220,15 +2297,22 @@ class _LoanAmortizationRow extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          AppFormat.currency(remaining),
-                          style: TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? const Color(0xFFF87171)
-                                : const Color(0xFFE11D48),
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                        SizedBox(
+                          width: 112,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              AppFormat.currency(remaining),
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.error,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -2236,9 +2320,9 @@ class _LoanAmortizationRow extends StatelessWidget {
                           'Outstanding',
                           style: TextStyle(
                             fontSize: 10,
-                            color: isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF64748B),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -2257,7 +2341,7 @@ class _LoanAmortizationRow extends StatelessWidget {
                           height: 4.5,
                           color: isDark
                               ? Colors.white.withValues(alpha: 0.08)
-                              : const Color(0xFFECE5D8),
+                              : Theme.of(context).colorScheme.outline,
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               return Align(
@@ -2265,7 +2349,9 @@ class _LoanAmortizationRow extends StatelessWidget {
                                 child: Container(
                                   width: constraints.maxWidth * paidProgress,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -2282,8 +2368,8 @@ class _LoanAmortizationRow extends StatelessWidget {
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
                         color: isDark
-                            ? const Color(0xFF6EE7B7)
-                            : const Color(0xFF059669),
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).colorScheme.secondary,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -2298,7 +2384,7 @@ class _LoanAmortizationRow extends StatelessWidget {
               height: 0.5,
               color: isDark
                   ? Colors.white.withValues(alpha: 0.08)
-                  : const Color(0xFFECE5D8),
+                  : Theme.of(context).colorScheme.outline,
             ),
         ],
       ),
@@ -2357,9 +2443,7 @@ class _NavigationLinkRow extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppTheme.darkTextPrimary
-                              : AppTheme.lightTextPrimary,
+                          color: context.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -2367,9 +2451,7 @@ class _NavigationLinkRow extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: isDark
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF64748B),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -2379,9 +2461,7 @@ class _NavigationLinkRow extends StatelessWidget {
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 20,
-                  color: isDark
-                      ? const Color(0xFF64748B)
-                      : const Color(0xFF94A3B8),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
@@ -2393,7 +2473,7 @@ class _NavigationLinkRow extends StatelessWidget {
             height: 0.5,
             color: isDark
                 ? Colors.white.withValues(alpha: 0.08)
-                : const Color(0xFFECE5D8),
+                : Theme.of(context).colorScheme.outline,
           ),
       ],
     );
@@ -2406,10 +2486,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
   final bool isDark;
   final VoidCallback onAddCard;
 
-  const _EmptyCardPlaceholder({
-    required this.isDark,
-    required this.onAddCard,
-  });
+  const _EmptyCardPlaceholder({required this.isDark, required this.onAddCard});
 
   @override
   Widget build(BuildContext context) {
@@ -2421,7 +2498,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
-              : const Color(0xFFECE5D8),
+              : Theme.of(context).colorScheme.outline,
           width: 0.8,
         ),
       ),
@@ -2431,13 +2508,15 @@ class _EmptyCardPlaceholder extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+              color: Theme.of(
+                context,
+              ).colorScheme.error.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child:  Icon(
               Icons.credit_card_rounded,
               size: 18,
-              color: Color(0xFFE11D48),
+              color: Theme.of(context).colorScheme.error,
             ),
           ),
           const SizedBox(width: 12),
@@ -2450,9 +2529,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isDark
-                        ? AppTheme.darkTextPrimary
-                        : AppTheme.lightTextPrimary,
+                    color: context.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -2460,9 +2537,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
                   'Track billing cycles, credit limits, and milestones',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -2503,7 +2578,7 @@ class _EmptyStateCard extends StatelessWidget {
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.08)
-              : const Color(0xFFECE5D8),
+              : Theme.of(context).colorScheme.outline,
           width: 0.9,
         ),
       ),
@@ -2512,10 +2587,10 @@ class _EmptyStateCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
+               Icon(
                 Icons.account_balance_wallet_outlined,
                 size: 24,
-                color: Color(0xFF4F46E5),
+                color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 10),
               Text(
@@ -2523,9 +2598,7 @@ class _EmptyStateCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: isDark
-                      ? AppTheme.darkTextPrimary
-                      : AppTheme.lightTextPrimary,
+                  color: context.textPrimary,
                 ),
               ),
             ],

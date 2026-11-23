@@ -12,6 +12,7 @@ import '../../services/reminder_service.dart';
 import '../../widgets/custom_snackbar.dart';
 import '../../shared/widgets/app_page_route.dart';
 import 'automatic_ingestion_screen.dart';
+import '../../shared/widgets/loading_state_widget.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -21,8 +22,7 @@ class NotificationSettingsScreen extends StatefulWidget {
       _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState
-    extends State<NotificationSettingsScreen>
+class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     with WidgetsBindingObserver {
   final _service = NotificationSettingsService();
   NotificationSettings _settings = NotificationSettings();
@@ -57,7 +57,8 @@ class _NotificationSettingsScreenState
   Future<void> _loadSettings() async {
     final settings = await _service.load();
     final liveSms = await LiveSmsService.instance.enabled;
-    final notifListener = await LiveSmsService.instance.isNotificationListenerEnabled();
+    final notifListener = await LiveSmsService.instance
+        .isNotificationListenerEnabled();
     final exactAlarm = await NotificationServiceV2().canScheduleExactAlarms();
     final battery = await Permission.ignoreBatteryOptimizations.isGranted;
     final waEnabled = SettingsService.instance.whatsappIngestionEnabled;
@@ -89,14 +90,21 @@ class _NotificationSettingsScreenState
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: LoadingStateWidget(message: 'Loading notification settings…'),
+      );
     }
 
     return Scaffold(
       appBar: SpendXAppBar(
         title: 'Notifications',
-        actions: [IconButton(
-          tooltip: 'Save',onPressed: _save, icon: const Icon(Icons.check))],
+        actions: [
+          IconButton(
+            tooltip: 'Save',
+            onPressed: _save,
+            icon: const Icon(Icons.check),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -107,13 +115,15 @@ class _NotificationSettingsScreenState
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color(0xFF6366F1).withValues(alpha: 0.15),
-                  const Color(0xFF6366F1).withValues(alpha: 0.05),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.35),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withValues(alpha: 0.35),
               ),
             ),
             child: InkWell(
@@ -130,12 +140,14 @@ class _NotificationSettingsScreenState
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child:  Icon(
                       Icons.bolt_rounded,
-                      color: Color(0xFF6366F1),
+                      color: Theme.of(context).colorScheme.primary,
                       size: 20,
                     ),
                   ),
@@ -159,9 +171,9 @@ class _NotificationSettingsScreenState
                       ],
                     ),
                   ),
-                  const Icon(
+                   Icon(
                     Icons.chevron_right_rounded,
-                    color: Color(0xFF6366F1),
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ],
               ),
@@ -172,10 +184,14 @@ class _NotificationSettingsScreenState
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.errorContainer.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.error.withValues(alpha: 0.4),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.error.withValues(alpha: 0.4),
                 ),
               ),
               child: Row(
@@ -194,7 +210,9 @@ class _NotificationSettingsScreenState
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: Theme.of(context).colorScheme.onErrorContainer,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onErrorContainer,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -202,7 +220,10 @@ class _NotificationSettingsScreenState
                           'Reminders will be delivered using inexact alarms and may be slightly delayed. Tap to allow exact alarms in system settings.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onErrorContainer.withValues(alpha: 0.8),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onErrorContainer
+                                .withValues(alpha: 0.8),
                           ),
                         ),
                       ],
@@ -210,8 +231,10 @@ class _NotificationSettingsScreenState
                   ),
                   TextButton(
                     onPressed: () async {
-                      await NotificationServiceV2().requestExactAlarmsPermission();
-                      final updated = await NotificationServiceV2().canScheduleExactAlarms();
+                      await NotificationServiceV2()
+                          .requestExactAlarmsPermission();
+                      final updated = await NotificationServiceV2()
+                          .canScheduleExactAlarms();
                       setState(() => _exactAlarmEnabled = updated);
                     },
                     child: const Text('Enable'),
@@ -225,17 +248,17 @@ class _NotificationSettingsScreenState
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.35),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                   Icon(
                     Icons.battery_alert_rounded,
-                    color: Color(0xFF8B5CF6),
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -254,7 +277,9 @@ class _NotificationSettingsScreenState
                           'OEM battery savers may terminate live UPI listeners when locked. Allow unrestricted background battery for reliable alerts.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -263,8 +288,10 @@ class _NotificationSettingsScreenState
                   TextButton(
                     onPressed: () async {
                       await Permission.ignoreBatteryOptimizations.request();
-                      final updated = await Permission.ignoreBatteryOptimizations.isGranted;
-                      if (mounted) setState(() => _batteryOptimizationIgnored = updated);
+                      final updated =
+                          await Permission.ignoreBatteryOptimizations.isGranted;
+                      if (mounted)
+                        setState(() => _batteryOptimizationIgnored = updated);
                     },
                     child: const Text('Unrestrict'),
                   ),
@@ -427,8 +454,10 @@ class _NotificationSettingsScreenState
               ),
               value: _notifListenerEnabled,
               onChanged: (v) async {
-                await LiveSmsService.instance.openNotificationListenerSettings();
-                final enabled = await LiveSmsService.instance.isNotificationListenerEnabled();
+                await LiveSmsService.instance
+                    .openNotificationListenerSettings();
+                final enabled = await LiveSmsService.instance
+                    .isNotificationListenerEnabled();
                 setState(() => _notifListenerEnabled = enabled);
               },
             ),
@@ -459,13 +488,19 @@ class _NotificationSettingsScreenState
             ),
             if (_whatsappEnabled) ...[
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton.icon(
                       icon: const Icon(Icons.tune_rounded, size: 16),
-                      label: const Text('Manage Financial Contacts', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        'Manage Financial Contacts',
+                        style: TextStyle(fontSize: 12),
+                      ),
                       onPressed: _showWhatsAppContactsSheet,
                     ),
                   ],
@@ -519,7 +554,9 @@ class _NotificationSettingsScreenState
                   setState(() {});
                 },
                 child: Text(
-                  GmailIntegrationService.instance.isConnected ? 'Disconnect' : 'Connect',
+                  GmailIntegrationService.instance.isConnected
+                      ? 'Disconnect'
+                      : 'Connect',
                   style: TextStyle(
                     color: GmailIntegrationService.instance.isConnected
                         ? Colors.red
@@ -551,8 +588,10 @@ class _NotificationSettingsScreenState
                   ? const Icon(Icons.check_circle, color: Colors.green)
                   : TextButton(
                       onPressed: () async {
-                        await NotificationServiceV2().requestExactAlarmsPermission();
-                        final updated = await NotificationServiceV2().canScheduleExactAlarms();
+                        await NotificationServiceV2()
+                            .requestExactAlarmsPermission();
+                        final updated = await NotificationServiceV2()
+                            .canScheduleExactAlarms();
                         setState(() => _exactAlarmEnabled = updated);
                       },
                       child: const Text('Fix'),
@@ -784,7 +823,10 @@ class _NotificationSettingsScreenState
           children: [
             Icon(Icons.security_rounded, color: Colors.green),
             SizedBox(width: 8),
-            Text('Privacy Guarantee', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Privacy Guarantee',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: const Text(
@@ -813,7 +855,9 @@ class _NotificationSettingsScreenState
   }
 
   void _showWhatsAppContactsSheet() {
-    final senders = List<String>.from(SettingsService.instance.whatsappAllowedSenders);
+    final senders = List<String>.from(
+      SettingsService.instance.whatsappAllowedSenders,
+    );
     final textController = TextEditingController();
     final contactFormKey = GlobalKey<FormState>();
 
@@ -874,7 +918,8 @@ class _NotificationSettingsScreenState
                           final contact = (value ?? '').trim();
                           if (contact.isEmpty) return 'Enter a contact name';
                           if (senders.any(
-                            (sender) => sender.toLowerCase() == contact.toLowerCase(),
+                            (sender) =>
+                                sender.toLowerCase() == contact.toLowerCase(),
                           )) {
                             return 'This contact is already allowed';
                           }
@@ -893,7 +938,9 @@ class _NotificationSettingsScreenState
                       final text = textController.text.trim();
                       setSheetState(() => senders.add(text));
                       textController.clear();
-                      await SettingsService.instance.setWhatsAppAllowedSenders(senders);
+                      await SettingsService.instance.setWhatsAppAllowedSenders(
+                        senders,
+                      );
                     },
                     child: const Text('Add'),
                   ),
@@ -906,7 +953,8 @@ class _NotificationSettingsScreenState
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: senders.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
                     itemBuilder: (_, index) {
                       final item = senders[index];
                       return ListTile(
@@ -918,7 +966,8 @@ class _NotificationSettingsScreenState
                           icon: const Icon(Icons.delete_outline, size: 20),
                           onPressed: () async {
                             setSheetState(() => senders.removeAt(index));
-                            await SettingsService.instance.setWhatsAppAllowedSenders(senders);
+                            await SettingsService.instance
+                                .setWhatsAppAllowedSenders(senders);
                           },
                         ),
                       );

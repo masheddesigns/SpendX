@@ -29,13 +29,16 @@ class MonthlyPulseCard extends ConsumerWidget {
 
     String cashflowNote;
     if (!hasData) {
-      cashflowNote = 'New calendar month • Record income or expenses to track flow.';
+      cashflowNote =
+          'New calendar month • Record income or expenses to track flow.';
     } else if (netCashFlow > 0) {
-      cashflowNote = 'Positive cashflow • Retaining $savingsRate% of monthly income.';
+      cashflowNote =
+          'Positive cashflow • Retaining $savingsRate% of monthly income.';
     } else if (netCashFlow == 0) {
       cashflowNote = 'Balanced cashflow • Income matches expenses exactly.';
     } else {
-      cashflowNote = 'Expenses exceed income by ${AppFormat.currency(netCashFlow.abs())} this month.';
+      cashflowNote =
+          'Expenses exceed income by ${AppFormat.currency(netCashFlow.abs())} this month.';
     }
 
     return Padding(
@@ -46,21 +49,24 @@ class MonthlyPulseCard extends ConsumerWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isDark
-                ? const [Color(0xFF161922), Color(0xFF13161F)]
-                : const [Color(0xFFFFFFFF), Color(0xFFFAF7F0)],
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainerLow,
+            ],
           ),
           border: Border.all(
             color: isDark
                 ? Colors.white.withValues(alpha: 0.08)
-                : const Color(0xFFECE5D8),
+                : Theme.of(context).colorScheme.outline,
             width: 0.9,
           ),
           boxShadow: [
             BoxShadow(
               color: isDark
                   ? Colors.black.withValues(alpha: 0.25)
-                  : const Color(0x081C1917),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.shadow.withValues(alpha: 0.08),
               blurRadius: 14,
               offset: const Offset(0, 4),
             ),
@@ -88,7 +94,7 @@ class MonthlyPulseCard extends ConsumerWidget {
                         Icon(
                           Icons.insights_rounded,
                           size: 16,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -97,7 +103,9 @@ class MonthlyPulseCard extends ConsumerWidget {
                             fontSize: 11.5,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.9,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -110,14 +118,14 @@ class MonthlyPulseCard extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                         const SizedBox(width: 2),
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 15,
-                          color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ],
                     ),
@@ -133,12 +141,19 @@ class MonthlyPulseCard extends ConsumerWidget {
                     Expanded(
                       flex: 4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF12261B) : const Color(0xFFF0FDF4),
+                          color: isDark
+                              ? const Color(0xFF12261B)
+                              : const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                            color: isDark ? const Color(0x3022C55E) : const Color(0x2516A34A),
+                            color: isDark
+                                ? const Color(0x3022C55E)
+                                : const Color(0x2516A34A),
                             width: 0.8,
                           ),
                         ),
@@ -150,7 +165,9 @@ class MonthlyPulseCard extends ConsumerWidget {
                                 Icon(
                                   Icons.arrow_downward_rounded,
                                   size: 13,
-                                  color: isDark ? const Color(0xFF86EFAC) : const Color(0xFF16A34A),
+                                  color: isDark
+                                      ? Theme.of(context).colorScheme.secondary
+                                      : Theme.of(context).colorScheme.secondary,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -158,7 +175,11 @@ class MonthlyPulseCard extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? const Color(0xFF86EFAC) : const Color(0xFF15803D),
+                                    color: isDark
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.secondary
+                                        : const Color(0xFF15803D),
                                   ),
                                 ),
                               ],
@@ -170,8 +191,12 @@ class MonthlyPulseCard extends ConsumerWidget {
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.4,
-                                color: isDark ? Colors.white : const Color(0xFF14532D),
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF14532D),
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -188,16 +213,22 @@ class MonthlyPulseCard extends ConsumerWidget {
                         height: 28,
                         decoration: BoxDecoration(
                           color: isDark
-                              ? (netCashFlow >= 0 ? const Color(0x2522C55E) : const Color(0x25F43F5E))
-                              : (netCashFlow >= 0 ? const Color(0xFFDCFCE7) : const Color(0xFFFFE4E6)),
+                              ? (netCashFlow >= 0
+                                    ? const Color(0x2522C55E)
+                                    : const Color(0x25F43F5E))
+                              : (netCashFlow >= 0
+                                    ? const Color(0xFFDCFCE7)
+                                    : const Color(0xFFFFE4E6)),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          netCashFlow >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                          netCashFlow >= 0
+                              ? Icons.trending_up_rounded
+                              : Icons.trending_down_rounded,
                           size: 15,
                           color: netCashFlow >= 0
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFFE11D48),
+                              ? Theme.of(context).colorScheme.secondary
+                              : Theme.of(context).colorScheme.error,
                         ),
                       ),
                     ),
@@ -206,12 +237,19 @@ class MonthlyPulseCard extends ConsumerWidget {
                     Expanded(
                       flex: 4,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF261418) : const Color(0xFFFFF1F2),
+                          color: isDark
+                              ? const Color(0xFF261418)
+                              : Theme.of(context).colorScheme.errorContainer,
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                            color: isDark ? const Color(0x30F43F5E) : const Color(0x25E11D48),
+                            color: isDark
+                                ? const Color(0x30F43F5E)
+                                : const Color(0x25E11D48),
                             width: 0.8,
                           ),
                         ),
@@ -223,7 +261,9 @@ class MonthlyPulseCard extends ConsumerWidget {
                                 Icon(
                                   Icons.arrow_outward_rounded,
                                   size: 13,
-                                  color: isDark ? const Color(0xFFFDA4AF) : const Color(0xFFE11D48),
+                                  color: isDark
+                                      ? Theme.of(context).colorScheme.error
+                                      : Theme.of(context).colorScheme.error,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
@@ -231,7 +271,9 @@ class MonthlyPulseCard extends ConsumerWidget {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark ? const Color(0xFFFDA4AF) : const Color(0xFFBE123C),
+                                    color: isDark
+                                        ? Theme.of(context).colorScheme.error
+                                        : Theme.of(context).colorScheme.error,
                                   ),
                                 ),
                               ],
@@ -243,8 +285,12 @@ class MonthlyPulseCard extends ConsumerWidget {
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.4,
-                                color: isDark ? Colors.white : const Color(0xFF881337),
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF881337),
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -259,7 +305,10 @@ class MonthlyPulseCard extends ConsumerWidget {
 
                 // Mindful Status Note
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7.5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7.5,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.04)
@@ -271,7 +320,7 @@ class MonthlyPulseCard extends ConsumerWidget {
                       Icon(
                         Icons.info_outline_rounded,
                         size: 13,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 7),
                       Expanded(
@@ -280,7 +329,9 @@ class MonthlyPulseCard extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
-                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF57534E),
+                            color: isDark
+                                ? const Color(0xFFCBD5E1)
+                                : const Color(0xFF57534E),
                           ),
                         ),
                       ),

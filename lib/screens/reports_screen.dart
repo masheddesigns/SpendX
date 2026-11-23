@@ -107,51 +107,45 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── 1. Horizon Selector & Date Span ──────────────────
-              _HorizonSelector(
-                selectedPeriod: period,
-                onPeriodChanged: _onPeriodChanged,
-                isDark: isDark,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Horizon Selector & Date Span ──────────────────
+                _HorizonSelector(
+                  selectedPeriod: period,
+                  onPeriodChanged: _onPeriodChanged,
+                  isDark: isDark,
+                ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // ── 2. Cash Flow Horizon (Cardless Executive Summary) ─
-              _CashFlowHorizonSection(
-                summary: summary,
-                isDark: isDark,
-              ),
+                // ── 2. Cash Flow Horizon (Cardless Executive Summary) ─
+                _CashFlowHorizonSection(summary: summary, isDark: isDark),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // ── 3. Monthly Movement (Chronological Dual-Stem) ─────
-              _MonthlyMovementSection(
-                summary: summary,
-                anim: _chartAnim,
-                isDark: isDark,
-              ),
+                // ── 3. Monthly Movement (Chronological Dual-Stem) ─────
+                _MonthlyMovementSection(
+                  summary: summary,
+                  anim: _chartAnim,
+                  isDark: isDark,
+                ),
 
-              const SizedBox(height: 28),
+                const SizedBox(height: 28),
 
-              // ── 4. Where Your Money Went (Category Trajectory) ────
-              _CategoryBreakdownSection(
-                summary: summary,
-                isDark: isDark,
-              ),
+                // ── 4. Where Your Money Went (Category Trajectory) ────
+                _CategoryBreakdownSection(summary: summary, isDark: isDark),
 
-              const SizedBox(height: 28),
+                const SizedBox(height: 28),
 
-              // ── 5. Debt & Lending History ─────────────────────────
-              _DebtAndLendingSection(
-                summary: summary,
-                anim: _chartAnim,
-                isDark: isDark,
-              ),
-            ],
-          ),
+                // ── 5. Debt & Lending History ─────────────────────────
+                _DebtAndLendingSection(
+                  summary: summary,
+                  anim: _chartAnim,
+                  isDark: isDark,
+                ),
+              ],
+            ),
           ),
         ),
         loading: () => const SkeletonLoader.summary(),
@@ -198,7 +192,7 @@ class _HorizonSelector extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 12),
@@ -232,7 +226,7 @@ class _HorizonSelector extends StatelessWidget {
             Icon(
               Icons.date_range_rounded,
               size: 13,
-              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 5),
             Text(
@@ -240,7 +234,7 @@ class _HorizonSelector extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -275,7 +269,7 @@ class _PillButton extends StatelessWidget {
         : Colors.black.withValues(alpha: 0.04);
 
     final activeText = isDark ? cs.primary : const Color(0xFF0F766E);
-    final inactiveText = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final inactiveText = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return InkWell(
       onTap: onTap,
@@ -314,10 +308,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
   final ReportsSummary summary;
   final bool isDark;
 
-  const _CashFlowHorizonSection({
-    required this.summary,
-    required this.isDark,
-  });
+  const _CashFlowHorizonSection({required this.summary, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +316,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
     final net = summary.netSavings;
     final isPositive = net >= 0;
 
-    final primaryInflowColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final primaryInflowColor = Theme.of(context).colorScheme.secondary;
     final primaryOutflowColor = cs.error;
     final netColor = isPositive ? primaryInflowColor : primaryOutflowColor;
 
@@ -362,7 +353,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 Text(
@@ -370,7 +361,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -397,13 +388,15 @@ class _CashFlowHorizonSection extends StatelessWidget {
                   : 'Net deficit across this horizon (spending exceeded inflows)',
               style: TextStyle(
                 fontSize: 12,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
 
             const SizedBox(height: 16),
             Divider(
-              color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
+              color: isDark
+                  ? Colors.white10
+                  : Colors.black.withValues(alpha: 0.06),
               height: 1,
             ),
             const SizedBox(height: 14),
@@ -454,7 +447,10 @@ class _CashFlowHorizonSection extends StatelessWidget {
             if (summary.salarySourceCount > 0) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.04)
@@ -463,16 +459,18 @@ class _CashFlowHorizonSection extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.payments_outlined,
-                        size: 16,
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    Icon(
+                      Icons.payments_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Verified Salary Received:',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const Spacer(),
@@ -481,7 +479,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        color: Theme.of(context).colorScheme.secondary,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -519,7 +517,7 @@ class _MetricPillar extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 2),
@@ -555,7 +553,7 @@ class _MonthlyMovementSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final inflowColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+    final inflowColor = Theme.of(context).colorScheme.secondary;
     final outflowColor = cs.error;
 
     // SAFE REVERSAL: The underlying repository and service provide newest-first.
@@ -574,7 +572,7 @@ class _MonthlyMovementSection extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             Row(
@@ -603,7 +601,12 @@ class _MonthlyMovementSection extends StatelessWidget {
                       ),
                     ),
                   )
-                : _buildBarChart(chronologicalData, cs, inflowColor, outflowColor),
+                : _buildBarChart(
+                    chronologicalData,
+                    cs,
+                    inflowColor,
+                    outflowColor,
+                  ),
           ),
         ),
       ],
@@ -633,16 +636,17 @@ class _MonthlyMovementSection extends StatelessWidget {
             barTouchData: BarTouchData(
               enabled: true,
               touchTooltipData: BarTouchTooltipData(
-                getTooltipColor: (_) => isDark
-                    ? const Color(0xFF1E293B)
-                    : const Color(0xFFFFFFFF),
+                getTooltipColor: (_) =>
+                    isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFFFF),
                 tooltipBorderRadius: BorderRadius.circular(8),
                 getTooltipItem: (group, groupIndex, rod, rodIndex) {
                   final item = data[group.x.toInt()];
                   final isIncomeRod = rodIndex == 0;
                   final label = isIncomeRod ? 'Inflow' : 'Outflow';
                   final amount = isIncomeRod ? item.income : item.expense;
-                  final currentMonthLabel = DateFormat('MMM yy').format(DateTime.now());
+                  final currentMonthLabel = DateFormat(
+                    'MMM yy',
+                  ).format(DateTime.now());
                   final monthTitle = item.label == currentMonthLabel
                       ? '${item.label} (MTD)'
                       : item.label;
@@ -664,15 +668,14 @@ class _MonthlyMovementSection extends StatelessWidget {
                   showTitles: true,
                   getTitlesWidget: (v, _) {
                     final i = v.toInt();
-                    if (i < 0 || i >= data.length) return const SizedBox.shrink();
+                    if (i < 0 || i >= data.length)
+                      return const SizedBox.shrink();
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         data[i].label,
                         style: TextStyle(
-                          color: isDark
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF64748B),
+                          color: cs.onSurfaceVariant,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
@@ -681,15 +684,23 @@ class _MonthlyMovementSection extends StatelessWidget {
                   },
                 ),
               ),
-              leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              leftTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
             ),
             gridData: FlGridData(
               show: true,
               drawVerticalLine: false,
               getDrawingHorizontalLine: (_) => FlLine(
-                color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                color: isDark
+                    ? Colors.white10
+                    : Colors.black.withValues(alpha: 0.05),
                 strokeWidth: 1,
               ),
             ),
@@ -706,13 +717,17 @@ class _MonthlyMovementSection extends StatelessWidget {
                     toY: d.income * anim.value,
                     color: inflowColor,
                     width: rodWidth,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(5),
+                    ),
                   ),
                   BarChartRodData(
                     toY: d.expense * anim.value,
                     color: outflowColor,
                     width: rodWidth,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(5),
+                    ),
                   ),
                 ],
               );
@@ -741,12 +756,16 @@ class _ChartLegendDot extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ],
@@ -784,7 +803,7 @@ class _CategoryBreakdownSection extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             if (categories.isNotEmpty)
@@ -793,7 +812,7 @@ class _CategoryBreakdownSection extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
           ],
@@ -825,13 +844,19 @@ class _CategoryBreakdownSection extends StatelessWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: categories.length,
                 separatorBuilder: (_, _) => Divider(
-                  color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                  color: isDark
+                      ? Colors.white10
+                      : Colors.black.withValues(alpha: 0.05),
                   height: 16,
                 ),
                 itemBuilder: (context, i) {
                   final c = categories[i];
-                  final humanName = ReportsCategoryResolver.resolve(c.categoryName);
-                  final pct = totalExpense > 0 ? (c.amount / totalExpense) : 0.0;
+                  final humanName = ReportsCategoryResolver.resolve(
+                    c.categoryName,
+                  );
+                  final pct = totalExpense > 0
+                      ? (c.amount / totalExpense)
+                      : 0.0;
 
                   return _CategoryProportionRow(
                     name: humanName,
@@ -891,7 +916,10 @@ class _CategoryProportionRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark
                           ? Colors.white.withValues(alpha: 0.05)
@@ -903,7 +931,7 @@ class _CategoryProportionRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -929,7 +957,9 @@ class _CategoryProportionRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -946,7 +976,7 @@ class _CategoryProportionRow extends StatelessWidget {
             minHeight: 5,
             backgroundColor: trackColor,
             valueColor: AlwaysStoppedAnimation(
-              isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+              Theme.of(context).colorScheme.secondary,
             ),
           ),
         ),
@@ -981,7 +1011,7 @@ class _DebtAndLendingSection extends StatelessWidget {
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.2,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 4),
@@ -989,7 +1019,7 @@ class _DebtAndLendingSection extends StatelessWidget {
           'Changes in borrowing, obligations & peer lending over time',
           style: TextStyle(
             fontSize: 12,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 14),
@@ -1043,8 +1073,8 @@ class _PeerLendingCadenceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final netLending = totalLent - totalBorrowed;
     final isNetLent = netLending >= 0;
-    final lentColor = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
-    final borrowedColor = isDark ? const Color(0xFFFB923C) : const Color(0xFFEA580C);
+    final lentColor = Theme.of(context).colorScheme.secondary;
+    final borrowedColor = Theme.of(context).colorScheme.tertiary;
 
     return SpendXGlassSurface(
       level: SpendXGlassLevel.base,
@@ -1059,13 +1089,18 @@ class _PeerLendingCadenceCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.handshake_outlined,
-                        size: 16,
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    Icon(
+                      Icons.handshake_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Peer Lending Cadence',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -1088,17 +1123,22 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Total Lent',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
-                      Text(AppFormat.currency(totalLent),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: lentColor,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          )),
+                      Text(
+                        'Total Lent',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        AppFormat.currency(totalLent),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: lentColor,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1106,17 +1146,22 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Total Borrowed',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
-                      Text(AppFormat.currency(totalBorrowed),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: borrowedColor,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          )),
+                      Text(
+                        'Total Borrowed',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        AppFormat.currency(totalBorrowed),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: borrowedColor,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1124,10 +1169,13 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('Net Position',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                      Text(
+                        'Net Position',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                       Text(
                         '${isNetLent ? '+' : ''}${AppFormat.currency(netLending)}',
                         style: TextStyle(
@@ -1156,7 +1204,11 @@ class _PeerLendingCadenceCard extends StatelessWidget {
               const SizedBox(height: 8),
               SizedBox(
                 height: 120,
-                child: _buildLendingTrendChart(lentColor, borrowedColor),
+                child: _buildLendingTrendChart(
+                  lentColor,
+                  borrowedColor,
+                  Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ] else ...[
               const SizedBox(height: 12),
@@ -1165,7 +1217,7 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                   'No peer lending records captured in this period.',
                   style: TextStyle(
                     fontSize: 11,
-                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1176,7 +1228,11 @@ class _PeerLendingCadenceCard extends StatelessWidget {
     );
   }
 
-  Widget _buildLendingTrendChart(Color lentColor, Color borrowedColor) {
+  Widget _buildLendingTrendChart(
+    Color lentColor,
+    Color borrowedColor,
+    Color neutralColor,
+  ) {
     final maxVal = trend.fold<double>(
       0.0,
       (m, d) => m > d.net.abs() ? m : d.net.abs(),
@@ -1223,16 +1279,22 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: neutralColor,
                     ),
                   ),
                 );
               },
             ),
           ),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
         ),
         gridData: const FlGridData(show: false),
         borderData: FlBorderData(show: false),
@@ -1271,7 +1333,9 @@ class _LoanPrincipalAmortizationCard extends StatelessWidget {
     final totalDebt = loans.fold<double>(0, (s, l) => s + l.remainingPrincipal);
     final totalPaid = loans.fold<double>(0, (s, l) => s + l.principalPaid);
     final totalOriginal = totalDebt + totalPaid;
-    final overallProgress = totalOriginal > 0 ? (totalPaid / totalOriginal) : 0.0;
+    final overallProgress = totalOriginal > 0
+        ? (totalPaid / totalOriginal)
+        : 0.0;
     final primaryColor = Theme.of(context).colorScheme.primary;
     final errorColor = Theme.of(context).colorScheme.error;
 
@@ -1288,13 +1352,18 @@ class _LoanPrincipalAmortizationCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.account_balance_outlined,
-                        size: 16,
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    Icon(
+                      Icons.account_balance_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Loan Principal Amortization',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -1318,7 +1387,7 @@ class _LoanPrincipalAmortizationCard extends StatelessWidget {
                     'No active term loans.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1327,19 +1396,23 @@ class _LoanPrincipalAmortizationCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Principal Repaid: ${AppFormat.currency(totalPaid)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      )),
-                  Text('Remaining Debt: ${AppFormat.currency(totalDebt)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: errorColor,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      )),
+                  Text(
+                    'Principal Repaid: ${AppFormat.currency(totalPaid)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  Text(
+                    'Remaining Debt: ${AppFormat.currency(totalDebt)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: errorColor,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -1355,32 +1428,47 @@ class _LoanPrincipalAmortizationCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Individual loan rows
-              ...loans.map((loan) => Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
+              ...loans.map(
+                (loan) => Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          loan.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 140,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
                           child: Text(
-                            loan.name,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                            '${(loan.progress * 100).toStringAsFixed(0)}% (${AppFormat.currency(loan.remainingPrincipal)} left)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                         ),
-                        Text(
-                          '${(loan.progress * 100).toStringAsFixed(0)}% (${AppFormat.currency(loan.remainingPrincipal)} left)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -1404,11 +1492,15 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final totalOutstanding = cards.fold<double>(0, (s, c) => s + c.outstanding);
     final totalLimit = cards.fold<double>(0, (s, c) => s + c.limit);
-    final overallUtil = totalLimit > 0 ? (totalOutstanding / totalLimit) * 100 : 0.0;
+    final overallUtil = totalLimit > 0
+        ? (totalOutstanding / totalLimit) * 100
+        : 0.0;
 
     final utilColor = overallUtil >= 80
         ? Colors.red
-        : (overallUtil >= 50 ? Colors.orange : const Color(0xFF22C55E));
+        : (overallUtil >= 50
+              ? Colors.orange
+              : Theme.of(context).colorScheme.secondary);
 
     return SpendXGlassSurface(
       level: SpendXGlassLevel.base,
@@ -1423,13 +1515,18 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.credit_card_outlined,
-                        size: 16,
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)),
+                    Icon(
+                      Icons.credit_card_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Revolving Credit Exposure',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -1453,7 +1550,7 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
                     'No credit cards added.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1472,10 +1569,12 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    totalLimit > 0 ? 'Limit: ${AppFormat.currency(totalLimit)}' : 'No limit set',
+                    totalLimit > 0
+                        ? 'Limit: ${AppFormat.currency(totalLimit)}'
+                        : 'No limit set',
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -1494,51 +1593,80 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Individual card rows
-              ...cards.map((card) => Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+              ...cards.map(
+                (card) => Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
                           children: [
-                            Text(
-                              card.name,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                card.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1.5,
+                              ),
                               decoration: BoxDecoration(
-                                color: (card.daysLeft <= 5 ? cs.error : cs.secondary)
-                                    .withValues(alpha: 0.15),
+                                color:
+                                    (card.daysLeft <= 5
+                                            ? cs.error
+                                            : cs.secondary)
+                                        .withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
                                 'Due in ${card.daysLeft}d',
+                                maxLines: 1,
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w600,
-                                  color: card.daysLeft <= 5 ? cs.error : cs.secondary,
+                                  color: card.daysLeft <= 5
+                                      ? cs.error
+                                      : cs.secondary,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        Text(
-                          '${AppFormat.currency(card.outstanding)} (${card.utilPct.toStringAsFixed(0)}%)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 130,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '${AppFormat.currency(card.outstanding)} (${card.utilPct.toStringAsFixed(0)}%)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -1571,7 +1699,7 @@ class _ExportTransactionsSheetContent extends StatelessWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 6),
@@ -1579,7 +1707,7 @@ class _ExportTransactionsSheetContent extends StatelessWidget {
             'Note: These actions export your underlying transaction records. They do not generate a consolidated visual PDF report.',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -1644,7 +1772,9 @@ class _ExportOptionTile extends StatelessWidget {
               : Colors.black.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.08),
+            color: isDark
+                ? Colors.white10
+                : Colors.black.withValues(alpha: 0.08),
             width: 1,
           ),
         ),
@@ -1654,14 +1784,18 @@ class _ExportOptionTile extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF38BDF8).withValues(alpha: 0.15)
-                    : const Color(0xFF0284C7).withValues(alpha: 0.10),
+                    ? Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.15)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 icon,
                 size: 20,
-                color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                color: Theme.of(context).colorScheme.secondary,
               ),
             ),
             const SizedBox(width: 14),
@@ -1671,14 +1805,17 @@ class _ExportOptionTile extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: TextStyle(
                       fontSize: 11,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -1687,7 +1824,7 @@ class _ExportOptionTile extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               size: 18,
-              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ],
         ),

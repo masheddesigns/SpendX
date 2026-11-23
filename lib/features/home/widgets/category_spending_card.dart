@@ -37,21 +37,24 @@ class CategorySpendingCard extends ConsumerWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isDark
-                ? const [Color(0xFF161922), Color(0xFF13151E)]
-                : const [Color(0xFFFFFFFF), Color(0xFFF9F6EE)],
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainerLow,
+            ],
           ),
           border: Border.all(
             color: isDark
                 ? Colors.white.withValues(alpha: 0.10)
-                : const Color(0xFFECE5D8),
+                : Theme.of(context).colorScheme.outline,
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
               color: isDark
                   ? Colors.black.withValues(alpha: 0.30)
-                  : const Color(0x0A1C1917),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.shadow.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -69,7 +72,7 @@ class CategorySpendingCard extends ConsumerWidget {
                     Icon(
                       Icons.pie_chart_outline_rounded,
                       size: 16,
-                      color: isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -78,7 +81,7 @@ class CategorySpendingCard extends ConsumerWidget {
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.0,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -88,7 +91,7 @@ class CategorySpendingCard extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -107,7 +110,7 @@ class CategorySpendingCard extends ConsumerWidget {
                       final category = categoriesMap[entry.key];
                       final amount = entry.value;
                       final percentage = (amount / totalSpent).clamp(0.01, 1.0);
-                      final color = _resolveColor(category?.color);
+                      final color = _resolveColor(context, category?.color);
                       return Expanded(
                         flex: (percentage * 100).toInt().clamp(1, 100),
                         child: Container(
@@ -133,14 +136,16 @@ class CategorySpendingCard extends ConsumerWidget {
                     : 0.0;
                 final percentText = '${(percentage * 100).toInt()}%';
 
-                final color = _resolveColor(category?.color);
+                final color = _resolveColor(context, category?.color);
                 final icon = category != null
                     ? CategoryIconPicker.iconForKey(category.icon)
                     : Icons.category_rounded;
                 final name = category?.name ?? 'Other';
 
                 return Padding(
-                  padding: EdgeInsets.only(bottom: index == topEntries.length - 1 ? 0 : 10),
+                  padding: EdgeInsets.only(
+                    bottom: index == topEntries.length - 1 ? 0 : 10,
+                  ),
                   child: Row(
                     children: [
                       // Tactile squircle icon pod
@@ -151,7 +156,9 @@ class CategorySpendingCard extends ConsumerWidget {
                           color: color.withValues(alpha: isDark ? 0.20 : 0.12),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: color.withValues(alpha: isDark ? 0.35 : 0.25),
+                            color: color.withValues(
+                              alpha: isDark ? 0.35 : 0.25,
+                            ),
                             width: 0.8,
                           ),
                         ),
@@ -166,12 +173,13 @@ class CategorySpendingCard extends ConsumerWidget {
                           children: [
                             Text(
                               name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
-                                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1C1917),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -179,7 +187,9 @@ class CategorySpendingCard extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
-                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF78716C),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -192,7 +202,7 @@ class CategorySpendingCard extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.white : const Color(0xFF1C1917),
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -207,13 +217,14 @@ class CategorySpendingCard extends ConsumerWidget {
     );
   }
 
-  Color _resolveColor(String? colorStr) {
-    if (colorStr == null || colorStr.isEmpty) return const Color(0xFF6366F1);
+  Color _resolveColor(BuildContext context, String? colorStr) {
+    if (colorStr == null || colorStr.isEmpty)
+      return Theme.of(context).colorScheme.primary;
     try {
       final hex = colorStr.replaceAll('#', '');
       if (hex.length == 6) return Color(int.parse('0xFF$hex'));
       if (hex.length == 8) return Color(int.parse('0x$hex'));
     } catch (_) {}
-    return const Color(0xFF6366F1);
+    return Theme.of(context).colorScheme.primary;
   }
 }

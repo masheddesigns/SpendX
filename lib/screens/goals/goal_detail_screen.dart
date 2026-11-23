@@ -55,7 +55,9 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     final result = await showDialog<({double amount, String? note})>(
       context: context,
       builder: (ctx) => SpendXGlassDialog(
-        title: _goal.type == GoalType.debtPayoff ? 'Log Payment' : 'Log Savings',
+        title: _goal.type == GoalType.debtPayoff
+            ? 'Log Payment'
+            : 'Log Savings',
         message: 'Record contribution towards ${_goal.title}',
         primaryLabel: 'Add',
         secondaryLabel: 'Cancel',
@@ -64,10 +66,12 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           children: [
             TextField(
               controller: amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               autofocus: true,
               style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -75,11 +79,15 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                 labelText: 'Amount',
                 prefixText: '₹ ',
                 filled: true,
-                fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
+                fillColor: isDark
+                    ? const Color(0x1AFFFFFF)
+                    : const Color(0x66FFFFFF),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                    color: isDark
+                        ? const Color(0x28FFFFFF)
+                        : const Color(0x18000000),
                     width: 0.75,
                   ),
                 ),
@@ -89,17 +97,21 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
             TextField(
               controller: noteCtrl,
               style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 14,
               ),
               decoration: InputDecoration(
                 labelText: 'Note (optional)',
                 filled: true,
-                fillColor: isDark ? const Color(0x1AFFFFFF) : const Color(0x66FFFFFF),
+                fillColor: isDark
+                    ? const Color(0x1AFFFFFF)
+                    : const Color(0x66FFFFFF),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: isDark ? const Color(0x28FFFFFF) : const Color(0x18000000),
+                    color: isDark
+                        ? const Color(0x28FFFFFF)
+                        : const Color(0x18000000),
                     width: 0.75,
                   ),
                 ),
@@ -167,9 +179,11 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
   }
 
   Future<void> _markComplete() async {
-    await ref.read(goalRepoProvider).update(
-      _goal.copyWith(currentAmount: _goal.targetAmount, isActive: false),
-    );
+    await ref
+        .read(goalRepoProvider)
+        .update(
+          _goal.copyWith(currentAmount: _goal.targetAmount, isActive: false),
+        );
     ref.invalidate(goalsProvider);
     if (mounted) Navigator.pop(context, true);
   }
@@ -201,11 +215,11 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
     if (progress.isOverBudget) {
       barColor = cs.error;
     } else if (progress.isCompleted) {
-      barColor = const Color(0xFF22C55E);
+      barColor = Theme.of(context).colorScheme.secondary;
     } else if (pct >= 0.7) {
-      barColor = const Color(0xFF22C55E);
+      barColor = Theme.of(context).colorScheme.secondary;
     } else if (pct >= 0.4) {
-      barColor = const Color(0xFFF59E0B);
+      barColor = Theme.of(context).colorScheme.tertiary;
     } else {
       barColor = cs.error;
     }
@@ -232,130 +246,214 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-        children: [
-          // ── Edge State Banners ─────────────────────────────────────
-          if (progress.isCompleted)
-            const _Banner(
-              icon: Icons.check_circle_rounded,
-              text: 'Goal Achieved!',
-              color: AppColors.success,
-            ),
-          if (isOverdue)
-            _Banner(
-              icon: Icons.warning_amber_rounded,
-              text: 'Goal deadline has passed',
-              color: cs.error,
-            ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(goalLogsProvider(_goal.id));
+          ref.invalidate(goalInsightsProvider);
+          await Future.wait([
+            ref.read(goalLogsProvider(_goal.id).future),
+            ref.read(goalInsightsProvider.future),
+          ]);
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          children: [
+            // ── Edge State Banners ─────────────────────────────────────
+            if (progress.isCompleted)
+              const _Banner(
+                icon: Icons.check_circle_rounded,
+                text: 'Goal Achieved!',
+                color: AppColors.success,
+              ),
+            if (isOverdue)
+              _Banner(
+                icon: Icons.warning_amber_rounded,
+                text: 'Goal deadline has passed',
+                color: cs.error,
+              ),
 
-          // ── Progress Ring & Metrics Hero ──────────────────────────
-          SpendXGlassSurface(
-            level: SpendXGlassLevel.elevated,
-            borderRadius: BorderRadius.circular(20),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Column(
-              children: [
-                Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: pct),
-                    duration: const Duration(milliseconds: 800),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, _) => SizedBox(
-                      width: 140,
-                      height: 140,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: 140,
-                            height: 140,
-                            child: CircularProgressIndicator(
-                              value: value,
-                              strokeWidth: 10,
-                              backgroundColor: isDark ? const Color(0x1FFFFFFF) : const Color(0x18000000),
-                              valueColor: AlwaysStoppedAnimation(barColor),
-                              strokeCap: StrokeCap.round,
+            // ── Progress Ring & Metrics Hero ──────────────────────────
+            SpendXGlassSurface(
+              level: SpendXGlassLevel.elevated,
+              borderRadius: BorderRadius.circular(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Column(
+                children: [
+                  Center(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: pct),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, _) => SizedBox(
+                        width: 140,
+                        height: 140,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 140,
+                              height: 140,
+                              child: CircularProgressIndicator(
+                                value: value,
+                                strokeWidth: 10,
+                                backgroundColor: isDark
+                                    ? const Color(0x1FFFFFFF)
+                                    : const Color(0x18000000),
+                                valueColor: AlwaysStoppedAnimation(barColor),
+                                strokeCap: StrokeCap.round,
+                              ),
                             ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$pctText%',
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w800,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
-                                  color: barColor,
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '$pctText%',
+                                  style: TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                    color: barColor,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                progress.isCompleted
-                                    ? 'Done!'
-                                    : isOverdue
-                                        ? 'Overdue'
-                                        : '${progress.daysLeft}d left',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.textSecondaryOf(context),
+                                Text(
+                                  progress.isCompleted
+                                      ? 'Done!'
+                                      : isOverdue
+                                      ? 'Overdue'
+                                      : '${progress.daysLeft}d left',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.textSecondaryOf(
+                                          context,
+                                        ),
+                                      ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // ── Metrics Row ───────────────────────────────────────
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MetricTile(
-                        label: _goal.type == GoalType.spendingLimit ? 'Spent' : 'Saved',
-                        value: _goal.type == GoalType.spendingLimit
-                            ? AppFormat.currency(progress.currentSpent ?? 0)
-                            : AppFormat.currency(_goal.currentAmount),
-                        color: progress.isOverBudget ? cs.error : AppColors.success,
+                  // ── Metrics Row ───────────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MetricTile(
+                          label: _goal.type == GoalType.spendingLimit
+                              ? 'Spent'
+                              : 'Saved',
+                          value: _goal.type == GoalType.spendingLimit
+                              ? AppFormat.currency(progress.currentSpent ?? 0)
+                              : AppFormat.currency(_goal.currentAmount),
+                          color: progress.isOverBudget
+                              ? cs.error
+                              : AppColors.success,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _MetricTile(
-                        label: 'Remaining',
-                        value: AppFormat.currency(progress.remaining),
-                        color: AppColors.primary,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _MetricTile(
+                          label: 'Remaining',
+                          value: AppFormat.currency(progress.remaining),
+                          color: AppColors.primary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _MetricTile(
-                        label: _goal.type == GoalType.spendingLimit ? '/day left' : '/day needed',
-                        value: AppFormat.currency(progress.requiredDaily),
-                        color: progress.isBehindSchedule ? cs.error : const Color(0xFFF59E0B),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _MetricTile(
+                          label: _goal.type == GoalType.spendingLimit
+                              ? '/day left'
+                              : '/day needed',
+                          value: AppFormat.currency(progress.requiredDaily),
+                          color: progress.isBehindSchedule
+                              ? cs.error
+                              : Theme.of(context).colorScheme.tertiary,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // ── Trend Mini-Chart (from logs) ──────────────────────────
-          if (isManualProgress)
-            logsAsync.when(
-              data: (logs) {
-                if (logs.length < 2) return const SizedBox.shrink();
+            // ── Trend Mini-Chart (from logs) ──────────────────────────
+            if (isManualProgress)
+              logsAsync.when(
+                data: (logs) {
+                  if (logs.length < 2) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _TrendChart(
+                      logs: logs.reversed.toList(),
+                      target: _goal.targetAmount,
+                      color: barColor,
+                    ),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
+              ),
+
+            // ── Nudges ────────────────────────────────────────────────
+            nudgesAsync.when(
+              data: (nudges) {
+                final relevant = nudges.take(2).toList();
+                if (relevant.isEmpty) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _TrendChart(
-                    logs: logs.reversed.toList(),
-                    target: _goal.targetAmount,
-                    color: barColor,
+                  child: SpendXGlassSurface(
+                    level: SpendXGlassLevel.base,
+                    borderRadius: BorderRadius.circular(16),
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      children: relevant
+                          .map(
+                            (n) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    n.type == NudgeType.positive
+                                        ? Icons.check_circle_rounded
+                                        : n.type == NudgeType.warning
+                                        ? Icons.warning_amber_rounded
+                                        : Icons.lightbulb_outline_rounded,
+                                    size: 16,
+                                    color: n.type == NudgeType.positive
+                                        ? AppColors.success
+                                        : n.type == NudgeType.warning
+                                        ? Theme.of(context).colorScheme.tertiary
+                                        : AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      n.text,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: AppColors.textPrimaryOf(
+                                              context,
+                                            ),
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
                   ),
                 );
               },
@@ -363,172 +461,146 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
               error: (_, _) => const SizedBox.shrink(),
             ),
 
-          // ── Nudges ────────────────────────────────────────────────
-          nudgesAsync.when(
-            data: (nudges) {
-              final relevant = nudges.take(2).toList();
-              if (relevant.isEmpty) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: SpendXGlassSurface(
-                  level: SpendXGlassLevel.base,
-                  borderRadius: BorderRadius.circular(16),
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    children: relevant.map((n) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            n.type == NudgeType.positive
-                                ? Icons.check_circle_rounded
-                                : n.type == NudgeType.warning
-                                    ? Icons.warning_amber_rounded
-                                    : Icons.lightbulb_outline_rounded,
-                            size: 16,
-                            color: n.type == NudgeType.positive
-                                ? AppColors.success
-                                : n.type == NudgeType.warning
-                                    ? const Color(0xFFF59E0B)
-                                    : AppColors.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              n.text,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textPrimaryOf(context),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )).toList(),
-                  ),
+            // ── Action Buttons ────────────────────────────────────────
+            if (isManualProgress && !progress.isCompleted)
+              SpendXGlassButton(
+                variant: SpendXGlassButtonVariant.primary,
+                onPressed: _logProgress,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.add_rounded, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _goal.type == GoalType.debtPayoff
+                          ? 'Log Payment'
+                          : 'Log Savings',
+                    ),
+                  ],
                 ),
-              );
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
+              ),
 
-          // ── Action Buttons ────────────────────────────────────────
-          if (isManualProgress && !progress.isCompleted)
-            SpendXGlassButton(
-              variant: SpendXGlassButtonVariant.primary,
-              onPressed: _logProgress,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            if (!progress.isCompleted && !isOverdue) ...[
+              const SizedBox(height: 10),
+              SpendXGlassButton(
+                variant: SpendXGlassButtonVariant.tonal,
+                onPressed: _markComplete,
+                child: const Text('Mark as Complete'),
+              ),
+            ],
+
+            if (_goal.type == GoalType.spendingLimit) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Spending limit updates automatically from transactions.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondaryOf(context),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+
+            // ── Progress Log ──────────────────────────────────────────
+            if (isManualProgress) ...[
+              Text(
+                'Progress Log',
+                style: AppTextStyles.heading.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 10),
+              logsAsync.when(
+                data: (logs) {
+                  if (logs.isEmpty) {
+                    return SpendXGlassSurface(
+                      level: SpendXGlassLevel.base,
+                      borderRadius: BorderRadius.circular(16),
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: Text(
+                          'No entries yet. Tap the button above to log progress.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textMutedOf(context)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  return SpendXGlassSurface(
+                    level: SpendXGlassLevel.base,
+                    borderRadius: BorderRadius.circular(16),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < logs.length; i++) ...[
+                          _LogTile(
+                            log: logs[i],
+                            onDelete: () => _deleteLog(logs[i]),
+                          ),
+                          if (i < logs.length - 1)
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? const Color(0x1AFFFFFF)
+                                  : const Color(0x14000000),
+                              indent: 16,
+                              endIndent: 16,
+                            ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+                loading: () =>
+                    const SpendXLoadingState(count: 2, itemHeight: 48),
+                error: (_, _) => const SizedBox.shrink(),
+              ),
+            ],
+
+            // ── Related Transactions ────────────────────────────────────
+            const SizedBox(height: 24),
+            _RelatedTransactions(goal: _goal),
+
+            // ── Date Info ─────────────────────────────────────────────
+            const SizedBox(height: 16),
+            SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              borderRadius: BorderRadius.circular(16),
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  const Icon(Icons.add_rounded, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    _goal.type == GoalType.debtPayoff ? 'Log Payment' : 'Log Savings',
+                  _StatRow(
+                    label: 'Start Date',
+                    value: AppFormat.date(_goal.startDate),
+                  ),
+                  Divider(
+                    height: 16,
+                    color: isDark
+                        ? const Color(0x1AFFFFFF)
+                        : const Color(0x14000000),
+                  ),
+                  _StatRow(
+                    label: 'End Date',
+                    value: AppFormat.date(_goal.endDate),
+                  ),
+                  Divider(
+                    height: 16,
+                    color: isDark
+                        ? const Color(0x1AFFFFFF)
+                        : const Color(0x14000000),
+                  ),
+                  _StatRow(
+                    label: 'Target',
+                    value: AppFormat.currency(_goal.targetAmount),
                   ),
                 ],
               ),
             ),
-
-          if (!progress.isCompleted && !isOverdue) ...[
-            const SizedBox(height: 10),
-            SpendXGlassButton(
-              variant: SpendXGlassButtonVariant.tonal,
-              onPressed: _markComplete,
-              child: const Text('Mark as Complete'),
-            ),
           ],
-
-          if (_goal.type == GoalType.spendingLimit) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Spending limit updates automatically from transactions.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondaryOf(context),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // ── Progress Log ──────────────────────────────────────────
-          if (isManualProgress) ...[
-            Text(
-              'Progress Log',
-              style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-            logsAsync.when(
-              data: (logs) {
-                if (logs.isEmpty) {
-                  return SpendXGlassSurface(
-                    level: SpendXGlassLevel.base,
-                    borderRadius: BorderRadius.circular(16),
-                    padding: const EdgeInsets.all(24),
-                    child: Center(
-                      child: Text(
-                        'No entries yet. Tap the button above to log progress.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textMutedOf(context),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-                return SpendXGlassSurface(
-                  level: SpendXGlassLevel.base,
-                  borderRadius: BorderRadius.circular(16),
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < logs.length; i++) ...[
-                        _LogTile(log: logs[i], onDelete: () => _deleteLog(logs[i])),
-                        if (i < logs.length - 1)
-                          Divider(
-                            height: 1,
-                            color: isDark ? const Color(0x1AFFFFFF) : const Color(0x14000000),
-                            indent: 16,
-                            endIndent: 16,
-                          ),
-                      ],
-                    ],
-                  ),
-                );
-              },
-              loading: () => const SpendXLoadingState(count: 2, itemHeight: 48),
-              error: (_, _) => const SizedBox.shrink(),
-            ),
-          ],
-
-          // ── Related Transactions ────────────────────────────────────
-          const SizedBox(height: 24),
-          _RelatedTransactions(goal: _goal),
-
-          // ── Date Info ─────────────────────────────────────────────
-          const SizedBox(height: 16),
-          SpendXGlassSurface(
-            level: SpendXGlassLevel.base,
-            borderRadius: BorderRadius.circular(16),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _StatRow(label: 'Start Date', value: AppFormat.date(_goal.startDate)),
-                Divider(
-                  height: 16,
-                  color: isDark ? const Color(0x1AFFFFFF) : const Color(0x14000000),
-                ),
-                _StatRow(label: 'End Date', value: AppFormat.date(_goal.endDate)),
-                Divider(
-                  height: 16,
-                  color: isDark ? const Color(0x1AFFFFFF) : const Color(0x14000000),
-                ),
-                _StatRow(label: 'Target', value: AppFormat.currency(_goal.targetAmount)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -556,7 +628,10 @@ class _Banner extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          Text(
+            text,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
@@ -570,7 +645,11 @@ class _MetricTile extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _MetricTile({required this.label, required this.value, required this.color});
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -611,7 +690,11 @@ class _TrendChart extends StatelessWidget {
   final double target;
   final Color color;
 
-  const _TrendChart({required this.logs, required this.target, required this.color});
+  const _TrendChart({
+    required this.logs,
+    required this.target,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -631,7 +714,9 @@ class _TrendChart extends StatelessWidget {
           children: [
             Text(
               'Progress Over Time',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -642,7 +727,9 @@ class _TrendChart extends StatelessWidget {
                   points: points,
                   target: target,
                   color: color,
-                  bgColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  bgColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
                 ),
               ),
             ),
@@ -677,17 +764,27 @@ class _TrendPainter extends CustomPainter {
   final Color color;
   final Color bgColor;
 
-  _TrendPainter({required this.points, required this.target, required this.color, required this.bgColor});
+  _TrendPainter({
+    required this.points,
+    required this.target,
+    required this.color,
+    required this.bgColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
 
     final maxVal = math.max(target, points.reduce(math.max));
-    final stepX = points.length > 1 ? size.width / (points.length - 1) : size.width;
+    final stepX = points.length > 1
+        ? size.width / (points.length - 1)
+        : size.width;
 
     // Target line
-    final targetY = size.height - (target / maxVal * size.height * 0.9) - size.height * 0.05;
+    final targetY =
+        size.height -
+        (target / maxVal * size.height * 0.9) -
+        size.height * 0.05;
     final dashPaint = Paint()
       ..color = bgColor
       ..strokeWidth = 1;
@@ -710,7 +807,10 @@ class _TrendPainter extends CustomPainter {
 
     for (var i = 0; i < points.length; i++) {
       final x = i * stepX;
-      final y = size.height - (points[i] / maxVal * size.height * 0.9) - size.height * 0.05;
+      final y =
+          size.height -
+          (points[i] / maxVal * size.height * 0.9) -
+          size.height * 0.05;
       if (i == 0) {
         path.moveTo(x, y);
         fillPath.moveTo(x, size.height);
@@ -745,12 +845,28 @@ class _StatRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        )),
-        Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        )),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
       ],
     );
   }
@@ -793,9 +909,9 @@ class _RelatedTransactions extends ConsumerWidget {
                 ),
                 Text(
                   '${related.length} txns \u2022 ${AppFormat.currency(totalAmount)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -852,8 +968,7 @@ class _RelatedTransactions extends ConsumerWidget {
               tx.source == 'loan_payment' ||
               tx.type == 'transfer';
       }
-    }).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    }).toList()..sort((a, b) => b.date.compareTo(a.date));
   }
 }
 
@@ -866,7 +981,9 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isExpense = tx.type == 'expense';
-    final color = isExpense ? cs.error : const Color(0xFF22C55E);
+    final color = isExpense
+        ? cs.error
+        : Theme.of(context).colorScheme.secondary;
 
     return ListTile(
       dense: true,
@@ -890,8 +1007,8 @@ class _TransactionTile extends StatelessWidget {
       subtitle: Text(
         tx.notes.isNotEmpty
             ? tx.notes.length > 40
-                ? '${tx.notes.substring(0, 40)}...'
-                : tx.notes
+                  ? '${tx.notes.substring(0, 40)}...'
+                  : tx.notes
             : tx.source,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: cs.onSurfaceVariant,
@@ -925,15 +1042,26 @@ class _LogTile extends StatelessWidget {
     return ListTile(
       leading: CircleAvatar(
         radius: 18,
-        backgroundColor: const Color(0xFF22C55E).withValues(alpha: 0.12),
-        child: const Icon(Icons.add_rounded, color: Color(0xFF22C55E), size: 18),
+        backgroundColor: Theme.of(
+          context,
+        ).colorScheme.secondary.withValues(alpha: 0.12),
+        child:  Icon(
+          Icons.add_rounded,
+          color: Theme.of(context).colorScheme.secondary,
+          size: 18,
+        ),
       ),
-      title: Text(AppFormat.currency(log.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text(
+        AppFormat.currency(log.amount),
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
       subtitle: Text(
         log.note != null
             ? '${AppFormat.date(log.createdAt)} \u2022 ${log.note}'
             : AppFormat.date(log.createdAt),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
       ),
       trailing: IconButton(
         icon: Icon(Icons.delete_outline_rounded, size: 20, color: cs.error),

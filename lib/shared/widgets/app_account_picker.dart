@@ -34,12 +34,12 @@ class AppAccountPicker extends StatelessWidget {
       style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w500,
-        color: isDark ? Colors.white : const Color(0xFF0F172A),
+        color: Theme.of(context).colorScheme.onSurface,
       ),
       decoration: InputDecoration(
         labelText: 'Account',
         labelStyle: TextStyle(
-          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w600,
         ),
         filled: true,
@@ -56,7 +56,7 @@ class AppAccountPicker extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+            color: Theme.of(context).colorScheme.secondary,
             width: 1.25,
           ),
         ),
@@ -65,7 +65,11 @@ class AppAccountPicker extends StatelessWidget {
           .map(
             (account) => DropdownMenuItem<String>(
               value: account.id,
-              child: Text(account.name),
+              child: Text(
+                account.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           )
           .toList(),
