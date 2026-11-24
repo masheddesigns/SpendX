@@ -5,8 +5,14 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../data/providers.dart';
+import '../features/cashflow/runway_provider.dart';
+import '../features/dashboard/insights_providers.dart'
+    show netWorthChangeProvider;
+import '../features/health/health_score_provider.dart';
 import '../models/reports_summary.dart';
 import '../services/export_service.dart';
+import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/app_tap_scale.dart';
 import '../shared/widgets/empty_state_widget.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/skeleton_loader.dart';
@@ -15,17 +21,21 @@ import '../shared/widgets/glass/spendx_glass_sheet.dart';
 import '../shared/widgets/glass/spendx_scaffold.dart';
 import '../shared/widgets/spendx_app_bar.dart';
 import '../utils/app_format.dart';
+import 'financial_health_screen.dart';
+import 'net_worth_screen.dart';
 import 'reports/reports_category_resolver.dart';
 
-/// SpendX Financial Reports Screen.
+/// SpendX Unified Financial Insights & Reports Hub.
 ///
-/// Designed around actual financial data capabilities:
-/// 1. Cash Flow Cadence: Executive net savings and flow ratios.
-/// 2. Monthly Movement: Left-to-right chronological dual-stem timeline.
-/// 3. Where Your Money Went: Exact-mapped category distribution with proportional bars.
-/// 4. Debt & Lending History: Peer lending net trend, loan principal amortization, and credit exposure.
-/// 5. Persistent Horizon Selector: 3M, 6M, 12M with explicit calendar span.
-/// 6. Verified Transaction Export: CSV and JSON via [ExportService].
+/// Designed around authoritative financial data capabilities:
+/// 1. Top Executive Health & Runway: Real-time health score rating and liquid runway days.
+/// 2. Horizon Selector & Date Span: 3M, 6M, 12M with explicit calendar span.
+/// 3. Cash Flow Cadence: Executive net savings and flow ratios.
+/// 4. Monthly Movement: Left-to-right chronological dual-stem income vs expense timeline.
+/// 5. Where Your Money Went: Exact-mapped category distribution with proportional bars.
+/// 6. Net Worth Evolution: Equity trajectory minus liabilities with quick detail deep-dive.
+/// 7. Debt & Lending History: Peer lending net trend, loan principal amortization, and credit exposure.
+/// 8. Verified Transaction Export: CSV and JSON via [ExportService].
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -94,7 +104,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
-        title: 'Financial Reports',
+        title: 'Financial Insights & Reports',
         actions: [
           IconButton(
             icon: const Icon(Icons.file_upload_outlined),
@@ -113,14 +123,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                   maxWidth: isTablet ? 768 : double.infinity,
                 ),
                 child: RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(reportsProvider),
+                  onRefresh: () async {
+                    ref.invalidate(reportsProvider);
+                    ref.invalidate(financialHealthScoreProvider);
+                    ref.invalidate(runwayProvider);
+                    ref.invalidate(netWorthChangeProvider);
+                  },
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── 1. Horizon Selector & Date Span ──────────────────
+                        // ── 1. Top Executive Health Score & Runway ────────────
+                        _HealthAndRunwayHeader(isDark: isDark),
+
+                        const SizedBox(height: 20),
+
+                        // ── 2. Horizon Selector & Date Span ──────────────────
                         _HorizonSelector(
                           selectedPeriod: period,
                           onPeriodChanged: _onPeriodChanged,
@@ -129,12 +149,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
 
                         const SizedBox(height: 20),
 
-                        // ── 2. Cash Flow Horizon (Cardless Executive Summary) ─
+                        // ── 3. Cash Flow Horizon (Cardless Executive Summary) ─
                         _CashFlowHorizonSection(summary: summary, isDark: isDark),
 
                         const SizedBox(height: 24),
 
-                        // ── 3. Monthly Movement (Chronological Dual-Stem) ─────
+                        // ── 4. Monthly Movement (Chronological Dual-Stem) ─────
                         _MonthlyMovementSection(
                           summary: summary,
                           anim: _chartAnim,
@@ -143,12 +163,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
 
                         const SizedBox(height: 28),
 
-                        // ── 4. Where Your Money Went (Category Trajectory) ────
+                        // ── 5. Where Your Money Went (Category Trajectory) ────
                         _CategoryBreakdownSection(summary: summary, isDark: isDark),
 
                         const SizedBox(height: 28),
 
-                        // ── 5. Debt & Lending History ─────────────────────────
+                        // ── 6. Net Worth Evolution ────────────────────────────
+                        _NetWorthEvolutionSection(isDark: isDark),
+
+                        const SizedBox(height: 28),
+
+                        // ── 7. Debt & Lending History ─────────────────────────
                         _DebtAndLendingSection(
                           summary: summary,
                           anim: _chartAnim,
@@ -1917,4 +1942,453 @@ class _ExportOptionTile extends StatelessWidget {
   ),
 );
 }
+}
+
+// =========================================================================
+// 8. TOP EXECUTIVE HEALTH SCORE & RUNWAY
+// =========================================================================
+
+class _HealthAndRunwayHeader extends ConsumerWidget {
+  final bool isDark;
+
+  const _HealthAndRunwayHeader({required this.isDark});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final healthScoreAsync = ref.watch(financialHealthScoreProvider);
+    final runwayAsync = ref.watch(runwayProvider);
+    final cs = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        // Health Score Card (Tappable for full breakdown)
+        Expanded(
+          child: AppTapScale(
+            semanticLabel: 'View financial health score breakdown',
+            onTap: () => Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => const FinancialHealthScreen()),
+            ),
+            child: SpendXGlassSurface(
+              level: SpendXGlassLevel.base,
+              padding: const EdgeInsets.all(14),
+              child: healthScoreAsync.when(
+                data: (score) {
+                  final Color scoreColor;
+                  if (score.score >= 80) {
+                    scoreColor = cs.secondary;
+                  } else if (score.score >= 60) {
+                    scoreColor = cs.primary;
+                  } else if (score.score >= 40) {
+                    scoreColor = cs.tertiary;
+                  } else {
+                    scoreColor = cs.error;
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Health Score',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 16,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '${score.score}',
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: scoreColor,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                          Text(
+                            '/100',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scoreColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          score.level,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: scoreColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const SizedBox(
+                  height: 84,
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+                error: (_, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Health Score',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Unavailable',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: cs.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        // Cash Runway Card
+        Expanded(
+          child: SpendXGlassSurface(
+            level: SpendXGlassLevel.base,
+            padding: const EdgeInsets.all(14),
+            child: runwayAsync.when(
+              data: (runway) {
+                final Color runwayColor;
+                if (runway.status == RunwayStatus.critical) {
+                  runwayColor = cs.error;
+                } else if (runway.status == RunwayStatus.warning) {
+                  runwayColor = cs.tertiary;
+                } else {
+                  runwayColor = cs.secondary;
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Cash Runway',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        Icon(
+                          Icons.speed_rounded,
+                          size: 16,
+                          color: runwayColor,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '${runway.daysLeft}',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Days',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${AppFormat.currency(runway.dailyBurn)}/day burn',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                );
+              },
+              loading: () => const SizedBox(
+                height: 84,
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+              error: (_, _) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Cash Runway',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Unavailable',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: cs.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =========================================================================
+// 9. NET WORTH EVOLUTION (ASSET EQUITY & TRAJECTORY)
+// =========================================================================
+
+class _NetWorthEvolutionSection extends ConsumerWidget {
+  final bool isDark;
+
+  const _NetWorthEvolutionSection({required this.isDark});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final nwAsync = ref.watch(netWorthChangeProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Net Worth Evolution',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Liquid assets and equity minus liabilities',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const NetWorthScreen()),
+              ),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: const Text(
+                'Details',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        AppTapScale(
+          semanticLabel: 'Open net worth statement',
+          onTap: () => Navigator.push(
+            context,
+            AppPageRoute(builder: (_) => const NetWorthScreen()),
+          ),
+          child: SpendXGlassSurface(
+            level: SpendXGlassLevel.base,
+            padding: const EdgeInsets.all(18),
+            child: nwAsync.when(
+              data: (data) {
+                final isPositive = data.change >= 0;
+                final badgeColor = isPositive ? cs.secondary : cs.error;
+
+                return Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.account_balance_rounded,
+                        color: cs.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Current Net Worth',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            AppFormat.currency(data.current),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
+                              letterSpacing: -0.5,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (data.change != 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: badgeColor.withValues(alpha: 0.25),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isPositive
+                                  ? Icons.arrow_upward_rounded
+                                  : Icons.arrow_downward_rounded,
+                              size: 12,
+                              color: badgeColor,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${data.changePct.abs().toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: badgeColor,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+              loading: () => const SizedBox(
+                height: 44,
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+              error: (_, _) => Row(
+                children: [
+                  Icon(Icons.error_outline_rounded, color: cs.error, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Could not load net worth',
+                    style: TextStyle(color: cs.error, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

@@ -82,6 +82,16 @@ class FeatureTogglesScreen extends StatelessWidget {
                   value: settings.enableLending,
                   onChanged: settings.setEnableLending,
                 ),
+                const SizedBox(height: 16),
+
+                _ModuleToggle(
+                  icon: Icons.label_outline_rounded,
+                  color: Colors.deepPurple,
+                  title: 'Advanced Tags',
+                  subtitle: 'Organize transactions with custom keywords and labels.',
+                  value: settings.enableTags,
+                  onChanged: settings.setEnableTags,
+                ),
   
                 const SizedBox(height: 32),
                 const Text(

@@ -10,7 +10,6 @@ import '../ai_chat_screen.dart';
 import '../data_health_screen.dart';
 import '../debug/debug_hub_screen.dart';
 import '../feedback_screen.dart';
-import '../insights/insights_tab.dart';
 import '../notifications_inbox_screen.dart';
 import '../reports_screen.dart';
 import '../review/review_queue_screen.dart';
@@ -19,7 +18,6 @@ import '../settings/app_settings_screen.dart';
 import '../smart_import_screen.dart';
 import '../settings/automatic_ingestion_screen.dart';
 import '../../features/ingestion/providers/ingestion_providers.dart';
-import '../../features/wrapped/screens/wrapped_screen.dart';
 import '../../features/review_queue/providers/review_providers.dart';
 
 /// SpendX 2.0 System & Intelligence Workspace (More Screen).
@@ -147,33 +145,13 @@ class MoreScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   _MoreGlassRow(
-                    icon: Icons.bar_chart_rounded,
-                    iconColor: Theme.of(context).colorScheme.secondary,
-                    title: 'Reports & Cash Flow',
-                    subtitle:
-                        'Income vs expense breakdown, monthly cash flow analysis',
-                    isDark: isDark,
-                    onTap: () => _push(context, const ReportsScreen()),
-                  ),
-                  _buildDivider(isDark),
-                  _MoreGlassRow(
                     icon: Icons.auto_graph_rounded,
                     iconColor: AppTheme.primaryBlue,
-                    title: 'Financial Health & Insights',
+                    title: 'Financial Insights & Reports',
                     subtitle:
-                        'Health score, runway, net worth evolution, category breakdown',
+                        'Health score, runway, cash flow, categories & net worth',
                     isDark: isDark,
-                    onTap: () => _push(context, const _InsightsScreen()),
-                  ),
-                  _buildDivider(isDark),
-                  _MoreGlassRow(
-                    icon: Icons.auto_stories_rounded,
-                    iconColor: Theme.of(context).colorScheme.primary,
-                    title: 'Spending Wrapped',
-                    subtitle: 'Annual and monthly spending recap & highlights',
-                    isDark: isDark,
-                    onTap: () =>
-                        _push(context, const WrappedScreen(period: 'month')),
+                    onTap: () => _push(context, const ReportsScreen()),
                   ),
                 ],
               ),
@@ -218,16 +196,6 @@ class MoreScreen extends ConsumerWidget {
                   ),
                   _buildDivider(isDark),
                   _MoreGlassRow(
-                    icon: Icons.health_and_safety_outlined,
-                    iconColor: Theme.of(context).colorScheme.secondary,
-                    title: 'Data Health & Integrity',
-                    subtitle:
-                        'Audit ledger parity, schema & inbox gap diagnostics',
-                    isDark: isDark,
-                    onTap: () => _push(context, const DataHealthScreen()),
-                  ),
-                  _buildDivider(isDark),
-                  _MoreGlassRow(
                     icon: Icons.chat_bubble_outline_rounded,
                     iconColor: AppColors.transfer,
                     title: 'Feedback & Support',
@@ -236,6 +204,16 @@ class MoreScreen extends ConsumerWidget {
                     onTap: () => _push(context, const FeedbackScreen()),
                   ),
                   if (AppEnv.isDebug) ...[
+                    _buildDivider(isDark),
+                    _MoreGlassRow(
+                      icon: Icons.health_and_safety_outlined,
+                      iconColor: Theme.of(context).colorScheme.secondary,
+                      title: 'Data Health & Integrity',
+                      subtitle:
+                          'Audit ledger parity, schema & inbox gap diagnostics',
+                      isDark: isDark,
+                      onTap: () => _push(context, const DataHealthScreen()),
+                    ),
                     _buildDivider(isDark),
                     _MoreGlassRow(
                       icon: Icons.developer_mode_rounded,
@@ -435,28 +413,4 @@ class _MoreGlassRow extends StatelessWidget {
 }
 }
 
-// ── Standalone Insights Screen wrapper ───────────────────────────
 
-class _InsightsScreen extends StatelessWidget {
-  const _InsightsScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return SpendXScaffold(
-      extendBody: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Text(
-          'Insights',
-          style: AppTextStyles.heading.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: const [InsightsTab(embedded: true)],
-      ),
-    );
-  }
-}

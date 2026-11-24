@@ -10,6 +10,7 @@ class SettingsService extends ChangeNotifier {
   static const String _enableCreditCardsKey = 'enable_credit_cards';
   static const String _enableLoansKey = 'enable_loans';
   static const String _enableLiabilitiesKey = 'enable_liabilities';
+  static const String _enableTagsKey = 'enable_tags';
   static const String _periodicReminderKey = 'periodic_reminder_freq';
   static const String _hasGuestSessionKey = 'has_guest_session';
   static const String _autoBackupIntervalKey = 'backup_auto_interval';
@@ -383,6 +384,16 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // --- Tags Module ---
+  bool get enableTags {
+    return _prefs.getBool(_enableTagsKey) ?? false;
+  }
+
+  Future<void> setEnableTags(bool val) async {
+    await _prefs.setBool(_enableTagsKey, val);
+    notifyListeners();
+  }
+
   // --- Periodic Reminders ---
   String get periodicReminderFrequency {
     return _prefs.getString(_periodicReminderKey) ?? 'off';
@@ -662,6 +673,7 @@ class SettingsService extends ChangeNotifier {
       _enableCreditCardsKey: enableCreditCards,
       _enableLoansKey: enableLoans,
       _enableLiabilitiesKey: enableLiabilities,
+      _enableTagsKey: enableTags,
       _periodicReminderKey: periodicReminderFrequency,
       _autoBackupIntervalKey: backupIntervalHours,
       _autoBackupEnabledKey: autoBackupEnabled,
@@ -688,6 +700,9 @@ class SettingsService extends ChangeNotifier {
     }
     if (settings.containsKey(_enableLiabilitiesKey)) {
       await setEnableLiabilities(settings[_enableLiabilitiesKey]);
+    }
+    if (settings.containsKey(_enableTagsKey)) {
+      await setEnableTags(settings[_enableTagsKey]);
     }
     if (settings.containsKey(_periodicReminderKey)) {
       await setPeriodicReminderFrequency(settings[_periodicReminderKey]);

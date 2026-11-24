@@ -18,7 +18,6 @@ import 'tag_management_screen.dart';
 import 'feature_toggles_screen.dart';
 import 'notification_help_screen.dart';
 import '../about_screen.dart';
-import '../credit_history_screen.dart';
 import '../help_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 
@@ -183,25 +182,20 @@ class AppSettingsScreen extends StatelessWidget {
                 AppPageRoute(builder: (_) => const BudgetManagementScreen()),
               ),
             ),
-            _SettingsTile(
-              icon: Icons.label_outline_rounded,
-              iconColor: Theme.of(context).colorScheme.primary,
-              title: 'Tags',
-              subtitle: 'Organize transactions with tags',
-              onTap: () => Navigator.push(
-                context,
-                AppPageRoute(builder: (_) => const TagManagementScreen()),
-              ),
-            ),
-            _SettingsTile(
-              icon: Icons.history_rounded,
-              iconColor: Theme.of(context).colorScheme.tertiary,
-              title: 'Credit History',
-              subtitle: 'Statements and card history',
-              onTap: () => Navigator.push(
-                context,
-                AppPageRoute(builder: (_) => const CreditHistoryScreen()),
-              ),
+            Consumer<SettingsService>(
+              builder: (ctx, settings, _) {
+                if (!settings.enableTags) return const SizedBox.shrink();
+                return _SettingsTile(
+                  icon: Icons.label_outline_rounded,
+                  iconColor: Theme.of(context).colorScheme.primary,
+                  title: 'Tags',
+                  subtitle: 'Organize transactions with tags',
+                  onTap: () => Navigator.push(
+                    context,
+                    AppPageRoute(builder: (_) => const TagManagementScreen()),
+                  ),
+                );
+              },
             ),
 
             const Divider(height: 32),
