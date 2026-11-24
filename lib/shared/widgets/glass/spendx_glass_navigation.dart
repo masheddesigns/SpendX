@@ -44,6 +44,8 @@ class SpendXGlassNavigation extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final compact = MediaQuery.sizeOf(context).width < 360;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final navigationHeight = 66.0 + ((textScale - 1).clamp(0.0, 1.0) * 40.0);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -54,7 +56,7 @@ class SpendXGlassNavigation extends StatelessWidget {
       ),
       child: SpendXGlassSurface(
         level: SpendXGlassLevel.floating,
-        height: 66,
+        height: navigationHeight,
         borderRadius: BorderRadius.circular(AppRadius.full),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         child: Row(

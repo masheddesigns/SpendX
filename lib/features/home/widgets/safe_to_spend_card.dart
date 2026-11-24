@@ -117,6 +117,8 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     SafeToSpendCalculation calc,
     bool isDark,
   ) {
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final timelineHeight = 100.0 + ((textScale - 1).clamp(0.0, 1.0) * 32.0);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final monthName = DateFormat('MMMM').format(now).toUpperCase();
@@ -241,7 +243,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             ),
             builder: (context, staticOverlay) {
               return SizedBox(
-                height: 100,
+                height: timelineHeight,
                 width: double.infinity,
                 child: CustomPaint(
                   painter: _OrganicPathPainter(
@@ -466,6 +468,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final inflowLabelHeight =
+            60.0 + ((textScale - 1).clamp(0.0, 1.0) * 24.0);
         // Node X coordinates
         final x0 = w * 0.12;
         final x1 = w * 0.40;
@@ -578,7 +583,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     : null,
                 child: SizedBox(
                   width: 90,
-                  height: 60,
+                  height: inflowLabelHeight,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

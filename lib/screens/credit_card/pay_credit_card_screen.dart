@@ -33,9 +33,11 @@ class PayCreditCardScreen extends ConsumerStatefulWidget {
 }
 
 class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String? _selectedAccountId;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -52,37 +54,59 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
   }
 
   Future<void> _processPayment() async {
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-    if (amount <= 0) return;
+    if (!(_formKey.currentState?.validate() ?? false) || _isProcessing) return;
+    final amount = double.parse(_amountController.text.trim());
 
     final accounts = ref.read(bankAccountsProvider).valueOrNull ?? [];
     final fallbackAccount = accounts.where((a) => a.isAsset).firstOrNull?.id;
     final payingAccountId = _selectedAccountId ?? fallbackAccount;
+    if (payingAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add a bank account before making a payment.'),
+        ),
+      );
+      return;
+    }
 
-    final service = CreditCardService();
-    await service.processPayment(
-      cardId: widget.card.id,
-      paymentAmount: amount,
-      date: _selectedDate,
-      accountId: payingAccountId,
-      note: 'Payment to ${widget.card.bank}',
-    );
+    setState(() => _isProcessing = true);
+    try {
+      final service = CreditCardService();
+      await service.processPayment(
+        cardId: widget.card.id,
+        paymentAmount: amount,
+        date: _selectedDate,
+        accountId: payingAccountId,
+        note: 'Payment to ${widget.card.bank}',
+      );
 
-    // Invalidate providers for reactivity
-    ref.invalidate(creditOutstandingProvider(widget.card.id));
-    ref.invalidate(creditRecentTransactionsProvider(widget.card.id));
-    ref.invalidate(liabilitiesSummaryProvider);
-    ref.invalidate(app_data.cardsProvider);
-    ref.invalidate(app_data.accountsProvider);
-    ref.invalidate(bankAccountsProvider);
-    ref.invalidate(app_data.transactionsProvider);
-    ref.invalidate(paginatedTransactionsProvider);
-    ref.invalidate(app_data.remindersProvider);
-    ref.invalidate(app_data.safeToSpendProvider);
-    DataChangeBus.instance.notify();
+      // Invalidate providers for reactivity.
+      ref.invalidate(creditOutstandingProvider(widget.card.id));
+      ref.invalidate(creditRecentTransactionsProvider(widget.card.id));
+      ref.invalidate(liabilitiesSummaryProvider);
+      ref.invalidate(app_data.cardsProvider);
+      ref.invalidate(app_data.accountsProvider);
+      ref.invalidate(bankAccountsProvider);
+      ref.invalidate(app_data.transactionsProvider);
+      ref.invalidate(paginatedTransactionsProvider);
+      ref.invalidate(app_data.remindersProvider);
+      ref.invalidate(app_data.safeToSpendProvider);
+      DataChangeBus.instance.notify();
 
-    if (mounted) {
-      Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Payment could not be saved. Please try again.',
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -158,9 +182,19 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
                 title: 'Payment Amount',
                 padding: EdgeInsets.only(bottom: AppSpacing.sm),
               ),
-              AppAmountField(
-                controller: _amountController,
-                amountColor: cs.secondary,
+              Form(
+                key: _formKey,
+                child: AppAmountField(
+                  controller: _amountController,
+                  amountColor: cs.secondary,
+                  validator: (value) {
+                    final amount = double.tryParse((value ?? '').trim());
+                    if (amount == null || !amount.isFinite || amount <= 0) {
+                      return 'Enter an amount greater than zero';
+                    }
+                    return null;
+                  },
+                ),
               ),
               AppSpacing.sectionSpacer,
 
@@ -172,9 +206,8 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
                     child: CircularProgressIndicator(),
                   ),
                 ),
-                error: (err, _) => Text(
-                  'Error loading accounts: $err',
-                  style: TextStyle(color: cs.error, fontSize: 12),
+                error: (_, _) => _AccountLoadError(
+                  onRetry: () => ref.invalidate(bankAccountsProvider),
                 ),
                 data: (accounts) {
                   final assetAccounts = accounts
@@ -228,7 +261,8 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
         child: PrimaryButton(
           label: 'Confirm Payment',
           icon: Icons.account_balance_wallet_rounded,
-          onPressed: _processPayment,
+          onPressed: _isProcessing ? null : _processPayment,
+          isLoading: _isProcessing,
           tone: PrimaryButtonTone.primary,
           expand: true,
         ),
@@ -246,6 +280,46 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
       },
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    );
+  }
+}
+
+class _AccountLoadError extends StatelessWidget {
+  const _AccountLoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: colors.onErrorContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Could not load accounts.',
+                  style: TextStyle(color: colors.onErrorContainer),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ),
+        ],
+      ),
     );
   }
 }

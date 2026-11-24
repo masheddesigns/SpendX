@@ -61,9 +61,6 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
       _selectedCategoryId = loan.categoryId;
       _selectedType = loan.type;
     }
-    _nameController.addListener(() => setState(() {}));
-    _bankController.addListener(() => setState(() {}));
-    _amountController.addListener(() => setState(() {}));
     _loadCategories();
   }
 
@@ -106,16 +103,8 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
     _installmentController.text = emi.toStringAsFixed(2);
   }
 
-  bool get _isValid {
-    if (_nameController.text.trim().isEmpty) return false;
-    if (_bankController.text.trim().isEmpty) return false;
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-    if (amount <= 0) return false;
-    return true;
-  }
-
   Future<void> _saveLoan() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isLoading = true);
     try {
@@ -185,21 +174,35 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
                 controller: _nameController,
                 labelText: 'Loan Name (e.g. Car Loan)',
                 prefixIcon: Icons.drive_eta_rounded,
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Enter a loan name'
+                    : null,
               ),
               const SizedBox(height: AppSpacing.m),
               AppTextField(
                 controller: _bankController,
                 labelText: 'Bank Name',
                 prefixIcon: Icons.account_balance_rounded,
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Enter the bank name'
+                    : null,
               ),
               const SizedBox(height: AppSpacing.l),
               const AppSectionHeader(title: 'Loan Details'),
               const SizedBox(height: AppSpacing.m),
               AppAmountField(
                 controller: _amountController,
-                onChanged: (_) => _calculateEMI(),
+                onChanged: (_) {
+                  _calculateEMI();
+                  setState(() {});
+                },
+                validator: (value) {
+                  final amount = double.tryParse((value ?? '').trim());
+                  if (amount == null || !amount.isFinite || amount <= 0) {
+                    return 'Enter a loan amount greater than zero';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: AppSpacing.m),
 
@@ -249,7 +252,17 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
                       controller: _interestController,
                       labelText: 'Interest Rate (%)',
                       keyboardType: TextInputType.number,
-                      onChanged: (_) => _calculateEMI(),
+                      onChanged: (_) {
+                        _calculateEMI();
+                        setState(() {});
+                      },
+                      validator: (value) {
+                        final rate = double.tryParse((value ?? '').trim());
+                        if (rate == null || !rate.isFinite || rate < 0) {
+                          return 'Enter a valid annual rate';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: AppSpacing.m),
@@ -258,7 +271,17 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
                       controller: _tenureController,
                       labelText: 'Tenure (Months)',
                       keyboardType: TextInputType.number,
-                      onChanged: (_) => _calculateEMI(),
+                      onChanged: (_) {
+                        _calculateEMI();
+                        setState(() {});
+                      },
+                      validator: (value) {
+                        final months = int.tryParse((value ?? '').trim());
+                        if (months == null || months < 1 || months > 600) {
+                          return 'Enter 1–600 months';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                 ],
@@ -268,6 +291,13 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
                 controller: _dueDayController,
                 labelText: 'EMI Due Day (1-31)',
                 keyboardType: TextInputType.number,
+                validator: (value) {
+                  final day = int.tryParse((value ?? '').trim());
+                  if (day == null || day < 1 || day > 31) {
+                    return 'Enter a day from 1 to 31';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: AppSpacing.m),
               AppTextField(
@@ -275,6 +305,15 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
                 labelText: 'Monthly EMI (calculated)',
                 keyboardType: TextInputType.number,
                 readOnly: false,
+                validator: (value) {
+                  final installment = double.tryParse((value ?? '').trim());
+                  if (installment == null ||
+                      !installment.isFinite ||
+                      installment <= 0) {
+                    return 'Enter a monthly EMI greater than zero';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: AppSpacing.m),
 
@@ -334,7 +373,7 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
                 flex: 2,
                 child: PrimaryButton(
                   label: 'Save Loan',
-                  onPressed: _isValid ? _saveLoan : null,
+                  onPressed: _isLoading ? null : _saveLoan,
                   isLoading: _isLoading,
                 ),
               ),
@@ -390,5 +429,4 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
   }
 }
 
-extension on double {
-}
+extension on double {}

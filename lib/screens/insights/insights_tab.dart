@@ -55,7 +55,10 @@ class InsightsTab extends ConsumerWidget {
           child: _HealthScoreCard(score: score),
         ),
         loading: () => const _ShimmerCard(height: 180),
-        error: (_, _) => const SizedBox.shrink(),
+        error: (_, _) => _InsightsInlineError(
+          label: 'Financial health could not load',
+          onRetry: () => ref.invalidate(financialHealthScoreProvider),
+        ),
       ),
 
       const SizedBox(height: 16),
@@ -83,7 +86,10 @@ class InsightsTab extends ConsumerWidget {
           ),
         ),
         loading: () => const _ShimmerCard(height: 100),
-        error: (_, _) => const SizedBox.shrink(),
+        error: (_, _) => _InsightsInlineError(
+          label: 'Net worth could not load',
+          onRetry: () => ref.invalidate(netWorthChangeProvider),
+        ),
       ),
 
       const SizedBox(height: 16),
@@ -106,7 +112,10 @@ class InsightsTab extends ConsumerWidget {
           );
         },
         loading: () => const SizedBox.shrink(),
-        error: (_, _) => const SizedBox.shrink(),
+        error: (_, _) => _InsightsInlineError(
+          label: 'Credit health could not load',
+          onRetry: () => ref.invalidate(creditHealthProvider),
+        ),
       ),
 
       // ═══════════════════════════════════════════════════════════
@@ -192,7 +201,10 @@ class InsightsTab extends ConsumerWidget {
           );
         },
         loading: () => const SizedBox.shrink(),
-        error: (_, _) => const SizedBox.shrink(),
+        error: (_, _) => _InsightsInlineError(
+          label: 'Salary insights could not load',
+          onRetry: () => ref.invalidate(salaryLedgerProvider),
+        ),
       ),
 
       // ═══════════════════════════════════════════════════════════
@@ -207,7 +219,10 @@ class InsightsTab extends ConsumerWidget {
           );
         },
         loading: () => const _ShimmerCard(height: 100),
-        error: (_, _) => const SizedBox.shrink(),
+        error: (_, _) => _InsightsInlineError(
+          label: 'Monthly summary could not load',
+          onRetry: () => ref.invalidate(currentMonthStatsProvider),
+        ),
       ),
 
       const SizedBox(height: 16),
@@ -220,7 +235,10 @@ class InsightsTab extends ConsumerWidget {
             ? _ForecastCard(forecast: f)
             : const SizedBox.shrink(),
         loading: () => const SizedBox.shrink(),
-        error: (_, _) => const SizedBox.shrink(),
+        error: (_, _) => _InsightsInlineError(
+          label: 'Forecast could not load',
+          onRetry: () => ref.invalidate(forecastProvider),
+        ),
       ),
     ];
 
@@ -366,6 +384,32 @@ class _RiskSection extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InsightsInlineError extends StatelessWidget {
+  const _InsightsInlineError({required this.label, required this.onRetry});
+
+  final String label;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Semantics(
+        liveRegion: true,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label, style: TextStyle(color: colors.error)),
+            ),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ),
       ),
     );

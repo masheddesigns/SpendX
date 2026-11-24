@@ -1,8 +1,8 @@
 # SpendX UI/UX audit
 
-**Reviewed:** 2026-11-23
+**Reviewed:** 2026-11-24
 **Scope:** Flutter source under `lib/`, plus a debug build and connected-device checks.
-**Device check:** Debug APK installed on the connected Android phone. Credit card, home, Accounts, and Add Expense were checked at 320 dp logical width. Accounts and Add Expense were inspected at 1.3 system text scale; their amounts and choices remain legible, and the Accounts subtitle, badge, and section header reflow. Unknown route fallback, cold and warm Android deep links, and toolbar back navigation were checked. The phone's original display size and 1.0 text scale were restored after testing.
+**Device check:** The Redmi was checked at 320 dp in prior passes and at its normal 393 dp width with 1.3 text scale. A Samsung SM-T515 tablet (800 dp logical width) ran the current debug build at 1.3 text scale in light mode. Its first-run onboarding permission prompt and Home rendered; Home showed no visible clipping or Flutter overflow logs. Both devices were restored to their original display and text settings.
 
 See [ui_ux_todo.md](ui_ux_todo.md) for the current scorecard and remaining work. The older scorecard and source counts have been removed because they no longer describe the current tree.
 
@@ -10,23 +10,23 @@ See [ui_ux_todo.md](ui_ux_todo.md) for the current scorecard and remaining work.
 
 ### Accessibility and touch
 
-The current source contains 43 `Semantics` widgets, 65 `tooltip:` properties, and 63 `IconButton`s. A source scan found tooltips on all `IconButton`s. `IconButtonClean`, `PrimaryButton`, `AppTapScale`, the expense type choices, and category choices enforce or provide at least 48 dp hit areas. Expense choices now expose selection and meaningful labels. These foundations do not establish that every custom gesture has a clear name and sufficiently large hit region; a full geometry review remains open. TalkBack and VoiceOver testing are out of scope per the product preference.
+The current source contains 43 `Semantics` widgets, 65 `tooltip:` properties, and 63 `IconButton`s. A source scan found tooltips on all `IconButton`s. `IconButtonClean`, `PrimaryButton`, `AppTapScale`, expense choices, and category choices provide 48 dp hit areas. A full geometry and naming review of custom gestures remains open. TalkBack and VoiceOver testing are out of scope per the product preference.
 
 ### Theme colors
 
-Adaptive color tokens are available and the direct use of the old dark-only `AppColors.primaryText` alias is absent. The current source has 205 `Color(0x...)` literals. Obvious neutral and financial status roles in the category pickers, credit card payment/EMI, net worth reports, and activity analytics now use `ColorScheme`. Most remaining literals define fixed chart, category, brand, and glass palettes; a light/dark visual pass remains.
+Adaptive color tokens are available and the direct use of the old dark-only `AppColors.primaryText` alias is absent. The current source has 205 `Color(0x...)` literals. Neutral text and status roles use `ColorScheme`; remaining literal uses cluster around category, chart, brand, alert, and glass roles. Light and dark appearances were visually reviewed on Home, Accounts, Settings, and representative empty states. Data-heavy chart and category combinations still need review with representative data.
 
 ### Layout and responsive behavior
 
-Current source indicators are 124 `TextOverflow` declarations, 354 `Expanded`/`Flexible` widgets, and 14 `LayoutBuilder`s. Device checks verified the credit card balance row/actions, home status row and compact navigation, Accounts app bar and assets/liabilities summary, shared section header, and Add Expense type selector at 320 dp. At 1.3 system text scale, Accounts subtitle, badge, and section header reflow and Add Expense choices stack. The rebuilt screens showed no overflow markers or fresh overflow logs. Other screens and tablet widths still need targeted review.
+Current source indicators are 124 `TextOverflow` declarations, 355 `Expanded`/`Flexible` widgets, and 14 `LayoutBuilder`s. At 1.3 text scale, the Home journey's Inflow date overflowed by 1 px; its label and canvas now grow with text scale. The Redmi showed no fresh overflow log after the fix. The tablet showed Home at 800 dp and 1.3 text scale without visible clipping. Other screens still need targeted review.
 
 ### Forms
 
-All 10 current `TextFormField`s have validators. Validation presence does not prove domain correctness, useful feedback, or consistent input formatting. Review workflows screen by screen.
+There are 26 validator properties. Add Loan now checks required names, a positive principal, a nonnegative rate, 1–600 month tenure, due day 1–31, and positive monthly EMI. Pay Credit Card now shows amount errors instead of silently returning. Add/edit category, tag, budget, notification-contact, and goal forms have required or domain-specific checks. Review business rules and formatting on remaining workflows.
 
 ### Loading, empty, and error states
 
-Reusable loading, empty, skeleton, and error components exist. Retention Metrics now recovers from load errors with retry, and Usage Analytics retains its request and offers refresh/retry. The rest of the asynchronous routes still need a route-by-route check for consistency.
+Reusable loading, empty, skeleton, and error components exist. Credit-card sections, payment-account loading, Retention Metrics, Usage Analytics, and Insights provider errors now have retry controls. The rest of the async routes still need a route-by-route check. Theme creation no longer requests Inter from Google Fonts at runtime, removing that network dependency from first paint.
 
 ### Navigation and motion
 
@@ -37,6 +37,7 @@ Reusable loading, empty, skeleton, and error components exist. Retention Metrics
 - `flutter analyze lib` — no issues found.
 - `flutter build apk --debug` — successful.
 - ADB device detected and debug APK installed successfully.
+- The current 32-bit debug build opened on the SM-T515. First run rendered onboarding behind an SMS permission prompt; after declining permission and skipping onboarding, Home rendered at 800 dp and 1.3 text scale. No fresh `RenderFlex overflowed` or fatal startup logs appeared.
 - Credit card and home screens inspected at 320 dp; previously observed overflows are fixed, with no visible markers or fresh Flutter overflow logs.
 - Cold `spendx://transactions` opened the Activity screen; a warm `spendx://accounts` intent navigated the running app to Accounts.
 - An unknown cold custom link opened Home. At 320 dp the home navigation displays compact tab labels without truncation, and Add Expense shows all three transaction types; larger text stacks the selector vertically. Device text scale and resolution were restored.
@@ -45,42 +46,12 @@ Reusable loading, empty, skeleton, and error components exist. Retention Metrics
 - `flutter analyze lib` — no issues found; `flutter build apk --debug` — successful.
 - Automated tests were not run.
 
----
 
-## Final State (latest audit)
+## Current verification and remaining work
 
-| Metric | Original | Final | Δ |
-|---|---|---|---|
-| `Semantics` widgets | 2 | 41 | +39 |
-| `Tooltip` widgets | 0 | 5 | +5 |
-| `tooltip:` props | 0 | 63 | +63 |
-| `minimumSize` | 6 | 10 | +4 |
-| `validator:` | 6 | 24 | +18 |
-| `TextOverflow` | 66 | 120 | +54 |
-| `maxLines` | 62 | 121 | +59 |
-| `Expanded` | 278 | 299 | +21 |
-| `SafeArea` | 54 | 54 | 0 |
-| `RefreshIndicator` | 14 | 30 | +16 |
-| Hardcoded `Color(0x)` | 1,218 | 389 | -829 |
-| Hardcoded `Colors.xxx` | 656 | 594 | -62 |
-| EmptyState widgets | 0 | 42 | +42 |
-| Skeleton loaders | 0 | 44 | +44 |
-| Illustrations | 1 | 5 | +4 |
-
-### Final UI/UX Scorecard
-
-| Category | Original | Final | Verdict |
-|---|---|---|---|
-| Accessibility | 1/10 | **5/10** | 🟡 41 Semantics, 63 tooltips — improving but needs ~100+ |
-| Theming / Dark Mode | 4/10 | **7/10** | 🟡 Adaptive tokens + context extension; 389 hardcoded colors remain |
-| Responsiveness | 3/10 | **5/10** | 🟡 TextOverflow 66→120; still 7 LayoutBuilder |
-| Forms & Validation | 2/10 | **4/10** | 🟡 6→24 validators; ~40 more needed |
-| Loading/Empty/Error | 4/10 | **7/10** | ✅ EmptyStateWidget, LoadingStateWidget, 5 illustrations |
-| Touch Targets | 4/10 | **4/10** | ❌ 6→10 minSize; still below standard |
-| Navigation | 6/10 | **6/10** | ✅ OK |
-| Motion | 5/10 | **5/10** | ✅ OK |
-| Typography/Spacing | 6/10 | **6/10** | ✅ OK |
-
-**Overall: 3.5/10 → 6/10** (significant improvement)
-
-*Audit based on static code analysis of `lib/` at commit `7ba3e0e` + uncommitted remediation pass. No runtime/visual inspection performed.*
+- `flutter analyze lib` completed with no issues.
+- `flutter build apk --debug --split-per-abi` completed successfully. The current debug build was installed on the Redmi and checked at 1.3 text scale; after the Home timeline fix there were no fresh RenderFlex overflow logs.
+- The Samsung SM-T515 is 32-bit only. The matching debug APK installed. First run showed onboarding and an SMS permission prompt; after declining and skipping, Home rendered. Runtime Google Fonts fetching has been removed. The release app was reopened and the tablet's original 1200×1920 size and 1.1 text scale were restored.
+- The Redmi was restored to 1080×2340, 1.0 text scale, and Light theme. Its screen size and text scale are normal.
+- Source indicators: 43 Semantics, 65 tooltip properties, 63 IconButtons, 26 validator properties, 124 TextOverflow declarations, 126 maxLines, 355 Expanded/Flexible widgets, 14 LayoutBuilders, 30 RefreshIndicators, 11 minimumSize properties, and 205 fixed Color literals.
+- Automated tests were not run. The remaining work is a full custom-gesture geometry review, data-backed chart palette review, remaining route checks at tablet and large text sizes, route-by-route async retry review, and iOS verification. TalkBack and VoiceOver remain excluded by preference.

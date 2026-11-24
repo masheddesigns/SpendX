@@ -212,7 +212,11 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             stmtSummaryAsync.valueOrNull,
                           ),
                           loading: () => const SkeletonLoader.summary(),
-                          error: (err, _) => Text('$err'),
+                          error: (_, _) => _InlineLoadError(
+                            onRetry: () => ref.invalidate(
+                              creditOutstandingProvider(selectedCard.id),
+                            ),
+                          ),
                         ),
                         AppSpacing.sectionSpacer,
                         _buildActionGrid(selectedCard),
@@ -234,7 +238,13 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   loading: () => const SliverToBoxAdapter(
                     child: SkeletonLoader.transactions(),
                   ),
-                  error: (err, _) => SliverToBoxAdapter(child: Text('$err')),
+                  error: (_, _) => SliverToBoxAdapter(
+                    child: _InlineLoadError(
+                      onRetry: () => ref.invalidate(
+                        creditRecentTransactionsProvider(selectedCard.id),
+                      ),
+                    ),
+                  ),
                 ),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
               ],
@@ -1237,5 +1247,41 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     ).then((result) {
       if (result == true) _invalidateAll();
     });
+  }
+}
+
+class _InlineLoadError extends StatelessWidget {
+  const _InlineLoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Could not load this information.',
+            style: TextStyle(color: colors.onErrorContainer),
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

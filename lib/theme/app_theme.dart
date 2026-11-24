@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../services/settings_service.dart';
 
 export 'app_spacing.dart';
@@ -379,7 +378,6 @@ class AppTheme extends ChangeNotifier {
 
       return ThemeData(
         useMaterial3: true,
-        fontFamily: GoogleFonts.inter().fontFamily,
         colorScheme: colorScheme,
         textTheme: _buildStaticTextTheme(colorScheme),
         scaffoldBackgroundColor: bg,
@@ -492,7 +490,6 @@ class AppTheme extends ChangeNotifier {
 
     return ThemeData(
       useMaterial3: true,
-      fontFamily: GoogleFonts.inter().fontFamily,
       colorScheme: colorScheme,
       textTheme: _buildStaticTextTheme(colorScheme),
       scaffoldBackgroundColor: bg,
@@ -571,7 +568,9 @@ class AppTheme extends ChangeNotifier {
   }
 
   static TextTheme _buildStaticTextTheme(ColorScheme cs) {
-    final base = GoogleFonts.interTextTheme();
+    // Keep startup independent of Google Fonts' runtime network fetch. The
+    // platform typography (Roboto on Android) is available offline.
+    final base = Typography.material2021().black;
     return base.copyWith(
       displayLarge: AppTextStyles.displayBalance.copyWith(color: cs.onSurface),
       headlineLarge: AppTextStyles.heading.copyWith(color: cs.onSurface),
