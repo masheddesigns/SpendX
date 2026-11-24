@@ -4,7 +4,8 @@ import 'package:intl/intl.dart';
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/financial_health_screen.dart';
 import '../../../services/haptic_service.dart';
-import '../../../shared/widgets/app_page_route.dart';
+import '../../../services/sound_effects_service.dart';
+import '../../../shared/widgets/playful/playful_page_route.dart';
 import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
 import '../../transactions/providers/transaction_providers.dart';
@@ -147,10 +148,10 @@ class QuickActionsRow extends ConsumerWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
-                  HapticService.instance.tap();
+                  SoundEffectsService.instance.whoosh();
                   Navigator.push(
                     context,
-                    AppPageRoute(builder: (_) => const FinancialHealthScreen()),
+                    PlayfulPageRoute(builder: (_) => const FinancialHealthScreen()),
                   );
                 },
                 child: Column(
@@ -294,10 +295,10 @@ class QuickActionsRow extends ConsumerWidget {
   }
 
   void _openScreen(BuildContext context, String type, {WidgetRef? ref}) {
-    HapticService.instance.tap();
+    SoundEffectsService.instance.pop();
     Navigator.push(
       context,
-      AppPageRoute(builder: (_) => AddExpenseScreen(initialType: type)),
+      PlayfulPageRoute(builder: (_) => AddExpenseScreen(initialType: type)),
     );
   }
 }

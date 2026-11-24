@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/sound_effects_service.dart';
 import '../../theme/app_motion.dart';
 
 /// Subtle press-down feedback for tappable elements.
 ///
-/// Combines: scale (0.97) + opacity (0.85) + optional haptic.
+/// Combines: scale (0.97) + opacity (0.85) + optional haptic and sound.
 /// Duration uses AppMotion.fast (120ms).
 class AppTapScale extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final bool haptic;
+  final SoundEffect? sound;
   final String? semanticLabel;
 
   const AppTapScale({
@@ -19,6 +21,7 @@ class AppTapScale extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.haptic = false,
+    this.sound,
     this.semanticLabel,
   });
 
@@ -47,7 +50,11 @@ class _AppTapScaleState extends State<AppTapScale> {
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
       onTap: () {
-        if (widget.haptic) HapticFeedback.lightImpact();
+        if (widget.sound != null) {
+          SoundEffectsService.instance.play(widget.sound!);
+        } else if (widget.haptic) {
+          HapticFeedback.lightImpact();
+        }
         widget.onTap?.call();
       },
       onLongPress: widget.onLongPress,

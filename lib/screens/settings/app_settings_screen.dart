@@ -112,6 +112,20 @@ class AppSettingsScreen extends StatelessWidget {
                 onTap: () => _showThemeModePicker(context),
               ),
             ),
+            Consumer<SettingsService>(
+              builder: (ctx, settings, _) => SwitchListTile(
+                secondary: Icon(
+                  settings.soundEffectsEnabled
+                      ? Icons.volume_up_rounded
+                      : Icons.volume_off_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Sound Effects & Audio'),
+                subtitle: const Text('Playful tactile audio feedback on interactions'),
+                value: settings.soundEffectsEnabled,
+                onChanged: settings.setSoundEffectsEnabled,
+              ),
+            ),
 
             const Divider(height: 32),
 

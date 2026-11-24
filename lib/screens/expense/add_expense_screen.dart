@@ -42,6 +42,7 @@ import '../bank/add_bank_account_screen.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../shared/widgets/playful/spendx_playful.dart';
 import '../../theme/app_theme.dart' as modern_theme;
 import '../../widgets/form/add_category_sheet.dart';
 import '../../shared/widgets/app_page_route.dart';
@@ -343,6 +344,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     setState(() => _formErrors = errors);
 
     if (!(_formKey.currentState?.validate() ?? false) || errors.isNotEmpty) {
+      SoundEffectsService.instance.alert();
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0.0,
@@ -396,6 +398,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
 
       invalidateAllFinancialProviders(ref);
+      SoundEffectsService.instance.coin();
       if (mounted) {
         Navigator.pop(context, true);
         CustomSnackBar.show(
@@ -488,6 +491,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ),
     );
 
+    SoundEffectsService.instance.coin();
     if (mounted) {
       Navigator.pop(context, true);
     }
@@ -1467,8 +1471,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
               const SizedBox(height: 24),
 
-              SpendXGlassButton(
-                variant: SpendXGlassButtonVariant.primary,
+              SpendXPlayfulButton(
+                variant: _selectedType == 'income'
+                    ? PlayfulButtonVariant.income
+                    : (_selectedType == 'transfer'
+                        ? PlayfulButtonVariant.primary
+                        : PlayfulButtonVariant.expense),
+                height: 50,
                 onPressed: _saveTransaction,
                 child: Text(
                   widget.existingTransaction != null
@@ -1476,10 +1485,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       : (_selectedType == 'transfer'
                             ? 'Move Funds'
                             : 'Save Activity'),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
                 ),
               ),
             ],

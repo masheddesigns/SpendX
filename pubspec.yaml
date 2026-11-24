@@ -60,6 +60,7 @@ dependencies:
   sqlite3: ^3.5.2
   spendx_process_lock:
     path: packages/spendx_process_lock
+  audioplayers: ^6.7.1
 
 dependency_overrides:
   image: 4.8.0
@@ -90,6 +91,7 @@ flutter:
   assets:
     - assets/logo.svg
     - assets/illustrations/
+    - assets/audio/
 
 hooks:
   user_defines:
