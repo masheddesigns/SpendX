@@ -8,6 +8,7 @@ import '../../features/liabilities/providers/liabilities_providers.dart';
 import 'lending_report_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/empty_state_widget.dart';
+import '../../theme/app_theme.dart';
 
 class LendingScreen extends ConsumerStatefulWidget {
   const LendingScreen({super.key});
@@ -82,7 +83,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                         label: 'You Gave',
                         subtitle: 'They owe you',
                         icon: Icons.arrow_upward_rounded,
-                        color: Theme.of(context).colorScheme.secondary,
+                        color: AppTheme.semanticIncome,
                         selected: type == 'lent',
                         onTap: () => setSheet(() => type = 'lent'),
                       ),
@@ -93,7 +94,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                         label: 'You Got',
                         subtitle: 'You owe them',
                         icon: Icons.arrow_downward_rounded,
-                        color: cs.error,
+                        color: AppTheme.semanticExpense,
                         selected: type == 'borrowed',
                         onTap: () => setSheet(() => type = 'borrowed'),
                       ),
@@ -349,8 +350,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                   'Remaining: ${AppFormat.currency(remaining)}',
                   style: TextStyle(
                     color: isLent
-                        ? Theme.of(context).colorScheme.secondary
-                        : cs.error,
+                        ? AppTheme.semanticIncome
+                        : AppTheme.semanticExpense,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -435,7 +436,6 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(lendingProvider);
     final allItems = [...state.activeItems, ...state.settledItems];
-    final cs = Theme.of(context).colorScheme;
 
     // Summary from active items
     double youWillGet = 0, youOwe = 0;
@@ -503,7 +503,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                             child: _SummaryTile(
                               label: "You'll get",
                               amount: youWillGet,
-                              color: Theme.of(context).colorScheme.secondary,
+                              color: AppTheme.semanticIncome,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -511,7 +511,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                             child: _SummaryTile(
                               label: 'You owe',
                               amount: youOwe,
-                              color: cs.error,
+                              color: AppTheme.semanticExpense,
                             ),
                           ),
                         ],
@@ -526,8 +526,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: net > 0
-                              ? Theme.of(context).colorScheme.secondary
-                              : cs.error,
+                              ? AppTheme.semanticIncome
+                              : AppTheme.semanticExpense,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -552,7 +552,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                               .where((l) => l.type == 'lent')
                               .length,
                           selected: _filter == 'get',
-                          color: Theme.of(context).colorScheme.secondary,
+                          color: AppTheme.semanticIncome,
                           onTap: () => setState(() => _filter = 'get'),
                         ),
                         const SizedBox(width: 8),
@@ -562,7 +562,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                               .where((l) => l.type == 'borrowed')
                               .length,
                           selected: _filter == 'owe',
-                          color: cs.error,
+                          color: AppTheme.semanticExpense,
                           onTap: () => setState(() => _filter = 'owe'),
                         ),
                         const SizedBox(width: 8),

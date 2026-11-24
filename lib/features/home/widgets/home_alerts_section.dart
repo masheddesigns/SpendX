@@ -61,7 +61,10 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [const Color(0x336366F1), const Color(0x1A6366F1)]
+                      ? [
+                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.20),
+                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                        ]
                       : [
                           Theme.of(context).colorScheme.primaryContainer,
                           Theme.of(context).colorScheme.primaryContainer,
@@ -143,7 +146,10 @@ class _HomeAlertsSectionState extends ConsumerState<HomeAlertsSection> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [const Color(0x33F59E0B), const Color(0x1AF59E0B)]
+                      ? [
+                          Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.20),
+                          Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.10),
+                        ]
                       : [
                           Theme.of(context).colorScheme.tertiaryContainer,
                           Theme.of(context).colorScheme.tertiaryContainer,

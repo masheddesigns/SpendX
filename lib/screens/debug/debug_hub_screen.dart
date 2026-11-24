@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/config/app_env.dart';
 import '../../services/dev_tools_service.dart';
 import '../../widgets/custom_snackbar.dart';
+import '../../shared/widgets/app_page_route.dart';
 import 'retention_metrics_screen.dart';
 
 class DebugHubScreen extends StatefulWidget {
@@ -129,7 +130,7 @@ class _DebugHubScreenState extends State<DebugHubScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
+                AppPageRoute(
                     builder: (_) => const RetentionMetricsScreen()),
               );
             },

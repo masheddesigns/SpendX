@@ -13,6 +13,7 @@ import '../../widgets/custom_snackbar.dart';
 import '../../shared/widgets/app_page_route.dart';
 import 'automatic_ingestion_screen.dart';
 import '../../shared/widgets/loading_state_widget.dart';
+import '../../theme/app_theme.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -571,7 +572,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       : 'Connect',
                   style: TextStyle(
                     color: GmailIntegrationService.instance.isConnected
-                        ? Colors.red
+                        ? AppTheme.semanticExpense
                         : Theme.of(context).colorScheme.primary,
                   ),
                 ),
@@ -597,7 +598,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 style: const TextStyle(fontSize: 12),
               ),
               trailing: _exactAlarmEnabled
-                  ? const Icon(Icons.check_circle, color: Colors.green)
+                  ? const Icon(Icons.check_circle, color: AppTheme.semanticIncome)
                   : TextButton(
                       onPressed: () async {
                         await NotificationServiceV2()
@@ -833,7 +834,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.security_rounded, color: Colors.green),
+            Icon(Icons.security_rounded, color: AppTheme.semanticIncome),
             SizedBox(width: 8),
             Text(
               'Privacy Guarantee',
@@ -893,7 +894,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.verified_user_outlined, color: Colors.green),
+                  const Icon(Icons.verified_user_outlined, color: AppTheme.semanticIncome),
                   const SizedBox(width: 8),
                   const Text(
                     'Allowed Financial Contacts',

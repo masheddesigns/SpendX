@@ -4,7 +4,7 @@ import '../../services/gemini_service.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/spendx_app_bar.dart';
 
-import 'package:spend_x/theme/app_spacing.dart';
+import '../../theme/app_theme.dart';
 class FeatureTogglesScreen extends StatelessWidget {
   const FeatureTogglesScreen({super.key});
 
@@ -35,7 +35,7 @@ class FeatureTogglesScreen extends StatelessWidget {
   
                 _ModuleToggle(
                   icon: Icons.money_off_csred_rounded,
-                  color: Colors.orange,
+                  color: AppTheme.semanticWarning,
                   title: 'Disable Income Tracking',
                   subtitle:
                       'Hide income actions, charts, filters, and summaries for expense-only use.',
@@ -66,7 +66,7 @@ class FeatureTogglesScreen extends StatelessWidget {
   
                 _ModuleToggle(
                   icon: Icons.summarize_rounded,
-                  color: Colors.redAccent,
+                  color: AppTheme.semanticExpense,
                   title: 'Liabilities Hub',
                   subtitle: 'Unified view for all your credit and debt obligations.',
                   value: settings.enableLiabilities,

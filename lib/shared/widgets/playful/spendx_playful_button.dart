@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../services/sound_effects_service.dart';
 import '../../../theme/playful_tokens.dart';
 
 enum PlayfulButtonVariant { primary, income, expense, tonal, outline }
@@ -107,7 +106,6 @@ class _SpendXPlayfulButtonState extends State<SpendXPlayfulButton>
     if (widget.onPressed == null || widget.isLoading) return;
     _isDown = true;
     _ctrl.forward();
-    SoundEffectsService.instance.pop();
   }
 
   void _handleTapUp(TapUpDetails _) {

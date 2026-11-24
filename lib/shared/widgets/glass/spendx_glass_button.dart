@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../services/sound_effects_service.dart';
 import '../../../theme/app_theme.dart';
 import 'spendx_glass_surface.dart';
 
@@ -206,7 +205,6 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
             onTapCancel: isEnabled ? _handleTapCancel : null,
             onTap: isEnabled
                 ? () {
-                    SoundEffectsService.instance.pop();
                     widget.onPressed!();
                   }
                 : null,

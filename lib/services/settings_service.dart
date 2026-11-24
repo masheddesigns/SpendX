@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'live_sms_service.dart';
-import 'sound_effects_service.dart';
 
 class SettingsService extends ChangeNotifier {
   static const String _onboardingKey = 'onboarding_complete';
@@ -12,7 +11,6 @@ class SettingsService extends ChangeNotifier {
   static const String _enableLoansKey = 'enable_loans';
   static const String _enableLiabilitiesKey = 'enable_liabilities';
   static const String _enableTagsKey = 'enable_tags';
-  static const String _soundEffectsKey = 'enable_sound_effects';
   static const String _periodicReminderKey = 'periodic_reminder_freq';
   static const String _hasGuestSessionKey = 'has_guest_session';
   static const String _autoBackupIntervalKey = 'backup_auto_interval';
@@ -119,7 +117,6 @@ class SettingsService extends ChangeNotifier {
   /// Call this during app initialization
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
-    SoundEffectsService.instance.enabled = soundEffectsEnabled;
   }
 
   String? getLastExpenseCategoryId({required String type}) {
@@ -397,16 +394,6 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Sound Effects Module ---
-  bool get soundEffectsEnabled {
-    return _prefs.getBool(_soundEffectsKey) ?? true;
-  }
-
-  Future<void> setSoundEffectsEnabled(bool val) async {
-    await _prefs.setBool(_soundEffectsKey, val);
-    SoundEffectsService.instance.enabled = val;
-    notifyListeners();
-  }
 
   // --- Periodic Reminders ---
   String get periodicReminderFrequency {
@@ -688,7 +675,6 @@ class SettingsService extends ChangeNotifier {
       _enableLoansKey: enableLoans,
       _enableLiabilitiesKey: enableLiabilities,
       _enableTagsKey: enableTags,
-      _soundEffectsKey: soundEffectsEnabled,
       _periodicReminderKey: periodicReminderFrequency,
       _autoBackupIntervalKey: backupIntervalHours,
       _autoBackupEnabledKey: autoBackupEnabled,
@@ -718,9 +704,6 @@ class SettingsService extends ChangeNotifier {
     }
     if (settings.containsKey(_enableTagsKey)) {
       await setEnableTags(settings[_enableTagsKey]);
-    }
-    if (settings.containsKey(_soundEffectsKey)) {
-      await setSoundEffectsEnabled(settings[_soundEffectsKey]);
     }
     if (settings.containsKey(_periodicReminderKey)) {
       await setPeriodicReminderFrequency(settings[_periodicReminderKey]);

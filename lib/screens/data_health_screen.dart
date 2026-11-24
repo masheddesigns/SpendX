@@ -202,15 +202,15 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     final noPermission = hasRun && !result.permissionGranted;
 
     final cardBorder = isClean
-        ? Colors.green.withValues(alpha: 0.3)
+        ? AppTheme.semanticIncome.withValues(alpha: 0.3)
         : hasMissed
-        ? Colors.orange.withValues(alpha: 0.4)
+        ? AppTheme.semanticWarning.withValues(alpha: 0.4)
         : cs.outline.withValues(alpha: 0.15);
 
     final cardBg = isClean
-        ? Colors.green.withValues(alpha: 0.05)
+        ? AppTheme.semanticIncome.withValues(alpha: 0.05)
         : hasMissed
-        ? Colors.orange.withValues(alpha: 0.06)
+        ? AppTheme.semanticWarning.withValues(alpha: 0.06)
         : cs.surfaceContainer;
 
     return Container(
@@ -228,14 +228,14 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (hasMissed ? Colors.orange : Colors.blue).withValues(
+                  color: (hasMissed ? AppTheme.semanticWarning : AppTheme.primaryBlue).withValues(
                     alpha: 0.15,
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.mark_email_read_rounded,
-                  color: hasMissed ? Colors.orange : Colors.blue,
+                  color: hasMissed ? AppTheme.semanticWarning : AppTheme.primaryBlue,
                   size: 20,
                 ),
               ),
@@ -268,7 +268,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.15),
+                    color: AppTheme.semanticIncome.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
@@ -276,14 +276,14 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                     children: [
                       Icon(
                         Icons.check_circle_rounded,
-                        color: Colors.green,
+                        color: AppTheme.semanticIncome,
                         size: 14,
                       ),
                       SizedBox(width: 4),
                       Text(
                         '100% Captured',
                         style: TextStyle(
-                          color: Colors.green,
+                          color: AppTheme.semanticIncome,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
@@ -335,7 +335,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
+                color: AppTheme.semanticWarning.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -345,14 +345,14 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                     children: [
                       const Icon(
                         Icons.warning_amber_rounded,
-                        color: Colors.orange,
+                        color: AppTheme.semanticWarning,
                         size: 18,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         '${result.missedCount} uncaptured transaction${result.missedCount == 1 ? '' : 's'} found!',
                         style: const TextStyle(
-                          color: Colors.orange,
+                          color: AppTheme.semanticWarning,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
@@ -380,7 +380,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                           item.isCredit
                               ? Icons.arrow_downward_rounded
                               : Icons.arrow_upward_rounded,
-                          color: item.isCredit ? Colors.green : Colors.red,
+                          color: item.isCredit ? AppTheme.semanticIncome : AppTheme.semanticExpense,
                           size: 14,
                         ),
                         const SizedBox(width: 6),
@@ -398,7 +398,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
                         Text(
                           '${item.isCredit ? '+' : '-'}₹${item.amount.toStringAsFixed(2)}',
                           style: TextStyle(
-                            color: item.isCredit ? Colors.green : cs.onSurface,
+                            color: item.isCredit ? AppTheme.semanticIncome : cs.onSurface,
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
                           ),
@@ -532,7 +532,7 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
               children: [
                 const Icon(
                   Icons.verified_rounded,
-                  color: Colors.green,
+                  color: AppTheme.semanticIncome,
                   size: 22,
                 ),
                 const SizedBox(width: 12),
@@ -623,10 +623,10 @@ class _IssueCard extends StatelessWidget {
   (IconData, Color) _typeVisuals(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return switch (issue.type) {
-      'uncategorized' => (Icons.label_off_outlined, Colors.orange),
+      'uncategorized' => (Icons.label_off_outlined, AppTheme.semanticWarning),
       'no_account' => (Icons.account_balance_outlined, cs.onSurfaceVariant),
       'duplicate' => (Icons.content_copy_rounded, cs.error),
-      'abnormal_amount' => (Icons.trending_up_rounded, Colors.amber),
+      'abnormal_amount' => (Icons.trending_up_rounded, AppTheme.semanticWarning),
       'future_dated' => (Icons.schedule_rounded, cs.tertiary),
       _ => (Icons.info_outline, cs.onSurfaceVariant),
     };

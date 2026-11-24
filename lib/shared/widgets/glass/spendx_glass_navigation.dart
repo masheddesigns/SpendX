@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../services/sound_effects_service.dart';
 import '../../../theme/app_theme.dart';
 import 'spendx_glass_surface.dart';
 
@@ -76,7 +75,6 @@ class SpendXGlassNavigation extends StatelessWidget {
                     isDark: isDark,
                     compact: compact,
                     onTap: () {
-                      SoundEffectsService.instance.pop();
                       onItemSelected(index);
                     },
                   ),

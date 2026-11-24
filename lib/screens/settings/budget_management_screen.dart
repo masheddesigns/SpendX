@@ -311,7 +311,7 @@ class _BudgetManagementScreenState
                             final progressColor = progress < 0.7
                                 ? Theme.of(context).colorScheme.primary
                                 : progress < 0.9
-                                ? Colors.orange
+                                ? AppTheme.semanticWarning
                                 : Theme.of(context).colorScheme.error;
 
                             return Padding(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../services/sound_effects_service.dart';
 import '../../../theme/playful_tokens.dart';
 
 /// Bouncy Playful Page Route Transition.
@@ -7,16 +6,13 @@ import '../../../theme/playful_tokens.dart';
 /// Features:
 /// - Entering page scales from 0.93 to 1.0 with playful overshoot ([Curves.easeOutBack]).
 /// - Fade + subtle upward slide for high physical depth.
-/// - Soft [SoundEffect.whoosh] sound effect trigger on navigation.
 /// - Respects reduced motion preferences.
 class PlayfulPageRoute<T> extends PageRouteBuilder<T> {
   final Widget Function(BuildContext) builder;
-  final bool playSound;
 
   PlayfulPageRoute({
     required this.builder,
     super.settings,
-    this.playSound = true,
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) => builder(context),
           transitionDuration: PlayfulTokens.durationPage,
@@ -49,9 +45,5 @@ class PlayfulPageRoute<T> extends PageRouteBuilder<T> {
               ),
             );
           },
-        ) {
-    if (playSound) {
-      SoundEffectsService.instance.whoosh();
-    }
-  }
+        );
 }

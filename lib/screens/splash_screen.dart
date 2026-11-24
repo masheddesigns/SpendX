@@ -19,6 +19,7 @@ import '../data/core/tracked_database_task_queue.dart';
 import '../features/home/screens/home_screen.dart';
 import 'onboarding_screen.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -392,10 +393,10 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Container(
                     width: 300,
                     height: 300,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [Color(0x666558E8), Colors.transparent],
+                        colors: [AppTheme.primaryBlue.withValues(alpha: 0.40), Colors.transparent],
                       ),
                     ),
                   ),
@@ -409,10 +410,10 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Container(
                     width: 250,
                     height: 250,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [Color(0x4035B779), Colors.transparent],
+                        colors: [AppTheme.semanticIncome.withValues(alpha: 0.25), Colors.transparent],
                       ),
                     ),
                   ),
@@ -523,7 +524,7 @@ class _SplashScreenState extends State<SplashScreen>
                             children: [
                               const Icon(
                                 Icons.warning_amber_rounded,
-                                color: Color(0xFFEF4444),
+                                color: AppTheme.semanticExpense,
                                 size: 36,
                               ),
                               const SizedBox(height: 8),
@@ -554,7 +555,7 @@ class _SplashScreenState extends State<SplashScreen>
                                       ? null
                                       : _checkInitialState,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF6558E8),
+                                    backgroundColor: AppTheme.primaryBlue,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
@@ -586,7 +587,7 @@ class _SplashScreenState extends State<SplashScreen>
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Color(0x996558E8),
+                            color: AppTheme.primaryBlue,
                           ),
                         ),
                       ),

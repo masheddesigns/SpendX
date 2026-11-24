@@ -117,9 +117,9 @@ class _SmartImportScreenState extends State<SmartImportScreen> {
 
   Color _notionTypeColor(NotionTableType type) {
     switch (type) {
-      case NotionTableType.expenses: return Colors.green;
-      case NotionTableType.bills: return Colors.orange;
-      case NotionTableType.netWorth: return Colors.blue;
+      case NotionTableType.expenses: return AppTheme.semanticExpense;
+      case NotionTableType.bills: return AppTheme.semanticWarning;
+      case NotionTableType.netWorth: return AppTheme.primaryBlue;
       case NotionTableType.unknown: return Colors.grey;
     }
   }
@@ -417,7 +417,7 @@ class _SmartImportScreenState extends State<SmartImportScreen> {
         trailing: Text(
           '${isExpense ? "-" : "+"} ${AppFormat.currency(row.amount)}',
           style: TextStyle(
-            color: isExpense ? cs.error : Colors.green,
+            color: isExpense ? cs.error : AppTheme.semanticIncome,
             fontWeight: FontWeight.bold,
             fontSize: 13,
           ),

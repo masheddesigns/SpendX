@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../services/sound_effects_service.dart';
 import '../../../theme/playful_tokens.dart';
 
 /// Wraps any widget with an elastic spring bounce micro-interaction on tap.
@@ -7,14 +6,12 @@ import '../../../theme/playful_tokens.dart';
 /// Features:
 /// - Squishes to [scaleDown] (0.94x) on touch-down.
 /// - Overshoots with spring elasticity on release.
-/// - Plays [SoundEffect.pop] and haptic tick.
 /// - Respects system reduced-motion preferences.
 class PlayfulBounce extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final double scaleDown;
-  final SoundEffect? sound;
   final bool enableHaptic;
   final String? semanticLabel;
 
@@ -24,7 +21,6 @@ class PlayfulBounce extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.scaleDown = 0.94,
-    this.sound = SoundEffect.pop,
     this.enableHaptic = true,
     this.semanticLabel,
   });
@@ -66,9 +62,6 @@ class _PlayfulBounceState extends State<PlayfulBounce>
     if (widget.onTap == null && widget.onLongPress == null) return;
     _isPressed = true;
     _ctrl.forward();
-    if (widget.sound != null) {
-      SoundEffectsService.instance.play(widget.sound!);
-    }
   }
 
   void _onTapUp(TapUpDetails _) {

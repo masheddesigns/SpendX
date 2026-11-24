@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../models/credit_emi.dart';
 import '../../models/emi_installment.dart';
-import '../../theme/app_spacing.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../shared/widgets/empty_state_widget.dart';
@@ -280,7 +280,7 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
       statusLabel = 'Overdue';
       statusIcon = Icons.warning_rounded;
     } else if (isDueSoon) {
-      statusColor = Colors.orange;
+      statusColor = AppTheme.semanticWarning;
       statusLabel = 'Due soon';
       statusIcon = Icons.schedule_rounded;
     } else {
@@ -356,7 +356,7 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
                         const SizedBox(width: 6),
                         _miniChip(
                           'I: ${AppFormat.currency(inst.interest)}',
-                          Colors.orange,
+                          AppTheme.semanticWarning,
                         ),
                       ],
                     ),
@@ -515,7 +515,7 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text('Delete', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
           ),
         ],
       ),

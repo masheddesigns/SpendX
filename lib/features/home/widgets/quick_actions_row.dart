@@ -150,7 +150,6 @@ class QuickActionsRow extends ConsumerWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
-                  SoundEffectsService.instance.whoosh();
                   Navigator.push(
                     context,
                     PlayfulPageRoute(builder: (_) => const FinancialHealthScreen()),
@@ -297,7 +296,6 @@ class QuickActionsRow extends ConsumerWidget {
   }
 
   void _openScreen(BuildContext context, String type, {WidgetRef? ref}) {
-    SoundEffectsService.instance.pop();
     Navigator.push(
       context,
       PlayfulPageRoute(builder: (_) => AddExpenseScreen(initialType: type)),
@@ -639,7 +637,6 @@ class _QuickChipState extends State<_QuickChip>
   void _handleTapDown(TapDownDetails _) {
     _isDown = true;
     _ctrl.forward();
-    SoundEffectsService.instance.pop();
   }
 
   void _handleTapUp(TapUpDetails _) {

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../widgets/spendx_app_bar.dart';
 import '../widgets/settings_tile.dart';
 import '../widgets/custom_snackbar.dart';
+import '../theme/app_theme.dart';
 
 class FeedbackScreen extends StatelessWidget {
   const FeedbackScreen({super.key});
@@ -189,7 +190,7 @@ class FeedbackScreen extends StatelessWidget {
               ),
               SettingsTile(
                 icon: Icons.star_rounded,
-                color: Colors.amber,
+                color: AppTheme.semanticWarning,
                 title: 'Rate SpendX',
                 subtitle: 'Love it? Give us 5 stars on Play Store',
                 onTap: () => _rateApp(context),
@@ -219,7 +220,7 @@ class FeedbackScreen extends StatelessWidget {
               ),
               SettingsTile(
                 icon: Icons.feedback_outlined,
-                color: Colors.teal,
+                color: AppTheme.semanticIncome,
                 title: 'Send Feedback',
                 subtitle: 'Share thoughts, suggestions, or compliments',
                 onTap: () => _sendFeedback(context),
@@ -227,7 +228,7 @@ class FeedbackScreen extends StatelessWidget {
               const SizedBox(height: 12),
               SettingsTile(
                 icon: Icons.bug_report_outlined,
-                color: Colors.red,
+                color: AppTheme.semanticExpense,
                 title: 'Report a Bug',
                 subtitle: 'Found something broken? Let us know',
                 onTap: () => _reportBug(context),

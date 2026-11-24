@@ -722,9 +722,7 @@ class _AutomaticIngestionScreenState
     return Container(
       margin: const EdgeInsets.only(left: 54, right: 14),
       height: 0.5,
-      color: isDark
-          ? Colors.white.withValues(alpha: 0.08)
-          : Colors.black.withValues(alpha: 0.06),
+      color: context.borderColor,
     );
   }
 }

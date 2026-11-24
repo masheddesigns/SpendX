@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../theme/app_theme.dart';
 
 import '../../services/smart_category_classifier.dart';
 import '../../data/repositories/transaction_repo.dart';
@@ -23,7 +24,6 @@ import '../../services/recurring_detector.dart';
 import '../../shared/widgets/app_card.dart';
 import '../../utils/app_format.dart';
 
-import 'package:spend_x/theme/app_spacing.dart';
 /// Mandatory preview screen for Smart Import.
 ///
 /// User always confirms before a transaction is inserted. Confidence drives
@@ -296,8 +296,8 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
 
   Color _confidenceColor(ColorScheme cs) {
     final c = widget.parsed.confidence;
-    if (c >= 0.75) return Colors.green;
-    if (c >= 0.50) return Colors.orange;
+    if (c >= 0.75) return AppTheme.semanticIncome;
+    if (c >= 0.50) return AppTheme.semanticWarning;
     return cs.error;
   }
 
@@ -814,9 +814,9 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.10),
+        color: AppTheme.semanticWarning.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+        border: Border.all(color: AppTheme.semanticWarning.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -824,13 +824,13 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
           Row(
             children: [
               const Icon(Icons.text_fields_rounded,
-                  color: Colors.orange, size: 20),
+                  color: AppTheme.semanticWarning, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Couldn\'t auto-detect the transaction',
-                  style: TextStyle(
-                    color: Colors.orange.shade800,
+                  style: const TextStyle(
+                    color: AppTheme.semanticWarning,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -1096,7 +1096,7 @@ class _ImportPreviewScreenState extends ConsumerState<ImportPreviewScreen> {
   }
 
   Widget _signalChip(_FieldSignal s, ColorScheme cs) {
-    final color = s.ok ? Colors.green : Colors.orange;
+    final color = s.ok ? AppTheme.semanticIncome : AppTheme.semanticWarning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(

@@ -18,7 +18,7 @@ import '../../widgets/settings_tile.dart';
 import '../../widgets/app_button.dart';
 import 'package:spend_x/widgets/spendx_app_bar.dart';
 
-import 'package:spend_x/theme/app_spacing.dart';
+import '../../theme/app_theme.dart';
 
 enum SyncHealth { healthy, syncing, needsAuth, locked, error }
 
@@ -304,7 +304,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
 
     switch (health) {
       case SyncHealth.healthy:
-        healthColor = Colors.green;
+        healthColor = AppTheme.semanticIncome;
         healthIcon = Icons.check_circle_outline;
         healthTitle = 'System Ready';
         healthSubtitle = _connectedEmail == null
@@ -318,7 +318,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
         healthSubtitle = 'Transferring snapshot';
         break;
       case SyncHealth.needsAuth:
-        healthColor = Colors.orange;
+        healthColor = AppTheme.semanticWarning;
         healthIcon = Icons.lock_open_outlined;
         healthTitle = 'Connection Required';
         healthSubtitle = 'Please sign in to enable Drive backup';
@@ -330,7 +330,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
         healthSubtitle = 'Database is busy, backup will be available shortly';
         break;
       case SyncHealth.error:
-        healthColor = Colors.red;
+        healthColor = AppTheme.semanticExpense;
         healthIcon = Icons.error_outline;
         healthTitle = 'Sync Issue';
         healthSubtitle = 'Check your connection or Drive storage';
@@ -671,9 +671,9 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
                     onPressed: () async {
                       if (!_isOperationInProgress) await _disconnectDrive();
                     },
-                    child: const Text(
+                    child: Text(
                       'Disconnect',
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(color: AppTheme.semanticExpense),
                     ),
                   ),
                 ],
@@ -970,17 +970,17 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.08),
+                  color: AppTheme.semanticIncome.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: Colors.green.withValues(alpha: 0.2),
+                    color: AppTheme.semanticIncome.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
                   children: [
                     const Icon(
                       Icons.lock_rounded,
-                      color: Colors.green,
+                      color: AppTheme.semanticIncome,
                       size: 20,
                     ),
                     const SizedBox(width: 12),
@@ -1250,7 +1250,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
         const SizedBox(height: 12),
         SettingsTile(
           icon: Icons.data_object_rounded,
-          color: Colors.amber.shade700,
+          color: AppTheme.semanticWarning,
           title: 'Export Transactions JSON',
           subtitle: 'Share transactions as a JSON file',
           onTap: () {
@@ -1280,7 +1280,7 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
         const SizedBox(height: 12),
         SettingsTile(
           icon: Icons.picture_as_pdf_outlined,
-          color: Colors.red.shade600,
+          color: AppTheme.semanticExpense,
           title: 'Export Salary Report PDF',
           subtitle: 'Salary intelligence report as PDF',
           onTap: () {

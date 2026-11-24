@@ -4,6 +4,7 @@ import '../../services/import_validation_log.dart';
 import '../../services/retention_events.dart';
 import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/loading_state_widget.dart';
+import '../../theme/app_theme.dart';
 
 /// Internal debug panel for the retention observation window.
 ///
@@ -338,12 +339,12 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
 
     Color? targetColor(int? actual, int target) {
       if (actual == null) return null;
-      return actual >= target ? Colors.green : Colors.orange;
+      return actual >= target ? AppTheme.semanticIncome : AppTheme.semanticWarning;
     }
 
     Color? latencyColor(int? v) {
       if (v == null) return null;
-      return v <= 2500 ? Colors.green : Colors.orange;
+      return v <= 2500 ? AppTheme.semanticIncome : AppTheme.semanticWarning;
     }
 
     return Container(
@@ -375,7 +376,7 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
             suffix: '(target ≤ 20%)',
             highlight: s.correctionRate == null
                 ? null
-                : (s.correctionRate! <= 20 ? Colors.green : Colors.orange),
+                : (s.correctionRate! <= 20 ? AppTheme.semanticIncome : AppTheme.semanticWarning),
           ),
           const Divider(height: 24),
           _row('  amount edits', '${s.amountEdits}', dim: true),
@@ -432,21 +433,21 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
 
   Color? _ctaColor(int? rate) {
     if (rate == null) return null;
-    if (rate >= 40) return Colors.green;
-    if (rate >= 25) return Colors.orange;
-    return Colors.red;
+    if (rate >= 40) return AppTheme.semanticIncome;
+    if (rate >= 25) return AppTheme.semanticWarning;
+    return AppTheme.semanticExpense;
   }
 
   Color? _completionColor(int? rate) {
     if (rate == null) return null;
-    if (rate >= 40) return Colors.green;
-    return Colors.red;
+    if (rate >= 40) return AppTheme.semanticIncome;
+    return AppTheme.semanticExpense;
   }
 
   Color? _notifColor(int? rate) {
     if (rate == null) return null;
-    if (rate >= 15) return Colors.green;
-    return Colors.red;
+    if (rate >= 15) return AppTheme.semanticIncome;
+    return AppTheme.semanticExpense;
   }
 
   String _shortName(String full) {

@@ -209,6 +209,10 @@ extension SpendXThemeContext on BuildContext {
       isDark ? AppTheme.darkSurface : AppTheme.lightSurface;
   Color get canvasColor => isDark ? AppTheme.darkCanvas : AppTheme.lightCanvas;
   Color get borderColor => isDark ? AppTheme.darkBorder : AppTheme.lightBorder;
+  Color get incomeColor => AppTheme.semanticIncome;
+  Color get expenseColor => AppTheme.semanticExpense;
+  Color get warningColor => AppTheme.semanticWarning;
+  Color get transferColor => AppTheme.semanticTransfer;
   Color get fieldFillColor => Theme.of(this).colorScheme.surfaceContainerHigh;
   Color get fieldBorderColor => Theme.of(this).colorScheme.outline;
   Color get fieldHintColor => Theme.of(this).colorScheme.onSurfaceVariant;
@@ -420,6 +424,18 @@ class AppTheme extends ChangeNotifier {
             side: const BorderSide(color: lightBorder, width: 1),
           ),
         ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: primary,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.button),
+            ),
+            textStyle: AppTextStyles.button,
+            elevation: 0,
+          ),
+        ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: primary,
@@ -538,6 +554,18 @@ class AppTheme extends ChangeNotifier {
         unselectedItemColor: darkTextMuted,
         elevation: 0,
         type: BottomNavigationBarType.fixed,
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          textStyle: AppTextStyles.button,
+          elevation: 0,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

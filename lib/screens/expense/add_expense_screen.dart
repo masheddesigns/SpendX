@@ -343,8 +343,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     setState(() => _formErrors = errors);
 
-    if (!(_formKey.currentState?.validate() ?? false) || errors.isNotEmpty) {
-      SoundEffectsService.instance.alert();
+    if (errors.isNotEmpty || !(_formKey.currentState?.validate() ?? false)) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0.0,
@@ -398,7 +397,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
 
       invalidateAllFinancialProviders(ref);
-      SoundEffectsService.instance.coin();
       if (mounted) {
         Navigator.pop(context, true);
         CustomSnackBar.show(
@@ -491,8 +489,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       ),
     );
 
-    SoundEffectsService.instance.coin();
     if (mounted) {
+      CustomSnackBar.show(
+        context,
+        message: widget.existingTransaction != null
+            ? 'Activity updated successfully ✓'
+            : (_selectedType == 'income'
+                ? 'Income recorded successfully ✓'
+                : 'Expense recorded successfully ✓'),
+      );
       Navigator.pop(context, true);
     }
   }
@@ -1293,6 +1298,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             ),
                             const SizedBox(height: 10),
                             FormField<String>(
+                              key: ValueKey(_selectedCategoryId),
                               initialValue: _selectedCategoryId,
                               validator: (val) {
                                 if (!_isSpecialNonCategorizedType &&
@@ -1446,20 +1452,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _notesFocusNode.unfocus(),
                       label: _selectedType == 'transfer'
-                          ? 'Transfer Note'
-                          : 'Merchant / Payee Notes',
+                          ? 'Transfer Note (Optional)'
+                          : 'Merchant / Payee Notes (Optional)',
                       prefix: Icon(
                         _selectedType == 'transfer'
                             ? Icons.swap_horiz_rounded
                             : Icons.notes_rounded,
                       ),
                       validator: (val) {
-                        if (val == null || val.trim().isEmpty) {
-                          return _selectedType == 'transfer'
-                              ? 'Please enter a transfer note'
-                              : 'Please enter a description or payee';
-                        }
-                        if (val.trim().length > 500) {
+                        if (val != null && val.trim().length > 500) {
                           return 'Note must be 500 characters or less';
                         }
                         return null;

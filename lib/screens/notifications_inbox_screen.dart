@@ -11,6 +11,7 @@ import '../screens/recurring/recurring_payments_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../shared/widgets/skeleton_loader.dart';
 import '../shared/widgets/empty_state_widget.dart';
+import '../theme/app_theme.dart';
 import '../utils/app_format.dart';
 
 /// In-app notifications inbox: lists active (pending) reminders and routes
@@ -120,7 +121,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                           final color = alert.severity == AlertSeverity.critical
                               ? cs.error
                               : alert.severity == AlertSeverity.warning
-                                  ? Colors.orange
+                                  ? AppTheme.semanticWarning
                                   : cs.primary;
 
                           final dueLabel = alert.triggerDate != null
