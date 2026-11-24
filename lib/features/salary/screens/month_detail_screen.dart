@@ -706,7 +706,7 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
     return SingleChildScrollView(
       child: Padding(
         padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         child: ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: BackdropFilter(

@@ -93,7 +93,7 @@ class WrappedStoryBubbles extends ConsumerWidget {
                             'Wrapped',
                             style: TextStyle(
                               color: Colors.white70,
-                              fontSize: 9,
+                              fontSize: 10.5,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

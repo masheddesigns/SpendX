@@ -90,7 +90,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     final reportsAsync = ref.watch(reportsProvider);
     final period = ref.watch(reportsPeriodProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return SpendXScaffold(
       appBar: SpendXAppBar(
@@ -1351,7 +1351,7 @@ class _PeerLendingCadenceCard extends StatelessWidget {
                   child: Text(
                     trend[i].label,
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                       color: neutralColor,
                     ),
@@ -1711,7 +1711,7 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
                                 'Due in ${card.daysLeft}d',
                                 maxLines: 1,
                                 style: TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w600,
                                   color: card.daysLeft <= 5
                                       ? cs.error

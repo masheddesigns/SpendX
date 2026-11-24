@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart' show Database, DatabaseExecutor;
 
 import '../../core/constants/default_categories.dart';
 import '../../core/constants/category_meta.dart';
+import '../../core/logging/app_logger.dart';
 import '../../models/category.dart';
 import '../core/app_database.dart';
 import '../core/database_access_gate.dart';
@@ -47,13 +48,11 @@ class CategoryRepo {
         .toList();
 
     if (missingExpense.isEmpty && missingIncome.isEmpty) {
-      // ignore: avoid_print
-      print('📂 Categories already exist, skipping seed');
+      AppLogger.d('Categories already exist, skipping seed');
       return;
     }
 
-    // ignore: avoid_print
-    print('🌱 Seeding default categories');
+    AppLogger.d('Seeding default categories');
 
     final database = await _db;
     if (database is Database) {
@@ -85,13 +84,11 @@ class CategoryRepo {
         );
       }
     }
-    // ignore: avoid_print
-    print(
-      '🌱 Inserted default categories: '
+    AppLogger.d(
+      'Inserted default categories: '
       '${missingExpense.length + missingIncome.length}',
     );
-    // ignore: avoid_print
-    print('✅ Default categories seeded');
+    AppLogger.d('Default categories seeded');
   }
 
   Category _buildDefaultCategory({required String name, required String type}) {

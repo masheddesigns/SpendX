@@ -35,6 +35,7 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   bool _motionConfigured = false;
+  bool _reducedMotion = false;
 
   @override
   void initState() {
@@ -48,12 +49,16 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_motionConfigured) return;
-    _motionConfigured = true;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _ctrl.value = 0.5;
-    } else {
-      _ctrl.repeat();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!_motionConfigured || reduceMotion != _reducedMotion) {
+      _motionConfigured = true;
+      _reducedMotion = reduceMotion;
+      if (reduceMotion) {
+        _ctrl.stop();
+        _ctrl.value = 0.5;
+      } else {
+        _ctrl.repeat();
+      }
     }
   }
 

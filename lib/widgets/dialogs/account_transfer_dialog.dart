@@ -34,6 +34,7 @@ Future<bool> showAccountTransferDialog(
   String? sourceId = accounts.first.id;
   String? destId = accounts.last.id;
   final amountController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
 
   if (!context.mounted) return false;
 
@@ -43,107 +44,115 @@ Future<bool> showAccountTransferDialog(
       builder: (ctx, setInner) => AlertDialog(
         backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
         title: const Text('Account Transfer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: sourceId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: 'From Account',
-                filled: true,
-                fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+        content: Form(
+          key: formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: sourceId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'From Account',
+                  filled: true,
+                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
-              ),
-              dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
-              items: accounts
-                  .map(
-                    (a) => DropdownMenuItem(
-                      value: a.id,
-                      child: Text(
-                        a.name,
-                        overflow: TextOverflow.ellipsis,
+                dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
+                items: accounts
+                    .map(
+                      (a) => DropdownMenuItem(
+                        value: a.id,
+                        child: Text(
+                          a.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setInner(() => sourceId = v),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: destId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: 'To Account',
-                filled: true,
-                fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                    )
+                    .toList(),
+                onChanged: (v) => setInner(() => sourceId = v),
               ),
-              dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
-              items: accounts
-                  .map(
-                    (a) => DropdownMenuItem(
-                      value: a.id,
-                      child: Text(
-                        a.name,
-                        overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: destId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'To Account',
+                  filled: true,
+                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                dropdownColor: Theme.of(ctx).colorScheme.surfaceContainerHigh,
+                items: accounts
+                    .map(
+                      (a) => DropdownMenuItem(
+                        value: a.id,
+                        child: Text(
+                          a.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setInner(() => destId = v),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: amountController,
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                prefixText: '₹',
-                filled: true,
-                fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                    )
+                    .toList(),
+                onChanged: (v) => setInner(() => destId = v),
               ),
-              keyboardType: TextInputType.number,
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: amountController,
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: '₹',
+                  filled: true,
+                  fillColor: Theme.of(ctx).colorScheme.surfaceContainer,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Please enter an amount';
+                  }
+                  final amt = double.tryParse(v.trim());
+                  if (amt == null || amt <= 0) {
+                    return 'Enter an amount greater than zero';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-            ElevatedButton(
-              onPressed: () {
-                if (sourceId == destId) {
-                  CustomSnackBar.show(
-                    ctx,
-                    message: 'Source and Destination cannot be same.',
-                    isError: true,
-                  );
-                  return;
-                }
-                final amount = double.tryParse(amountController.text.trim());
-                if (amount == null || amount <= 0) {
-                  CustomSnackBar.show(
-                    ctx,
-                    message: 'Please enter an amount greater than zero.',
-                    isError: true,
-                  );
-                  return;
-                }
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Transfer'),
-            ),
+          ElevatedButton(
+            onPressed: () {
+              if (sourceId == destId) {
+                CustomSnackBar.show(
+                  ctx,
+                  message: 'Source and Destination cannot be same.',
+                  isError: true,
+                );
+                return;
+              }
+              if (!formKey.currentState!.validate()) {
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Transfer'),
+          ),
         ],
       ),
     ),

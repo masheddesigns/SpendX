@@ -55,10 +55,9 @@ class SpendXGlassSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final mediaQuery = MediaQuery.of(context);
-    final bottomInset = mediaQuery.viewInsets.bottom > 0
-        ? mediaQuery.viewInsets.bottom
-        : mediaQuery.padding.bottom;
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
+    final paddingBottom = MediaQuery.paddingOf(context).bottom;
+    final bottomInset = viewInsetsBottom > 0 ? viewInsetsBottom : paddingBottom;
     final topRadius = Radius.circular(AppRadius.xl);
 
     final sheetGradient = LinearGradient(
@@ -86,7 +85,7 @@ class SpendXGlassSheet extends StatelessWidget {
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
-            maxHeight: mediaQuery.size.height * 0.85,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
           ),
           decoration: BoxDecoration(
             gradient: sheetGradient,

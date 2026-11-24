@@ -182,7 +182,7 @@ class SpendXTransactionTile extends StatelessWidget {
                         child: Text(
                           isCcPayment ? 'Bill Settled ✓' : '0 Net Impact',
                           style: TextStyle(
-                            fontSize: 9,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                             color: isCcPayment
                                 ? (isDark ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSecondaryContainer)
@@ -253,7 +253,7 @@ class SpendXTransactionTile extends StatelessWidget {
                               child: const Text(
                                 'REVIEW',
                                 style: TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                   color: AppTheme.semanticWarning,
                                   letterSpacing: 0.3,
@@ -283,7 +283,7 @@ class SpendXTransactionTile extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
                                     color: Theme.of(context).colorScheme.primary,
                                   ),
@@ -318,7 +318,7 @@ class SpendXTransactionTile extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
                                     color: isCcPayment
                                         ? (isDark ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSecondaryContainer)

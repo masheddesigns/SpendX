@@ -302,6 +302,7 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
   }
 
   void _submit() {
+    if (!_formKey.currentState!.validate()) return;
     if (_parsed <= 0) return;
     final notifier = ref.read(salaryLedgerProvider.notifier);
     final companyId = widget.company.id;
@@ -318,6 +319,8 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
     );
   }
 
+  final _formKey = GlobalKey<FormState>();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -325,67 +328,80 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
         left: 20,
         right: 20,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.outline,
-                borderRadius: BorderRadius.circular(2),
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Update Salary',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
+            const SizedBox(height: 16),
+            Text(
+              'Update Salary',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${widget.company.name} \u2014 salary hike',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _salaryCtrl,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            onChanged: (_) => setState(() {}),
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 20,
-            ),
-            decoration: InputDecoration(
-              labelText: 'New Monthly Salary',
-              labelStyle: TextStyle(
+            const SizedBox(height: 4),
+            Text(
+              '${widget.company.name} \u2014 salary hike',
+              style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
               ),
-              prefixText: '\u20b9 ',
-              prefixStyle: TextStyle(
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _salaryCtrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Please enter new salary';
+                }
+                final num = double.tryParse(v.trim());
+                if (num == null || num <= 0) {
+                  return 'Enter a valid amount';
+                }
+                return null;
+              },
+              style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 20,
               ),
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+              decoration: InputDecoration(
+                labelText: 'New Monthly Salary',
+                labelStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                prefixText: '\u20b9 ',
+                prefixStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 20,
+                ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 14),
           Semantics(
             button: true,
@@ -452,12 +468,13 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
               ),
               child: Text(
                 'Apply Salary Change',
-                style: TextStyle(fontSize: 16),
+                style: const TextStyle(fontSize: 16),
               ),
             ),
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -474,6 +491,7 @@ class _CompanyEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
+  final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameCtrl;
   late TextEditingController _dayCtrl;
   late DateTime _joinedDate;
@@ -499,8 +517,6 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
     super.dispose();
   }
 
-  bool get _isValid => _nameCtrl.text.trim().isNotEmpty;
-
   Future<void> _pickJoinedDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -513,7 +529,7 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
   }
 
   Future<void> _save() async {
-    if (!_isValid) return;
+    if (!_formKey.currentState!.validate()) return;
 
     final safeDay = (int.tryParse(_dayCtrl.text.trim()) ?? 5).clamp(1, 28);
     final company = Company(
@@ -557,9 +573,12 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: Form(
+            key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               // ── Employment Type ───────────────────────
               Text(
                 'Employment Type',
@@ -671,10 +690,16 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
               const SizedBox(height: 16),
 
               // ── Name ──────────────────────────────────
-              TextField(
+              TextFormField(
                 controller: _nameCtrl,
                 autofocus: true,
                 onChanged: (_) => setState(() {}),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Please enter a name';
+                  }
+                  return null;
+                },
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: _empType == EmploymentType.freelance
@@ -702,9 +727,18 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
               // ── Pay Day (hidden for daily/perProject) ─
               if (_payCycle != PayCycle.daily &&
                   _payCycle != PayCycle.perProject)
-                TextField(
+                TextFormField(
                   controller: _dayCtrl,
                   keyboardType: TextInputType.number,
+                  validator: (v) {
+                    if (v != null && v.trim().isNotEmpty) {
+                      final d = int.tryParse(v.trim());
+                      if (d == null || d < 1 || d > 28) {
+                        return 'Enter day between 1 and 28';
+                      }
+                    }
+                    return null;
+                  },
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     labelText: 'Salary Credit Day (1-28)',
@@ -778,7 +812,7 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                 width: double.infinity,
                 height: 52,
                 child: FilledButton(
-                  onPressed: _isValid ? _save : null,
+                  onPressed: _save,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     shape: RoundedRectangleBorder(
@@ -795,6 +829,7 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

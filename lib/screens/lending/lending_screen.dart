@@ -35,6 +35,8 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
     DateTime? dueDate;
 
     if (!mounted) return;
+    final formKey = GlobalKey<FormState>();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -44,8 +46,6 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
       ),
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheet) {
-          final isValid =
-              name.trim().isNotEmpty && (double.tryParse(amount) ?? 0) > 0;
           final cs = Theme.of(ctx).colorScheme;
 
           return Padding(
@@ -53,12 +53,15 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
               left: 20,
               right: 20,
               top: 16,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              bottom: MediaQuery.viewInsetsOf(ctx).bottom + 20,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: Form(
+              key: formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Center(
                   child: Container(
                     width: 40,
@@ -110,9 +113,15 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                   onSelected: (s) => setSheet(() => name = s),
                   fieldViewBuilder: (_, ctrl, focus, _) {
                     ctrl.addListener(() => setSheet(() => name = ctrl.text));
-                    return TextField(
+                    return TextFormField(
                       controller: ctrl,
                       focusNode: focus,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Please enter a person name';
+                        }
+                        return null;
+                      },
                       decoration: InputDecoration(
                         labelText: 'Person name',
                         filled: true,
@@ -128,9 +137,19 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 const SizedBox(height: 14),
 
                 // Amount
-                TextField(
-                  keyboardType: TextInputType.number,
+                TextFormField(
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (v) => setSheet(() => amount = v),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Please enter an amount';
+                    }
+                    final a = double.tryParse(v.trim());
+                    if (a == null || a <= 0) {
+                      return 'Enter an amount greater than zero';
+                    }
+                    return null;
+                  },
                   decoration: InputDecoration(
                     labelText: 'Amount',
                     prefixText: '\u20b9 ',
@@ -145,7 +164,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 const SizedBox(height: 14),
 
                 // Notes
-                TextField(
+                TextFormField(
                   onChanged: (v) => setSheet(() => notes = v),
                   decoration: InputDecoration(
                     labelText: 'Note (optional)',
@@ -209,32 +228,31 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                   width: double.infinity,
                   height: 52,
                   child: FilledButton(
-                    onPressed: isValid
-                        ? () async {
-                            final parsedAmount = double.tryParse(amount);
-                            if (parsedAmount == null || parsedAmount <= 0) {
-                              return;
-                            }
-                            await ref
-                                .read(lendingProvider.notifier)
-                                .add(
-                                  Lending(
-                                    personName: TextFormatter.normalizeName(
-                                      name,
-                                    ),
-                                    type: type,
-                                    originalAmount: parsedAmount,
-                                    date: givenDate,
-                                    dueDate: dueDate,
-                                    notes: notes.trim().isEmpty
-                                        ? null
-                                        : notes.trim(),
-                                  ),
-                                );
-                            if (sheetCtx.mounted) Navigator.pop(sheetCtx);
-                            _refresh();
-                          }
-                        : null,
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) return;
+                      final parsedAmount = double.tryParse(amount);
+                      if (parsedAmount == null || parsedAmount <= 0) {
+                        return;
+                      }
+                      await ref
+                          .read(lendingProvider.notifier)
+                          .add(
+                            Lending(
+                              personName: TextFormatter.normalizeName(
+                                name,
+                              ),
+                              type: type,
+                              originalAmount: parsedAmount,
+                              date: givenDate,
+                              dueDate: dueDate,
+                              notes: notes.trim().isEmpty
+                                  ? null
+                                  : notes.trim(),
+                            ),
+                          );
+                      if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                      _refresh();
+                    },
                     style: FilledButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -248,6 +266,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 ),
               ],
             ),
+          ),
           );
         },
       ),
@@ -270,7 +289,6 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
         builder: (ctx, setSheet) {
           final cs = Theme.of(ctx).colorScheme;
           final parsedCustom = double.tryParse(customAmount) ?? 0;
-          final isValid = parsedCustom > 0 && parsedCustom <= remaining;
 
           Future<void> record(double amt) async {
             final newPaid = (lending.paidAmount + amt).clamp(
@@ -287,17 +305,22 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
             _refresh();
           }
 
+          final formKey = GlobalKey<FormState>();
+
           return Padding(
             padding: EdgeInsets.only(
               left: 20,
               right: 20,
               top: 16,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              bottom: MediaQuery.viewInsetsOf(ctx).bottom + 20,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: Form(
+              key: formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Center(
                   child: Container(
                     width: 40,
@@ -351,9 +374,21 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                TextField(
-                  keyboardType: TextInputType.number,
+                TextFormField(
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (v) => setSheet(() => customAmount = v),
+                  validator: (v) {
+                    if (v != null && v.trim().isNotEmpty) {
+                      final amt = double.tryParse(v.trim());
+                      if (amt == null || amt <= 0) {
+                        return 'Enter a valid amount';
+                      }
+                      if (amt > remaining + 0.01) {
+                        return 'Amount exceeds remaining (${AppFormat.currency(remaining)})';
+                      }
+                    }
+                    return null;
+                  },
                   decoration: InputDecoration(
                     labelText: 'Custom amount',
                     prefixText: '\u20b9 ',
@@ -371,7 +406,12 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                   width: double.infinity,
                   height: 48,
                   child: FilledButton(
-                    onPressed: isValid ? () => record(parsedCustom) : null,
+                    onPressed: () {
+                      if (!formKey.currentState!.validate()) return;
+                      if (parsedCustom > 0) {
+                        record(parsedCustom);
+                      }
+                    },
                     style: FilledButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -384,6 +424,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
                 ),
               ],
             ),
+          ),
           );
         },
       ),

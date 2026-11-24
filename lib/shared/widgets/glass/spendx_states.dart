@@ -19,6 +19,7 @@ class _SpendXLoadingStateState extends State<SpendXLoadingState>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   bool _motionConfigured = false;
+  bool _reducedMotion = false;
 
   @override
   void initState() {
@@ -32,12 +33,16 @@ class _SpendXLoadingStateState extends State<SpendXLoadingState>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_motionConfigured) return;
-    _motionConfigured = true;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _controller.value = 0.5;
-    } else {
-      _controller.repeat(reverse: true);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!_motionConfigured || reduceMotion != _reducedMotion) {
+      _motionConfigured = true;
+      _reducedMotion = reduceMotion;
+      if (reduceMotion) {
+        _controller.stop();
+        _controller.value = 0.5;
+      } else {
+        _controller.repeat(reverse: true);
+      }
     }
   }
 

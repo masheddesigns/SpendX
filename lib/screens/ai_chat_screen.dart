@@ -585,7 +585,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
         ),
         decoration: BoxDecoration(
           color: msg.isUser
@@ -626,7 +626,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.85,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.85,
         ),
         decoration: BoxDecoration(
           color: cs.surfaceContainer,

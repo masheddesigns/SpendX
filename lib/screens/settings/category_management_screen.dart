@@ -46,7 +46,7 @@ class _CategoryManagementScreenState
             padding: EdgeInsets.only(
               left: 24,
               right: 24,
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
               top: 20,
             ),
             child: SingleChildScrollView(

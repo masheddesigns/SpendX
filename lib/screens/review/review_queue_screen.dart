@@ -676,7 +676,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                       child: Text(
                         kindLabel,
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: 10.5,
                           color: cs.primary,
                           fontWeight: FontWeight.w600,
                         ),

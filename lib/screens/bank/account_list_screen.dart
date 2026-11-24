@@ -1226,7 +1226,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 9.5,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.3,
                                 color: isSolvent
@@ -1668,7 +1668,7 @@ class _BankAccountRow extends StatelessWidget {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            fontSize: 9.5,
+                                            fontSize: 10.5,
                                             fontWeight: FontWeight.w700,
                                             letterSpacing: 0.3,
                                             color: context.textSecondary,
@@ -1694,7 +1694,7 @@ class _BankAccountRow extends StatelessWidget {
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              fontSize: 9,
+                                              fontSize: 10,
                                               fontWeight: FontWeight.w700,
                                               letterSpacing: 0.4,
                                               color: Theme.of(

@@ -1475,7 +1475,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
 
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                bottom: MediaQuery.viewInsetsOf(ctx).bottom,
               ),
               child: Container(
                 decoration: BoxDecoration(

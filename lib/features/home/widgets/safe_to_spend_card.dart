@@ -46,6 +46,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
   bool _motionConfigured = false;
+  bool _reducedMotion = false;
 
   @override
   void initState() {
@@ -64,12 +65,16 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_motionConfigured) return;
-    _motionConfigured = true;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _pulseController.value = 0.5;
-    } else {
-      _pulseController.repeat(reverse: true);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!_motionConfigured || reduceMotion != _reducedMotion) {
+      _motionConfigured = true;
+      _reducedMotion = reduceMotion;
+      if (reduceMotion) {
+        _pulseController.stop();
+        _pulseController.value = 0.5;
+      } else {
+        _pulseController.repeat(reverse: true);
+      }
     }
   }
 
@@ -524,7 +529,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           ? '${now.day} ${DateFormat('MMM').format(now)} • Due'
                           : '${now.day} ${DateFormat('MMM').format(now)}',
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: hasDueToday
                             ? FontWeight.w700
                             : FontWeight.w500,
@@ -584,7 +589,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                                 ? DateFormat('d MMM').format(nextBill.dueDate)
                                 : '${now.add(const Duration(days: 7)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 7)))}',
                             style: TextStyle(
-                              fontSize: 9,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
@@ -644,7 +649,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                                 ? DateFormat('d MMM').format(secondBill.dueDate)
                                 : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
                             style: TextStyle(
-                              fontSize: 9,
+                              fontSize: 10,
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                             textAlign: TextAlign.center,
@@ -678,7 +683,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     Text(
                       '$daysInMonth ${DateFormat('MMM').format(now)}',
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,

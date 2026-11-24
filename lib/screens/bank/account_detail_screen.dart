@@ -412,7 +412,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                                         Text(
                                           'INFLOW',
                                           style: TextStyle(
-                                            fontSize: 9.5,
+                                            fontSize: 10.5,
                                             fontWeight: FontWeight.w700,
                                             letterSpacing: 0.5,
                                             color: Theme.of(
@@ -467,7 +467,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                                         Text(
                                           'OUTFLOW',
                                           style: TextStyle(
-                                            fontSize: 9.5,
+                                            fontSize: 10.5,
                                             fontWeight: FontWeight.w700,
                                             letterSpacing: 0.5,
                                             color: Theme.of(

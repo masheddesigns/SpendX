@@ -91,6 +91,7 @@ class _CountUpTextState extends State<CountUpText>
   late AnimationController _controller;
   late Animation<double> _animation;
   bool _initialMotionConfigured = false;
+  bool _reducedMotion = false;
 
   @override
   void initState() {
@@ -105,12 +106,16 @@ class _CountUpTextState extends State<CountUpText>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_initialMotionConfigured) return;
-    _initialMotionConfigured = true;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _controller.value = 1;
-    } else {
-      _controller.forward();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!_initialMotionConfigured || reduceMotion != _reducedMotion) {
+      _initialMotionConfigured = true;
+      _reducedMotion = reduceMotion;
+      if (reduceMotion) {
+        _controller.stop();
+        _controller.value = 1;
+      } else if (!_controller.isCompleted) {
+        _controller.forward();
+      }
     }
   }
 

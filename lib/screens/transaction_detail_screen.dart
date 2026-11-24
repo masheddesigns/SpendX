@@ -192,7 +192,7 @@ class _UnifiedTransactionDetailScreenState
         title: '$verb Contact',
         child: Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
             left: 16,
             right: 16,
             top: 8,
@@ -1727,7 +1727,7 @@ class _UnifiedTransactionDetailScreenState
                       Text(
                         'ORIGINAL SPEND',
                         style: TextStyle(
-                          fontSize: 9.5,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                           color: context.textMuted,
@@ -1760,7 +1760,7 @@ class _UnifiedTransactionDetailScreenState
                       Text(
                         'ESTIMATED INR',
                         style: TextStyle(
-                          fontSize: 9.5,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                           color: context.textMuted,

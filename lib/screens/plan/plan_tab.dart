@@ -916,7 +916,7 @@ class _ForecastMetric extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 9.5,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
               color: Theme.of(context).colorScheme.onSurfaceVariant,

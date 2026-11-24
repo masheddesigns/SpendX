@@ -24,6 +24,7 @@ class SpendXGlassButton extends StatefulWidget {
   final double? height;
   final BorderRadius? borderRadius;
   final bool isLoading;
+  final String? semanticLabel;
 
   const SpendXGlassButton({
     super.key,
@@ -37,6 +38,7 @@ class SpendXGlassButton extends StatefulWidget {
     this.height = 44,
     this.borderRadius,
     this.isLoading = false,
+    this.semanticLabel,
   });
 
   factory SpendXGlassButton.icon({
@@ -51,6 +53,7 @@ class SpendXGlassButton extends StatefulWidget {
     double? height = 44,
     BorderRadius? borderRadius,
     bool isLoading = false,
+    String? semanticLabel,
   }) {
     return SpendXGlassButton(
       key: key,
@@ -63,6 +66,7 @@ class SpendXGlassButton extends StatefulWidget {
       height: height,
       borderRadius: borderRadius,
       isLoading: isLoading,
+      semanticLabel: semanticLabel ?? label,
       child: Text(label),
     );
   }
@@ -187,6 +191,7 @@ class _SpendXGlassButtonState extends State<SpendXGlassButton>
 
     return Semantics(
       button: true,
+      label: widget.semanticLabel,
       enabled: isEnabled,
       focusable: isEnabled,
       child: ConstrainedBox(
