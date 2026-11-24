@@ -47,16 +47,18 @@ class SpendXGlassNavigation extends StatelessWidget {
     final textScale = MediaQuery.textScalerOf(context).scale(1);
     final navigationHeight = 66.0 + ((textScale - 1).clamp(0.0, 1.0) * 40.0);
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        bottomInset > 0 ? bottomInset + 6 : 14,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
+    return Align(
+      alignment: Alignment.bottomCenter,
+      heightFactor: 1.0,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            bottomInset > 0 ? bottomInset + 6 : 14,
+          ),
           child: SpendXGlassSurface(
             level: SpendXGlassLevel.floating,
             height: navigationHeight,
@@ -66,25 +68,25 @@ class SpendXGlassNavigation extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(items.length, (index) {
                 final item = items[index];
-            final isSelected = selectedIndex == index;
-            return Expanded(
-              child: _GlassNavItem(
-                item: item,
-                isSelected: isSelected,
-                isDark: isDark,
-                compact: compact,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onItemSelected(index);
-                },
-              ),
-            );
-          }),
+                final isSelected = selectedIndex == index;
+                return Expanded(
+                  child: _GlassNavItem(
+                    item: item,
+                    isSelected: isSelected,
+                    isDark: isDark,
+                    compact: compact,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      onItemSelected(index);
+                    },
+                  ),
+                );
+              }),
+            ),
+          ),
         ),
       ),
-    ),
-    ),
-  );
+    );
   }
 }
 
