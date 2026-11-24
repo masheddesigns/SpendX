@@ -24,8 +24,6 @@ import 'package:spend_x/models/transaction.dart';
 import 'package:spend_x/models/card_statement.dart';
 import 'package:spend_x/data/core/tables.dart';
 import 'package:spend_x/features/streak/streak_engine.dart';
-import 'package:spend_x/domain/finance/safe_to_spend.dart';
-import 'package:spend_x/domain/finance/money.dart';
 import 'package:spend_x/domain/finance/finance.dart';
 import 'package:spend_x/services/balance_attribution.dart';
 import 'package:spend_x/services/cross_channel_deduplication_service.dart';
@@ -40,10 +38,8 @@ import 'package:spend_x/shared/widgets/glass/spendx_transaction_tile.dart';
 import 'package:spend_x/services/financial_transaction_service.dart';
 import 'package:spend_x/core/utils/category_classifier.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_event_repository.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_review_repository.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_transaction_adapter.dart';
 import 'package:spend_x/services/data_audit_service.dart';
-import 'package:spend_x/services/inbox_audit_service.dart';
 import 'package:spend_x/utils/app_format.dart';
 
 void main() {
@@ -1186,7 +1182,7 @@ void main() {
       final parsed = TransactionTextParser.parse(sms);
       expect(parsed, isNotNull);
       // Must NOT extract the available limit of 83397.13 as the transaction amount!
-      expect(parsed!.amount, isNot(83397.13));
+      expect(parsed.amount, isNot(83397.13));
       expect(parsed.amount, closeTo(2508.28, 0.01));
       expect(parsed.isCredit, isFalse);
     });
@@ -1195,7 +1191,7 @@ void main() {
       const sms = 'INR 1,366.26 spent using ICICI Bank Card XX5007 on 06-Nov-26 on AMAZON PAY IN E. Avl Limit: INR 79,449.39.';
       final parsed = TransactionTextParser.parse(sms);
       expect(parsed, isNotNull);
-      expect(parsed!.amount, closeTo(1366.26, 0.01));
+      expect(parsed.amount, closeTo(1366.26, 0.01));
       expect(parsed.amount, isNot(79449.39));
     });
   });

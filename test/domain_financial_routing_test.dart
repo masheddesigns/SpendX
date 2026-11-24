@@ -39,7 +39,7 @@ void main() {
 
   tearDown(() async => db.close());
 
-  Future<double> _bankBalance() async {
+  Future<double> bankBalance() async {
     final r = await db.query(
       Tables.bankAccounts,
       columns: ['balance'],
@@ -73,7 +73,7 @@ void main() {
     );
 
     // The bank-side expense leg must now reduce the materialized balance.
-    expect(await _bankBalance(), 750.0);
+    expect(await bankBalance(), 750.0);
     expect(await ledgerRepo.getAccountBalance('A'), -250.0);
 
     // Credit outstanding must have dropped by the payment.
@@ -115,7 +115,7 @@ void main() {
     await svc.recordInstallmentPayment('inst000001', accountId: 'A');
 
     // The bank-side expense leg must reduce the materialized balance.
-    expect(await _bankBalance(), -4000.0);
+    expect(await bankBalance(), -4000.0);
     expect(await ledgerRepo.getAccountBalance('A'), -5000.0);
 
     // Loan paid_amount must reflect the principal component.

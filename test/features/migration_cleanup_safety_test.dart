@@ -8,11 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:spend_x/data/core/spendx_database_factory.dart';
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/security/database_key_manager.dart';
 import 'package:spend_x/data/security/database_encryption_migration_service.dart';
-import 'package:spend_x/models/transaction.dart' as spx;
-import 'package:spend_x/services/financial_transaction_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

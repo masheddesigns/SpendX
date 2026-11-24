@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,9 +8,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 
 import 'package:spend_x/data/core/app_database.dart';
 import 'package:spend_x/data/core/spendx_database_factory.dart' hide InvalidDatabaseKeyException;
-import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
-import 'package:spend_x/data/security/database_encryption_migration_service.dart';
 import 'package:spend_x/data/security/database_key_manager.dart';
 import 'package:spend_x/services/backup_service.dart';
 import 'package:spend_x/services/platform_process_lock_service.dart';

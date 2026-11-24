@@ -11,7 +11,6 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/core/spendx_database_factory.dart';
 import 'package:spend_x/data/security/database_key_manager.dart';
 import 'package:spend_x/data/security/database_encryption_migration_service.dart';

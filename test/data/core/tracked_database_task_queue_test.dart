@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:spend_x/data/core/database_access_gate.dart';
 import 'package:spend_x/data/core/gated_database.dart';
-import 'package:spend_x/data/core/gated_transaction.dart';
 import 'package:spend_x/data/core/tracked_database_task_queue.dart';
 import 'package:spend_x/services/platform_process_lock_service.dart';
 

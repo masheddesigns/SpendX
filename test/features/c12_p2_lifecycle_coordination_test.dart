@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:spend_x/data/core/app_database.dart';
 import 'package:spend_x/data/core/database_lifecycle_coordinator.dart';
-import 'package:spend_x/data/core/spendx_database_factory.dart';
 import 'package:spend_x/data/core/write_queue.dart';
 import 'package:spend_x/services/backup_service.dart';
 import 'package:spend_x/services/live_sms_service.dart';

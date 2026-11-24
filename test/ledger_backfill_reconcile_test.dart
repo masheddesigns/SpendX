@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart' hide Transaction;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 
 import 'package:spend_x/data/core/app_database.dart';
@@ -25,7 +24,7 @@ void main() {
 
   tearDown(() async => db.close());
 
-  Future<void> _seedAccount(Database db, String id, double balance,
+  Future<void> seedAccount(Database db, String id, double balance,
       {int isAsset = 1}) async {
     await db.insert('bank_accounts', {
       'id': id,
@@ -37,7 +36,7 @@ void main() {
     });
   }
 
-  Future<void> _seedTxn(
+  Future<void> seedTxn(
     Database db,
     String id,
     String type,
@@ -59,13 +58,13 @@ void main() {
     });
   }
 
-  Future<int> _ledgerCount() async =>
+  Future<int> ledgerCount() async =>
       (await db.query('ledger_transactions')).length;
 
   group('Phase 1D reconcile — acceptance gate B', () {
     test('clean transaction -> CREATE', () async {
-      await _seedAccount(db, 'A', 1000);
-      await _seedTxn(db, 't1', 'income', 600, accountId: 'A');
+      await seedAccount(db, 'A', 1000);
+      await seedTxn(db, 't1', 'income', 600, accountId: 'A');
       final report = await LedgerBackfillService.reconcile(db, authorized: true);
 
       expect(report.verdict, 'PASS');
@@ -78,8 +77,8 @@ void main() {
     });
 
     test('already correctly journaled -> SKIP (no duplicate)', () async {
-      await _seedAccount(db, 'A', 5000);
-      await _seedTxn(db, 't1', 'income', 1000, accountId: 'A');
+      await seedAccount(db, 'A', 5000);
+      await seedTxn(db, 't1', 'income', 1000, accountId: 'A');
       await db.insert('ledger_transactions', {
         'id': 'legacy-1',
         'type': 'income',
@@ -100,8 +99,8 @@ void main() {
 
     test('already journaled but amount/type differs -> WARN/REVIEW, no mutation',
         () async {
-      await _seedAccount(db, 'A', 1000);
-      await _seedTxn(db, 't1', 'income', 1000, accountId: 'A');
+      await seedAccount(db, 'A', 1000);
+      await seedTxn(db, 't1', 'income', 1000, accountId: 'A');
       await db.insert('ledger_transactions', {
         'id': 'legacy-mismatched',
         'type': 'income',
@@ -111,7 +110,7 @@ void main() {
         'reference_id': 't1',
         'created_at': DateTime(2025, 1, 1).toIso8601String(),
       });
-      final before = await _ledgerCount();
+      final before = await ledgerCount();
 
       final report = await LedgerBackfillService.reconcile(db, authorized: true);
 
@@ -119,7 +118,7 @@ void main() {
       expect(report.hardFailures, isNotEmpty);
       expect(report.verdict, 'FAIL — ROLLED BACK');
       // The mismatched row is untouched; nothing new was created.
-      expect(await _ledgerCount(), before);
+      expect(await ledgerCount(), before);
       final rows = await db.query('ledger_transactions',
           where: 'reference_id = ?', whereArgs: ['t1']);
       expect(rows.length, 1);
@@ -127,8 +126,8 @@ void main() {
     });
 
     test('legacy transaction without reference -> CREATE', () async {
-      await _seedAccount(db, 'A', 2000);
-      await _seedTxn(db, 'tX', 'expense', 300, accountId: 'A');
+      await seedAccount(db, 'A', 2000);
+      await seedTxn(db, 'tX', 'expense', 300, accountId: 'A');
       final report = await LedgerBackfillService.reconcile(db, authorized: true);
       expect(report.ledgerEntriesCreated, greaterThanOrEqualTo(1));
       final rows = await db.query('ledger_transactions',
@@ -137,7 +136,7 @@ void main() {
     });
 
     test('orphan reference -> FAIL', () async {
-      await _seedAccount(db, 'A', 5000);
+      await seedAccount(db, 'A', 5000);
       await db.insert('ledger_transactions', {
         'id': 'orphan-1',
         'type': 'expense',
@@ -147,16 +146,16 @@ void main() {
         'reference_id': 'ghost-ref-xyz',
         'created_at': DateTime(2025, 1, 1).toIso8601String(),
       });
-      final before = await _ledgerCount();
+      final before = await ledgerCount();
 
       final report = await LedgerBackfillService.reconcile(db, authorized: true);
       expect(report.verdict, 'FAIL — ROLLED BACK');
-      expect(await _ledgerCount(), before);
+      expect(await ledgerCount(), before);
     });
 
     test('duplicate reference -> FAIL', () async {
-      await _seedAccount(db, 'A', 5000);
-      await _seedTxn(db, 'dup1', 'income', 100, accountId: 'A');
+      await seedAccount(db, 'A', 5000);
+      await seedTxn(db, 'dup1', 'income', 100, accountId: 'A');
       for (var i = 0; i < 2; i++) {
         await db.insert('ledger_transactions', {
           'id': 'dup-leg-$i',
@@ -168,15 +167,15 @@ void main() {
           'created_at': DateTime(2025, 1, 1).toIso8601String(),
         });
       }
-      final before = await _ledgerCount();
+      final before = await ledgerCount();
 
       final report = await LedgerBackfillService.reconcile(db, authorized: true);
       expect(report.verdict, 'FAIL — ROLLED BACK');
-      expect(await _ledgerCount(), before);
+      expect(await ledgerCount(), before);
     });
 
     test('unknown reference domain -> FAIL', () async {
-      await _seedAccount(db, 'A', 5000);
+      await seedAccount(db, 'A', 5000);
       await db.insert('ledger_transactions', {
         'id': 'unknown-domain',
         'type': 'expense',
@@ -258,7 +257,7 @@ void main() {
 
     test('allowed salary/EMI residual -> EXECUTABLE_WITH_EXCEPTIONS + absorbed',
         () async {
-      await _seedAccount(db, 'A', 1000);
+      await seedAccount(db, 'A', 1000);
       await db.insert('salary', {
         'id': 'S1',
         'company_name': 'Acme',
@@ -281,13 +280,13 @@ void main() {
     });
 
     test('re-run -> zero duplicate creation', () async {
-      await _seedAccount(db, 'A', 6000);
-      await _seedTxn(db, 't1', 'income', 1000, accountId: 'A');
-      await _seedTxn(db, 't2', 'expense', 400, accountId: 'A');
+      await seedAccount(db, 'A', 6000);
+      await seedTxn(db, 't1', 'income', 1000, accountId: 'A');
+      await seedTxn(db, 't2', 'expense', 400, accountId: 'A');
       final first = await LedgerBackfillService.reconcile(db, authorized: true);
-      final afterFirst = await _ledgerCount();
+      final afterFirst = await ledgerCount();
       final second = await LedgerBackfillService.reconcile(db, authorized: true);
-      final afterSecond = await _ledgerCount();
+      final afterSecond = await ledgerCount();
       expect(afterFirst, afterSecond);
       expect(second.ledgerEntriesCreated, 0);
       expect(second.openingBalancesCreated, 0);
@@ -295,8 +294,8 @@ void main() {
     });
 
     test('execution failure -> complete rollback (no partial rows)', () async {
-      await _seedAccount(db, 'A', 5000);
-      await _seedTxn(db, 'ok', 'income', 1000, accountId: 'A');
+      await seedAccount(db, 'A', 5000);
+      await seedTxn(db, 'ok', 'income', 1000, accountId: 'A');
       await db.insert('ledger_transactions', {
         'id': 'orphan-2',
         'type': 'expense',
@@ -306,7 +305,7 @@ void main() {
         'reference_id': 'ghost-ref-2',
         'created_at': DateTime(2025, 1, 1).toIso8601String(),
       });
-      final before = await _ledgerCount();
+      final before = await ledgerCount();
 
       await LedgerBackfillService.reconcile(db, authorized: true);
 
@@ -318,25 +317,25 @@ void main() {
     });
 
     test('preflight (authorized:false) never mutates', () async {
-      await _seedAccount(db, 'A', 6000);
-      await _seedTxn(db, 't1', 'income', 1000, accountId: 'A');
-      final before = await _ledgerCount();
+      await seedAccount(db, 'A', 6000);
+      await seedTxn(db, 't1', 'income', 1000, accountId: 'A');
+      final before = await ledgerCount();
 
       final report =
           await LedgerBackfillService.reconcile(db, authorized: false);
       expect(report.verdict, 'PASS');
-      expect(await _ledgerCount(), before);
+      expect(await ledgerCount(), before);
     });
   });
 
   group('Phase 1D reconcile — financial invariants (gate D)', () {
     test('derived balance == legacy stored for every reconciled account',
         () async {
-      await _seedAccount(db, 'A', 2000);
-      await _seedAccount(db, 'B', 5000);
-      await _seedTxn(db, 'i1', 'income', 600, accountId: 'A');
-      await _seedTxn(db, 'e1', 'expense', 200, accountId: 'A');
-      await _seedTxn(db, 'i3', 'income', 5000, accountId: 'B');
+      await seedAccount(db, 'A', 2000);
+      await seedAccount(db, 'B', 5000);
+      await seedTxn(db, 'i1', 'income', 600, accountId: 'A');
+      await seedTxn(db, 'e1', 'expense', 200, accountId: 'A');
+      await seedTxn(db, 'i3', 'income', 5000, accountId: 'B');
       // Pre-existing correct ledger row for B (must be preserved, not duped).
       await db.insert('ledger_transactions', {
         'id': 'legacy-b',
@@ -406,7 +405,7 @@ void main() {
       }
     });
 
-    Future<Database> _openLive() async {
+    Future<Database> openLive() async {
       final a = AppDatabase.instance;
       // Reset the singleton and wipe the on-disk file so each gate test starts
       // from a pristine, isolated database.
@@ -420,7 +419,7 @@ void main() {
 
     test('flag OFF / authorization absent / kill switch -> no mutation',
         () async {
-      final live = await _openLive();
+      final live = await openLive();
       await live.insert('bank_accounts', {
         'id': 'A',
         'name': 'Savings',

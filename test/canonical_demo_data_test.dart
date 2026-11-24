@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
 import 'package:spend_x/data/repositories/credit_repo.dart';
 import 'package:spend_x/data/repositories/loan_repo.dart';
@@ -18,7 +17,6 @@ import 'package:spend_x/models/lending.dart';
 import 'package:spend_x/models/goal.dart';
 import 'package:spend_x/models/reminder_model.dart';
 import 'package:spend_x/models/transaction.dart' as model;
-import 'package:spend_x/domain/finance/finance.dart';
 
 void main() {
   setUpAll(() {

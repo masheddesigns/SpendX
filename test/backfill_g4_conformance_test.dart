@@ -47,7 +47,7 @@ void main() {
 
   tearDown(() async => db.close());
 
-  Future<int> _ledgerCount() async =>
+  Future<int> ledgerCount() async =>
       (await db.query(Tables.ledgerTransactions)).length;
 
   test('G4: backfill reconciles a post-G1-G3 journal (edit+delete emit reversal/correction)',
@@ -78,10 +78,10 @@ void main() {
     }
 
     // Idempotent: a second run adds no rows and still passes.
-    final afterFirst = await _ledgerCount();
+    final afterFirst = await ledgerCount();
     final report2 = await LedgerBackfillService.reconcile(db, authorized: true);
     expect(report2.hardFailures, isEmpty);
-    expect(await _ledgerCount(), afterFirst);
+    expect(await ledgerCount(), afterFirst);
   });
 
   test('G4: backfill still FAILS on a genuine orphan (guard intact)', () async {

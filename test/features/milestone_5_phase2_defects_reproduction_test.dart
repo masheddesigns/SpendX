@@ -1,15 +1,11 @@
-import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:spend_x/data/core/database_access_gate.dart';
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_account_repository.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_credit_adapter.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_event_repository.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_loan_adapter.dart';
 import 'package:spend_x/data/repositories/credit_repo.dart';
 import 'package:spend_x/data/repositories/loan_repo.dart';
 import 'package:spend_x/domain/finance/finance.dart';

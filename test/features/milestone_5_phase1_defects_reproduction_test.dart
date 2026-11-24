@@ -1,16 +1,12 @@
-import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_account_repository.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_event_repository.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_financial_query_repository.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_transaction_adapter.dart';
 import 'package:spend_x/data/repositories/transaction_repo.dart';
-import 'package:spend_x/domain/finance/finance.dart';
 import 'package:spend_x/models/bank_account.dart';
 import 'package:spend_x/models/transaction.dart' as spx;
 import 'package:spend_x/services/settings_service.dart';

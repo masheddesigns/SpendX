@@ -4,12 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 import 'package:spend_x/data/core/reversal_index_compatibility_service.dart';
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_account_repository.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_credit_adapter.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_event_repository.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_loan_adapter.dart';
 import 'package:spend_x/data/repositories/credit_repo.dart';
 import 'package:spend_x/data/repositories/loan_repo.dart';
 import 'package:spend_x/data/repositories/transaction_repo.dart';
@@ -1263,11 +1260,11 @@ void main() {
           'id': eventId,
           'event_type': 'expense',
           'lifecycle_status': 'draft',
-          if (revOf != null) 'reversal_of_event_id': revOf,
+          'reversal_of_event_id': ?revOf,
           'timestamp': t,
           'currency': 'INR',
           'description': 'Description $eventId',
-          if (notes != null) 'notes': notes,
+          'notes': ?notes,
           'created_at': t,
           'updated_at': t,
         });

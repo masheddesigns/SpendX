@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:spend_x/data/core/database_access_gate.dart';
 import 'package:spend_x/data/core/gated_database.dart';
-import 'package:spend_x/data/core/gated_transaction.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
 import 'package:spend_x/data/repositories/credit_repo.dart';
 import 'package:spend_x/data/repositories/loan_repo.dart';
@@ -23,7 +21,6 @@ import 'package:spend_x/data/repositories/canonical/canonical_review_repository.
 import 'package:spend_x/data/repositories/canonical/canonical_recurring_repository.dart';
 import 'package:spend_x/features/merchant_rules/data/merchant_rule_repo.dart';
 import 'package:spend_x/data/core/app_database.dart';
-import 'package:spend_x/data/core/spendx_database_factory.dart';
 import 'package:flutter/services.dart';
 import 'package:spend_x/services/evidence_pruning_service.dart';
 import 'package:spend_x/services/platform_process_lock_service.dart';
@@ -80,7 +77,7 @@ class FakePlatformProcessLockService implements PlatformProcessLockService {
 
 class RawTestDatabase implements Database {
   int queryCount = 0;
-  bool _isOpen = true;
+  final bool _isOpen = true;
 
   @override
   bool get isOpen => _isOpen;

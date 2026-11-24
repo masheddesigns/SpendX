@@ -5,7 +5,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:spend_x/data/core/database_access_gate.dart';
 import 'package:spend_x/data/core/gated_database.dart';
 import 'package:spend_x/data/core/gated_transaction.dart';
-import 'package:spend_x/data/core/gated_batch.dart';
 import 'package:spend_x/services/platform_process_lock_service.dart';
 import 'package:spend_x/services/evidence_pruning_service.dart';
 

@@ -57,7 +57,7 @@ void main() {
     await db.close();
   });
 
-  Future<double> _bankBalance() async {
+  Future<double> bankBalance() async {
     final r = await db.query(
       Tables.bankAccounts,
       columns: ['balance'],
@@ -71,7 +71,7 @@ void main() {
     await svc.createExpense(_tx(id: 'x1', type: 'expense', amount: 200, accountId: 'A'));
     // Materialized balance equals the ledger-derived balance (account fully
     // journaled within this test).
-    expect(await _bankBalance(), -200);
+    expect(await bankBalance(), -200);
     expect(await ledgerRepo.getAccountBalance('A'), -200);
   });
 
@@ -88,14 +88,14 @@ void main() {
 
     expect((await db.query('transactions')).length, 1);
     expect((await db.query('ledger_transactions')).length, 1);
-    expect(await _bankBalance(), -100);
+    expect(await bankBalance(), -100);
   });
 
   test('G3: balance parity holds across mixed income/expense/transfer', () async {
     await svc.createIncome(_tx(id: 'i1', type: 'income', amount: 1000, accountId: 'A'));
     await svc.createExpense(_tx(id: 'e1', type: 'expense', amount: 300, accountId: 'A'));
     await svc.createExpense(_tx(id: 'e2', type: 'expense', amount: 150, accountId: 'A'));
-    expect(await _bankBalance(), 550);
+    expect(await bankBalance(), 550);
     expect(await ledgerRepo.getAccountBalance('A'), 550);
   });
 
@@ -105,13 +105,13 @@ void main() {
       oldTransaction: _tx(id: 'e3', type: 'expense', amount: 400, accountId: 'A'),
       newTransaction: _tx(id: 'e3', type: 'expense', amount: 700, accountId: 'A'),
     );
-    expect(await _bankBalance(), -700);
+    expect(await bankBalance(), -700);
     expect(await ledgerRepo.getAccountBalance('A'), -700);
   });
 
   test('G3: ledger is the source of truth; cache is delta-maintained', () async {
     await svc.createIncome(_tx(id: 'i2', type: 'income', amount: 500, accountId: 'A'));
-    expect(await _bankBalance(), 500);
+    expect(await bankBalance(), 500);
     // Corrupt the cache out-of-band (simulating a legacy bug). The journal is
     // unaffected, so the canonical ledger-derived balance stays correct.
     await db.rawUpdate(
@@ -125,9 +125,9 @@ void main() {
     // each mutation's cache delta equals its journal delta.
     await svc.createExpense(_tx(id: 'e4', type: 'expense', amount: 100, accountId: 'A'));
     expect(await ledgerRepo.getAccountBalance('A'), 400); // ledger correct
-    expect(await _bankBalance(), 899); // 999 - 100 (delta applied)
+    expect(await bankBalance(), 899); // 999 - 100 (delta applied)
     // Cache delta equals the journal event delta:
-    expect((await _bankBalance()) - 999, -100);
+    expect((await bankBalance()) - 999, -100);
   });
 
   test('G3: concurrent mutations serialize and preserve the invariant', () async {
@@ -140,7 +140,7 @@ void main() {
       );
     }
     await Future.wait(futures);
-    expect(await _bankBalance(), -200);
+    expect(await bankBalance(), -200);
     expect(await ledgerRepo.getAccountBalance('A'), -200);
   });
 
@@ -166,7 +166,7 @@ void main() {
     await svc.createTransaction(tx, creditTxn: creditTxn);
 
     // Bank balance untouched for a card purchase...
-    expect(await _bankBalance(), 0);
+    expect(await bankBalance(), 0);
     // ...but the card outstanding and the credit ledger are updated.
     expect(await ledgerRepo.getCreditOutstanding('C1'), 1200);
     final card = (await db.query(Tables.creditCards, where: 'id = ?', whereArgs: ['C1'])).first;
@@ -187,7 +187,7 @@ void main() {
 
     final loan = (await db.query(Tables.loans, where: 'id = ?', whereArgs: ['L1'])).first;
     expect((loan['paid_amount'] as num).toDouble(), 5000);
-    expect(await _bankBalance(), -5000);
+    expect(await bankBalance(), -5000);
   });
 
   test('G1: fuel_expense and refund journal correctly', () async {
@@ -197,7 +197,7 @@ void main() {
     await svc.createTransaction(
       _tx(id: 'r1', type: 'refund', amount: 80, accountId: 'A'),
     );
-    expect(await _bankBalance(), -220); // -300 + 80
+    expect(await bankBalance(), -220); // -300 + 80
     expect(await ledgerRepo.getAccountBalance('A'), -220);
   });
 
@@ -222,7 +222,7 @@ void main() {
       referenceId: 'p1',
     ));
 
-    expect(await _bankBalance(), -pay);
+    expect(await bankBalance(), -pay);
     expect(await ledgerRepo.getAccountBalance('A'), -pay);
 
     // Loan EMI payment side-effect (bank-side expense)
@@ -242,7 +242,7 @@ void main() {
       referenceId: 'e1',
     ));
 
-    expect(await _bankBalance(), -(pay + emi));
+    expect(await bankBalance(), -(pay + emi));
     expect(await ledgerRepo.getAccountBalance('A'), -(pay + emi));
   });
 }

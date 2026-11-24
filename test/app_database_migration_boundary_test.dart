@@ -1,10 +1,8 @@
 // ignore_for_file: avoid_print
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart' hide Transaction;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 
 import 'package:spend_x/data/core/app_database.dart';
@@ -35,7 +33,7 @@ void main() {
 
   /// Recreate ledger_transactions at the v19 shape (no category_id column),
   /// mirroring a real pre-v20 database, so migrations run from v19.
-  Future<void> _downgradeLedgerToV19() async {
+  Future<void> downgradeLedgerToV19() async {
     await db.execute('ALTER TABLE ledger_transactions RENAME TO _lt_old');
     await db.execute('''
       CREATE TABLE ledger_transactions (
@@ -56,7 +54,7 @@ void main() {
     await db.execute('DROP TABLE _lt_old');
   }
 
-  Future<void> _seedTxn(String id, String type, double amount,
+  Future<void> seedTxn(String id, String type, double amount,
       {String? accountId}) async {
     await db.insert('transactions', {
       'id': id,
@@ -71,9 +69,9 @@ void main() {
 
   test('A. v19 → v21 upgrade is schema-only (no ledger backfill rows)',
       () async {
-    await _downgradeLedgerToV19();
-    await _seedTxn('t1', 'income', 500.0, accountId: 'A');
-    await _seedTxn('t2', 'expense', 200.0, accountId: 'A');
+    await downgradeLedgerToV19();
+    await seedTxn('t1', 'income', 500.0, accountId: 'A');
+    await seedTxn('t2', 'expense', 200.0, accountId: 'A');
     await db.execute('PRAGMA user_version = 19');
 
     await AppDatabase.instance.migrateSchemaOnly(db, 19);
@@ -95,8 +93,8 @@ void main() {
   });
 
   test('B. opening an already-v21 database does NOT backfill', () async {
-    await _seedTxn('t1', 'income', 500.0, accountId: 'A');
-    await _seedTxn('t2', 'expense', 200.0, accountId: 'A');
+    await seedTxn('t1', 'income', 500.0, accountId: 'A');
+    await seedTxn('t2', 'expense', 200.0, accountId: 'A');
     await db.execute('PRAGMA user_version = 21');
 
     await AppDatabase.instance.migrateSchemaOnly(db, 21);
@@ -107,8 +105,8 @@ void main() {
 
   test('D. existing legacy ledger rows are preserved (not rewritten)',
       () async {
-    await _downgradeLedgerToV19();
-    await _seedTxn('t1', 'expense', 100.0, accountId: 'A');
+    await downgradeLedgerToV19();
+    await seedTxn('t1', 'expense', 100.0, accountId: 'A');
     // A pre-existing ledger row that already represents t1.
     await db.insert('ledger_transactions', {
       'id': 'legacy-1',

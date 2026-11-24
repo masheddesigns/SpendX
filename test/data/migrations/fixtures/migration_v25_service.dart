@@ -61,8 +61,8 @@ class MigrationV25Service {
   }) async {
     // Step 1: Add source_record_id column and index (idempotent — v24 base schema
     // may already include the column).
-    final _cols = await executor.rawQuery('PRAGMA table_info(evidence);');
-    if (!_cols.any((c) => c['name'] == 'source_record_id')) {
+    final cols = await executor.rawQuery('PRAGMA table_info(evidence);');
+    if (!cols.any((c) => c['name'] == 'source_record_id')) {
       await executor.execute(addSourceRecordIdColumn);
     }
     await executor.execute(createSourceRecordIdIndex);

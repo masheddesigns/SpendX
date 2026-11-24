@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart';
@@ -7,7 +6,6 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:spend_x/data/core/tables.dart';
-import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/core/database_lifecycle_coordinator.dart';
 import 'package:spend_x/data/repositories/account_repo.dart';
 import 'package:spend_x/data/repositories/category_repo.dart';
@@ -18,14 +16,12 @@ import 'package:spend_x/data/repositories/transaction_repo.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_account_repository.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_event_repository.dart';
 import 'package:spend_x/data/repositories/canonical/canonical_financial_query_repository.dart';
-import 'package:spend_x/data/repositories/canonical/canonical_transaction_adapter.dart';
 import 'package:spend_x/models/bank_account.dart';
 import 'package:spend_x/models/credit_card.dart';
 import 'package:spend_x/models/goal.dart';
 import 'package:spend_x/models/loan.dart';
 import 'package:spend_x/models/transaction.dart' as spx;
 import 'package:spend_x/services/backup_service.dart';
-import 'package:spend_x/services/canonical_backup_validator.dart';
 import 'package:spend_x/services/financial_transaction_service.dart';
 import 'package:spend_x/services/import_service.dart';
 

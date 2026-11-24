@@ -6,7 +6,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spend_x/data/core/app_database.dart';
-import 'package:spend_x/data/core/spendx_database_factory.dart';
 import 'package:spend_x/data/core/tables_v24.dart';
 import 'package:spend_x/data/security/database_encryption_migration_service.dart';
 import 'package:spend_x/data/security/database_key_manager.dart';

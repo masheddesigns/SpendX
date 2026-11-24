@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart' hide Transaction;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide Transaction;
 
 import 'package:spend_x/data/core/app_database.dart';
@@ -13,7 +12,7 @@ import 'package:spend_x/data/migrations/ledger_backfill_service.dart';
 void main() {
   late String dbPath;
 
-  Future<Database> _openLive() async {
+  Future<Database> openLive() async {
     final a = AppDatabase.instance;
     await a.close();
     final f = File(dbPath);
@@ -23,7 +22,7 @@ void main() {
     return live;
   }
 
-  Future<void> _seedClean(Database db) async {
+  Future<void> seedClean(Database db) async {
     await db.insert('bank_accounts', {
       'id': 'A',
       'name': 'Savings',
@@ -43,8 +42,8 @@ void main() {
     });
   }
 
-  Future<void> _seedOrphan(Database db) async {
-    await _seedClean(db);
+  Future<void> seedOrphan(Database db) async {
+    await seedClean(db);
     await db.insert('ledger_transactions', {
       'id': 'orphan1',
       'type': 'expense',
@@ -56,7 +55,7 @@ void main() {
     });
   }
 
-  Future<List<String>> _statuses(Database db) async =>
+  Future<List<String>> statuses(Database db) async =>
       (await db.query('ledger_backfill_log'))
           .map((r) => r['status'] as String)
           .toList();
@@ -81,8 +80,8 @@ void main() {
 
   group('Phase 1E — outcome / audit logging', () {
     test('EXECUTION_SUCCESS logged on committed run; ledger mutated', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -94,14 +93,14 @@ void main() {
       expect(report.applied, isTrue);
       expect((await live.query('ledger_transactions')).length,
           greaterThanOrEqualTo(2));
-      final logs = await _statuses(live);
+      final logs = await statuses(live);
       expect(logs, contains('EXECUTION_SUCCESS'));
     });
 
     test('EXECUTION_ROLLBACK on orphan; ledger unchanged; no success marker',
         () async {
-      final live = await _openLive();
-      await _seedOrphan(live);
+      final live = await openLive();
+      await seedOrphan(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -114,14 +113,14 @@ void main() {
       expect(report.blockReason, 'fail');
       // No ledger mutation: only the pre-existing orphan row remains.
       expect((await live.query('ledger_transactions')).length, 1);
-      final logs = await _statuses(live);
+      final logs = await statuses(live);
       expect(logs, contains('EXECUTION_ROLLBACK'));
       expect(logs, isNot(contains('EXECUTION_SUCCESS')));
     });
 
     test('PREFLIGHT_PASS logged (no mutation)', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -132,13 +131,13 @@ void main() {
 
       expect(report.blockReason, 'preflight');
       expect((await live.query('ledger_transactions')).isEmpty, isTrue);
-      final logs = await _statuses(live);
+      final logs = await statuses(live);
       expect(logs, contains('PREFLIGHT_PASS'));
     });
 
     test('PREFLIGHT_FAIL logged (no mutation)', () async {
-      final live = await _openLive();
-      await _seedOrphan(live);
+      final live = await openLive();
+      await seedOrphan(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -149,13 +148,13 @@ void main() {
 
       expect(report.blockReason, 'preflight');
       expect((await live.query('ledger_transactions')).length, 1);
-      final logs = await _statuses(live);
+      final logs = await statuses(live);
       expect(logs, contains('PREFLIGHT_FAIL'));
     });
 
     test('BLOCKED_BY_FLAG logged when feature flag off', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(false);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -166,13 +165,13 @@ void main() {
 
       expect(report.blockReason, 'flag');
       expect((await live.query('ledger_transactions')).isEmpty, isTrue);
-      final logs = await _statuses(live);
+      final logs = await statuses(live);
       expect(logs, contains('BLOCKED_BY_FLAG'));
     });
 
     test('BLOCKED_BY_KILL_SWITCH logged when kill switch active', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(true);
 
@@ -183,15 +182,15 @@ void main() {
 
       expect(report.blockReason, 'kill');
       expect((await live.query('ledger_transactions')).isEmpty, isTrue);
-      final logs = await _statuses(live);
+      final logs = await statuses(live);
       expect(logs, contains('BLOCKED_BY_KILL_SWITCH'));
     });
   });
 
   group('Phase 1E — idempotency mapping', () {
     test('EXECUTION_SUCCESS blocks future runs (without force)', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -202,12 +201,12 @@ void main() {
           await AppDatabase.instance.runLedgerBackfill(authorized: true);
       expect(again.exceptions.join('\n'), contains('Prior successful'));
       expect((await live.query('ledger_transactions')).length, before);
-      expect(await _statuses(live), ['EXECUTION_SUCCESS']);
+      expect(await statuses(live), ['EXECUTION_SUCCESS']);
     });
 
     test('PREFLIGHT_PASS does NOT block future execution', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -220,8 +219,8 @@ void main() {
     });
 
     test('EXECUTION_ROLLBACK does NOT block future execution', () async {
-      final live = await _openLive();
-      await _seedOrphan(live);
+      final live = await openLive();
+      await seedOrphan(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -233,8 +232,8 @@ void main() {
     });
 
     test('BLOCKED_BY_FLAG does NOT block future execution', () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(false);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -251,13 +250,13 @@ void main() {
   group('Phase 1E — audit-log failure is non-destructive', () {
     test('commit survives audit-log write failure; applied stays true',
         () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
       AppDatabase.auditLogWriter =
-          (_, __, ___) => throw Exception('boom');
+          (_, _, _) => throw Exception('boom');
 
       final report = await AppDatabase.instance.runLedgerBackfill(
         authorized: true,
@@ -269,7 +268,7 @@ void main() {
       expect((await live.query('ledger_transactions')).length,
           greaterThanOrEqualTo(2));
       // Audit log write failed -> no success row persisted.
-      expect(await _statuses(live), isEmpty);
+      expect(await statuses(live), isEmpty);
       AppDatabase.auditLogWriter = null;
     });
   });
@@ -277,8 +276,8 @@ void main() {
   group('Phase 1E — TOCTOU: in-transaction flag/kill re-check', () {
     test('preflight executable, then flag flipped -> execute rejected',
         () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -296,13 +295,13 @@ void main() {
 
       expect(exec.blockReason, 'flag');
       expect((await live.query('ledger_transactions')).isEmpty, isTrue);
-      expect(await _statuses(live), contains('BLOCKED_BY_FLAG'));
+      expect(await statuses(live), contains('BLOCKED_BY_FLAG'));
     });
 
     test('preflight executable, then kill switch flipped -> execute rejected',
         () async {
-      final live = await _openLive();
-      await _seedClean(live);
+      final live = await openLive();
+      await seedClean(live);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -315,12 +314,12 @@ void main() {
 
       expect(exec.blockReason, 'kill');
       expect((await live.query('ledger_transactions')).isEmpty, isTrue);
-      expect(await _statuses(live), contains('BLOCKED_BY_KILL_SWITCH'));
+      expect(await statuses(live), contains('BLOCKED_BY_KILL_SWITCH'));
     });
 
     test('in-transaction gate rejects when flag off (enforceFlagKill)', () async {
-      final db = await _openLive();
-      await _seedClean(db);
+      final db = await openLive();
+      await seedClean(db);
 
       final report = await LedgerBackfillService.reconcile(
         db,
@@ -333,8 +332,8 @@ void main() {
     });
 
     test('in-transaction gate allows when flag on (enforceFlagKill)', () async {
-      final db = await _openLive();
-      await _seedClean(db);
+      final db = await openLive();
+      await seedClean(db);
       await db.insert('ledger_backfill_flags',
           {'key': 'enabled', 'value': 'true'});
 
@@ -350,8 +349,8 @@ void main() {
   });
 
   group('Phase 1E — LOAN_CREDIT_INTEREST_RESIDUAL exception', () {
-    Future<void> _seedLoanWithInterest(Database db, double interest) async {
-      await _seedClean(db);
+    Future<void> seedLoanWithInterest(Database db, double interest) async {
+      await seedClean(db);
       await db.insert('loans', {
         'id': 'L1',
         'name': 'Test Loan',
@@ -372,8 +371,8 @@ void main() {
 
     test('interest residual is named exception; balanced but not journalized',
         () async {
-      final live = await _openLive();
-      await _seedLoanWithInterest(live, 50.0);
+      final live = await openLive();
+      await seedLoanWithInterest(live, 50.0);
       await AppDatabase.instance.setBackfillEnabled(true);
       await AppDatabase.instance.setKillSwitch(false);
 
@@ -392,8 +391,8 @@ void main() {
     });
 
     test('unquantifiable (NULL) interest FAILs, never becomes zero', () async {
-      final live = await _openLive();
-      await _seedLoanWithInterest(live, 50.0);
+      final live = await openLive();
+      await seedLoanWithInterest(live, 50.0);
       await live.insert('loan_installments', {
         'id': 'LI2',
         'loanId': 'L1',
