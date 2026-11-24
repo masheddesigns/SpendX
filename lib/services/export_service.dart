@@ -61,18 +61,23 @@ class ExportService {
       final Uint8List packageBytes = await packageFile.readAsBytes();
 
       // 2. Open platform file-saving dialog with required bytes supplied
-      final String? outputFile = await FilePicker.platform.saveFile(
+      final Uri? outputUri = await FilePicker.saveFile(
         dialogTitle: 'Save Backup',
         fileName: BackupFileService.backupFileName,
-        type: FileType.custom,
-        allowedExtensions: ['spendx'],
         bytes: packageBytes,
       );
 
-      if (outputFile == null) {
+      if (outputUri == null) {
         AppLogger.d('[EXPORT] Backup export canceled by user');
         return null;
       }
+
+      final String outputFile =
+          (outputUri.hasScheme && outputUri.scheme == 'file')
+              ? outputUri.toFilePath()
+              : (outputUri.path.isNotEmpty
+                  ? outputUri.path
+                  : outputUri.toString());
 
       // On desktop platforms where saveFile returns a path without automatically writing bytes:
       if (!Platform.isAndroid && !Platform.isIOS) {

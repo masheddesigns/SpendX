@@ -128,31 +128,39 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
   Widget _tabItem(String title, int index) {
     final active = _selectedTab == index;
     return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedTab = index),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: active
-                ? Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                  )
-                : null,
-          ),
-          child: Text(
-            title,
-            style: TextStyle(
-              color: active
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-              fontSize: 13,
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: '$title tab',
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedTab = index),
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: active
+                    ? Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.3),
+                      )
+                    : null,
+              ),
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: active
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 13,
+                ),
+              ),
             ),
           ),
         ),

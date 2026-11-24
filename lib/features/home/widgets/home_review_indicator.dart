@@ -22,38 +22,43 @@ class HomeReviewIndicator extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: const Key('home_review_queue_indicator'),
-          onTap: () async {
-            await Navigator.push(
-              context,
-              AppPageRoute(builder: (_) => const ReviewQueueScreen()),
-            );
-            ref.invalidate(reviewQueueCountProvider);
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.tertiaryContainer,
-                  Theme.of(
-                    context,
-                  ).colorScheme.tertiaryContainer.withValues(alpha: 0.72),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Theme.of(
+      child: Semantics(
+        button: true,
+        label: '$reviewCount transactions need review. Tap to open review queue.',
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: const Key('home_review_queue_indicator'),
+              onTap: () async {
+                await Navigator.push(
                   context,
-                ).colorScheme.tertiary.withValues(alpha: isDark ? 0.4 : 0.6),
-                width: 1.0,
-              ),
-            ),
-            child: Row(
+                  AppPageRoute(builder: (_) => const ReviewQueueScreen()),
+                );
+                ref.invalidate(reviewQueueCountProvider);
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.tertiaryContainer,
+                      Theme.of(
+                        context,
+                      ).colorScheme.tertiaryContainer.withValues(alpha: 0.72),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.tertiary.withValues(alpha: isDark ? 0.4 : 0.6),
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(7),
@@ -130,6 +135,8 @@ class HomeReviewIndicator extends ConsumerWidget {
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }

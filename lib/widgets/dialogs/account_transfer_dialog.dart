@@ -121,20 +121,29 @@ Future<bool> showAccountTransferDialog(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (sourceId == destId) {
-                CustomSnackBar.show(
-                  ctx,
-                  message: 'Source and Destination cannot be same.',
-                  isError: true,
-                );
-                return;
-              }
-              Navigator.pop(ctx, true);
-            },
-            child: const Text('Transfer'),
-          ),
+            ElevatedButton(
+              onPressed: () {
+                if (sourceId == destId) {
+                  CustomSnackBar.show(
+                    ctx,
+                    message: 'Source and Destination cannot be same.',
+                    isError: true,
+                  );
+                  return;
+                }
+                final amount = double.tryParse(amountController.text.trim());
+                if (amount == null || amount <= 0) {
+                  CustomSnackBar.show(
+                    ctx,
+                    message: 'Please enter an amount greater than zero.',
+                    isError: true,
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Transfer'),
+            ),
         ],
       ),
     ),

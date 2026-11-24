@@ -558,11 +558,14 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           ],
           if (!hasLimit) ...[
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => _navigateToEditCard(card),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: Row(
+            Semantics(
+              button: true,
+              label: 'Set your credit limit to track usage',
+              child: GestureDetector(
+                onTap: () => _navigateToEditCard(card),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: Row(
                   children: [
                     Icon(
                       Icons.info_outline_rounded,
@@ -588,7 +591,8 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 ),
               ),
             ),
-          ],
+          ),
+        ],
           if (stmtSummary != null && stmtSummary.statementAmount > 0) ...[
             const SizedBox(height: 16),
             Container(
@@ -735,17 +739,24 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             color: cs.onSurfaceVariant,
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => _navigateToPayments(card),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 48),
-                            child: Center(
-                              child: Text(
-                                'Pay Bill \u2192',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.primary,
+                        Semantics(
+                          button: true,
+                          label: 'Pay Bill',
+                          child: GestureDetector(
+                            onTap: () => _navigateToPayments(card),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: 48,
+                                minHeight: 48,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Pay Bill \u2192',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: cs.primary,
+                                  ),
                                 ),
                               ),
                             ),

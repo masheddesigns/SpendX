@@ -294,62 +294,71 @@ class _SearchFilterScreenState extends ConsumerState<SearchFilterScreen> {
                         ),
                         const SizedBox(width: 16),
                         // Date Filter Button
-                        InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: _selectDateRange,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (_startDate != null)
-                                  ? AppTheme.primaryBlue.withValues(
-                                      alpha: isDark ? 0.20 : 0.15,
-                                    )
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainer,
+                        Semantics(
+                          button: true,
+                          label: _startDate == null
+                              ? 'Select Date Range'
+                              : 'Date Range: ${DateFormat('dd/MM').format(_startDate!)} - ${DateFormat('dd/MM').format(_endDate ?? _startDate!)}',
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                            child: InkWell(
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: (_startDate != null)
-                                    ? AppTheme.primaryBlue.withValues(
-                                        alpha: isDark ? 0.60 : 0.45,
-                                      )
-                                    : Theme.of(context).colorScheme.outline,
-                                width: 0.75,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.calendar_month_rounded,
-                                  size: 15,
-                                  color: (_startDate != null)
-                                      ? AppTheme.primaryBlue
-                                      : (Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant),
+                              onTap: _selectDateRange,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _startDate == null
-                                      ? 'Date Range'
-                                      : '${DateFormat('dd/MM').format(_startDate!)} - ${DateFormat('dd/MM').format(_endDate ?? _startDate!)}',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
+                                decoration: BoxDecoration(
+                                  color: (_startDate != null)
+                                      ? AppTheme.primaryBlue.withValues(
+                                          alpha: isDark ? 0.20 : 0.15,
+                                        )
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
                                     color: (_startDate != null)
-                                        ? (Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface)
-                                        : (Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant),
+                                        ? AppTheme.primaryBlue.withValues(
+                                            alpha: isDark ? 0.60 : 0.45,
+                                          )
+                                        : Theme.of(context).colorScheme.outline,
+                                    width: 0.75,
                                   ),
                                 ),
-                              ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_month_rounded,
+                                      size: 15,
+                                      color: (_startDate != null)
+                                          ? AppTheme.primaryBlue
+                                          : (Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _startDate == null
+                                          ? 'Date Range'
+                                          : '${DateFormat('dd/MM').format(_startDate!)} - ${DateFormat('dd/MM').format(_endDate ?? _startDate!)}',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: (_startDate != null)
+                                            ? (Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface)
+                                            : (Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),

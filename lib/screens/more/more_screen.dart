@@ -300,14 +300,19 @@ class _MoreGlassRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      splashColor: isDark
-          ? Colors.white.withValues(alpha: 0.05)
-          : Colors.black.withValues(alpha: 0.03),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        child: Row(
+    return Semantics(
+      button: true,
+      label: '$title, $subtitle',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: onTap,
+          splashColor: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.03),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
           children: [
             // Translucent Glass Icon Pill
             Container(
@@ -425,8 +430,10 @@ class _MoreGlassRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }
 
 // ── Standalone Insights Screen wrapper ───────────────────────────

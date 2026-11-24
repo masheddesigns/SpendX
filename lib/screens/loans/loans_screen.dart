@@ -66,22 +66,50 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
               return _buildEmptyState(context);
             }
 
-            // Use simple ListView — no fragile AnimatedList state
+            // Use responsive LayoutBuilder for phone vs tablet grid
             return RefreshIndicator(
               onRefresh: () =>
                   ref.read(app_data.loansProvider.notifier).refresh(),
-              child: ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.only(
-                  left: AppSpacing.listHorizontalPadding,
-                  right: AppSpacing.listHorizontalPadding,
-                  top: AppSpacing.listHorizontalPadding,
-                  bottom: 80, // space for FAB
-                ),
-                itemCount: loans.length,
-                itemBuilder: (context, index) {
-                  final loan = loans[index];
-                  return _buildLoanTile(context, loan);
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth > 600;
+                  if (isWide) {
+                    return GridView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.only(
+                        left: AppSpacing.listHorizontalPadding,
+                        right: AppSpacing.listHorizontalPadding,
+                        top: AppSpacing.listHorizontalPadding,
+                        bottom: 80,
+                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        mainAxisExtent: 140,
+                      ),
+                      itemCount: loans.length,
+                      itemBuilder: (context, index) {
+                        final loan = loans[index];
+                        return _buildLoanTile(context, loan);
+                      },
+                    );
+                  }
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: AppSpacing.listHorizontalPadding,
+                      right: AppSpacing.listHorizontalPadding,
+                      top: AppSpacing.listHorizontalPadding,
+                      bottom: 80, // space for FAB
+                    ),
+                    itemCount: loans.length,
+                    itemBuilder: (context, index) {
+                      final loan = loans[index];
+                      return _buildLoanTile(context, loan);
+                    },
+                  );
                 },
               ),
             );
@@ -116,25 +144,29 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
   Widget _buildLoanTile(BuildContext context, Loan loan) {
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.cardGap),
-      child: InkWell(
-        onTap: () async {
-          final result = await Navigator.push(
-            context,
-            AppPageRoute(builder: (_) => LoanDetailScreen(loan: loan)),
-          );
-          if (!mounted) return;
-          if (result == LoanDetailAction.deleted) {
-            await _deleteLoan(loan, skipConfirm: true);
-            return;
-          }
-          if (result == true) {
-            await ref.read(app_data.loansProvider.notifier).refresh();
-            ref.invalidate(liabilitiesSummaryProvider);
-          }
-        },
-        onLongPress: () => _showLoanOptions(context, loan),
-        borderRadius: BorderRadius.circular(24),
-        child: _buildLoanCard(context, loan),
+      child: Semantics(
+        button: true,
+        label: 'Loan ${loan.name}, ${loan.bank}, principal ${AppFormat.currency(loan.principalAmount)}',
+        child: InkWell(
+          onTap: () async {
+            final result = await Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => LoanDetailScreen(loan: loan)),
+            );
+            if (!mounted) return;
+            if (result == LoanDetailAction.deleted) {
+              await _deleteLoan(loan, skipConfirm: true);
+              return;
+            }
+            if (result == true) {
+              await ref.read(app_data.loansProvider.notifier).refresh();
+              ref.invalidate(liabilitiesSummaryProvider);
+            }
+          },
+          onLongPress: () => _showLoanOptions(context, loan),
+          borderRadius: BorderRadius.circular(24),
+          child: _buildLoanCard(context, loan),
+        ),
       ),
     );
   }

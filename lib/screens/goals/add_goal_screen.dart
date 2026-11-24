@@ -20,6 +20,8 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   GoalType _type = GoalType.savings;
   final _titleCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
+  final FocusNode _titleFocus = FocusNode();
+  final FocusNode _amountFocus = FocusNode();
   final _formKey = GlobalKey<FormState>();
   int _durationDays = 30;
   String? _selectedCategoryId;
@@ -43,6 +45,8 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   void dispose() {
     _titleCtrl.dispose();
     _amountCtrl.dispose();
+    _titleFocus.dispose();
+    _amountFocus.dispose();
     super.dispose();
   }
 
@@ -154,45 +158,56 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                         label = 'Pay Off Debt';
                         icon = Icons.credit_score_rounded;
                     }
-                    return GestureDetector(
-                      onTap: () => setState(() => _type = t),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                    return Semantics(
+                      button: true,
+                      selected: selected,
+                      label: '$label goal type',
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
                         ),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? cs.primary.withValues(alpha: 0.12)
-                              : cs.surfaceContainer,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: selected ? cs.primary : cs.outlineVariant,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              icon,
-                              size: 18,
-                              color: selected
-                                  ? cs.primary
-                                  : cs.onSurfaceVariant,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _type = t),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              label,
-                              style: TextStyle(
-                                color: selected
-                                    ? cs.primary
-                                    : cs.onSurfaceVariant,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? cs.primary.withValues(alpha: 0.12)
+                                  : cs.surfaceContainer,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected ? cs.primary : cs.outlineVariant,
                               ),
                             ),
-                          ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  icon,
+                                  size: 18,
+                                  color: selected
+                                      ? cs.primary
+                                      : cs.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? cs.primary
+                                        : cs.onSurfaceVariant,
+                                    fontWeight: selected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     );
@@ -204,6 +219,9 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                 // ── Title ──────────────────────────────────────────────
                 TextFormField(
                   controller: _titleCtrl,
+                  focusNode: _titleFocus,
+                  textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) => _amountFocus.requestFocus(),
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Enter a goal title'
                       : null,
@@ -229,6 +247,9 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                 // ── Amount ─────────────────────────────────────────────
                 TextFormField(
                   controller: _amountCtrl,
+                  focusNode: _amountFocus,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _isValid ? _save() : null,
                   validator: (value) {
                     final amount = double.tryParse(
                       (value ?? '')
@@ -311,6 +332,10 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     initialValue: _selectedCategoryId,
+                    validator: (v) => _type == GoalType.spendingLimit &&
+                            (v == null || v.isEmpty)
+                        ? 'Please select a category'
+                        : null,
                     decoration: InputDecoration(
                       labelText: 'Category',
                       filled: true,
@@ -399,27 +424,29 @@ class _DurationChip extends StatelessWidget {
       selected: selected,
       label: '$label duration',
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected
-                  ? cs.primary.withValues(alpha: 0.12)
-                  : cs.surfaceContainer,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selected ? cs.primary : cs.outlineVariant,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: selected
+                    ? cs.primary.withValues(alpha: 0.12)
+                    : cs.surfaceContainer,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: selected ? cs.primary : cs.outlineVariant,
+                ),
               ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected ? cs.primary : cs.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 13,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected ? cs.primary : cs.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 13,
+                ),
               ),
             ),
           ),

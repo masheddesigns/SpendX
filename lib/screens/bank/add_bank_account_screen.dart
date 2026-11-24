@@ -29,6 +29,9 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
   late TextEditingController _nameCtrl;
   late TextEditingController _bankCtrl;
   late TextEditingController _balanceCtrl;
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _bankFocus = FocusNode();
+  final FocusNode _balanceFocus = FocusNode();
   String _accountType = 'savings';
   bool _isAsset = true;
 
@@ -67,6 +70,9 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     _nameCtrl.dispose();
     _bankCtrl.dispose();
     _balanceCtrl.dispose();
+    _nameFocus.dispose();
+    _bankFocus.dispose();
+    _balanceFocus.dispose();
     super.dispose();
   }
 
@@ -299,6 +305,9 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                     const SizedBox(height: 12),
                     AppTextField(
                       controller: _nameCtrl,
+                      focusNode: _nameFocus,
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) => _bankFocus.requestFocus(),
                       labelText: _nameLabel,
                       hintText: _nameHint,
                       validator: (val) {
@@ -314,6 +323,9 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                     const SizedBox(height: 14),
                     AppTextField(
                       controller: _bankCtrl,
+                      focusNode: _bankFocus,
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) => _balanceFocus.requestFocus(),
                       labelText: _bankLabel,
                       hintText: _bankHint,
                       validator: (val) {
@@ -335,6 +347,9 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                     const SizedBox(height: 6),
                     AppAmountField(
                       controller: _balanceCtrl,
+                      focusNode: _balanceFocus,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _save(),
                       validator: (value) {
                         final amount = double.tryParse(
                           (value ?? '').trim().replaceAll(',', ''),
@@ -387,39 +402,53 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                           t['key']!,
                         ).replaceAll('#', '');
                         final color = Color(int.parse('0xFF$cleanHex'));
-                        return GestureDetector(
-                          onTap: () => setState(() {
-                            _accountType = t['key']!;
-                            _isAsset = true;
-                          }),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
+                        return Semantics(
+                          button: true,
+                          selected: isSelected,
+                          label: '${t['label']!} account type',
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 48,
+                              minHeight: 48,
                             ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? color.withValues(alpha: isDark ? 0.25 : 0.18)
-                                  : Theme.of(context).colorScheme.surfaceContainer,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected
-                                    ? color
-                                    : Theme.of(context).colorScheme.outline,
-                                width: isSelected ? 1.25 : 0.75,
-                              ),
-                            ),
-                            child: Text(
-                              t['label']!,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? color
-                                    : AppColors.textSecondaryOf(context),
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
+                            child: GestureDetector(
+                              onTap: () => setState(() {
+                                _accountType = t['key']!;
+                                _isAsset = true;
+                              }),
+                              child: Center(
+                                widthFactor: 1,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? color.withValues(alpha: isDark ? 0.25 : 0.18)
+                                        : Theme.of(context).colorScheme.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? color
+                                          : Theme.of(context).colorScheme.outline,
+                                      width: isSelected ? 1.25 : 0.75,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    t['label']!,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? color
+                                          : AppColors.textSecondaryOf(context),
+                                      fontSize: 13,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),

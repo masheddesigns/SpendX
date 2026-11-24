@@ -7,6 +7,7 @@ import '../../utils/text_formatter.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import 'lending_report_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 
 class LendingScreen extends ConsumerStatefulWidget {
   const LendingScreen({super.key});
@@ -527,19 +528,46 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
           // ── List ───────────────────────────────────────────────────
           Expanded(
             child: filtered.isEmpty
-                ? _buildEmpty()
-                : RefreshIndicator(
-                    onRefresh: () async => _refresh(),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) => _LendingCard(
-                        lending: filtered[i],
-                        onTap: filtered[i].isSettled
-                            ? null
-                            : () => _showPayment(filtered[i]),
-                      ),
-                    ),
+                ? _buildEmpty(allItems)
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 600;
+                      if (isWide) {
+                        return RefreshIndicator(
+                          onRefresh: () async => _refresh(),
+                          child: GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              mainAxisExtent: 130,
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (_, i) => _LendingCard(
+                              lending: filtered[i],
+                              onTap: filtered[i].isSettled
+                                  ? null
+                                  : () => _showPayment(filtered[i]),
+                            ),
+                          ),
+                        );
+                      }
+                      return RefreshIndicator(
+                        onRefresh: () async => _refresh(),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) => _LendingCard(
+                            lending: filtered[i],
+                            onTap: filtered[i].isSettled
+                                ? null
+                                : () => _showPayment(filtered[i]),
+                          ),
+                        ),
+                      );
+                    },
                   ),
           ),
         ],
@@ -547,38 +575,19 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
     );
   }
 
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.handshake_outlined,
-            size: 56,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _filter == 'get'
-                ? 'No one owes you'
-                : _filter == 'owe'
-                ? 'You don\'t owe anyone'
-                : _filter == 'settled'
-                ? 'No settled records'
-                : 'No lending records',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Track money you give or borrow',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildEmpty(List<Lending> allItems) {
+    return EmptyStateWidget(
+      icon: Icons.handshake_outlined,
+      title: _filter == 'get'
+          ? 'No one owes you'
+          : _filter == 'owe'
+          ? 'You don\'t owe anyone'
+          : _filter == 'settled'
+          ? 'No settled records'
+          : 'No lending records',
+      description: 'Track money you give or borrow with friends and family.',
+      ctaLabel: 'Add Record',
+      onCtaTap: () => _showAddEntry(allItems),
     );
   }
 }
@@ -605,35 +614,43 @@ class _TypeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.12) : cs.surfaceContainer,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? color : cs.outlineVariant,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: selected ? color : cs.onSurfaceVariant, size: 22),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected ? color : cs.onSurface,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label, $subtitle',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            decoration: BoxDecoration(
+              color: selected ? color.withValues(alpha: 0.12) : cs.surfaceContainer,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? color : cs.outlineVariant,
+                width: selected ? 2 : 1,
               ),
             ),
-            Text(
-              subtitle,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+            child: Column(
+              children: [
+                Icon(icon, color: selected ? color : cs.onSurfaceVariant, size: 22),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? color : cs.onSurface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -660,12 +677,15 @@ class _LendingCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
+      child: Semantics(
+        button: true,
+        label: '${lending.personName}, ${isLent ? "Lent" : "Borrowed"}, remaining ${AppFormat.currency(remaining)}',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
             children: [
               Row(
                 children: [
@@ -805,8 +825,9 @@ class _LendingCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ── Summary Tile ─────────────────────────────────────────────────────────
@@ -877,24 +898,33 @@ class _FilterChip extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final activeColor = color ?? cs.primary;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected
-              ? activeColor.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? activeColor : cs.outlineVariant),
-        ),
-        child: Text(
-          count > 0 ? '$label ($count)' : label,
-          style: TextStyle(
-            color: selected ? activeColor : cs.onSurfaceVariant,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 12,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: count > 0 ? '$label ($count)' : label,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            decoration: BoxDecoration(
+              color: selected
+                  ? activeColor.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: selected ? activeColor : cs.outlineVariant),
+            ),
+            child: Center(
+              child: Text(
+                count > 0 ? '$label ($count)' : label,
+                style: TextStyle(
+                  color: selected ? activeColor : cs.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  fontSize: 12,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -951,10 +981,16 @@ class _DateField extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final hasValue = date != null;
+    final dateDisplay = hasValue ? DateFormat('dd MMM yyyy').format(date!) : placeholder ?? 'not set';
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    return Semantics(
+      button: true,
+      label: '$label: $dateDisplay',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
           color: cs.surfaceContainer,
@@ -1021,6 +1057,8 @@ class _DateField extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }

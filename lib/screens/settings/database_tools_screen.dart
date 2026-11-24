@@ -71,13 +71,13 @@ class _DatabaseToolsScreenState extends ConsumerState<DatabaseToolsScreen> {
     setState(() => _isBusy = true);
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['spendx', 'json'],
       );
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
+      if (files.isNotEmpty && files.first.path != null) {
+        final file = File(files.first.path!);
         final container = mounted ? ProviderScope.containerOf(context) : null;
         final success = await ImportService.instance.importFromFile(
           file,

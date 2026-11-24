@@ -395,10 +395,13 @@ class _CategoryManagementScreenState
               final color = meta.color;
               return Card(
                 clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () =>
-                      _showAddCategoryDialog(existingCategory: category),
-                  child: Padding(
+                child: Semantics(
+                  button: true,
+                  label: '${category.name} category',
+                  child: InkWell(
+                    onTap: () =>
+                        _showAddCategoryDialog(existingCategory: category),
+                    child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
@@ -441,7 +444,8 @@ class _CategoryManagementScreenState
                     ),
                   ),
                 ),
-              );
+              ),
+            );
             },
           ),
       ],
@@ -464,29 +468,36 @@ class _TypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.2)
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected
-                ? color
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            width: 1.5,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? color : Colors.grey,
-            fontWeight: FontWeight.w600,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$label type',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? color.withValues(alpha: 0.2)
+                  : Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? color
+                    : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? color : Colors.grey,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),

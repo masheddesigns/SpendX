@@ -701,28 +701,35 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
                   const SizedBox(height: 14),
 
                   // Date picker
-                  GestureDetector(
-                    onTap: _pickDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today_rounded,
-                              color: Colors.blueAccent, size: 18),
-                          const SizedBox(width: 10),
-                          Text(
-                              'Paid on: ${DateFormat('dd MMM yyyy').format(_paidDate)}',
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurface, fontSize: 15)),
-                          const Spacer(),
-                          Icon(Icons.edit_rounded,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant, size: 16),
-                        ],
+                  Semantics(
+                    button: true,
+                    label: 'Paid on: ${DateFormat('dd MMM yyyy').format(_paidDate)}',
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      child: GestureDetector(
+                        onTap: _pickDate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today_rounded,
+                                  color: Colors.blueAccent, size: 18),
+                              const SizedBox(width: 10),
+                              Text(
+                                  'Paid on: ${DateFormat('dd MMM yyyy').format(_paidDate)}',
+                                  style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onSurface, fontSize: 15)),
+                              const Spacer(),
+                              Icon(Icons.edit_rounded,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant, size: 16),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),

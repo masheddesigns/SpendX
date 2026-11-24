@@ -19,39 +19,39 @@ import 'package:spend_x/services/backup_service.dart';
 import 'package:spend_x/services/backup_file_service.dart';
 import 'package:spend_x/services/export_service.dart';
 
-class MockFilePickerForExport extends FilePicker with MockPlatformInterfaceMixin {
+class MockFilePickerForExport extends FilePickerPlatform
+    with MockPlatformInterfaceMixin {
   Uint8List? capturedBytes;
   String? capturedFileName;
-  FileType? capturedType;
-  List<String>? capturedAllowedExtensions;
   String? returnPath;
   bool shouldReturnNull = false;
 
   @override
-  Future<String?> saveFile({
+  Future<Uri?> saveFile({
+    required String fileName,
+    required Uint8List bytes,
+    String mimeType = 'application/octet-stream',
     String? dialogTitle,
-    String? fileName,
     String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Uint8List? bytes,
-    bool lockParentWindow = false,
+    Function(FilePickerStatus)? onFileSaving,
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
   }) async {
     capturedBytes = bytes;
     capturedFileName = fileName;
-    capturedType = type;
-    capturedAllowedExtensions = allowedExtensions;
 
     if (shouldReturnNull) {
       return null;
     }
 
-    if (returnPath != null && bytes != null) {
+    if (returnPath != null) {
       final file = File(returnPath!);
       await file.parent.create(recursive: true);
       await file.writeAsBytes(bytes);
+      return Uri.file(returnPath!);
     }
-    return returnPath;
+    return null;
   }
 }
 
@@ -74,17 +74,17 @@ void main() {
 
   late Directory tempDir;
   late MockFilePickerForExport mockPicker;
-  FilePicker? originalPicker;
+  FilePickerPlatform? originalPicker;
 
   setUpAll(() {
     try {
-      originalPicker = FilePicker.platform;
+      originalPicker = FilePickerPlatform.instance;
     } catch (_) {}
   });
 
   tearDownAll(() {
     if (originalPicker != null) {
-      FilePicker.platform = originalPicker!;
+      FilePickerPlatform.instance = originalPicker!;
     }
   });
 
@@ -92,7 +92,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     tempDir = await Directory.systemTemp.createTemp('spendx_export_qual_');
     mockPicker = MockFilePickerForExport();
-    FilePicker.platform = mockPicker;
+    FilePickerPlatform.instance = mockPicker;
   });
 
   tearDown(() async {
@@ -149,19 +149,16 @@ void main() {
 
     // Verify manual export pass: bytes must be supplied
     final exportedBytes = await packageFile.readAsBytes();
-    final savedPath = await FilePicker.platform.saveFile(
+    final savedUri = await FilePicker.saveFile(
       dialogTitle: 'Save Backup',
       fileName: BackupFileService.backupFileName,
-      type: FileType.custom,
-      allowedExtensions: ['spendx'],
       bytes: exportedBytes,
     );
 
-    expect(savedPath, equals(destinationPath));
+    expect(savedUri?.toFilePath(), equals(destinationPath));
     expect(mockPicker.capturedBytes, isNotNull);
     expect(mockPicker.capturedBytes!.length, equals(exportedBytes.length));
     expect(mockPicker.capturedFileName, equals('spendx_backup.spendx'));
-    expect(mockPicker.capturedAllowedExtensions, equals(['spendx']));
 
     final savedFile = File(destinationPath);
     expect(await savedFile.exists(), isTrue);
@@ -196,7 +193,7 @@ void main() {
     );
 
     final bytes = await packageFile.readAsBytes();
-    await FilePicker.platform.saveFile(
+    await FilePicker.saveFile(
       fileName: 'spendx_backup.spendx',
       bytes: bytes,
     );
@@ -313,11 +310,11 @@ void main() {
     );
     await sourceDb.close();
     final bytes = await packageFile.readAsBytes();
-    final exportedPath = await FilePicker.platform.saveFile(
+    final exportedUri = await FilePicker.saveFile(
       fileName: 'spendx_backup.spendx',
       bytes: bytes,
     );
-    expect(exportedPath, equals(destinationPath));
+    expect(exportedUri?.toFilePath(), equals(destinationPath));
 
     final exportedFile = File(destinationPath);
     expect(await exportedFile.exists(), isTrue);

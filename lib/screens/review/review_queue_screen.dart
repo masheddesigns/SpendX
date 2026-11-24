@@ -476,11 +476,15 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
           ? SpendXGlassLevel.elevated
           : SpendXGlassLevel.base,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: widget.isSelectionMode ? widget.onSelect : null,
-        onLongPress: widget.onSelect,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
+      child: Semantics(
+        button: widget.isSelectionMode,
+        selected: widget.isSelected,
+        label: 'Review transaction: ${parsed.merchant ?? "Transaction"}, ${parsed.amount}',
+        child: InkWell(
+          onTap: widget.isSelectionMode ? widget.onSelect : null,
+          onLongPress: widget.onSelect,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -509,23 +513,30 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
               if (widget.isSelectionMode) const SizedBox(height: 8),
 
               // Why this is here (trust signal) — clickable
-              GestureDetector(
-                onTap: () =>
-                    setState(() => _showWhyDetected = !_showWhyDetected),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.amber.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
+              Semantics(
+                button: true,
+                label: 'Why was this detected: $reasonLabel',
+                child: GestureDetector(
+                  onTap: () =>
+                      setState(() => _showWhyDetected = !_showWhyDetected),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.amber.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
@@ -554,6 +565,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   ),
                 ),
               ),
+            ),
+          ),
+        ),
 
               // Why detected — explainability panel
               if (_showWhyDetected)
@@ -811,8 +825,9 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _rejectWithReason(String reason) async {
     ref.read(rejectReviewProvider)(widget.item.id);

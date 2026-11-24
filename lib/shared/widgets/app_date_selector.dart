@@ -17,47 +17,55 @@ class AppDateSelector extends StatelessWidget {
     final fillColor = context.fieldFillColor;
     final borderColor = context.fieldBorderColor;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: selectedDate,
-          firstDate: DateTime(2000),
-          lastDate: DateTime(2100),
-        );
-        if (picked != null) onDateSelected(picked);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: fillColor,
+    final dateFormatted = DateFormat('dd MMM yyyy').format(selectedDate);
+    return Semantics(
+      button: true,
+      label: 'Select date: $dateFormatted',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: 0.75),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.calendar_today_rounded,
-              size: 20,
-              color: Theme.of(context).colorScheme.secondary,
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: selectedDate,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) onDateSelected(picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: fillColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 0.75),
             ),
-            const SizedBox(width: 12),
-            Text(
-              DateFormat('dd MMM yyyy').format(selectedDate),
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  dateFormatted,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
             ),
-            const Spacer(),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 20,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -387,39 +387,46 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
             ),
           ),
           const SizedBox(height: 14),
-          GestureDetector(
-            onTap: _pickDate,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Effective From',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 14,
-                    ),
+          Semantics(
+            button: true,
+            label: 'Effective from ${DateFormat('MMM yyyy').format(_effectiveFrom)}',
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: GestureDetector(
+                onTap: _pickDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const Spacer(),
-                  Text(
-                    DateFormat('MMM yyyy').format(_effectiveFrom),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Effective From',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        DateFormat('MMM yyyy').format(_effectiveFrom),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.calendar_month_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 18,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    Icons.calendar_month_rounded,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    size: 18,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -718,44 +725,51 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                 ),
               const SizedBox(height: 16),
               // Joined date picker
-              GestureDetector(
-                onTap: _pickJoinedDate,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Joined Date',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontSize: 14,
-                        ),
+              Semantics(
+                button: true,
+                label: 'Joined date ${DateFormat('dd MMM yyyy').format(_joinedDate)}',
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: GestureDetector(
+                    onTap: _pickJoinedDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
                       ),
-                      const Spacer(),
-                      Text(
-                        DateFormat('dd MMM yyyy').format(_joinedDate),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.calendar_month_rounded,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        size: 18,
+                      child: Row(
+                        children: [
+                          Text(
+                            'Joined Date',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            DateFormat('dd MMM yyyy').format(_joinedDate),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.calendar_month_rounded,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 18,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

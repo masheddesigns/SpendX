@@ -9,6 +9,7 @@ import '../../shared/widgets/app_amount_field.dart';
 import '../../shared/widgets/app_date_selector.dart';
 import '../../shared/widgets/app_section_header.dart';
 import '../../shared/widgets/app_account_picker.dart';
+import '../../shared/widgets/loading_state_widget.dart';
 import '../../domain/credit/credit_card_service.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../features/salary/providers/salary_providers.dart';
@@ -200,11 +201,9 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
 
               const AppSectionHeader(title: 'Pay From Account'),
               accountsAsync.when(
-                loading: () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
-                  ),
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: LoadingStateWidget(message: 'Loading accounts...'),
                 ),
                 error: (_, _) => _AccountLoadError(
                   onRetry: () => ref.invalidate(bankAccountsProvider),

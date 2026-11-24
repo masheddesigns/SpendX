@@ -39,6 +39,7 @@ class _RecurringPaymentsScreenState
     String? categoryId = existing?.categoryId;
     String frequency = existing?.frequency ?? 'monthly';
     DateTime startDate = existing?.startDate ?? DateTime.now();
+    final dialogFormKey = GlobalKey<FormState>();
 
     showDialog<void>(
       context: context,
@@ -60,51 +61,68 @@ class _RecurringPaymentsScreenState
             title: Text(
               existing == null ? 'New Recurring Payment' : 'Edit Template',
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppTextField(
-                    controller: nameController,
-                    hintText: 'e.g. Netflix, Rent',
-                    label: 'Name',
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(12),
+            content: Form(
+              key: dialogFormKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppTextField(
+                      controller: nameController,
+                      hintText: 'e.g. Netflix, Rent',
+                      label: 'Name',
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Enter a name';
+                        }
+                        return null;
+                      },
                     ),
-                    padding: const EdgeInsets.all(4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _TypeSegment(
-                            label: 'Expense',
-                            selected: type == 'expense',
-                            color: cs.error,
-                            onTap: () => setDialogState(() {
-                              type = 'expense';
-                              categoryId = null;
-                            }),
+                    const SizedBox(height: AppSpacing.m),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _TypeSegment(
+                              label: 'Expense',
+                              selected: type == 'expense',
+                              color: cs.error,
+                              onTap: () => setDialogState(() {
+                                type = 'expense';
+                                categoryId = null;
+                              }),
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: _TypeSegment(
-                            label: 'Income',
-                            selected: type == 'income',
-                            color: cs.primary,
-                            onTap: () => setDialogState(() {
-                              type = 'income';
-                              categoryId = null;
-                            }),
+                          Expanded(
+                            child: _TypeSegment(
+                              label: 'Income',
+                              selected: type == 'income',
+                              color: cs.primary,
+                              onTap: () => setDialogState(() {
+                                type = 'income';
+                                categoryId = null;
+                              }),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  AppAmountField(controller: amountController),
+                    const SizedBox(height: AppSpacing.m),
+                    AppAmountField(
+                      controller: amountController,
+                      validator: (val) {
+                        final amount = double.tryParse((val ?? '').trim());
+                        if (amount == null || !amount.isFinite || amount <= 0) {
+                          return 'Enter an amount greater than zero';
+                        }
+                        return null;
+                      },
+                    ),
                   const SizedBox(height: AppSpacing.m),
                   _DropdownField<String>(
                     label: 'Frequency',
@@ -150,56 +168,64 @@ class _RecurringPaymentsScreenState
                   ],
                   const SizedBox(height: AppSpacing.m),
                   // Start date picker
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: dialogContext,
-                        initialDate: startDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now().add(const Duration(days: 730)),
-                        helpText: 'First payment date',
-                      );
-                      if (picked != null) {
-                        setDialogState(() => startDate = picked);
-                      }
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh,
+                  Semantics(
+                    button: true,
+                    label: 'First payment date: ${AppFormat.date(startDate)}',
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: dialogContext,
+                            initialDate: startDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now().add(const Duration(days: 730)),
+                            helpText: 'First payment date',
+                          );
+                          if (picked != null) {
+                            setDialogState(() => startDate = picked);
+                          }
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Start Date',
-                                style: Theme.of(dialogContext)
-                                    .textTheme
-                                    .labelLarge
-                                    ?.copyWith(color: cs.onSurfaceVariant),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Start Date',
+                                    style: Theme.of(dialogContext)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(AppFormat.date(startDate)),
+                                ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(AppFormat.date(startDate)),
+                              Icon(
+                                Icons.calendar_today,
+                                size: 18,
+                                color: cs.onSurfaceVariant,
+                              ),
                             ],
                           ),
-                          Icon(
-                            Icons.calendar_today,
-                            size: 18,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+          ),
             actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             actions: [
               TextButton(
@@ -211,6 +237,9 @@ class _RecurringPaymentsScreenState
                 label: 'Save',
                 height: 44,
                 onPressed: () async {
+                  if (!(dialogFormKey.currentState?.validate() ?? false)) {
+                    return;
+                  }
                   final name = nameController.text.trim();
                   final amount = double.tryParse(amountController.text);
                   if (name.isEmpty || amount == null || amount <= 0) {

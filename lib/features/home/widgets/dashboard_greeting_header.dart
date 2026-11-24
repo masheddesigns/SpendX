@@ -82,7 +82,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                   button: true,
                   label: 'Net worth: ${AppFormat.currency(netWorth)}',
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {

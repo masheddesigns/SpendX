@@ -442,23 +442,30 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       .map(
                         (s) => Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => _sendMessage(s),
-                            child: Chip(
-                              label: Text(
-                                s,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(
+                          child: Semantics(
+                            button: true,
+                            label: 'Suggestion: $s',
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                              child: GestureDetector(
+                                onTap: () => _sendMessage(s),
+                                child: Chip(
+                                  label: Text(
+                                    s,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSecondaryContainer,
+                                    ),
+                                  ),
+                                  backgroundColor: Theme.of(
                                     context,
-                                  ).colorScheme.onSecondaryContainer,
+                                  ).colorScheme.secondaryContainer,
+                                  side: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
                                 ),
-                              ),
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.secondaryContainer,
-                              side: BorderSide(
-                                color: Theme.of(context).colorScheme.outline,
                               ),
                             ),
                           ),

@@ -157,55 +157,62 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
     required VoidCallback onTap,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      child: SpendXGlassSurface(
-        level: SpendXGlassLevel.interactive,
-        borderRadius: BorderRadius.circular(16),
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary.withValues(
-                  alpha: isDark ? 0.20 : 0.12,
+    return Semantics(
+      button: true,
+      label: '$title, $subtitle',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          child: SpendXGlassSurface(
+            level: SpendXGlassLevel.interactive,
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primary.withValues(
+                      alpha: isDark ? 0.20 : 0.12,
+                    ),
+                  ),
+                  child: Icon(icon, color: AppColors.primary, size: 20),
                 ),
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimaryOf(context),
-                    ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryOf(context),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondaryOf(context),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryOf(context),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: AppColors.textMutedOf(context),
+                ),
+              ],
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: AppColors.textMutedOf(context),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -489,26 +496,38 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 if (!isPaid)
-                                  GestureDetector(
-                                    onTap: () =>
-                                        _payInstallment(inst, accounts),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
+                                  Semantics(
+                                    button: true,
+                                    label: 'Pay installment ${AppFormat.currency(inst.amount)}',
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.15,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        'PAY',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: cs.primary,
+                                      child: GestureDetector(
+                                        onTap: () =>
+                                            _payInstallment(inst, accounts),
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary.withValues(
+                                                alpha: 0.15,
+                                              ),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              'PAY',
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: cs.primary,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),

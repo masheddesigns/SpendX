@@ -25,43 +25,51 @@ class SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      leading: Container(
-        width: iconContainerSize,
-        height: iconContainerSize,
-        decoration: BoxDecoration(
-          color: AppTheme.tinted(color),
-          borderRadius: BorderRadius.circular(12),
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      label: subtitle.isNotEmpty ? '$title, $subtitle' : title,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          leading: Container(
+            width: iconContainerSize,
+            height: iconContainerSize,
+            decoration: BoxDecoration(
+              color: AppTheme.tinted(color),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: iconSize,
+            ),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              decoration: TextDecoration.none,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+              decoration: TextDecoration.none,
+            ),
+          ),
+          trailing: trailing ?? Icon(
+            Icons.arrow_forward_ios,
+            color: Theme.of(context).colorScheme.outlineVariant,
+            size: 14,
+          ),
         ),
-        child: Icon(
-          icon,
-          color: color,
-          size: iconSize,
-        ),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface,
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-          decoration: TextDecoration.none,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          fontSize: 12,
-          decoration: TextDecoration.none,
-        ),
-      ),
-      trailing: trailing ?? Icon(
-        Icons.arrow_forward_ios,
-        color: Theme.of(context).colorScheme.outlineVariant,
-        size: 14,
       ),
     );
   }

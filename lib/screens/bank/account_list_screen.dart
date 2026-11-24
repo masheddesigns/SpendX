@@ -637,7 +637,6 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
     BankAccount account,
   ) {
     HapticService.instance.tap();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -658,7 +657,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.black12,
+                    color: context.borderColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -746,7 +745,6 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
     CreditCard card,
   ) {
     HapticService.instance.tap();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -767,7 +765,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.black12,
+                    color: context.borderColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1149,18 +1147,21 @@ class _NetPositionHorizonCard extends ConsumerWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: () {
-            HapticService.instance.tap();
-            Navigator.push(
-              context,
-              AppPageRoute(builder: (_) => const NetWorthScreen()),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+        child: Semantics(
+          button: true,
+          label: 'View Net Worth summary',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: () {
+              HapticService.instance.tap();
+              Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const NetWorthScreen()),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top Row: Solvency Status Badge + Breakdown Action
@@ -1288,9 +1289,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                     gradient: LinearGradient(
                       colors: [
                         Colors.transparent,
-                        isDark
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : Colors.black.withValues(alpha: 0.08),
+                        context.borderColor,
                         Colors.transparent,
                       ],
                       stops: const [0.0, 0.5, 1.0],
@@ -1349,8 +1348,9 @@ class _NetPositionHorizonCard extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ── Restrained Quick Action Hub ─────────────────────────────────
@@ -1462,7 +1462,7 @@ class _ActionPillButton extends StatelessWidget {
           child: Tooltip(
             message: label,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
@@ -1552,15 +1552,19 @@ class _BankAccountRow extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(14),
-                  splashColor: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.03),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    child: Column(
+                child: Semantics(
+                  button: true,
+                  label: '$displayName, $typeLabel account, balance ${AppFormat.currency(account.balance)}',
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(14),
+                    splashColor: context.onSurfaceOverlay(
+                      lightOpacity: 0.03,
+                      darkOpacity: 0.05,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
@@ -1733,6 +1737,7 @@ class _BankAccountRow extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
 
               // Context Options Button
               const SizedBox(width: 2),
@@ -1924,17 +1929,25 @@ class _CreditCardInstrument extends StatelessWidget {
                             HapticService.instance.tap();
                             onOptionsTap();
                           },
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 48,
+                              minHeight: 48,
                             ),
-                            child: Icon(
-                              Icons.more_vert_rounded,
-                              size: 18,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                child: Icon(
+                                  Icons.more_vert_rounded,
+                                  size: 18,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1947,13 +1960,16 @@ class _CreditCardInstrument extends StatelessWidget {
               const SizedBox(height: 10),
 
               // Interactive Card Body (Tapping opens edit screen)
-              InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(16),
-                splashColor: Colors.white.withValues(alpha: 0.05),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
+              Semantics(
+                button: true,
+                label: '${card.name}, credit card, outstanding ${AppFormat.currency(card.usedAmount)}',
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(16),
+                  splashColor: Colors.white.withValues(alpha: 0.05),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Card Name & Masked Digits
@@ -2121,6 +2137,7 @@ class _CreditCardInstrument extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
 
               const SizedBox(height: 8),
 
@@ -2131,23 +2148,29 @@ class _CreditCardInstrument extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onTap,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 48),
-                      child: Center(
-                        child: Text(
-                          card.limitAmount > 0
-                              ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
-                              : 'No limit set',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: utilizationColor,
-                            fontWeight: FontWeight.w600,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                  Semantics(
+                    button: true,
+                    label: card.limitAmount > 0
+                        ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
+                        : 'No limit set',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onTap,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                        child: Center(
+                          child: Text(
+                            card.limitAmount > 0
+                                ? '${utilization.toStringAsFixed(1)}% utilized of ${AppFormat.currency(card.limitAmount)}'
+                                : 'No limit set',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: utilizationColor,
+                              fontWeight: FontWeight.w600,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
                           ),
                         ),
                       ),
@@ -2156,39 +2179,43 @@ class _CreditCardInstrument extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: onTap,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          child: Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '◇',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.tertiary,
-                                    fontWeight: FontWeight.bold,
+                      Semantics(
+                        button: true,
+                        label: dueText,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onTap,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                            child: Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '◇',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.tertiary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  dueText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    dueText,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -2318,10 +2345,13 @@ class _LoanAmortizationRow extends StatelessWidget {
         : 0.0;
     final paidPct = (paidProgress * 100).toStringAsFixed(0);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
+    return Semantics(
+      button: true,
+      label: 'Loan ${loan.name}, remaining ${AppFormat.currency(remaining)}, $paidPct% paid',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
@@ -2475,8 +2505,9 @@ class _LoanAmortizationRow extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ── Generic Navigation Link Row ─────────────────────────────────
@@ -2504,53 +2535,60 @@ class _NavigationLinkRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: iconColor, size: 19),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: context.textPrimary,
-                        ),
+        Semantics(
+          button: true,
+          label: '$title, $subtitle',
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: iconColor.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      child: Icon(icon, color: iconColor, size: 19),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: context.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ],
+              ),
             ),
           ),
         ),

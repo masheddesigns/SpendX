@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import '../features/home/screens/home_screen.dart';
 import '../models/calibration_progress.dart';
 import '../services/entity_consolidation_service.dart';
@@ -215,7 +216,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                   child: Text(
                     'Skip to Dashboard',
                     style: TextStyle(
-                      color: isDark ? Colors.white60 : Colors.black54,
+                      color: context.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -484,9 +485,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                                           ? Theme.of(
                                               context,
                                             ).colorScheme.primary
-                                          : (isDark
-                                                ? Colors.white38
-                                                : Colors.black38)),
+                                          : context.textMuted),
                               ),
                             ),
                           ),
@@ -620,12 +619,17 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _showStatExplanation(label, explanation, color),
-        splashColor: color.withValues(alpha: 0.2),
-        highlightColor: color.withValues(alpha: 0.1),
-        child: Container(
+      child: Semantics(
+        button: true,
+        label: '$label: $value',
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => _showStatExplanation(label, explanation, color),
+            splashColor: color.withValues(alpha: 0.2),
+            highlightColor: color.withValues(alpha: 0.1),
+            child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: color.withValues(alpha: isDark ? 0.12 : 0.08),
@@ -655,7 +659,7 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 10,
-                        color: isDark ? Colors.white60 : Colors.black54,
+                        color: context.textSecondary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -666,8 +670,10 @@ class _OnboardingSmsSyncScreenState extends State<OnboardingSmsSyncScreen>
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildRadarHologram(bool isDark) {
     return Semantics(

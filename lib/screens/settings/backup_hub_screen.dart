@@ -400,41 +400,48 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
 
   Widget _buildRemoteSyncBanner() {
     final colorScheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () async {
-        if (!_isOperationInProgress) await _manualRestore();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: colorScheme.tertiaryContainer,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: colorScheme.tertiary.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, color: colorScheme.onTertiaryContainer),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'New backup available from another device.',
-                style: TextStyle(
-                  color: colorScheme.onTertiaryContainer,
-                  fontWeight: FontWeight.bold,
+    return Semantics(
+      button: true,
+      label: 'New backup available from another device. Restore Now',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: () async {
+            if (!_isOperationInProgress) await _manualRestore();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: colorScheme.tertiary.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: colorScheme.onTertiaryContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'New backup available from another device.',
+                    style: TextStyle(
+                      color: colorScheme.onTertiaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+                Text(
+                  'Restore Now',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              'Restore Now',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.9),
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

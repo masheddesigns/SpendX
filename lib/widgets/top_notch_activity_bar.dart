@@ -159,17 +159,20 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                     left: 16.0,
                     right: 16.0,
                   ),
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticService.instance.tap();
-                      SyncActivityService.instance.dismiss();
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(26),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                        child: AnimatedContainer(
-                          constraints: const BoxConstraints(minHeight: 48),
+                  child: Semantics(
+                    button: true,
+                    label: 'Activity notification: ${state.title}. Tap to dismiss',
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticService.instance.tap();
+                        SyncActivityService.instance.dismiss();
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(26),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                          child: AnimatedContainer(
+                            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                           duration: _reducedMotion
                               ? Duration.zero
                               : const Duration(milliseconds: 300),
@@ -310,6 +313,7 @@ class _TopNotchActivityBarState extends State<TopNotchActivityBar>
                   ),
                 ),
               ),
+            ),
             ),
           ),
         );

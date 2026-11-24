@@ -30,6 +30,7 @@ class AddCreditTransactionScreen extends ConsumerStatefulWidget {
 
 class _AddCreditTransactionScreenState
     extends ConsumerState<AddCreditTransactionScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _merchantController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
@@ -69,6 +70,7 @@ class _AddCreditTransactionScreenState
   }
 
   Future<void> _saveTransaction() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     final amount = double.tryParse(_amountController.text) ?? 0.0;
     if (amount <= 0) return;
 
@@ -114,79 +116,95 @@ class _AddCreditTransactionScreenState
     return Scaffold(
       appBar: const SpendXAppBar(title: 'Credit Purchase'),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.m),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const AppSectionHeader(
-                title: 'Amount',
-                padding: EdgeInsets.only(bottom: AppSpacing.s),
-              ),
-              AppAmountField(
-                controller: _amountController,
-                amountColor: Theme.of(context).colorScheme.primary,
-              ),
-              AppSpacing.sectionSpacer,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.m),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AppSectionHeader(
+                  title: 'Amount',
+                  padding: EdgeInsets.only(bottom: AppSpacing.s),
+                ),
+                AppAmountField(
+                  controller: _amountController,
+                  amountColor: Theme.of(context).colorScheme.primary,
+                  validator: (val) {
+                    final amount = double.tryParse((val ?? '').trim());
+                    if (amount == null || !amount.isFinite || amount <= 0) {
+                      return 'Enter an amount greater than zero';
+                    }
+                    return null;
+                  },
+                ),
+                AppSpacing.sectionSpacer,
 
-              const AppSectionHeader(
-                title: 'Date',
-                padding: EdgeInsets.only(bottom: AppSpacing.s),
-              ),
-              AppDateSelector(
-                selectedDate: _selectedDate,
-                onDateSelected: (date) => setState(() => _selectedDate = date),
-              ),
-              AppSpacing.sectionSpacer,
+                const AppSectionHeader(
+                  title: 'Date',
+                  padding: EdgeInsets.only(bottom: AppSpacing.s),
+                ),
+                AppDateSelector(
+                  selectedDate: _selectedDate,
+                  onDateSelected: (date) => setState(() => _selectedDate = date),
+                ),
+                AppSpacing.sectionSpacer,
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const AppSectionHeader(
-                    title: 'Category',
-                    padding: EdgeInsets.only(bottom: AppSpacing.s),
-                  ),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final newCat = await showModalBottomSheet<Category>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) =>
-                            const AddCategorySheet(initialType: 'expense'),
-                      );
-                      if (newCat != null) {
-                        await _loadCategories();
-                        setState(() => _selectedCategoryId = newCat.id);
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.add_circle_outline_rounded,
-                      size: 18,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const AppSectionHeader(
+                      title: 'Category',
+                      padding: EdgeInsets.only(bottom: AppSpacing.s),
                     ),
-                    label: const Text('Add New'),
-                  ),
-                ],
-              ),
-              AppCategoryPicker(
-                availableCategories: _availableCategories,
-                selectedCategoryId: _selectedCategoryId,
-                activeColor: Theme.of(context).colorScheme.primary,
-                onCategorySelected: (id) =>
-                    setState(() => _selectedCategoryId = id),
-              ),
-              AppSpacing.sectionSpacer,
+                    TextButton.icon(
+                      onPressed: () async {
+                        final newCat = await showModalBottomSheet<Category>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) =>
+                              const AddCategorySheet(initialType: 'expense'),
+                        );
+                        if (newCat != null) {
+                          await _loadCategories();
+                          setState(() => _selectedCategoryId = newCat.id);
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 18,
+                      ),
+                      label: const Text('Add New'),
+                    ),
+                  ],
+                ),
+                AppCategoryPicker(
+                  availableCategories: _availableCategories,
+                  selectedCategoryId: _selectedCategoryId,
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  onCategorySelected: (id) =>
+                      setState(() => _selectedCategoryId = id),
+                ),
+                AppSpacing.sectionSpacer,
 
-              const AppSectionHeader(
-                title: 'Merchant',
-                padding: EdgeInsets.only(bottom: AppSpacing.s),
-              ),
-              AppTextField(
-                controller: _merchantController,
-                labelText: 'e.g. Amazon, Starbucks',
-                prefixIcon: Icons.storefront_rounded,
-              ),
-            ],
+                const AppSectionHeader(
+                  title: 'Merchant',
+                  padding: EdgeInsets.only(bottom: AppSpacing.s),
+                ),
+                AppTextField(
+                  controller: _merchantController,
+                  labelText: 'e.g. Amazon, Starbucks',
+                  prefixIcon: Icons.storefront_rounded,
+                  validator: (val) {
+                    if (val != null && val.trim().length > 100) {
+                      return 'Merchant must be 100 characters or less';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

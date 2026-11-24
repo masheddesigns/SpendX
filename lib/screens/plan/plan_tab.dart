@@ -676,45 +676,52 @@ class _FinancialHorizonCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               // Money Score Display with Info Affordance
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _showHabitScoreExplanation(context),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${score.value}',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+              Semantics(
+                button: true,
+                label: 'Habit score ${score.value}, tap for explanation',
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showHabitScoreExplanation(context),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          'Habit Score',
+                          '${score.value}',
                           style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        const SizedBox(width: 3),
-                        Icon(
-                          Icons.info_outline_rounded,
-                          size: 11,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Habit Score',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.4,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 11,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -785,54 +792,60 @@ class _FinancialHorizonCard extends StatelessWidget {
           // ── Mindful Guidance / Nudge Pebble ────────────────
           if (saveSuggestion != null || nudges.isNotEmpty) ...[
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: onActionTap,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 48),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.2),
-                    width: 0.6,
+            Semantics(
+              button: true,
+              label: saveSuggestion != null
+                  ? 'Save ${AppFormat.currency(saveSuggestion!.amount)} this month to strengthen runway'
+                  : nudges.first.title,
+              child: GestureDetector(
+                onTap: onActionTap,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 15,
-                      color: Theme.of(context).colorScheme.primary,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
+                      width: 0.6,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        saveSuggestion != null
-                            ? 'Save ${AppFormat.currency(saveSuggestion!.amount)} this month to strengthen runway'
-                            : nudges.first.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 15,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          saveSuggestion != null
+                              ? 'Save ${AppFormat.currency(saveSuggestion!.amount)} this month to strengthen runway'
+                              : nudges.first.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onPrimaryContainer,
+                          ),
                         ),
                       ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ],
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1156,28 +1169,35 @@ class _EmptyBudgetCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              AppPageRoute(builder: (_) => const BudgetManagementScreen()),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: const Text(
-                  '+ Set Budget Horizon',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+          Semantics(
+            button: true,
+            label: 'Set Budget Horizon',
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const BudgetManagementScreen()),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: const Center(
+                    widthFactor: 1,
+                    child: Text(
+                      '+ Set Budget Horizon',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1279,14 +1299,18 @@ class _GoalLandmarkRow extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: isDark
-            ? Colors.white10
-            : Colors.black.withValues(alpha: 0.03),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
+      child: Semantics(
+        button: true,
+        label: '${goal.title}, $pct% complete, remaining ${AppFormat.currency(progress.remaining)}, target ${AppFormat.currency(goal.targetAmount)}',
+        child: InkWell(
+          onTap: onTap,
+          splashColor: context.onSurfaceOverlay(
+            lightOpacity: 0.03,
+            darkOpacity: 0.08,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -1370,8 +1394,9 @@ class _GoalLandmarkRow extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _EmptyGoalsCard extends StatelessWidget {
@@ -1424,28 +1449,35 @@ class _EmptyGoalsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              AppPageRoute(builder: (_) => const AddGoalScreen()),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: const Text(
-                  '+ Set First Milestone',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+          Semantics(
+            button: true,
+            label: 'Set First Milestone',
+            child: GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                AppPageRoute(builder: (_) => const AddGoalScreen()),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: const Center(
+                    widthFactor: 1,
+                    child: Text(
+                      '+ Set First Milestone',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1588,11 +1620,15 @@ class _FoundationsRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: InkWell(
+      child: Semantics(
+        button: true,
+        label: '$title, $subtitle',
+        child: InkWell(
         onTap: onTap,
-        splashColor: isDark
-            ? Colors.white10
-            : Colors.black.withValues(alpha: 0.03),
+        splashColor: context.onSurfaceOverlay(
+          lightOpacity: 0.03,
+          darkOpacity: 0.08,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
@@ -1640,8 +1676,9 @@ class _FoundationsRowTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 /// Standalone wrapper for pushing the Planning surface onto navigation routes.

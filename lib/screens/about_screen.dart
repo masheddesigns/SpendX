@@ -221,13 +221,16 @@ class AboutScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // ── Privacy Policy link ───────────────────────
-                InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () => Navigator.push(
-                    context,
-                    AppPageRoute(builder: (_) => const PrivacyPolicyScreen()),
-                  ),
-                  child: Container(
+                Semantics(
+                  button: true,
+                  label: 'Read Privacy Policy',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => Navigator.push(
+                      context,
+                      AppPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                    ),
+                    child: Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainer,
@@ -283,7 +286,8 @@ class AboutScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
+              ),
+            ],
             );
           },
         ),

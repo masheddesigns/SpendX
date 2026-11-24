@@ -40,9 +40,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
             ],
           ),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : Theme.of(context).colorScheme.outline,
+            color: context.borderColor,
             width: 1.0,
           ),
           boxShadow: [
@@ -106,24 +104,30 @@ class DashboardBudgetsCard extends ConsumerWidget {
                         ),
                       );
                     },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Horizons',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      child: Center(
+                        widthFactor: 1,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Horizons',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 15,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 15,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -132,137 +136,159 @@ class DashboardBudgetsCard extends ConsumerWidget {
 
             const SizedBox(height: 16),
 
-            // Budgets Journey List
-            Column(
-              children: List.generate(displayItems.length, (index) {
-                final item = displayItems[index];
-                final spent = item.spent;
-                final limit = item.budget.limit;
-                final isOver = spent > limit;
-                final remaining = limit - spent;
-                final ratio = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
-
-                final color = isOver
-                    ? Theme.of(context).colorScheme.error
-                    : (ratio > 0.8
-                          ? Theme.of(context).colorScheme.tertiary
-                          : (Theme.of(context).colorScheme.secondary));
-
-                final icon = CategoryIconPicker.iconForKey(item.category.icon);
-
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: index == displayItems.length - 1 ? 0 : 14,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: color.withValues(
-                                alpha: isDark ? 0.20 : 0.12,
-                              ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(icon, size: 16, color: color),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.category.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${AppFormat.currency(spent)} of ${AppFormat.currency(limit)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color.withValues(
-                                alpha: isDark ? 0.16 : 0.10,
-                              ),
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.full,
-                              ),
-                            ),
-                            child: Text(
-                              isOver
-                                  ? '${AppFormat.currency(remaining.abs())} over'
-                                  : '${AppFormat.currency(remaining)} cushion',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: color,
-                              ),
-                            ),
-                          ),
-                        ],
+            // Budgets Journey List with Responsive Breakpoint
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 550;
+                if (isWide && displayItems.length > 1) {
+                  final itemWidth = (constraints.maxWidth - 16) / 2;
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 14,
+                    children: displayItems.map((item) {
+                      return SizedBox(
+                        width: itemWidth,
+                        child: _buildBudgetItem(context, item, isDark),
+                      );
+                    }).toList(),
+                  );
+                }
+                return Column(
+                  children: List.generate(displayItems.length, (index) {
+                    final item = displayItems[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == displayItems.length - 1 ? 0 : 14,
                       ),
-                      const SizedBox(height: 8),
-
-                      // Stepping Stone Progress Horizon
-                      Stack(
-                        children: [
-                          Container(
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Theme.of(context).colorScheme.outline,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor: ratio,
-                            child: Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: color,
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      child: _buildBudgetItem(context, item, isDark),
+                    );
+                  }),
                 );
-              }),
+              },
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBudgetItem(
+    BuildContext context,
+    dynamic item,
+    bool isDark,
+  ) {
+    final spent = item.spent;
+    final limit = item.budget.limit;
+    final isOver = spent > limit;
+    final remaining = limit - spent;
+    final ratio = limit > 0 ? (spent / limit).clamp(0.0, 1.0) : 0.0;
+
+    final color = isOver
+        ? Theme.of(context).colorScheme.error
+        : (ratio > 0.8
+              ? Theme.of(context).colorScheme.tertiary
+              : (Theme.of(context).colorScheme.secondary));
+
+    final icon = CategoryIconPicker.iconForKey(item.category.icon);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: color.withValues(
+                  alpha: isDark ? 0.20 : 0.12,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 16, color: color),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${AppFormat.currency(spent)} of ${AppFormat.currency(limit)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 3,
+              ),
+              decoration: BoxDecoration(
+                color: color.withValues(
+                  alpha: isDark ? 0.16 : 0.10,
+                ),
+                borderRadius: BorderRadius.circular(
+                  AppRadius.full,
+                ),
+              ),
+              child: Text(
+                isOver
+                    ? '${AppFormat.currency(remaining.abs())} over'
+                    : '${AppFormat.currency(remaining)} cushion',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Stepping Stone Progress Horizon
+        Stack(
+          children: [
+            Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Theme.of(context).colorScheme.outline,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: ratio,
+              child: Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

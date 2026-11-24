@@ -138,26 +138,31 @@ class QuickActionsRow extends ConsumerWidget {
           const SizedBox(height: 22),
 
           // ── Seamless Canvas Tracking Rhythm (Cardless, Organic) ──
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticService.instance.tap();
-              Navigator.push(
-                context,
-                AppPageRoute(builder: (_) => const FinancialHealthScreen()),
-              );
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header: YOUR RHYTHM  &  STREAK TOKEN
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Semantics(
+            button: true,
+            label: 'Your rhythm and financial health',
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticService.instance.tap();
+                  Navigator.push(
+                    context,
+                    AppPageRoute(builder: (_) => const FinancialHealthScreen()),
+                  );
+                },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'YOUR RHYTHM',
-                      style: TextStyle(
-                        fontSize: 10.5,
+                    // Header: YOUR RHYTHM  &  STREAK TOKEN
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'YOUR RHYTHM',
+                          style: TextStyle(
+                            fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.0,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -203,6 +208,8 @@ class QuickActionsRow extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+      ),
 
           const SizedBox(height: 12),
         ],
@@ -390,26 +397,35 @@ class _RhythmNode extends StatelessWidget {
       );
     }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(height: 20, child: Center(child: nodeCircle)),
-          const SizedBox(height: 5),
-          Text(
-            weekdayLabel,
-            style: TextStyle(
-              fontSize: day.isToday ? 8.5 : 8.0,
-              fontWeight: day.isToday ? FontWeight.w800 : FontWeight.w600,
-              letterSpacing: 0.5,
-              color: day.isToday
-                  ? (Theme.of(context).colorScheme.primary)
-                  : (Theme.of(context).colorScheme.onSurfaceVariant),
+    return Semantics(
+      button: true,
+      label: 'Tracking for ${day.isToday ? "Today, " : ""}$weekdayLabel',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 20, child: Center(child: nodeCircle)),
+                const SizedBox(height: 5),
+                Text(
+                  weekdayLabel,
+                  style: TextStyle(
+                    fontSize: day.isToday ? 8.5 : 8.0,
+                    fontWeight: day.isToday ? FontWeight.w800 : FontWeight.w600,
+                    letterSpacing: 0.5,
+                    color: day.isToday
+                        ? (Theme.of(context).colorScheme.primary)
+                        : (Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -551,56 +567,60 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
     final bg = colorScheme.primary;
     final fg = colorScheme.onPrimary;
 
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        child: Container(
-          height: 48,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.shadow.withValues(alpha: 0.25),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: colorScheme.onPrimary.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
+    return Semantics(
+      button: true,
+      label: 'Log activity',
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.96 : 1.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          child: Container(
+            height: 48,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.25),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
                 ),
-                child: Icon(
-                  Icons.add_rounded,
-                  size: 16,
-                  color: colorScheme.onPrimary,
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: colorScheme.onPrimary.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 16,
+                    color: colorScheme.onPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Log activity',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                  color: fg,
+                const SizedBox(width: 8),
+                Text(
+                  'Log activity',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: fg,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -634,62 +654,71 @@ class _QuickChipState extends State<_QuickChip> {
     final bg = colorScheme.surface;
     final border = colorScheme.outline;
 
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.94 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: border, width: 0.9),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.shadow.withValues(alpha: 0.12),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 20,
-                height: 20,
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTap: widget.onTap,
+          child: Center(
+            child: AnimatedScale(
+              scale: _pressed ? 0.94 : 1.0,
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
-                  color: widget.accentColor.withValues(
-                    alpha: 0.16,
-                  ),
-                  shape: BoxShape.circle,
+                  color: bg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: border, width: 0.9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.shadow.withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  widget.iconData,
-                  size: 12,
-                  color: widget.accentColor,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: widget.accentColor.withValues(
+                          alpha: 0.16,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        widget.iconData,
+                        size: 12,
+                        color: widget.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                          color: colorScheme.onSurface,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                    color: colorScheme.onSurface,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

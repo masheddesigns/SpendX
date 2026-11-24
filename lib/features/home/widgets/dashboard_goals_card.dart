@@ -40,9 +40,7 @@ class DashboardGoalsCard extends ConsumerWidget {
             ],
           ),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : Theme.of(context).colorScheme.outline,
+            color: context.borderColor,
             width: 1.0,
           ),
           boxShadow: [
@@ -104,24 +102,30 @@ class DashboardGoalsCard extends ConsumerWidget {
                         AppPageRoute(builder: (_) => const GoalsScreen()),
                       );
                     },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'All Milestones',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      child: Center(
+                        widthFactor: 1,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'All Milestones',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 15,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 15,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -130,150 +134,171 @@ class DashboardGoalsCard extends ConsumerWidget {
 
             const SizedBox(height: 16),
 
-            // Goals Journey
-            Column(
-              children: List.generate(displayGoals.length, (index) {
-                final goal = displayGoals[index];
-                final target = goal.targetAmount;
-                final saved = goal.currentAmount;
-                final progress = target > 0
-                    ? (saved / target).clamp(0.0, 1.0)
-                    : 0.0;
-                final percentText = '${(progress * 100).toInt()}%';
-
-                final isCompleted = saved >= target && target > 0;
-                final statusLabel = isCompleted
-                    ? 'Completed'
-                    : progress > 0.5
-                    ? 'Halfway'
-                    : 'On Track';
-
-                return InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      AppPageRoute(
-                        builder: (_) => GoalDetailScreen(goal: goal),
+            // Goals Journey with Responsive Breakpoint
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 550;
+                if (isWide && displayGoals.length > 1) {
+                  final itemWidth = (constraints.maxWidth - 16) / 2;
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 14,
+                    children: displayGoals.map((goal) {
+                      return SizedBox(
+                        width: itemWidth,
+                        child: _buildGoalItem(context, goal, isDark),
+                      );
+                    }).toList(),
+                  );
+                }
+                return Column(
+                  children: List.generate(displayGoals.length, (index) {
+                    final goal = displayGoals[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == displayGoals.length - 1 ? 0 : 14,
                       ),
+                      child: _buildGoalItem(context, goal, isDark),
                     );
-                  },
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      bottom: index == displayGoals.length - 1 ? 0 : 14,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          // Organic Progress Ring Pebble
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              SizedBox(
-                                width: 44,
-                                height: 44,
-                                child: CircularProgressIndicator(
-                                  value: progress,
-                                  strokeWidth: 4,
-                                  backgroundColor: isDark
-                                      ? Colors.white.withValues(alpha: 0.08)
-                                      : Theme.of(context).colorScheme.outline,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    isCompleted
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.secondary
-                                        : Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                percentText,
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 12),
-
-                          // Goal details
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  goal.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Saved: ${AppFormat.currency(saved)} of ${AppFormat.currency(target)}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Mindful Milestone badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isCompleted
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.secondaryContainer
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.full,
-                              ),
-                            ),
-                            child: Text(
-                              statusLabel,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: isCompleted
-                                    ? Theme.of(context).colorScheme.secondary
-                                    : (Theme.of(context).colorScheme.primary),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  }),
                 );
-              }),
+              },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoalItem(
+    BuildContext context,
+    dynamic goal,
+    bool isDark,
+  ) {
+    final target = goal.targetAmount;
+    final saved = goal.currentAmount;
+    final progress = target > 0 ? (saved / target).clamp(0.0, 1.0) : 0.0;
+    final percentText = '${(progress * 100).toInt()}%';
+
+    final isCompleted = saved >= target && target > 0;
+    final statusLabel = isCompleted
+        ? 'Completed'
+        : progress > 0.5
+        ? 'Halfway'
+        : 'On Track';
+
+    return Semantics(
+      button: true,
+      label: 'Goal ${goal.title}, $percentText complete, $statusLabel',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            Navigator.push(
+              context,
+              AppPageRoute(
+                builder: (_) => GoalDetailScreen(goal: goal),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                // Organic Progress Ring Pebble
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 4,
+                        backgroundColor: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Theme.of(context).colorScheme.outline,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isCompleted
+                              ? Theme.of(context).colorScheme.secondary
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      percentText,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+
+                // Goal details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goal.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Saved: ${AppFormat.currency(saved)} of ${AppFormat.currency(target)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Mindful Milestone badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isCompleted
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                        : Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(
+                      AppRadius.full,
+                    ),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: isCompleted
+                          ? Theme.of(context).colorScheme.secondary
+                          : (Theme.of(context).colorScheme.primary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

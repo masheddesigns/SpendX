@@ -50,7 +50,7 @@ class _SmartImportScreenState extends State<SmartImportScreen> {
   }
 
   Future<void> _pickFile() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
         'csv', 'tsv', 'txt',
@@ -60,11 +60,11 @@ class _SmartImportScreenState extends State<SmartImportScreen> {
         'zip',
       ],
     );
-    if (picked == null || picked.files.single.path == null) return;
+    if (picked.isEmpty || picked.first.path == null) return;
 
     setState(() => _isLoading = true);
     try {
-      final file = File(picked.files.single.path!);
+      final file = File(picked.first.path!);
       final result = await SmartImporter.instance.parseFile(file);
       setState(() => _result = result);
     } catch (e) {

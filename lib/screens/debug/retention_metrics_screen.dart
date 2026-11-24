@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/import_validation_log.dart';
 import '../../services/retention_events.dart';
 import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/loading_state_widget.dart';
 
 /// Internal debug panel for the retention observation window.
 ///
@@ -85,7 +86,7 @@ class _RetentionMetricsScreenState extends State<RetentionMetricsScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingStateWidget(message: 'Calculating retention metrics...')
           : _error != null
           ? ErrorStateWidget(error: _error!, onRetry: _load)
           : RefreshIndicator(

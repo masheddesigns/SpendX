@@ -38,58 +38,68 @@ class WrappedStoryBubbles extends ConsumerWidget {
                       ? 'Week ${period.split('-W').last}'
                       : _shortLabel(period);
 
-              return GestureDetector(
-                onTap: () { HapticService.instance.tap(); Navigator.push(
-                  context,
-                  AppPageRoute(
-                      builder: (_) => WrappedScreen(period: period)),
-                ); },
-                child: Container(
-                  width: 80,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isYearly
-                          ? [Colors.deepPurple.shade700, Colors.deepPurple.shade400]
-                          : isWeekly
-                              ? [Colors.teal.shade700, Colors.teal.shade400]
-                              : [Colors.blueAccent.shade700, Colors.blueAccent.shade200],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+              return Semantics(
+                button: true,
+                label: 'View $label wrap-up',
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticService.instance.tap();
+                      Navigator.push(
+                        context,
+                        AppPageRoute(
+                            builder: (_) => WrappedScreen(period: period)),
+                      );
+                    },
+                    child: Container(
+                      width: 80,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isYearly
+                              ? [Colors.deepPurple.shade700, Colors.deepPurple.shade400]
+                              : isWeekly
+                                  ? [Colors.teal.shade700, Colors.teal.shade400]
+                                  : [Colors.blueAccent.shade700, Colors.blueAccent.shade200],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.15)),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isYearly
+                                ? Icons.auto_awesome_rounded
+                                : isWeekly
+                                    ? Icons.date_range_rounded
+                                    : Icons.insights_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const Text(
+                            'Wrapped',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.15)),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isYearly
-                            ? Icons.auto_awesome_rounded
-                            : isWeekly
-                                ? Icons.date_range_rounded
-                                : Icons.insights_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Text(
-                        'Wrapped',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               );

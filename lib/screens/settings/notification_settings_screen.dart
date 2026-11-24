@@ -126,8 +126,13 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 ).colorScheme.primary.withValues(alpha: 0.35),
               ),
             ),
-            child: InkWell(
-              onTap: () {
+            child: Semantics(
+              button: true,
+              label: 'Automatic Ingestion Hub, Real-time bank SMS, UPI app notifications & ledger sync',
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: InkWell(
+                  onTap: () {
                 Navigator.push(
                   context,
                   AppPageRoute(
@@ -179,6 +184,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
               ),
             ),
           ),
+        ),
+      ),
           if (!_exactAlarmEnabled) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 16),

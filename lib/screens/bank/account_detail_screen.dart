@@ -250,9 +250,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                           : [const Color(0xFFFFFFFF), const Color(0xFFFBF8F3)],
                     ),
                     border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.1)
-                          : Theme.of(context).colorScheme.outline,
+                      color: context.borderColor,
                       width: 1,
                     ),
                     boxShadow: [
@@ -767,9 +765,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
               borderRadius: BorderRadius.circular(24),
               color: Theme.of(context).colorScheme.surfaceContainer,
               border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Theme.of(context).colorScheme.outline,
+                color: context.borderColor,
                 width: 0.9,
               ),
               boxShadow: [

@@ -396,14 +396,18 @@ class TransactionTile extends StatelessWidget {
     final tile = AppCard(
       borderRadius: AppRadius.l,
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-      child: ListTile(
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        horizontalTitleGap: 10,
-        minLeadingWidth: 38,
-        titleAlignment: ListTileTitleAlignment.center,
-        contentPadding: AppSpacing.cardPadding,
-        onTap: onTap,
+      child: Semantics(
+        button: onTap != null,
+        enabled: onTap != null,
+        label: '${_buildTitle()}, ${_buildSubtitle()}, $sign ${_formatAmount(transaction.amount)}',
+        child: ListTile(
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          horizontalTitleGap: 10,
+          minLeadingWidth: 38,
+          titleAlignment: ListTileTitleAlignment.center,
+          contentPadding: AppSpacing.cardPadding,
+          onTap: onTap,
         leading: Container(
           width: 40,
           height: 40,
@@ -470,7 +474,8 @@ class TransactionTile extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
 
     final canSlide =
         onEdit != null ||

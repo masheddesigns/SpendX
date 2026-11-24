@@ -68,6 +68,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late String _selectedType;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
+  final FocusNode _amountFocusNode = FocusNode();
+  final FocusNode _notesFocusNode = FocusNode();
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategoryId;
 
@@ -221,6 +223,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   void dispose() {
     _amountController.dispose();
     _notesController.dispose();
+    _amountFocusNode.dispose();
+    _notesFocusNode.dispose();
     super.dispose();
   }
 
@@ -671,7 +675,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             _loadInitialData();
           },
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             child: AnimatedContainer(
               duration: MediaQuery.disableAnimationsOf(context)
                   ? Duration.zero
@@ -839,31 +843,40 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Widget _movementPresetChip(String label, VoidCallback onTap, bool isDark) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: context.onSurfaceOverlay(
-            lightOpacity: 0.063,
-            darkOpacity: 0.094,
-          ),
+    return Semantics(
+      button: true,
+      label: 'Preset $label',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: context.onSurfaceOverlay(
-              lightOpacity: 0.09,
-              darkOpacity: 0.16,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: context.onSurfaceOverlay(
+                  lightOpacity: 0.063,
+                  darkOpacity: 0.094,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: context.onSurfaceOverlay(
+                    lightOpacity: 0.09,
+                    darkOpacity: 0.16,
+                  ),
+                  width: 0.75,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
             ),
-            width: 0.75,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
@@ -1094,6 +1107,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 8),
                     AppAmountField(
                       controller: _amountController,
+                      focusNode: _amountFocusNode,
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) => _notesFocusNode.requestFocus(),
                       amountColor: headerColor,
                       validator: (value) {
                         final amount = double.tryParse((value ?? '').trim());
@@ -1109,39 +1125,49 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: _recentAmounts.map((amount) {
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () => _applyQuickAmount(amount),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 48),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
+                          final formattedAmount = '${settings.currencySymbol}${_formatQuickAmount(amount)}';
+                          return Semantics(
+                            button: true,
+                            label: 'Quick amount $formattedAmount',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () => _applyQuickAmount(amount),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                  minHeight: 48,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surface
-                                      .withValues(alpha: isDark ? 0.12 : 0.25),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: context.onSurfaceOverlay(
-                                      lightOpacity: 0.09,
-                                      darkOpacity: 0.16,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
                                     ),
-                                    width: 0.75,
-                                  ),
-                                ),
-                                child: Text(
-                                  '${settings.currencySymbol}${_formatQuickAmount(amount)}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surface
+                                          .withValues(alpha: isDark ? 0.12 : 0.25),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: context.onSurfaceOverlay(
+                                          lightOpacity: 0.09,
+                                          darkOpacity: 0.16,
+                                        ),
+                                        width: 0.75,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      formattedAmount,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurface,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1180,57 +1206,64 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                     ).colorScheme.onSurface,
                                   ),
                                 ),
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(12),
-                                  onTap: () async {
-                                    final newCat =
-                                        await showModalBottomSheet<Category>(
-                                          context: context,
-                                          isScrollControlled: true,
-                                          backgroundColor: Colors.transparent,
-                                          builder: (_) => AddCategorySheet(
-                                            initialType: _selectedType,
-                                          ),
-                                        );
-                                    if (newCat != null) {
-                                      await _loadInitialData();
-                                      setState(() {
-                                        _selectedCategoryId = newCat.id;
-                                        _didExplicitCategorySelection = true;
-                                      });
-                                    }
-                                  },
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      minHeight: 48,
-                                    ),
-                                    child: Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 4,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.add_circle_outline_rounded,
-                                            size: 16,
-                                            color: modern_theme
-                                                .AppTheme
-                                                .primaryBlue,
-                                          ),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Add New',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: modern_theme
-                                                  .AppTheme
-                                                  .primaryBlue,
+                                Semantics(
+                                  button: true,
+                                  label: 'Add new category',
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () async {
+                                      final newCat =
+                                          await showModalBottomSheet<Category>(
+                                            context: context,
+                                            isScrollControlled: true,
+                                            backgroundColor: Colors.transparent,
+                                            builder: (_) => AddCategorySheet(
+                                              initialType: _selectedType,
                                             ),
+                                          );
+                                      if (newCat != null) {
+                                        await _loadInitialData();
+                                        setState(() {
+                                          _selectedCategoryId = newCat.id;
+                                          _didExplicitCategorySelection = true;
+                                        });
+                                      }
+                                    },
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
+                                      ),
+                                      child: Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 4,
                                           ),
-                                        ],
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.add_circle_outline_rounded,
+                                                size: 16,
+                                                color: modern_theme
+                                                    .AppTheme
+                                                    .primaryBlue,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Add New',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: modern_theme
+                                                      .AppTheme
+                                                      .primaryBlue,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1351,6 +1384,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     const SizedBox(height: 16),
                     shared.AppTextField(
                       controller: _notesController,
+                      focusNode: _notesFocusNode,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _notesFocusNode.unfocus(),
                       label: _selectedType == 'transfer'
                           ? 'Transfer Note (Optional)'
                           : 'Merchant / Payee Notes (Optional)',
@@ -1359,6 +1395,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             ? Icons.swap_horiz_rounded
                             : Icons.notes_rounded,
                       ),
+                      validator: (val) {
+                        if (val != null && val.trim().length > 500) {
+                          return 'Note must be 500 characters or less';
+                        }
+                        return null;
+                      },
                     ),
                   ],
                 ),

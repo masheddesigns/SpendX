@@ -655,25 +655,32 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          GestureDetector(
-                            onTap: _onAddTransaction,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 48),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 10,
+                          Semantics(
+                            button: true,
+                            label: 'Log activity',
+                            child: GestureDetector(
+                              onTap: _onAddTransaction,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                  minHeight: 48,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(100),
-                                ),
-                                child: const Text(
-                                  '+ Log activity',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(100),
+                                  ),
+                                  child: const Text(
+                                    '+ Log activity',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -764,7 +771,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
       selected: isSelected,
       label: '$label filter',
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
@@ -827,7 +834,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
       selected: isSelected,
       label: '$label sub-filter',
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,

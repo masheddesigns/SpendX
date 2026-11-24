@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:spend_x/theme/app_spacing.dart';
+import 'package:spend_x/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -268,28 +268,36 @@ class _PillButton extends StatelessWidget {
     final activeText = cs.onPrimaryContainer;
     final inactiveText = Theme.of(context).colorScheme.onSurfaceVariant;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: isSelected ? activeBg : inactiveBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? cs.primary : cs.outline,
-              width: 1,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$label period',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: isSelected ? activeBg : inactiveBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? cs.primary : cs.outline,
+                width: 1,
+              ),
             ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? activeText : inactiveText,
+            child: Center(
+              widthFactor: 1,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? activeText : inactiveText,
+                ),
+              ),
             ),
           ),
         ),
@@ -331,7 +339,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
       savingsRateColor = cs.error;
     } else {
       savingsRateText = '0.0%';
-      savingsRateColor = isDark ? Colors.grey : Colors.black54;
+      savingsRateColor = context.textMuted;
     }
 
     return SpendXGlassSurface(
@@ -392,54 +400,102 @@ class _CashFlowHorizonSection extends StatelessWidget {
 
             const SizedBox(height: 16),
             Divider(
-              color: isDark
-                  ? Colors.white10
-                  : Colors.black.withValues(alpha: 0.06),
+              color: context.borderColor,
               height: 1,
             ),
             const SizedBox(height: 14),
 
-            // Four Flow Pillars
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricPillar(
-                    label: 'Total Inflow',
-                    value: AppFormat.currency(summary.totalIncome),
-                    valueColor: primaryInflowColor,
-                    isDark: isDark,
-                  ),
-                ),
-                Expanded(
-                  child: _MetricPillar(
-                    label: 'Total Outflow',
-                    value: AppFormat.currency(summary.totalExpense),
-                    valueColor: primaryOutflowColor,
-                    isDark: isDark,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricPillar(
-                    label: 'Savings Rate',
-                    value: savingsRateText,
-                    valueColor: savingsRateColor,
-                    isDark: isDark,
-                  ),
-                ),
-                Expanded(
-                  child: _MetricPillar(
-                    label: 'Avg Daily Spend',
-                    value: AppFormat.currency(summary.avgDailySpending),
-                    valueColor: Theme.of(context).colorScheme.onSurface,
-                    isDark: isDark,
-                  ),
-                ),
-              ],
+            // Four Flow Pillars with Responsive Breakpoint
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 600;
+                if (isWide) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: _MetricPillar(
+                          label: 'Total Inflow',
+                          value: AppFormat.currency(summary.totalIncome),
+                          valueColor: primaryInflowColor,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MetricPillar(
+                          label: 'Total Outflow',
+                          value: AppFormat.currency(summary.totalExpense),
+                          valueColor: primaryOutflowColor,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MetricPillar(
+                          label: 'Savings Rate',
+                          value: savingsRateText,
+                          valueColor: savingsRateColor,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MetricPillar(
+                          label: 'Avg Daily Spend',
+                          value: AppFormat.currency(summary.avgDailySpending),
+                          valueColor: Theme.of(context).colorScheme.onSurface,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _MetricPillar(
+                            label: 'Total Inflow',
+                            value: AppFormat.currency(summary.totalIncome),
+                            valueColor: primaryInflowColor,
+                            isDark: isDark,
+                          ),
+                        ),
+                        Expanded(
+                          child: _MetricPillar(
+                            label: 'Total Outflow',
+                            value: AppFormat.currency(summary.totalExpense),
+                            valueColor: primaryOutflowColor,
+                            isDark: isDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _MetricPillar(
+                            label: 'Savings Rate',
+                            value: savingsRateText,
+                            valueColor: savingsRateColor,
+                            isDark: isDark,
+                          ),
+                        ),
+                        Expanded(
+                          child: _MetricPillar(
+                            label: 'Avg Daily Spend',
+                            value: AppFormat.currency(summary.avgDailySpending),
+                            valueColor: Theme.of(context).colorScheme.onSurface,
+                            isDark: isDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
 
             if (summary.salarySourceCount > 0) ...[
@@ -450,9 +506,10 @@ class _CashFlowHorizonSection extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.04)
-                      : Colors.black.withValues(alpha: 0.03),
+                  color: context.onSurfaceOverlay(
+                    lightOpacity: 0.03,
+                    darkOpacity: 0.04,
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -603,6 +660,7 @@ class _MonthlyMovementSection extends StatelessWidget {
                     ),
                   )
                 : _buildBarChart(
+                    context,
                     chronologicalData,
                     cs,
                     inflowColor,
@@ -615,6 +673,7 @@ class _MonthlyMovementSection extends StatelessWidget {
   }
 
   Widget _buildBarChart(
+    BuildContext context,
     List<MonthData> data,
     ColorScheme cs,
     Color inflowColor,
@@ -653,7 +712,7 @@ class _MonthlyMovementSection extends StatelessWidget {
                   return BarTooltipItem(
                     '$monthTitle\n$label: ${AppFormat.currency(amount)}',
                     TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: context.textPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -699,9 +758,7 @@ class _MonthlyMovementSection extends StatelessWidget {
               show: true,
               drawVerticalLine: false,
               getDrawingHorizontalLine: (_) => FlLine(
-                color: isDark
-                    ? Colors.white10
-                    : Colors.black.withValues(alpha: 0.05),
+                color: context.borderColor,
                 strokeWidth: 1,
               ),
             ),
@@ -848,9 +905,7 @@ class _CategoryBreakdownSection extends StatelessWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: categories.length,
                 separatorBuilder: (_, _) => Divider(
-                  color: isDark
-                      ? Colors.white10
-                      : Colors.black.withValues(alpha: 0.05),
+                  color: context.borderColor,
                   height: 16,
                 ),
                 itemBuilder: (context, i) {
@@ -895,9 +950,7 @@ class _CategoryProportionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trackColor = isDark
-        ? Colors.white.withValues(alpha: 0.06)
-        : Colors.black.withValues(alpha: 0.05);
+    final trackColor = context.borderColor;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -925,9 +978,10 @@ class _CategoryProportionRow extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.black.withValues(alpha: 0.04),
+                      color: context.onSurfaceOverlay(
+                        lightOpacity: 0.04,
+                        darkOpacity: 0.05,
+                      ),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1426,7 +1480,10 @@ class _LoanPrincipalAmortizationCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: overallProgress.clamp(0.0, 1.0),
                   minHeight: 6,
-                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                  backgroundColor: context.onSurfaceOverlay(
+                    lightOpacity: 0.12,
+                    darkOpacity: 0.10,
+                  ),
                   valueColor: AlwaysStoppedAnimation(primaryColor),
                 ),
               ),
@@ -1591,7 +1648,10 @@ class _RevolvingCreditExposureCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: (overallUtil / 100).clamp(0.0, 1.0),
                   minHeight: 6,
-                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                  backgroundColor: context.onSurfaceOverlay(
+                    lightOpacity: 0.12,
+                    darkOpacity: 0.10,
+                  ),
                   valueColor: AlwaysStoppedAnimation(utilColor),
                 ),
               ),
@@ -1766,20 +1826,24 @@ class _ExportOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
+    return Semantics(
+      button: true,
+      label: '$title, $subtitle',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.black.withValues(alpha: 0.03),
+          color: context.onSurfaceOverlay(
+            lightOpacity: 0.03,
+            darkOpacity: 0.05,
+          ),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDark
-                ? Colors.white10
-                : Colors.black.withValues(alpha: 0.08),
+            color: context.borderColor,
             width: 1,
           ),
         ),
@@ -1834,6 +1898,8 @@ class _ExportOptionTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }

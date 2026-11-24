@@ -637,9 +637,15 @@ class _AutomaticIngestionScreenState
     required bool isDark,
     VoidCallback? onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      label: '$title, $subtitle',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,8 +713,10 @@ class _AutomaticIngestionScreenState
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildDivider(bool isDark) {
     return Container(

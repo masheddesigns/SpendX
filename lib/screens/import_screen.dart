@@ -59,14 +59,14 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 
   Future<void> _importStandardCsv() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
       );
 
-      if (result != null && result.files.single.path != null) {
+      if (files.isNotEmpty && files.first.path != null) {
         setState(() => _loading = true);
-        final file = File(result.files.single.path!);
+        final file = File(files.first.path!);
         final count = await ExportService.instance.importTransactionsFromCsv(
           file,
         );
@@ -87,15 +87,15 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   }
 
   Future<void> _pickFileForGeneric() async {
-    final result = await FilePicker.platform.pickFiles(
+    final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
-    if (result == null || result.files.isEmpty) return;
+    if (files.isEmpty || files.first.path == null) return;
 
     setState(() {
       _loading = true;
-      _selectedFile = File(result.files.first.path!);
+      _selectedFile = File(files.first.path!);
     });
 
     final content = await _selectedFile!.readAsString();
@@ -273,10 +273,15 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
+    return Semantics(
+      button: true,
+      label: '$title, $subtitle',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainer,
@@ -319,8 +324,10 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _buildPreviewView() {
     final newCount = _rows.where((r) => !r.isDuplicate).length;
@@ -438,12 +445,12 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       );
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'csv'],
     );
-    if (result == null || result.files.isEmpty) return;
-    final path = result.files.first.path!;
+    if (files.isEmpty || files.first.path == null) return;
+    final path = files.first.path!;
     final ext = path.split('.').last.toLowerCase();
 
     if (ext == 'csv') {

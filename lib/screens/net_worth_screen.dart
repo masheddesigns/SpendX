@@ -975,38 +975,47 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
     required String type,
     required Color color,
   }) {
-    return InkWell(
-      onTap: () async {
-        final res = await Navigator.push(
-          context,
-          AppPageRoute(builder: (_) => AddBankAccountScreen(initialType: type)),
-        );
-        if (res == true) {
-          _refreshData();
-        }
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+    return Semantics(
+      button: true,
+      label: 'Add $label',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: () async {
+            final res = await Navigator.push(
+              context,
+              AppPageRoute(builder: (_) => AddBankAccountScreen(initialType: type)),
+            );
+            if (res == true) {
+              _refreshData();
+            }
+          },
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 5),
-            Text(
-              '+ $label',
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: color,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 14, color: color),
+                  const SizedBox(width: 5),
+                  Text(
+                    '+ $label',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1097,20 +1106,23 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         level: SpendXGlassLevel.base,
         borderRadius: BorderRadius.circular(AppRadius.m),
         padding: const EdgeInsets.all(14),
-        child: InkWell(
-          onTap: () {
-            if (isInvestment) {
-              _showUpdateAssetValuationSheet(a);
-            } else {
-              Navigator.push(
-                context,
-                AppPageRoute(builder: (_) => AccountDetailScreen(account: a)),
-              );
-            }
-          },
-          onLongPress: () => _showAccountMenu(a),
-          borderRadius: BorderRadius.circular(AppRadius.m),
-          child: Row(
+        child: Semantics(
+          button: true,
+          label: '${a.name}, balance ${AppFormat.currency(a.balance)}',
+          child: InkWell(
+            onTap: () {
+              if (isInvestment) {
+                _showUpdateAssetValuationSheet(a);
+              } else {
+                Navigator.push(
+                  context,
+                  AppPageRoute(builder: (_) => AccountDetailScreen(account: a)),
+                );
+              }
+            },
+            onLongPress: () => _showAccountMenu(a),
+            borderRadius: BorderRadius.circular(AppRadius.m),
+            child: Row(
             children: [
               Container(
                 width: 40,
@@ -1190,8 +1202,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCcLiabilityTile(CreditCard c) {
     if (c.outstanding <= 0) return const SizedBox.shrink();
@@ -1207,7 +1220,10 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         level: SpendXGlassLevel.base,
         borderRadius: BorderRadius.circular(AppRadius.m),
         padding: const EdgeInsets.all(14),
-        child: InkWell(
+        child: Semantics(
+          button: true,
+          label: '$cardName, outstanding ${AppFormat.currency(c.usedAmount)}, Tap to pay bill',
+          child: InkWell(
           onTap: () async {
             final res = await Navigator.push(
               context,
@@ -1287,8 +1303,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildLendingLiabilityTile(Lending l) {
     final remaining = l.originalAmount - l.paidAmount;
@@ -1581,39 +1598,48 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                           50000.0,
                           100000.0,
                         ])
-                          InkWell(
-                            onTap: () {
-                              final curr =
-                                  double.tryParse(ctrl.text.trim()) ??
-                                  initialBalance;
-                              final next = curr + delta;
-                              ctrl.text = next == next.roundToDouble()
-                                  ? next.toStringAsFixed(0)
-                                  : next.toStringAsFixed(2);
-                              setSheetState(() {});
-                            },
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primaryContainer,
+                          Semantics(
+                            button: true,
+                            label: 'Add ${delta >= 1000 ? "+₹${(delta / 1000).toStringAsFixed(0)}k" : "+₹$delta"}',
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                              child: InkWell(
+                                onTap: () {
+                                  final curr =
+                                      double.tryParse(ctrl.text.trim()) ??
+                                      initialBalance;
+                                  final next = curr + delta;
+                                  ctrl.text = next == next.roundToDouble()
+                                      ? next.toStringAsFixed(0)
+                                      : next.toStringAsFixed(2);
+                                  setSheetState(() {});
+                                },
                                 borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                '+₹${(delta / 1000).toStringAsFixed(0)}k',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimaryContainer,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Text(
+                                      '+₹${(delta / 1000).toStringAsFixed(0)}k',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? Colors.white70
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimaryContainer,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

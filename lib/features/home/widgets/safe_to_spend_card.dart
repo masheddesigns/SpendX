@@ -266,45 +266,49 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           const SizedBox(height: 16),
 
           // ── Status Headline (Tappable for Milestone Details) ──
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: calc.commitmentItems.isNotEmpty
-                ? () => _showCommitmentDetails(
-                    context,
-                    calc.commitmentItems,
-                    isDark,
-                  )
-                : () => _showBreakdownSheet(context, calc, isDark),
-            child: Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(minHeight: 48),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(
-                      statusLine,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        letterSpacing: -0.2,
+          Semantics(
+            button: true,
+            label: '$statusLine. Tap for details.',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: calc.commitmentItems.isNotEmpty
+                  ? () => _showCommitmentDetails(
+                      context,
+                      calc.commitmentItems,
+                      isDark,
+                    )
+                  : () => _showBreakdownSheet(context, calc, isDark),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        statusLine,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          letterSpacing: -0.2,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 15,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 15,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -312,48 +316,55 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           const SizedBox(height: 8),
 
           // ── Positive, Dignified Amount (No scary negative sign) ──
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: calc.commitmentItems.any((c) => c.isOverdue)
-                ? () => _showCommitmentDetails(
-                    context,
-                    calc.commitmentItems,
-                    isDark,
-                  )
-                : () => _showBreakdownSheet(context, calc, isDark),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    '₹',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.9)
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
+          Semantics(
+            button: true,
+            label: 'Safe to spend: ${AppFormat.currency(displayAmount)}',
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: calc.commitmentItems.any((c) => c.isOverdue)
+                    ? () => _showCommitmentDetails(
+                        context,
+                        calc.commitmentItems,
+                        isDark,
+                      )
+                    : () => _showBreakdownSheet(context, calc, isDark),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        '₹',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.9)
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        AppFormat.currency(
+                          displayAmount,
+                        ).replaceAll('₹', '').trim(),
+                        style: TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1.0,
+                          color: isDark
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 2),
-                  Text(
-                    AppFormat.currency(
-                      displayAmount,
-                    ).replaceAll('₹', '').trim(),
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -1.0,
-                      color: isDark
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -372,27 +383,32 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
 
           // ── Overdue Obligations Alert Banner ──
           if (hasOverdue)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () =>
-                  _showCommitmentDetails(context, calc.commitmentItems, isDark),
-              child: Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.error.withValues(alpha: 0.4),
-                    width: 0.8,
-                  ),
-                ),
-                child: Row(
+            Semantics(
+              button: true,
+              label: 'Overdue obligations. Tap to view.',
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () =>
+                      _showCommitmentDetails(context, calc.commitmentItems, isDark),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.error.withValues(alpha: 0.4),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
@@ -412,7 +428,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                   ],
                 ),
               ),
-            )
+            ),
+          ),
+        )
           else if (hasShortfall)
             Container(
               margin: const EdgeInsets.only(top: 8),
@@ -523,46 +541,53 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             Positioned(
               left: x1 - 50,
               top: 0,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: nextBill != null
-                    ? () => _showCommitmentDetails(
-                        context,
-                        allCommitments,
-                        isDark,
-                      )
-                    : null,
-                child: Container(
-                  width: 100,
-                  height: 95,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        height: 36,
-                      ), // Clearance below diamond node
-                      Text(
-                        nextBill != null ? 'Next bill' : 'Milestone',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Theme.of(context).colorScheme.tertiary,
+              child: Semantics(
+                button: nextBill != null,
+                enabled: nextBill != null,
+                label: nextBill != null
+                    ? 'Next bill: ${DateFormat('d MMM').format(nextBill.dueDate)}'
+                    : 'Milestone',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: nextBill != null
+                      ? () => _showCommitmentDetails(
+                          context,
+                          allCommitments,
+                          isDark,
+                        )
+                      : null,
+                  child: Container(
+                    width: 100,
+                    height: 95,
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          height: 36,
+                        ), // Clearance below diamond node
+                        Text(
+                          nextBill != null ? 'Next bill' : 'Milestone',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Theme.of(context).colorScheme.tertiary,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      Text(
-                        nextBill != null
-                            ? DateFormat('d MMM').format(nextBill.dueDate)
-                            : '${now.add(const Duration(days: 7)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 7)))}',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        Text(
+                          nextBill != null
+                              ? DateFormat('d MMM').format(nextBill.dueDate)
+                              : '${now.add(const Duration(days: 7)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 7)))}',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -572,46 +597,53 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
             Positioned(
               left: x2 - 45,
               top: 35,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: secondBill != null
-                    ? () => _showCommitmentDetails(
-                        context,
-                        allCommitments,
-                        isDark,
-                      )
-                    : null,
-                child: SizedBox(
-                  width: 90,
-                  height: inflowLabelHeight,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 25),
-                      Text(
-                        secondBill != null ? "Upcoming" : "Inflow",
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: secondBill != null
-                              ? (Theme.of(context).colorScheme.primary)
-                              : (Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant),
+              child: Semantics(
+                button: secondBill != null,
+                enabled: secondBill != null,
+                label: secondBill != null
+                    ? 'Upcoming: ${DateFormat('d MMM').format(secondBill.dueDate)}'
+                    : 'Inflow',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: secondBill != null
+                      ? () => _showCommitmentDetails(
+                          context,
+                          allCommitments,
+                          isDark,
+                        )
+                      : null,
+                  child: SizedBox(
+                    width: 90,
+                    height: inflowLabelHeight,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 25),
+                        Text(
+                          secondBill != null ? "Upcoming" : "Inflow",
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: secondBill != null
+                                ? (Theme.of(context).colorScheme.primary)
+                                : (Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant),
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      Text(
-                        secondBill != null
-                            ? DateFormat('d MMM').format(secondBill.dueDate)
-                            : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        Text(
+                          secondBill != null
+                              ? DateFormat('d MMM').format(secondBill.dueDate)
+                              : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1350,90 +1382,106 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                             ? '${diff.abs()}d overdue'
                             : 'Due in ${diff}d';
                         final isOverdue = diff < 0;
-                        return InkWell(
-                          onTap: () {
-                            Navigator.of(ctx).pop();
-                            _showCommitmentDetails(
-                              context,
-                              calc.commitmentItems,
-                              isDark,
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 6,
-                              horizontal: 4,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  item.type == 'credit_card'
-                                      ? Icons.credit_card_rounded
-                                      : Icons.payment_rounded,
-                                  size: 14,
-                                  color: isOverdue
-                                      ? Theme.of(context).colorScheme.error
-                                      : (Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant),
+                        return Semantics(
+                          button: true,
+                          label: '${item.title}, $dueStr, ${AppFormat.currency(item.amount.toRupees.abs())}',
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                _showCommitmentDetails(
+                                  context,
+                                  calc.commitmentItems,
+                                  isDark,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 4,
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '${item.title} ($dueStr)',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w500,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      item.type == 'credit_card'
+                                          ? Icons.credit_card_rounded
+                                          : Icons.payment_rounded,
+                                      size: 14,
                                       color: isOverdue
-                                          ? (Theme.of(
-                                              context,
-                                            ).colorScheme.error)
+                                          ? Theme.of(context).colorScheme.error
                                           : (Theme.of(
                                               context,
                                             ).colorScheme.onSurfaceVariant),
                                     ),
-                                  ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '${item.title} ($dueStr)',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: isOverdue
+                                              ? (Theme.of(
+                                                  context,
+                                                ).colorScheme.error)
+                                              : (Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant),
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '-${AppFormat.currency(item.amount.toRupees.abs())}',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context).colorScheme.error,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Icon(
+                                      Icons.chevron_right_rounded,
+                                      size: 14,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  '-${AppFormat.currency(item.amount.toRupees.abs())}',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Icon(
-                                  Icons.chevron_right_rounded,
-                                  size: 14,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         );
                       }),
                       const SizedBox(height: 6),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          _showCommitmentDetails(
-                            context,
-                            calc.commitmentItems,
-                            isDark,
-                          );
-                        },
-                        child: Text(
-                          'Tap any obligation above to cancel or mark as paid →',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.primary,
+                      Semantics(
+                        button: true,
+                        label: 'Manage obligations',
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.of(ctx).pop();
+                              _showCommitmentDetails(
+                                context,
+                                calc.commitmentItems,
+                                isDark,
+                              );
+                            },
+                            child: Center(
+                              child: Text(
+                                'Tap any obligation above to cancel or mark as paid →',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],

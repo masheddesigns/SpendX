@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../theme/app_theme.dart';
 
 import '../core/utils/category_resolver.dart';
 import '../data/repositories/transaction_repo.dart';
@@ -104,11 +105,11 @@ class _DataHealthScreenState extends ConsumerState<DataHealthScreen> {
     final score = _score;
     final scoreVal = score?.score ?? 100.0;
     final scoreColor = scoreVal >= 90
-        ? Colors.green
+        ? AppTheme.semanticIncome
         : scoreVal >= 75
         ? cs.primary
         : scoreVal >= 60
-        ? Colors.orange
+        ? AppTheme.semanticWarning
         : cs.error;
 
     return Container(
@@ -709,6 +710,7 @@ class _IssueCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: _severityColor(
+                          context,
                           issue.severity,
                         ).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -716,7 +718,7 @@ class _IssueCard extends StatelessWidget {
                       child: Text(
                         issue.severity.name.toUpperCase(),
                         style: TextStyle(
-                          color: _severityColor(issue.severity),
+                          color: _severityColor(context, issue.severity),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -767,9 +769,9 @@ class _IssueCard extends StatelessWidget {
     );
   }
 
-  Color _severityColor(AuditSeverity s) => switch (s) {
-    AuditSeverity.low => Colors.grey,
-    AuditSeverity.medium => Colors.orange,
-    AuditSeverity.high => Colors.red,
+  Color _severityColor(BuildContext context, AuditSeverity s) => switch (s) {
+    AuditSeverity.low => context.textMuted,
+    AuditSeverity.medium => AppTheme.semanticWarning,
+    AuditSeverity.high => Theme.of(context).colorScheme.error,
   };
 }

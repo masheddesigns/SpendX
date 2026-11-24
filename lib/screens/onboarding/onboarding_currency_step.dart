@@ -52,13 +52,17 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                     horizontal: 16,
                     vertical: 12,
                   ),
-                  child: InkWell(
-                    onTap: () {
-                      _updateState(() => _selectedCurrency = c['code']!);
-                      SettingsService.instance.setPrimaryCurrency(c['code']!);
-                    },
-                    borderRadius: BorderRadius.circular(AppRadius.m),
-                    child: Row(
+                  child: Semantics(
+                    button: true,
+                    selected: isSelected,
+                    label: '${c['name']!}, ${c['code']!}',
+                    child: InkWell(
+                      onTap: () {
+                        _updateState(() => _selectedCurrency = c['code']!);
+                        SettingsService.instance.setPrimaryCurrency(c['code']!);
+                      },
+                      borderRadius: BorderRadius.circular(AppRadius.m),
+                      child: Row(
                       children: [
                         Container(
                           width: 40,
@@ -119,7 +123,8 @@ extension _OnboardingCurrencyStep on _OnboardingScreenState {
                       ],
                     ),
                   ),
-                );
+                ),
+              );
               },
             ),
           ),

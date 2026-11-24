@@ -72,16 +72,21 @@ class MonthlyPulseCard extends ConsumerWidget {
             ),
           ],
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: () {
-            Navigator.push(
-              context,
-              AppPageRoute(builder: (_) => const ReportsScreen()),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(18),
+        child: Semantics(
+          button: true,
+          label: 'Monthly Pulse: View reports',
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(28),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  AppPageRoute(builder: (_) => const ReportsScreen()),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -134,159 +139,164 @@ class MonthlyPulseCard extends ConsumerWidget {
 
                 const SizedBox(height: 14),
 
-                // ── Connected Flow Landscape ──────────────────
-                Row(
-                  children: [
-                    // Income Pillar
-                    Expanded(
-                      flex: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.secondary.withValues(alpha: 0.25),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                // ── Connected Flow Landscape (Responsive) ──────────────────
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 500;
+                    return Row(
+                      children: [
+                        // Income Pillar
+                        Expanded(
+                          flex: isWide ? 5 : 4,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isWide ? 18 : 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withValues(alpha: 0.25),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.arrow_downward_rounded,
-                                  size: 13,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.secondary,
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_downward_rounded,
+                                      size: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.secondary,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Income',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSecondaryContainer,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(height: 5),
                                 Text(
-                                  'Income',
+                                  AppFormat.currency(income),
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: isWide ? 17 : 15,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.4,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.onSecondaryContainer,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 5),
-                            Text(
-                              AppFormat.currency(income),
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSecondaryContainer,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Central Flow Bridge
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: netCashFlow >= 0
-                              ? Theme.of(context).colorScheme.secondaryContainer
-                              : Theme.of(context).colorScheme.errorContainer,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          netCashFlow >= 0
-                              ? Icons.trending_up_rounded
-                              : Icons.trending_down_rounded,
-                          size: 15,
-                          color: netCashFlow >= 0
-                              ? Theme.of(context).colorScheme.secondary
-                              : Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-
-                    // Expenses Pillar
-                    Expanded(
-                      flex: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.error.withValues(alpha: 0.25),
-                            width: 0.8,
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+
+                        // Central Flow Bridge
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: netCashFlow >= 0
+                                  ? Theme.of(context).colorScheme.secondaryContainer
+                                  : Theme.of(context).colorScheme.errorContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              netCashFlow >= 0
+                                  ? Icons.trending_up_rounded
+                                  : Icons.trending_down_rounded,
+                              size: 15,
+                              color: netCashFlow >= 0
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+
+                        // Expenses Pillar
+                        Expanded(
+                          flex: isWide ? 5 : 4,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isWide ? 18 : 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.error.withValues(alpha: 0.25),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.arrow_outward_rounded,
-                                  size: 13,
-                                  color: Theme.of(context).colorScheme.error,
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_outward_rounded,
+                                      size: 13,
+                                      color: Theme.of(context).colorScheme.error,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Expenses',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(context).colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(height: 5),
                                 Text(
-                                  'Expenses',
+                                  AppFormat.currency(expense),
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: isWide ? 17 : 15,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.4,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 5),
-                            Text(
-                              AppFormat.currency(expense),
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onErrorContainer,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 12),
@@ -329,6 +339,8 @@ class MonthlyPulseCard extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 }

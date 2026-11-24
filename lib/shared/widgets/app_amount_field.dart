@@ -11,6 +11,8 @@ class AppAmountField extends StatelessWidget {
     this.amountColor,
     this.onChanged,
     this.validator,
+    this.textInputAction,
+    this.onFieldSubmitted,
   });
 
   final TextEditingController controller;
@@ -18,6 +20,8 @@ class AppAmountField extends StatelessWidget {
   final Color? amountColor;
   final ValueChanged<String>? onChanged;
   final FormFieldValidator<String>? validator;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,8 @@ class AppAmountField extends StatelessWidget {
         focusNode: focusNode,
         onChanged: onChanged,
         validator: validator,
+        textInputAction: textInputAction,
+        onFieldSubmitted: onFieldSubmitted,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),

@@ -21,6 +21,8 @@ class AppTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final bool readOnly;
   final VoidCallback? onTap;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
 
   const AppTextField({
     super.key,
@@ -44,6 +46,8 @@ class AppTextField extends StatelessWidget {
     this.focusNode,
     this.readOnly = false,
     this.onTap,
+    this.textInputAction,
+    this.onFieldSubmitted,
   }) : label = label ?? labelText ?? '',
        hint = hint ?? hintText;
 
@@ -83,6 +87,8 @@ class AppTextField extends StatelessWidget {
           autofocus: autofocus,
           readOnly: readOnly,
           onTap: onTap,
+          textInputAction: textInputAction,
+          onFieldSubmitted: onFieldSubmitted,
           style: textTheme.bodyLarge?.copyWith(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w500,
