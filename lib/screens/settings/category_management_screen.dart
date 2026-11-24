@@ -9,6 +9,7 @@ import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../utils/text_formatter.dart';
 import '../../widgets/category_color_picker.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../widgets/category_icon_picker.dart';
@@ -100,6 +101,7 @@ class _CategoryManagementScreenState
                     child: TextFormField(
                       controller: nameController,
                       autofocus: existingCategory == null,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
                       decoration: InputDecoration(
                         labelText: 'Category Name',
                         hintText: 'e.g. Groceries',
@@ -320,28 +322,63 @@ class _CategoryManagementScreenState
             onPressed: () => _showAddCategoryDialog(),
           ),
           body: SafeArea(
-            child: RefreshIndicator(
-              onRefresh: () => ref.refresh(categoriesProvider.future),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                children: [
-                  _buildCategorySection(
-                    'Income',
-                    incomeCategories,
-                    Theme.of(context).colorScheme.primary,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isTablet = constraints.maxWidth > 768;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isTablet ? 768 : double.infinity,
+                    ),
+                    child: sorted.isEmpty
+                        ? RefreshIndicator(
+                            onRefresh: () =>
+                                ref.refresh(categoriesProvider.future),
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 40,
+                                  horizontal: 16,
+                                ),
+                                child: EmptyStateWidget(
+                                  icon: Icons.category_outlined,
+                                  title: 'No Categories Found',
+                                  description:
+                                      'Add your first category to organize your transactions.',
+                                  ctaLabel: 'Add Category',
+                                  onCtaTap: () => _showAddCategoryDialog(),
+                                ),
+                              ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: () =>
+                                ref.refresh(categoriesProvider.future),
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              children: [
+                                _buildCategorySection(
+                                  'Income',
+                                  incomeCategories,
+                                  Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(height: 24),
+                                _buildCategorySection(
+                                  'Expense',
+                                  expenseCategories,
+                                  Theme.of(context).colorScheme.error,
+                                ),
+                              ],
+                            ),
+                          ),
                   ),
-                  const SizedBox(height: 24),
-                  _buildCategorySection(
-                    'Expense',
-                    expenseCategories,
-                    Theme.of(context).colorScheme.error,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         );
@@ -368,11 +405,12 @@ class _CategoryManagementScreenState
         ),
         const SizedBox(height: 12),
         if (items.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              'No categories found.',
-              style: TextStyle(color: Colors.white54),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: EmptyStateWidget(
+              icon: Icons.category_outlined,
+              title: 'No $title Categories',
+              description: 'You have not created any $title categories yet.',
             ),
           )
         else
@@ -398,10 +436,12 @@ class _CategoryManagementScreenState
                 child: Semantics(
                   button: true,
                   label: '${category.name} category',
-                  child: InkWell(
-                    onTap: () =>
-                        _showAddCategoryDialog(existingCategory: category),
-                    child: Padding(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                    child: InkWell(
+                      onTap: () =>
+                          _showAddCategoryDialog(existingCategory: category),
+                      child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
@@ -430,6 +470,8 @@ class _CategoryManagementScreenState
                               ),
                               Text(
                                 TextFormatter.toSmartTitleCase(category.type),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color: Theme.of(
@@ -445,8 +487,9 @@ class _CategoryManagementScreenState
                   ),
                 ),
               ),
-            );
-            },
+            ),
+          );
+          },
           ),
       ],
     );
@@ -493,6 +536,8 @@ class _TypeChip extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: isSelected ? color : Colors.grey,
                 fontWeight: FontWeight.w600,

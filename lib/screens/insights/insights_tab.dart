@@ -174,11 +174,15 @@ class InsightsTab extends ConsumerWidget {
                           children: [
                             Text(
                               'Salary',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                             Text(
                               '${AppFormat.currency(current.month.expectedAmount)} \u2022 ${current.status.label}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: statusColor,
                                 fontWeight: FontWeight.w500,
@@ -243,26 +247,51 @@ class InsightsTab extends ConsumerWidget {
     ];
 
     if (embedded) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 768 : double.infinity,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
+            ),
+          );
+        },
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(financialHealthScoreProvider);
-        ref.invalidate(runwayProvider);
-        ref.invalidate(anomalyProvider);
-        ref.invalidate(netWorthChangeProvider);
-        ref.invalidate(creditHealthProvider);
-        ref.invalidate(currentMonthStatsProvider);
-        ref.invalidate(forecastProvider);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isTablet = constraints.maxWidth > 768;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isTablet ? 768 : double.infinity,
+            ),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(financialHealthScoreProvider);
+                ref.invalidate(runwayProvider);
+                ref.invalidate(anomalyProvider);
+                ref.invalidate(netWorthChangeProvider);
+                ref.invalidate(creditHealthProvider);
+                ref.invalidate(currentMonthStatsProvider);
+                ref.invalidate(forecastProvider);
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
+                children: children,
+              ),
+            ),
+          ),
+        );
       },
-      child: ListView(
-        padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
-        children: children,
-      ),
     );
   }
 }
@@ -322,6 +351,8 @@ class _RiskSection extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${runway.daysLeft} days runway at ${AppFormat.currency(runway.dailyBurn)}/day',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -353,6 +384,8 @@ class _RiskSection extends StatelessWidget {
                         Expanded(
                           child: Text(
                             a.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
@@ -373,10 +406,14 @@ class _RiskSection extends StatelessWidget {
                           : Theme.of(context).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      '${streak.current}d consistency streak',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        '${streak.current}d consistency streak',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -472,13 +509,16 @@ class _HealthScoreCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        'Financial Health',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      Expanded(
+                        child: Text(
+                          'Financial Health',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      const Spacer(),
                       Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 14,
@@ -621,6 +661,8 @@ class _NetWorthBanner extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     AppFormat.currency(current),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: cs.onPrimary,
                       fontSize: 24,
@@ -689,6 +731,8 @@ class _CreditCompactCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Outstanding: ${AppFormat.currency(health.totalOutstanding)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -741,6 +785,8 @@ class _MonthlySummaryCard extends StatelessWidget {
           children: [
             Text(
               'This Month',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -795,6 +841,8 @@ class _Metric extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
@@ -829,15 +877,20 @@ class _ForecastCard extends StatelessWidget {
               children: [
                 Icon(Icons.auto_graph_rounded, color: cs.primary, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  'Next Month',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                Expanded(
+                  child: Text(
+                    'Next Month',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
                 ),
-                const Spacer(),
                 Text(
                   forecast.confidenceLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),

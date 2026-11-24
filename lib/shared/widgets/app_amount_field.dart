@@ -13,6 +13,7 @@ class AppAmountField extends StatelessWidget {
     this.validator,
     this.textInputAction,
     this.onFieldSubmitted,
+    this.autovalidateMode = AutovalidateMode.onUserInteraction,
   });
 
   final TextEditingController controller;
@@ -22,6 +23,7 @@ class AppAmountField extends StatelessWidget {
   final FormFieldValidator<String>? validator;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onFieldSubmitted;
+  final AutovalidateMode? autovalidateMode;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +38,7 @@ class AppAmountField extends StatelessWidget {
         focusNode: focusNode,
         onChanged: onChanged,
         validator: validator,
+        autovalidateMode: autovalidateMode,
         textInputAction: textInputAction,
         onFieldSubmitted: onFieldSubmitted,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),

@@ -13,11 +13,13 @@ import '../../salary_ledger/salary_ledger_models.dart';
 import '../../salary_ledger/salary_ledger_notifier.dart';
 import '../services/salary_pdf_export.dart';
 import '../../../shared/widgets/skeleton_loader.dart';
+import '../../../shared/widgets/empty_state_widget.dart';
 import '../../../shared/widgets/error_state_widget.dart';
 import '../widgets/salary_analytics_card.dart';
 import 'month_detail_screen.dart';
 import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/app_tap_scale.dart';
+import '../../../theme/app_theme.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ENTRY POINT
@@ -50,62 +52,47 @@ class SalaryScreen extends ConsumerWidget {
 // EMPTY STATE
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerWidget {
   const _EmptyState();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Salary'),
+        title: const Text('Salary'),
         backgroundColor: Colors.transparent,
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.business_rounded,
-                size: 64,
-                color: Colors.blueAccent.withValues(alpha: 0.4),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No income source added',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Add your employer, freelance client, or income source to start tracking',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Consumer(
-                builder: (context, ref, _) => FilledButton.icon(
-                  onPressed: () => _showSetupSheet(context, ref),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Company'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    minimumSize: const Size(200, 48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                child: RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(salaryLedgerProvider.notifier).refresh(),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 40,
+                    ),
+                    child: EmptyStateWidget(
+                      icon: Icons.business_rounded,
+                      title: 'No income source added',
+                      description:
+                          'Add your employer, freelance client, or income source to start tracking',
+                      ctaLabel: 'Add Company',
+                      onCtaTap: () => _showSetupSheet(context, ref),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -128,89 +115,118 @@ class _CompanyDashboard extends ConsumerWidget {
     final report = ref.watch(salaryReportProvider);
 
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(salaryLedgerProvider.notifier).refresh(),
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // ── App Bar ──────────────────────────────────────
-            SliverAppBar(
-              floating: true,
-              backgroundColor: Colors.transparent,
-              title: const Text('Salary'),
-              actions: [
-                if (state.hasMonths)
-                  IconButton(
-                    icon: const Icon(Icons.ios_share_rounded, size: 20),
-                    tooltip: 'Export',
-                    onPressed: () =>
-                        _showExportSheet(context, ref, state, filteredMonths),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.add_business_rounded),
-                  tooltip: 'Add Company',
-                  onPressed: () => _showSetupSheet(context, ref),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
                 ),
-              ],
-            ),
+                child: RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(salaryLedgerProvider.notifier).refresh(),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      // ── App Bar ──────────────────────────────────────
+                      SliverAppBar(
+                        floating: true,
+                        backgroundColor: Colors.transparent,
+                        title: const Text('Salary'),
+                        actions: [
+                          if (state.hasMonths)
+                            IconButton(
+                              icon: const Icon(Icons.ios_share_rounded, size: 20),
+                              tooltip: 'Export',
+                              onPressed: () => _showExportSheet(
+                                context,
+                                ref,
+                                state,
+                                filteredMonths,
+                              ),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.add_business_rounded),
+                            tooltip: 'Add Company',
+                            onPressed: () => _showSetupSheet(context, ref),
+                          ),
+                        ],
+                      ),
 
-            // ── Company Chips ────────────────────────────────
-            if (state.companies.length > 1)
-              SliverToBoxAdapter(
-                child: _CompanyChips(
-                  companies: state.companies,
-                  selectedId: state.selectedCompanyId,
+                      // ── Company Chips ────────────────────────────────
+                      if (state.companies.length > 1)
+                        SliverToBoxAdapter(
+                          child: _CompanyChips(
+                            companies: state.companies,
+                            selectedId: state.selectedCompanyId,
+                          ),
+                        ),
+
+                      // ── Company Header ───────────────────────────────
+                      if (company != null)
+                        SliverToBoxAdapter(
+                          child: _CompanyHeader(company: company),
+                        ),
+
+                      // ── Smart Alerts ─────────────────────────────────
+                      const SliverToBoxAdapter(child: _SmartAlerts()),
+
+                      // ── KPI Row ──────────────────────────────────────
+                      SliverToBoxAdapter(child: _KpiRow(report: report)),
+
+                      // ── Reliability Score ────────────────────────────
+                      if (state.hasMonths)
+                        SliverToBoxAdapter(
+                          child: _ReliabilityCard(health: health),
+                        ),
+
+                      // ── Filter Chips ─────────────────────────────────
+                      if (state.hasMonths)
+                        SliverToBoxAdapter(child: _FilterChips()),
+
+                      // ── Analytics Chart ──────────────────────────────
+                      if (filteredMonths.length > 1)
+                        const SliverToBoxAdapter(child: SalaryAnalyticsCard()),
+
+                      // ── Month List ───────────────────────────────────
+                      if (filteredMonths.isNotEmpty)
+                        _MonthList(months: filteredMonths)
+                      else if (state.hasMonths)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(32),
+                            child: EmptyStateWidget(
+                              icon: Icons.filter_alt_off_outlined,
+                              title: 'No matching months',
+                              description: 'No months match this filter',
+                            ),
+                          ),
+                        )
+                      else
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: EmptyStateWidget(
+                                icon: Icons.calendar_today_outlined,
+                                title: 'No salary months yet',
+                                description:
+                                    'Track your salary slips and payouts here',
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                    ],
+                  ),
                 ),
               ),
-
-            // ── Company Header ───────────────────────────────
-            if (company != null)
-              SliverToBoxAdapter(child: _CompanyHeader(company: company)),
-
-            // ── Smart Alerts ─────────────────────────────────
-            const SliverToBoxAdapter(child: _SmartAlerts()),
-
-            // ── KPI Row ──────────────────────────────────────
-            SliverToBoxAdapter(child: _KpiRow(report: report)),
-
-            // ── Reliability Score ────────────────────────────
-            if (state.hasMonths)
-              SliverToBoxAdapter(child: _ReliabilityCard(health: health)),
-
-            // ── Filter Chips ─────────────────────────────────
-            if (state.hasMonths) SliverToBoxAdapter(child: _FilterChips()),
-
-            // ── Analytics Chart ──────────────────────────────
-            if (filteredMonths.length > 1)
-              const SliverToBoxAdapter(child: SalaryAnalyticsCard()),
-
-            // ── Month List ───────────────────────────────────
-            if (filteredMonths.isNotEmpty)
-              _MonthList(months: filteredMonths)
-            else if (state.hasMonths)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(
-                    child: Text(
-                      'No months match this filter',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ),
-              )
-            else
-              const SliverFillRemaining(
-                child: Center(
-                  child: Text(
-                    'No salary months yet',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 96)),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -266,22 +282,22 @@ class _CompanyHeader extends StatelessWidget {
   final Company company;
   const _CompanyHeader({required this.company});
 
-  Color _empColor(EmploymentType type) {
+  Color _empColor(BuildContext context, EmploymentType type) {
     switch (type) {
       case EmploymentType.fullTime:
-        return Colors.blueAccent;
+        return Theme.of(context).colorScheme.primary;
       case EmploymentType.partTime:
-        return Colors.tealAccent;
+        return AppColors.transfer;
       case EmploymentType.freelance:
-        return Colors.purpleAccent;
+        return AppColors.primary;
       case EmploymentType.contract:
-        return Colors.orangeAccent;
+        return AppColors.warning;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final empColor = _empColor(company.employmentType);
+    final empColor = _empColor(context, company.employmentType);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -316,6 +332,8 @@ class _CompanyHeader extends StatelessWidget {
                   company.payCycle == PayCycle.monthly
                       ? company.employmentLabel
                       : '${company.employmentLabel} \u00b7 ${company.payCycleLabel}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: empColor,
                     fontSize: 11,
@@ -330,6 +348,8 @@ class _CompanyHeader extends StatelessWidget {
             company.employmentType == EmploymentType.freelance
                 ? 'Since ${DateFormat('MMM yyyy').format(company.createdAt)}'
                 : 'Joined ${DateFormat('MMM yyyy').format(company.createdAt)} \u00b7 Pay Day ${company.salaryCreditDay}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 13,
@@ -359,7 +379,7 @@ class _KpiRow extends StatelessWidget {
             child: _KpiTile(
               'Total Earned',
               AppFormat.currency(report.totalPaid),
-              Colors.greenAccent,
+              AppColors.success,
             ),
           ),
           const SizedBox(width: 8),
@@ -367,7 +387,7 @@ class _KpiRow extends StatelessWidget {
             child: _KpiTile(
               'Pending',
               AppFormat.currency(report.pending),
-              Colors.orangeAccent,
+              AppColors.warning,
             ),
           ),
         ],
@@ -398,6 +418,8 @@ class _KpiTile extends StatelessWidget {
         children: [
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 13,
@@ -406,6 +428,8 @@ class _KpiTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
               fontSize: 18,
@@ -431,10 +455,10 @@ class _ReliabilityCard extends StatelessWidget {
     if (health.totalMonths == 0) return const SizedBox.shrink();
 
     final scoreColor = health.reliabilityScore >= 80
-        ? Colors.greenAccent
+        ? AppColors.success
         : health.reliabilityScore >= 50
-        ? Colors.orangeAccent
-        : Colors.redAccent;
+        ? AppColors.warning
+        : AppColors.danger;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -454,31 +478,39 @@ class _ReliabilityCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Employer Reliability',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Employer Reliability',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _reliabilityLabel(health.reliabilityScore),
-                      style: TextStyle(
-                        color: scoreColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 2),
+                      Text(
+                        _reliabilityLabel(health.reliabilityScore),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scoreColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 Text(
                   '${health.reliabilityScore.toStringAsFixed(0)}%',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: scoreColor,
                     fontSize: 20,
@@ -531,6 +563,8 @@ class _ReliabilityCard extends StatelessWidget {
         children: [
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w600,
@@ -540,6 +574,8 @@ class _ReliabilityCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 10,
@@ -778,9 +814,9 @@ class _SmartAlerts extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.orange.shade900.withValues(alpha: 0.2),
+          color: AppColors.warning.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.3)),
+          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,17 +826,17 @@ class _SmartAlerts extends ConsumerWidget {
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.warning_amber_rounded,
-                        color: Colors.orangeAccent,
+                        color: AppColors.warning,
                         size: 14,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           a,
-                          style: const TextStyle(
-                            color: Colors.orangeAccent,
+                          style: TextStyle(
+                            color: AppColors.warning,
                             fontSize: 13,
                           ),
                         ),
@@ -902,7 +938,7 @@ class _MonthCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isLate
-              ? Colors.orange.shade900.withValues(alpha: 0.15)
+              ? AppColors.warning.withValues(alpha: 0.15)
               : _bgColor(m.status),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -938,13 +974,15 @@ class _MonthCard extends StatelessWidget {
                         : isLate
                         ? 'Paid late \u00b7 due $dueLabel'
                         : '${m.status.label} \u00b7 due $dueLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: m.month.expectedAmount <= 0
                           ? (m.totalPaid > 0
-                                ? Colors.greenAccent
-                                : Colors.grey.shade500)
+                                ? AppColors.success
+                                : Theme.of(context).colorScheme.onSurfaceVariant)
                           : isLate
-                          ? Colors.orangeAccent
+                          ? AppColors.warning
                           : _dotColor(m.status),
                       fontSize: 11,
                     ),
@@ -956,13 +994,13 @@ class _MonthCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.purple.shade900.withValues(alpha: 0.5),
+                  color: AppColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   'Bonus',
                   style: TextStyle(
-                    color: Colors.purpleAccent,
+                    color: AppColors.primary,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -973,8 +1011,8 @@ class _MonthCard extends StatelessWidget {
             if (m.delayDays > 0) ...[
               Text(
                 '${m.delayDays}d late',
-                style: const TextStyle(
-                  color: Colors.orangeAccent,
+                style: TextStyle(
+                  color: AppColors.warning,
                   fontSize: 10,
                 ),
               ),
@@ -982,6 +1020,8 @@ class _MonthCard extends StatelessWidget {
             ],
             Text(
               AppFormat.currency(m.totalPaid),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
@@ -1001,19 +1041,19 @@ class _MonthCard extends StatelessWidget {
   }
 
   Color _bgColor(SalaryStatus s) => switch (s) {
-    SalaryStatus.pending => Colors.red.shade900.withValues(alpha: 0.15),
-    SalaryStatus.partial => Colors.orange.shade900.withValues(alpha: 0.25),
-    SalaryStatus.paid => Colors.green.shade900.withValues(alpha: 0.25),
-    SalaryStatus.onHold => Colors.amber.shade900.withValues(alpha: 0.2),
-    SalaryStatus.overdue => Colors.red.shade900.withValues(alpha: 0.25),
+    SalaryStatus.pending => AppColors.danger.withValues(alpha: 0.15),
+    SalaryStatus.partial => AppColors.warning.withValues(alpha: 0.15),
+    SalaryStatus.paid => AppColors.success.withValues(alpha: 0.15),
+    SalaryStatus.onHold => AppColors.warning.withValues(alpha: 0.15),
+    SalaryStatus.overdue => AppColors.danger.withValues(alpha: 0.15),
   };
 
   Color _dotColor(SalaryStatus s) => switch (s) {
-    SalaryStatus.pending => Colors.redAccent,
-    SalaryStatus.partial => Colors.orangeAccent,
-    SalaryStatus.paid => Colors.greenAccent,
-    SalaryStatus.onHold => Colors.amber,
-    SalaryStatus.overdue => Colors.red,
+    SalaryStatus.pending => AppColors.danger,
+    SalaryStatus.partial => AppColors.warning,
+    SalaryStatus.paid => AppColors.success,
+    SalaryStatus.onHold => AppColors.warning,
+    SalaryStatus.overdue => AppColors.danger,
   };
 }
 
@@ -1025,13 +1065,13 @@ class _StatusDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isLate
-        ? Colors.orangeAccent
+        ? AppColors.warning
         : switch (status) {
-            SalaryStatus.paid => Colors.greenAccent,
-            SalaryStatus.partial => Colors.orangeAccent,
-            SalaryStatus.pending => Colors.redAccent,
-            SalaryStatus.onHold => Colors.amber,
-            SalaryStatus.overdue => Colors.red,
+            SalaryStatus.paid => AppColors.success,
+            SalaryStatus.partial => AppColors.warning,
+            SalaryStatus.pending => AppColors.danger,
+            SalaryStatus.onHold => AppColors.warning,
+            SalaryStatus.overdue => AppColors.danger,
           };
     return Container(
       width: 10,
@@ -1042,7 +1082,7 @@ class _StatusDot extends StatelessWidget {
         boxShadow: (status == SalaryStatus.paid && !isLate)
             ? [
                 BoxShadow(
-                  color: Colors.green.withValues(alpha: 0.5),
+                  color: AppColors.success.withValues(alpha: 0.5),
                   blurRadius: 4,
                   spreadRadius: 1,
                 ),
@@ -1216,7 +1256,11 @@ class _ExportOption extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.blueAccent, size: 22),
+            Icon(
+              icon,
+              color: Theme.of(context).colorScheme.primary,
+              size: 22,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1549,7 +1593,9 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
               controller: _nameCtrl,
               autofocus: true,
               onChanged: (_) => setState(() {}),
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
               decoration: InputDecoration(
                 labelText: _isFreelance
                     ? 'Client / Business Name'
@@ -1574,11 +1620,15 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
               controller: _salaryCtrl,
               keyboardType: TextInputType.number,
               onChanged: (_) => setState(() {}),
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
               decoration: InputDecoration(
                 labelText: _salaryLabel,
                 hintText: _isFreelance ? '0 = no target' : null,
-                hintStyle: TextStyle(color: Colors.grey.shade600),
+                hintStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 labelStyle: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -1600,11 +1650,15 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
                 controller: _dayCtrl,
                 keyboardType: TextInputType.number,
                 onChanged: (_) => setState(() {}),
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
                 decoration: InputDecoration(
                   labelText: _dayLabel,
                   hintText: _isFreelance ? 'Optional' : '5',
-                  hintStyle: TextStyle(color: Colors.grey.shade600),
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   labelStyle: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -1674,7 +1728,7 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
               child: FilledButton(
                 onPressed: _isValid ? _submit : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),

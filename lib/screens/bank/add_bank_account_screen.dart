@@ -247,13 +247,6 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     }
   }
 
-  bool get _isValid {
-    if (_nameCtrl.text.trim().isEmpty) return false;
-    if (!_isInvestment && _bankCtrl.text.trim().isEmpty) return false;
-    if (_balanceCtrl.text.trim().isEmpty) return false;
-    return true;
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -283,6 +276,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -351,8 +345,11 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _save(),
                       validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter a balance';
+                        }
                         final amount = double.tryParse(
-                          (value ?? '').trim().replaceAll(',', ''),
+                          value.trim().replaceAll(',', ''),
                         );
                         if (amount == null || !amount.isFinite || amount < 0) {
                           return 'Enter a valid balance of zero or more';
@@ -520,7 +517,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                 flex: 2,
                 child: SpendXGlassButton(
                   variant: SpendXGlassButtonVariant.primary,
-                  onPressed: _isValid ? _save : null,
+                  onPressed: _save,
                   child: Text(_isInvestment ? 'Save Asset' : 'Save Account'),
                 ),
               ),

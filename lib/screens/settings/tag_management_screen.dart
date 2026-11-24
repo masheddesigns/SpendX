@@ -34,6 +34,7 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: TextFormField(
             controller: controller,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Tag Name'),
             validator: (value) => value == null || value.trim().isEmpty
@@ -130,41 +131,73 @@ class _TagManagementScreenState extends ConsumerState<TagManagementScreen> {
             onPressed: _showAddTagDialog,
           ),
           body: SafeArea(
-            child: sortedTags.isEmpty
-                ? const EmptyStateWidget(
-                    icon: Icons.label_off_outlined,
-                    title: 'No tags yet',
-                    description: 'Create tags to organize your transactions.',
-                  )
-                : RefreshIndicator(
-                    onRefresh: () => ref.read(tagsProvider.notifier).refresh(),
-                    child: ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.m,
-                        AppSpacing.s,
-                        AppSpacing.m,
-                        AppSpacing.xxl,
-                      ),
-                      itemCount: sortedTags.length,
-                      itemBuilder: (context, index) {
-                        final tag = sortedTags[index];
-                        return ListTile(
-                          leading: Icon(
-                            Icons.tag,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          title: Text(tag.name),
-                          onTap: () => _showAddTagDialog(tag),
-                          trailing: IconButton(
-                            tooltip: 'Delete',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => _deleteTag(tag),
-                          ),
-                        );
-                      },
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isTablet = constraints.maxWidth > 768;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isTablet ? 768 : double.infinity,
                     ),
+                    child: sortedTags.isEmpty
+                        ? RefreshIndicator(
+                            onRefresh: () =>
+                                ref.read(tagsProvider.notifier).refresh(),
+                            child: const SingleChildScrollView(
+                              physics: AlwaysScrollableScrollPhysics(),
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: 40,
+                                  horizontal: 16,
+                                ),
+                                child: EmptyStateWidget(
+                                  icon: Icons.label_off_outlined,
+                                  title: 'No tags yet',
+                                  description:
+                                      'Create tags to organize your transactions.',
+                                ),
+                              ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: () =>
+                                ref.read(tagsProvider.notifier).refresh(),
+                            child: ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.m,
+                                AppSpacing.s,
+                                AppSpacing.m,
+                                AppSpacing.xxl,
+                              ),
+                              itemCount: sortedTags.length,
+                              itemBuilder: (context, index) {
+                                final tag = sortedTags[index];
+                                return ListTile(
+                                  leading: Icon(
+                                    Icons.tag,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                  title: Text(
+                                    tag.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () => _showAddTagDialog(tag),
+                                  trailing: IconButton(
+                                    tooltip: 'Delete',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: () => _deleteTag(tag),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                   ),
+                );
+              },
+            ),
           ),
         );
       },

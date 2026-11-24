@@ -147,8 +147,10 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
       child: Semantics(
         button: true,
         label: 'Loan ${loan.name}, ${loan.bank}, principal ${AppFormat.currency(loan.principalAmount)}',
-        child: InkWell(
-          onTap: () async {
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: InkWell(
+            onTap: () async {
             final result = await Navigator.push(
               context,
               AppPageRoute(builder: (_) => LoanDetailScreen(loan: loan)),
@@ -168,7 +170,8 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
           child: _buildLoanCard(context, loan),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -178,6 +181,7 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
       description: 'Track your car, home, or personal loans here.',
       ctaLabel: 'Add Loan',
       onCtaTap: _addLoan,
+      illustrationAsset: 'assets/illustrations/empty_loans.svg',
     );
   }
 
@@ -245,6 +249,8 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
                   ),
                   child: Text(
                     TextFormatter.toSmartTitleCase(loan.loanStatus),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -257,7 +263,7 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
               ],
             ),
           ),
-          const Divider(height: 1, color: Colors.white10),
+          Divider(height: 1, color: context.borderColor),
           Padding(
             padding: AppSpacing.cardPadding,
             child: Row(
@@ -328,21 +334,29 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Started: ${loan.startDate.day}/${loan.startDate.month}/${loan.startDate.year}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    Expanded(
+                      child: Text(
+                        'Started: ${loan.startDate.day}/${loan.startDate.month}/${loan.startDate.year}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                    if (loan.nextDueDate != null)
+                    if (loan.nextDueDate != null) ...[
+                      const SizedBox(width: 8),
                       Text(
                         'Next Due: ${loan.nextDueDate!.day}/${loan.nextDueDate!.month}/${loan.nextDueDate!.year}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11,
                           color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ],
@@ -364,6 +378,8 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
       children: [
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -372,6 +388,8 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
         const SizedBox(height: 4),
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -393,9 +411,14 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 16),
-          Text(
-            loan.name,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              loan.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(height: 16),
           ListTile(

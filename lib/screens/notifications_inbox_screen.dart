@@ -68,72 +68,109 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
         title: const Text('Notifications'),
         actions: [
           IconButton(
-            tooltip: 'Refresh',onPressed: _load, icon: const Icon(Icons.refresh)),
+            tooltip: 'Refresh',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
-      body: _isLoading
-          ? const SkeletonLoader.transactions()
-          : _alerts.isEmpty
-          ? const EmptyStateWidget(
-              icon: Icons.notifications_off_outlined,
-              title: 'No alerts right now',
-              description:
-                  'You\'re all caught up. Alerts will appear here when actions are needed.',
-            )
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemBuilder: (context, index) {
-                  final alert = _alerts[index];
-                  final icon = switch (alert.type) {
-                    AlertType.salaryDue ||
-                    AlertType.salaryDelayed ||
-                    AlertType.partialSalary => Icons.work_rounded,
-                    AlertType.loanDue => Icons.account_balance_rounded,
-                    AlertType.creditCardDue => Icons.credit_card_rounded,
-                    AlertType.subscriptionDue => Icons.subscriptions_rounded,
-                    AlertType.custom => Icons.handshake_rounded,
-                  };
-                  final color = alert.severity == AlertSeverity.critical
-                      ? cs.error
-                      : alert.severity == AlertSeverity.warning
-                      ? Colors.orange
-                      : cs.primary;
-
-                  final dueLabel = alert.triggerDate != null
-                      ? '• ${AppFormat.date(alert.triggerDate!)}'
-                      : '';
-
-                  return Card(
-                    child: ListTile(
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final content = _isLoading
+              ? const SkeletonLoader.transactions()
+              : _alerts.isEmpty
+                  ? RefreshIndicator(
+                      onRefresh: _load,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Container(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          alignment: Alignment.center,
+                          child: const EmptyStateWidget(
+                            icon: Icons.notifications_off_outlined,
+                            title: 'No alerts right now',
+                            description:
+                                'You\'re all caught up. Alerts will appear here when actions are needed.',
+                            illustrationAsset:
+                                'assets/illustrations/empty_notifications.svg',
+                          ),
                         ),
-                        child: Icon(icon, color: color, size: 22),
                       ),
-                      title: Text(alert.title),
-                      subtitle: Text(
-                        '${alert.description} $dueLabel',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        itemBuilder: (context, index) {
+                          final alert = _alerts[index];
+                          final icon = switch (alert.type) {
+                            AlertType.salaryDue ||
+                            AlertType.salaryDelayed ||
+                            AlertType.partialSalary => Icons.work_rounded,
+                            AlertType.loanDue => Icons.account_balance_rounded,
+                            AlertType.creditCardDue => Icons.credit_card_rounded,
+                            AlertType.subscriptionDue =>
+                              Icons.subscriptions_rounded,
+                            AlertType.custom => Icons.handshake_rounded,
+                          };
+                          final color = alert.severity == AlertSeverity.critical
+                              ? cs.error
+                              : alert.severity == AlertSeverity.warning
+                                  ? Colors.orange
+                                  : cs.primary;
+
+                          final dueLabel = alert.triggerDate != null
+                              ? '• ${AppFormat.date(alert.triggerDate!)}'
+                              : '';
+
+                          return Card(
+                            child: ListTile(
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(icon, color: color, size: 22),
+                              ),
+                              title: Text(
+                                alert.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '${alert.description} $dueLabel',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right_rounded,
+                                color: cs.onSurfaceVariant,
+                              ),
+                              onTap: () => _open(alert),
+                            ),
+                          );
+                        },
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemCount: _alerts.length,
                       ),
-                      trailing: Icon(
-                        Icons.chevron_right_rounded,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      onTap: () => _open(alert),
-                    ),
-                  );
-                },
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemCount: _alerts.length,
+                    );
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 768 : double.infinity,
               ),
+              child: content,
             ),
+          );
+        },
+      ),
     );
   }
 }

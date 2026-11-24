@@ -9,6 +9,7 @@ import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../services/settings_service.dart';
 import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/skeleton_loader.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
 
 class NetWorthReportScreen extends ConsumerStatefulWidget {
@@ -75,7 +76,7 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -186,7 +187,7 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainer,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              border: Border.all(color: context.borderColor),
             ),
             child: Column(
               children: [
@@ -209,9 +210,9 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
                   trailing: isSnapshots
                       ? IconButton(
                           tooltip: 'Delete',
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.delete_outline,
-                            color: Colors.redAccent,
+                            color: Theme.of(context).colorScheme.error,
                             size: 20,
                           ),
                           onPressed: () =>
@@ -225,7 +226,7 @@ class _NetWorthReportScreenState extends ConsumerState<NetWorthReportScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: Column(
                     children: [
-                      const Divider(color: Colors.white12, height: 1),
+                      Divider(color: context.borderColor, height: 1),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

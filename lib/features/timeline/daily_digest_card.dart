@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/decision_engine.dart';
 import '../../services/retention_events.dart';
 import '../../services/retention_service.dart';
+import '../../theme/app_theme.dart';
 import '../automation/automation_engine.dart';
 import '../automation/automation_providers.dart';
 import '../review_queue/providers/review_providers.dart';
@@ -244,7 +245,7 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
     if (reviewCount > 0) {
       return _DigestState(
         kind: _StateKind.review,
-        color: Colors.orange,
+        color: AppColors.warning,
         icon: Icons.rate_review_outlined,
         title:
             '$reviewCount transaction${reviewCount == 1 ? '' : 's'} need your review',
@@ -257,7 +258,7 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
     if (insight?.priority == InsightPriority.high) {
       return _DigestState(
         kind: _StateKind.high,
-        color: Colors.orange,
+        color: AppColors.warning,
         icon: Icons.flag_outlined,
         title: insight!.title,
         body: insight.body,
@@ -267,7 +268,7 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
     if (highNudge != null) {
       return _DigestState(
         kind: _StateKind.high,
-        color: Colors.orange,
+        color: AppColors.warning,
         icon: Icons.info_outline_rounded,
         title: highNudge.title,
         body: highNudge.message,
@@ -278,7 +279,7 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
     // 5. ALL SET — silence as success
     return _DigestState(
       kind: _StateKind.allSet,
-      color: Colors.green,
+      color: AppColors.success,
       icon: Icons.check_circle_rounded,
       title: 'You\'re all set',
       body: _allSetMessage(),
@@ -320,8 +321,8 @@ class _AccuracyTrendStrip extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.trending_up_rounded,
-              color: Colors.green, size: 16),
+          Icon(Icons.trending_up_rounded,
+              color: AppColors.success, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

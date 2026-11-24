@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/providers.dart' show cardsProvider;
@@ -11,6 +10,9 @@ import '../../features/transactions/providers/transaction_providers.dart';
 import '../../models/transaction.dart';
 import '../../services/data_change_bus.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/error_state_widget.dart';
+import '../../shared/widgets/loading_state_widget.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
@@ -136,9 +138,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
 
     return categoryMapAsync.when(
       loading: () =>
-          const Center(child: SpendXLoadingState(count: 6, itemHeight: 64)),
+          const Center(child: LoadingStateWidget(message: 'Loading transactions...')),
       error: (err, _) => Center(
-        child: SpendXErrorState(
+        child: ErrorStateWidget(
           message: err.toString(),
           onRetry: () => ref.invalidate(transactionCategoryMapProvider),
         ),
@@ -200,14 +202,22 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
           if (t.isIncomeType) visibleReceived += t.amount;
         }
 
-        Widget content = RefreshIndicator(
-          onRefresh: _onRefresh,
-          color: AppTheme.primaryBlue,
-          child: CustomScrollView(
-            controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              // ── Header Metric Pill (Quiet Awareness) ───────
+        Widget content = LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
+                ),
+                child: RefreshIndicator(
+                  onRefresh: _onRefresh,
+                  color: AppTheme.primaryBlue,
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      // ── Header Metric Pill (Quiet Awareness) ───────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -231,9 +241,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                                   ).colorScheme.surfaceContainer,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.06)
-                                        : Theme.of(context).colorScheme.outline,
+                                    color: context.borderColor,
                                     width: 0.8,
                                   ),
                                 ),
@@ -329,15 +337,13 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                           color: Theme.of(context).colorScheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.08)
-                                : Theme.of(context).colorScheme.outline,
+                            color: context.borderColor,
                             width: 0.8,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: isDark
-                                  ? Colors.black.withValues(alpha: 0.18)
+                                  ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.18)
                                   : Theme.of(context).colorScheme.shadow
                                         .withValues(alpha: 0.024),
                               blurRadius: 8,
@@ -594,100 +600,24 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                       horizontal: 16,
                       vertical: 20,
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 32,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.08)
-                              : Theme.of(context).colorScheme.outline,
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Semantics(
-                            image: true,
-                            label: 'Empty ledger illustration',
-                            child: SvgPicture.asset(
-                              'assets/illustrations/empty_transactions.svg',
-                              width: 132,
-                              height: 104,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            _searchQuery.isNotEmpty
-                                ? 'No matching transactions'
-                                : _selectedFilter == 'spent'
-                                ? 'No spending recorded'
-                                : _selectedFilter == 'received'
-                                ? 'No income recorded'
-                                : _selectedFilter == 'moved'
-                                ? 'No transfers recorded'
-                                : 'No transactions yet',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _searchQuery.isNotEmpty
-                                ? 'Try searching by a different merchant or note.'
-                                : _selectedFilter == 'spent'
-                                ? 'Your money stayed completely untouched in this period.'
-                                : 'Recorded transactions will flow continuously down this ledger.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Semantics(
-                            button: true,
-                            label: 'Log activity',
-                            child: GestureDetector(
-                              onTap: _onAddTransaction,
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  minWidth: 48,
-                                  minHeight: 48,
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(100),
-                                  ),
-                                  child: const Text(
-                                    '+ Log activity',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: EmptyStateWidget(
+                      icon: Icons.receipt_long_outlined,
+                      title: _searchQuery.isNotEmpty
+                          ? 'No matching transactions'
+                          : _selectedFilter == 'spent'
+                          ? 'No spending recorded'
+                          : _selectedFilter == 'received'
+                          ? 'No income recorded'
+                          : _selectedFilter == 'moved'
+                          ? 'No transfers recorded'
+                          : 'No transactions yet',
+                      description: _searchQuery.isNotEmpty
+                          ? 'Try searching by a different merchant or note.'
+                          : _selectedFilter == 'spent'
+                          ? 'Your money stayed completely untouched in this period.'
+                          : 'Recorded transactions will flow continuously down this ledger.',
+                      ctaLabel: '+ Log activity',
+                      onCtaTap: _onAddTransaction,
                     ),
                   ),
                 ),
@@ -720,7 +650,11 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 110)),
             ],
           ),
-        );
+        ),
+      ),
+    );
+  },
+);
 
         if (widget.isFullScreen) {
           return SpendXScaffold(
@@ -791,11 +725,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   color: isSelected
                       ? (activeColor ??
                             (isDark
-                                ? Colors.white.withValues(alpha: 0.3)
+                                ? cs.onSurface.withValues(alpha: 0.3)
                                 : cs.primary))
-                      : (isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Theme.of(context).colorScheme.outline),
+                      : context.borderColor,
                   width: isSelected ? 1.0 : 0.8,
                 ),
               ),
@@ -854,11 +786,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   color: isSelected
                       ? (activeColor ??
                             (isDark
-                                ? Colors.white.withValues(alpha: 0.3)
+                                ? cs.onSurface.withValues(alpha: 0.3)
                                 : cs.primary))
-                      : (isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : cs.outline),
+                      : context.borderColor,
                   width: isSelected ? 1.0 : 0.6,
                 ),
               ),
@@ -902,15 +832,13 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
               borderRadius: BorderRadius.circular(24),
               color: Theme.of(context).colorScheme.surfaceContainer,
               border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Theme.of(context).colorScheme.outline,
+                color: context.borderColor,
                 width: 0.9,
               ),
               boxShadow: [
                 BoxShadow(
                   color: isDark
-                      ? Colors.black.withValues(alpha: 0.25)
+                      ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                       : Theme.of(
                           context,
                         ).colorScheme.shadow.withValues(alpha: 0.03),
@@ -955,23 +883,29 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            dateHeader,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.6,
-                              color: isToday
-                                  ? AppTheme.primaryBlue
-                                  : (Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant),
+                          Expanded(
+                            child: Text(
+                              dateHeader,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                                color: isToday
+                                    ? AppTheme.primaryBlue
+                                    : (Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant),
+                              ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           if (daySpend > 0)
                             Text(
                               '${AppFormat.currency(daySpend)} spent',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -983,6 +917,8 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                           else if (dayInflow > 0)
                             Text(
                               '+${AppFormat.currency(dayInflow)} received',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -1039,9 +975,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                       child: Divider(
                         height: 12,
                         thickness: 0.5,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : Theme.of(context).colorScheme.outline,
+                        color: context.borderColor,
                       ),
                     ),
                   ],

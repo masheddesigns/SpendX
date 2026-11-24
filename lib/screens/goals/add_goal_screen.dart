@@ -67,7 +67,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
 
   Future<void> _save() async {
     debugPrint('🎯 _save called, isValid: $_isValid');
-    if (!_isValid || !(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
     try {
       if (_isEditing) {
@@ -220,10 +220,11 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                 TextFormField(
                   controller: _titleCtrl,
                   focusNode: _titleFocus,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   textInputAction: TextInputAction.next,
                   onFieldSubmitted: (_) => _amountFocus.requestFocus(),
                   validator: (value) => (value == null || value.trim().isEmpty)
-                      ? 'Enter a goal title'
+                      ? 'Please enter a goal title'
                       : null,
                   decoration: InputDecoration(
                     labelText: 'Goal title',
@@ -248,11 +249,15 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                 TextFormField(
                   controller: _amountCtrl,
                   focusNode: _amountFocus,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _isValid ? _save() : null,
+                  onFieldSubmitted: (_) => _save(),
                   validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter an amount';
+                    }
                     final amount = double.tryParse(
-                      (value ?? '')
+                      value
                           .trim()
                           .replaceAll(',', '')
                           .replaceAll(' ', ''),
@@ -289,42 +294,75 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                 const SizedBox(height: 16),
 
                 // ── Duration ───────────────────────────────────────────
-                Text(
-                  'Duration',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _DurationChip(
-                      days: 30,
-                      label: '1 month',
-                      selected: _durationDays == 30,
-                      onTap: () => setState(() => _durationDays = 30),
-                    ),
-                    _DurationChip(
-                      days: 90,
-                      label: '3 months',
-                      selected: _durationDays == 90,
-                      onTap: () => setState(() => _durationDays = 90),
-                    ),
-                    _DurationChip(
-                      days: 180,
-                      label: '6 months',
-                      selected: _durationDays == 180,
-                      onTap: () => setState(() => _durationDays = 180),
-                    ),
-                    _DurationChip(
-                      days: 365,
-                      label: '1 year',
-                      selected: _durationDays == 365,
-                      onTap: () => setState(() => _durationDays = 365),
-                    ),
-                  ],
+                FormField<int>(
+                  initialValue: _durationDays,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  validator: (v) =>
+                      (_durationDays <= 0) ? 'Please select a duration' : null,
+                  builder: (durationField) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Duration',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            _DurationChip(
+                              days: 30,
+                              label: '1 month',
+                              selected: _durationDays == 30,
+                              onTap: () {
+                                setState(() => _durationDays = 30);
+                                durationField.didChange(30);
+                              },
+                            ),
+                            _DurationChip(
+                              days: 90,
+                              label: '3 months',
+                              selected: _durationDays == 90,
+                              onTap: () {
+                                setState(() => _durationDays = 90);
+                                durationField.didChange(90);
+                              },
+                            ),
+                            _DurationChip(
+                              days: 180,
+                              label: '6 months',
+                              selected: _durationDays == 180,
+                              onTap: () {
+                                setState(() => _durationDays = 180);
+                                durationField.didChange(180);
+                              },
+                            ),
+                            _DurationChip(
+                              days: 365,
+                              label: '1 year',
+                              selected: _durationDays == 365,
+                              onTap: () {
+                                setState(() => _durationDays = 365);
+                                durationField.didChange(365);
+                              },
+                            ),
+                          ],
+                        ),
+                        if (durationField.hasError)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6, left: 4),
+                            child: Text(
+                              durationField.errorText!,
+                              style: TextStyle(color: cs.error, fontSize: 12),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
 
                 // ── Category (spending limit only) ─────────────────────
@@ -332,6 +370,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     initialValue: _selectedCategoryId,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     validator: (v) => _type == GoalType.spendingLimit &&
                             (v == null || v.isEmpty)
                         ? 'Please select a category'
@@ -392,7 +431,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
                 flex: 2,
                 child: PrimaryButton(
                   label: _isEditing ? 'Save Changes' : 'Create Goal',
-                  onPressed: _isValid ? _save : null,
+                  onPressed: _save,
                 ),
               ),
             ],

@@ -113,6 +113,8 @@ class DashboardBudgetsCard extends ConsumerWidget {
                           children: [
                             Text(
                               'Horizons',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
@@ -236,6 +238,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: 8,
@@ -253,6 +256,8 @@ class DashboardBudgetsCard extends ConsumerWidget {
                 isOver
                     ? '${AppFormat.currency(remaining.abs())} over'
                     : '${AppFormat.currency(remaining)} cushion',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,

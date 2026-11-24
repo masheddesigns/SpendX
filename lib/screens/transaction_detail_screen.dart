@@ -773,14 +773,12 @@ class _UnifiedTransactionDetailScreenState
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF0284C7,
-                                    ).withValues(alpha: isDark ? 0.20 : 0.12),
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: isDark ? 0.20 : 0.12),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: const Color(
-                                        0xFF0284C7,
-                                      ).withValues(alpha: isDark ? 0.35 : 0.25),
+                                      color: Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: isDark ? 0.35 : 0.25),
                                       width: 0.8,
                                     ),
                                   ),
@@ -1644,9 +1642,8 @@ class _UnifiedTransactionDetailScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(
-                    0xFF0284C7,
-                  ).withValues(alpha: isDark ? 0.22 : 0.12),
+                  color: Theme.of(context).colorScheme.primary
+                      .withValues(alpha: isDark ? 0.22 : 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -1687,14 +1684,12 @@ class _UnifiedTransactionDetailScreenState
                   vertical: 3.5,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(
-                    0xFF0284C7,
-                  ).withValues(alpha: isDark ? 0.20 : 0.12),
+                  color: Theme.of(context).colorScheme.primary
+                      .withValues(alpha: isDark ? 0.20 : 0.12),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: const Color(
-                      0xFF0284C7,
-                    ).withValues(alpha: isDark ? 0.40 : 0.25),
+                    color: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: isDark ? 0.40 : 0.25),
                     width: 0.8,
                   ),
                 ),
@@ -1719,9 +1714,7 @@ class _UnifiedTransactionDetailScreenState
               ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Theme.of(context).colorScheme.outline,
+                color: context.borderColor,
                 width: 0.8,
               ),
             ),
@@ -1954,18 +1947,24 @@ class _UnifiedTransactionDetailScreenState
                     label: 'Dismiss loan suggestion',
                     child: Tooltip(
                       message: 'Dismiss suggestion',
-                      child: InkWell(
-                        onTap: () =>
-                            setState(() => _dismissedLoanPrompt = true),
-                        child: SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: Icon(
-                            Icons.close,
-                            size: 16,
-                            color: isDark
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.primary,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 48,
+                          minHeight: 48,
+                        ),
+                        child: InkWell(
+                          onTap: () =>
+                              setState(() => _dismissedLoanPrompt = true),
+                          child: SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Icon(
+                              Icons.close,
+                              size: 16,
+                              color: isDark
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ),
                       ),
@@ -2046,9 +2045,7 @@ class _UnifiedTransactionDetailScreenState
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       height: 0.5,
-      color: isDark
-          ? Colors.white.withValues(alpha: 0.08)
-          : Colors.black.withValues(alpha: 0.06),
+      color: context.borderColor,
     );
   }
 

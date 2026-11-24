@@ -246,8 +246,14 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: isDark
-                          ? [const Color(0xFF1E2230), const Color(0xFF131620)]
-                          : [const Color(0xFFFFFFFF), const Color(0xFFFBF8F3)],
+                          ? [
+                              Theme.of(context).colorScheme.surfaceContainerHigh,
+                              Theme.of(context).colorScheme.surfaceContainer,
+                            ]
+                          : [
+                              context.surfaceColor,
+                              context.canvasColor,
+                            ],
                     ),
                     border: Border.all(
                       color: context.borderColor,
@@ -256,7 +262,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                     boxShadow: [
                       BoxShadow(
                         color: isDark
-                            ? Colors.black.withValues(alpha: 0.3)
+                            ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.3)
                             : Theme.of(
                                 context,
                               ).colorScheme.shadow.withValues(alpha: 0.047),
@@ -515,9 +521,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                         color: Theme.of(context).colorScheme.surfaceContainer,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.08)
-                              : Theme.of(context).colorScheme.outline,
+                          color: context.borderColor,
                           width: 0.8,
                         ),
                       ),
@@ -632,9 +636,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                       color: Theme.of(context).colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Theme.of(context).colorScheme.outline,
+                        color: context.borderColor,
                         width: 0.8,
                       ),
                     ),
@@ -704,10 +706,16 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         : cs.primary;
     final effectiveActiveText = activeColor ?? cs.onPrimary;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
+    return Semantics(
+      label: '$label filter',
+      button: true,
+      selected: isSelected,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
@@ -719,11 +727,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
             color: isSelected
                 ? (activeColor ??
                       (isDark
-                          ? Colors.white.withValues(alpha: 0.3)
+                          ? cs.onSurface.withValues(alpha: 0.3)
                           : cs.primary))
-                : (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Theme.of(context).colorScheme.outline),
+                : context.borderColor,
             width: isSelected ? 1.0 : 0.8,
           ),
         ),
@@ -738,7 +744,9 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   List<Widget> _buildGroupedLedgerSlivers(
@@ -771,7 +779,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
               boxShadow: [
                 BoxShadow(
                   color: isDark
-                      ? Colors.black.withValues(alpha: 0.25)
+                      ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                       : Theme.of(
                           context,
                         ).colorScheme.shadow.withValues(alpha: 0.03),
@@ -901,8 +909,13 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                                 ? Icons.swap_horiz_rounded
                                 : Icons.receipt_long_rounded);
 
-                      return InkWell(
-                        onTap: () async {
+                      return Semantics(
+                        label: '${t.notes.isNotEmpty ? t.notes : (cat?.name ?? "Transaction")}, ${AppFormat.currency(t.amount)}',
+                        button: true,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                          child: InkWell(
+                            onTap: () async {
                           HapticService.instance.tap();
                           await Navigator.push(
                             context,
@@ -924,11 +937,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                             border: Border(
                               bottom: !isLast
                                   ? BorderSide(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.05)
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.outline,
+                                      color: context.borderColor,
                                       width: 0.8,
                                     )
                                   : BorderSide.none,
@@ -1068,17 +1077,17 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                             ],
                           ),
                         ),
-                      );
-                    }),
+                      ),
+                    ),
+                  );
+                }),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Divider(
                         height: 12,
                         thickness: 0.5,
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : Theme.of(context).colorScheme.outline,
+                        color: context.borderColor,
                       ),
                     ),
                   ],

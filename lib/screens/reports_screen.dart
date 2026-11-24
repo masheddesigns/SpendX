@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../data/providers.dart';
 import '../models/reports_summary.dart';
 import '../services/export_service.dart';
+import '../shared/widgets/empty_state_widget.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/skeleton_loader.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
@@ -103,51 +104,63 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         ],
       ),
       body: reportsAsync.when(
-        data: (summary) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(reportsProvider),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── 1. Horizon Selector & Date Span ──────────────────
-                _HorizonSelector(
-                  selectedPeriod: period,
-                  onPeriodChanged: _onPeriodChanged,
-                  isDark: isDark,
+        data: (summary) => LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
                 ),
+                child: RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(reportsProvider),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── 1. Horizon Selector & Date Span ──────────────────
+                        _HorizonSelector(
+                          selectedPeriod: period,
+                          onPeriodChanged: _onPeriodChanged,
+                          isDark: isDark,
+                        ),
 
-                const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                // ── 2. Cash Flow Horizon (Cardless Executive Summary) ─
-                _CashFlowHorizonSection(summary: summary, isDark: isDark),
+                        // ── 2. Cash Flow Horizon (Cardless Executive Summary) ─
+                        _CashFlowHorizonSection(summary: summary, isDark: isDark),
 
-                const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                // ── 3. Monthly Movement (Chronological Dual-Stem) ─────
-                _MonthlyMovementSection(
-                  summary: summary,
-                  anim: _chartAnim,
-                  isDark: isDark,
+                        // ── 3. Monthly Movement (Chronological Dual-Stem) ─────
+                        _MonthlyMovementSection(
+                          summary: summary,
+                          anim: _chartAnim,
+                          isDark: isDark,
+                        ),
+
+                        const SizedBox(height: 28),
+
+                        // ── 4. Where Your Money Went (Category Trajectory) ────
+                        _CategoryBreakdownSection(summary: summary, isDark: isDark),
+
+                        const SizedBox(height: 28),
+
+                        // ── 5. Debt & Lending History ─────────────────────────
+                        _DebtAndLendingSection(
+                          summary: summary,
+                          anim: _chartAnim,
+                          isDark: isDark,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-
-                const SizedBox(height: 28),
-
-                // ── 4. Where Your Money Went (Category Trajectory) ────
-                _CategoryBreakdownSection(summary: summary, isDark: isDark),
-
-                const SizedBox(height: 28),
-
-                // ── 5. Debt & Lending History ─────────────────────────
-                _DebtAndLendingSection(
-                  summary: summary,
-                  anim: _chartAnim,
-                  isDark: isDark,
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
         loading: () => const SkeletonLoader.summary(),
         error: (err, _) => ErrorStateWidget(
@@ -333,7 +346,7 @@ class _CashFlowHorizonSection extends StatelessWidget {
       savingsRateText = '${summary.savingsRate.toStringAsFixed(1)}%';
       savingsRateColor = summary.savingsRate >= 20
           ? primaryInflowColor
-          : (summary.savingsRate >= 0 ? Colors.orange : cs.error);
+          : (summary.savingsRate >= 0 ? AppColors.warning : cs.error);
     } else if (summary.totalExpense > 0) {
       savingsRateText = 'Deficit (0% Inflow)';
       savingsRateColor = cs.error;
@@ -881,15 +894,15 @@ class _CategoryBreakdownSection extends StatelessWidget {
           SpendXGlassSurface(
             level: SpendXGlassLevel.base,
             borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.section),
+            child: const Padding(
+              padding: EdgeInsets.all(AppSpacing.section),
               child: Center(
-                child: Text(
-                  'No categorized expense records in this time horizon.',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
+                child: EmptyStateWidget(
+                  icon: Icons.pie_chart_outline_rounded,
+                  title: 'No Expense Records',
+                  description:
+                      'No categorized expense records in this time horizon.',
+                  illustrationAsset: 'assets/illustrations/empty_reports.svg',
                 ),
               ),
             ),
@@ -1000,6 +1013,8 @@ class _CategoryProportionRow extends StatelessWidget {
               children: [
                 Text(
                   AppFormat.currency(amount),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,

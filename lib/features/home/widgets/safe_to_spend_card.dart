@@ -23,6 +23,7 @@ import '../../../services/data_change_bus.dart';
 import '../../../services/haptic_service.dart';
 import '../../../shared/widgets/app_page_route.dart';
 import '../../../shared/widgets/glass/spendx_glass_sheet.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 
 /// The Organic Money Journey Scene.
@@ -269,45 +270,48 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           Semantics(
             button: true,
             label: '$statusLine. Tap for details.',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: calc.commitmentItems.isNotEmpty
-                  ? () => _showCommitmentDetails(
-                      context,
-                      calc.commitmentItems,
-                      isDark,
-                    )
-                  : () => _showBreakdownSheet(context, calc, isDark),
-              child: Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 48),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        statusLine,
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          letterSpacing: -0.2,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: calc.commitmentItems.isNotEmpty
+                    ? () => _showCommitmentDetails(
+                        context,
+                        calc.commitmentItems,
+                        isDark,
+                      )
+                    : () => _showBreakdownSheet(context, calc, isDark),
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 48),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          statusLine,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            letterSpacing: -0.2,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 15,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 15,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -343,9 +347,9 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.9)
-                              : Theme.of(context).colorScheme.onSurface,
+                          color: context.textPrimary.withValues(
+                            alpha: isDark ? 0.9 : 1.0,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 2),
@@ -357,9 +361,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                           fontSize: 34,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -1.0,
-                          color: isDark
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.onSurface,
+                          color: context.textPrimary,
                         ),
                       ),
                     ],
@@ -547,46 +549,49 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 label: nextBill != null
                     ? 'Next bill: ${DateFormat('d MMM').format(nextBill.dueDate)}'
                     : 'Milestone',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: nextBill != null
-                      ? () => _showCommitmentDetails(
-                          context,
-                          allCommitments,
-                          isDark,
-                        )
-                      : null,
-                  child: Container(
-                    width: 100,
-                    height: 95,
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          height: 36,
-                        ), // Clearance below diamond node
-                        Text(
-                          nextBill != null ? 'Next bill' : 'Milestone',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: Theme.of(context).colorScheme.tertiary,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: nextBill != null
+                        ? () => _showCommitmentDetails(
+                            context,
+                            allCommitments,
+                            isDark,
+                          )
+                        : null,
+                    child: Container(
+                      width: 100,
+                      height: 95,
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            height: 36,
+                          ), // Clearance below diamond node
+                          Text(
+                            nextBill != null ? 'Next bill' : 'Milestone',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Theme.of(context).colorScheme.tertiary,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          nextBill != null
-                              ? DateFormat('d MMM').format(nextBill.dueDate)
-                              : '${now.add(const Duration(days: 7)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 7)))}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          Text(
+                            nextBill != null
+                                ? DateFormat('d MMM').format(nextBill.dueDate)
+                                : '${now.add(const Duration(days: 7)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 7)))}',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -603,46 +608,49 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                 label: secondBill != null
                     ? 'Upcoming: ${DateFormat('d MMM').format(secondBill.dueDate)}'
                     : 'Inflow',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: secondBill != null
-                      ? () => _showCommitmentDetails(
-                          context,
-                          allCommitments,
-                          isDark,
-                        )
-                      : null,
-                  child: SizedBox(
-                    width: 90,
-                    height: inflowLabelHeight,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 25),
-                        Text(
-                          secondBill != null ? "Upcoming" : "Inflow",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: secondBill != null
-                                ? (Theme.of(context).colorScheme.primary)
-                                : (Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: secondBill != null
+                        ? () => _showCommitmentDetails(
+                            context,
+                            allCommitments,
+                            isDark,
+                          )
+                        : null,
+                    child: SizedBox(
+                      width: 90,
+                      height: inflowLabelHeight,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 25),
+                          Text(
+                            secondBill != null ? "Upcoming" : "Inflow",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: secondBill != null
+                                  ? (Theme.of(context).colorScheme.primary)
+                                  : (Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant),
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          secondBill != null
-                              ? DateFormat('d MMM').format(secondBill.dueDate)
-                              : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          Text(
+                            secondBill != null
+                                ? DateFormat('d MMM').format(secondBill.dueDate)
+                                : '${now.add(const Duration(days: 14)).day} ${DateFormat('MMM').format(now.add(const Duration(days: 14)))}',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -845,7 +853,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
           color: isOverdue
               ? Theme.of(context).colorScheme.error.withValues(alpha: 0.32)
               : (isDark
-                    ? Colors.white.withValues(alpha: 0.08)
+                    ? context.borderColor
                     : Theme.of(context).colorScheme.outline),
         ),
       ),
@@ -887,9 +895,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? Colors.white
-                            : Theme.of(context).colorScheme.onSurface,
+                        color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -1358,7 +1364,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
+                          ? context.borderColor
                           : Theme.of(context).colorScheme.outline,
                     ),
                   ),
@@ -1496,7 +1502,7 @@ class _SafeToSpendCardState extends ConsumerState<SafeToSpendCard>
               ),
               Divider(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.10)
+                    ? context.borderColor
                     : Theme.of(context).colorScheme.outline,
                 height: 24,
               ),

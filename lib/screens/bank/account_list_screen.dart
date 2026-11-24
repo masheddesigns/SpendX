@@ -11,6 +11,7 @@ import '../../models/loan.dart';
 import '../../services/haptic_service.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/app_tap_scale.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/spendx_glass.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_format.dart';
@@ -120,24 +121,24 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
 
     if (accountsAsync.hasError) {
       return Center(
-        child: SpendXErrorState(
-          message: accountsAsync.error.toString(),
+        child: ErrorStateWidget(
+          error: accountsAsync.error!,
           onRetry: () => ref.invalidate(accountsProvider),
         ),
       );
     }
     if (cardsAsync.hasError) {
       return Center(
-        child: SpendXErrorState(
-          message: cardsAsync.error.toString(),
+        child: ErrorStateWidget(
+          error: cardsAsync.error!,
           onRetry: () => ref.invalidate(creditCardsProvider),
         ),
       );
     }
     if (loansAsync.hasError) {
       return Center(
-        child: SpendXErrorState(
-          message: loansAsync.error.toString(),
+        child: ErrorStateWidget(
+          error: loansAsync.error!,
           onRetry: () => ref.invalidate(loansProvider),
         ),
       );
@@ -259,15 +260,13 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                     borderRadius: BorderRadius.circular(20),
                     color: Theme.of(context).colorScheme.surfaceContainer,
                     border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Theme.of(context).colorScheme.outline,
+                      color: context.borderColor,
                       width: 0.9,
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: isDark
-                            ? Colors.black.withValues(alpha: 0.25)
+                            ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                             : Theme.of(
                                 context,
                               ).colorScheme.shadow.withValues(alpha: 0.03),
@@ -394,15 +393,13 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   borderRadius: BorderRadius.circular(20),
                   color: Theme.of(context).colorScheme.surfaceContainer,
                   border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Theme.of(context).colorScheme.outline,
+                    color: context.borderColor,
                     width: 0.9,
                   ),
                   boxShadow: [
                     BoxShadow(
                       color: isDark
-                          ? Colors.black.withValues(alpha: 0.25)
+                          ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                           : Theme.of(
                               context,
                             ).colorScheme.shadow.withValues(alpha: 0.03),
@@ -544,11 +541,35 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   ),
                 ],
         ),
-        body: content,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth > 800) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: content,
+                ),
+              );
+            }
+            return content;
+          },
+        ),
       );
     }
 
-    return content;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth > 800) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: content,
+            ),
+          );
+        }
+        return content;
+      },
+    );
   }
 
   // ── Actions & Navigation Handlers ────────────────────────────
@@ -1130,15 +1151,13 @@ class _NetPositionHorizonCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(24),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.28)
+                ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.28)
                 : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.05),
             blurRadius: 18,
             offset: const Offset(0, 6),
@@ -1469,15 +1488,13 @@ class _ActionPillButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   color: Theme.of(context).colorScheme.surfaceContainer,
                   border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Theme.of(context).colorScheme.outline,
+                    color: context.borderColor,
                     width: 0.8,
                   ),
                   boxShadow: [
                     BoxShadow(
                       color: isDark
-                          ? Colors.black.withValues(alpha: 0.15)
+                          ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.15)
                           : Theme.of(
                               context,
                             ).colorScheme.shadow.withValues(alpha: 0.024),
@@ -1639,13 +1656,9 @@ class _BankAccountRow extends StatelessWidget {
                                           vertical: 1.5,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.06,
-                                                )
-                                              : Theme.of(context)
-                                                    .colorScheme
-                                                    .surfaceContainerHigh,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHigh,
                                           borderRadius: BorderRadius.circular(
                                             4,
                                           ),
@@ -1768,9 +1781,7 @@ class _BankAccountRow extends StatelessWidget {
           Container(
             margin: const EdgeInsets.only(left: 68, right: 16),
             height: 0.5,
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Theme.of(context).colorScheme.outline,
+            color: context.borderColor,
           ),
       ],
     );
@@ -2456,9 +2467,7 @@ class _LoanAmortizationRow extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                         child: Container(
                           height: 4.5,
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.08)
-                              : Theme.of(context).colorScheme.outline,
+                          color: context.borderColor,
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               return Align(
@@ -2499,9 +2508,7 @@ class _LoanAmortizationRow extends StatelessWidget {
             Container(
               margin: const EdgeInsets.only(left: 66, right: 16),
               height: 0.5,
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Theme.of(context).colorScheme.outline,
+              color: context.borderColor,
             ),
         ],
       ),
@@ -2596,9 +2603,7 @@ class _NavigationLinkRow extends StatelessWidget {
           Container(
             margin: const EdgeInsets.only(left: 68, right: 16),
             height: 0.5,
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Theme.of(context).colorScheme.outline,
+            color: context.borderColor,
           ),
       ],
     );
@@ -2621,9 +2626,7 @@ class _EmptyCardPlaceholder extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.8,
         ),
       ),
@@ -2701,9 +2704,7 @@ class _EmptyStateCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.9,
         ),
       ),
@@ -2718,12 +2719,16 @@ class _EmptyStateCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 10),
-              Text(
-                'Establish Your Balance Sheet',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: context.textPrimary,
+              Expanded(
+                child: Text(
+                  'Establish Your Balance Sheet',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: context.textPrimary,
+                  ),
                 ),
               ),
             ],

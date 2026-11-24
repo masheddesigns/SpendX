@@ -442,135 +442,158 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Add'),
       ),
-      body: Column(
-        children: [
-          // ── Summary ────────────────────────────────────────────────
-          if (state.activeItems.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 768 : double.infinity,
+              ),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _SummaryTile(
-                      label: "You'll get",
-                      amount: youWillGet,
-                      color: Theme.of(context).colorScheme.secondary,
+                  // ── Summary ────────────────────────────────────────────────
+                  if (state.activeItems.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _SummaryTile(
+                              label: "You'll get",
+                              amount: youWillGet,
+                              color: Theme.of(context).colorScheme.secondary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _SummaryTile(
+                              label: 'You owe',
+                              amount: youOwe,
+                              color: cs.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (state.activeItems.isNotEmpty && net != 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Net: ${net > 0 ? '+' : ''}${AppFormat.currency(net)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: net > 0
+                              ? Theme.of(context).colorScheme.secondary
+                              : cs.error,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+
+                  // ── Filter Tabs ────────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Row(
+                      children: [
+                        _FilterChip(
+                          label: 'All',
+                          count: state.activeItems.length,
+                          selected: _filter == 'all',
+                          onTap: () => setState(() => _filter = 'all'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: "You'll get",
+                          count: state.activeItems
+                              .where((l) => l.type == 'lent')
+                              .length,
+                          selected: _filter == 'get',
+                          color: Theme.of(context).colorScheme.secondary,
+                          onTap: () => setState(() => _filter = 'get'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: 'You owe',
+                          count: state.activeItems
+                              .where((l) => l.type == 'borrowed')
+                              .length,
+                          selected: _filter == 'owe',
+                          color: cs.error,
+                          onTap: () => setState(() => _filter = 'owe'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
+                          label: 'Settled',
+                          count: state.settledItems.length,
+                          selected: _filter == 'settled',
+                          onTap: () => setState(() => _filter = 'settled'),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 10),
+
+                  // ── List ───────────────────────────────────────────────────
                   Expanded(
-                    child: _SummaryTile(
-                      label: 'You owe',
-                      amount: youOwe,
-                      color: cs.error,
-                    ),
+                    child: filtered.isEmpty
+                        ? RefreshIndicator(
+                            onRefresh: () async => _refresh(),
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 40),
+                                child: _buildEmpty(allItems),
+                              ),
+                            ),
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isWide = constraints.maxWidth > 600;
+                              if (isWide) {
+                                return RefreshIndicator(
+                                  onRefresh: () async => _refresh(),
+                                  child: GridView.builder(
+                                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      mainAxisExtent: 130,
+                                    ),
+                                    itemCount: filtered.length,
+                                    itemBuilder: (_, i) => _LendingCard(
+                                      lending: filtered[i],
+                                      onTap: filtered[i].isSettled
+                                          ? null
+                                          : () => _showPayment(filtered[i]),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return RefreshIndicator(
+                                onRefresh: () async => _refresh(),
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                                  itemCount: filtered.length,
+                                  itemBuilder: (_, i) => _LendingCard(
+                                    lending: filtered[i],
+                                    onTap: filtered[i].isSettled
+                                        ? null
+                                        : () => _showPayment(filtered[i]),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
             ),
-          if (state.activeItems.isNotEmpty && net != 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                'Net: ${net > 0 ? '+' : ''}${AppFormat.currency(net)}',
-                style: TextStyle(
-                  color: net > 0
-                      ? Theme.of(context).colorScheme.secondary
-                      : cs.error,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-
-          // ── Filter Tabs ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'All',
-                  count: state.activeItems.length,
-                  selected: _filter == 'all',
-                  onTap: () => setState(() => _filter = 'all'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: "You'll get",
-                  count: state.activeItems
-                      .where((l) => l.type == 'lent')
-                      .length,
-                  selected: _filter == 'get',
-                  color: Theme.of(context).colorScheme.secondary,
-                  onTap: () => setState(() => _filter = 'get'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'You owe',
-                  count: state.activeItems
-                      .where((l) => l.type == 'borrowed')
-                      .length,
-                  selected: _filter == 'owe',
-                  color: cs.error,
-                  onTap: () => setState(() => _filter = 'owe'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Settled',
-                  count: state.settledItems.length,
-                  selected: _filter == 'settled',
-                  onTap: () => setState(() => _filter = 'settled'),
-                ),
-              ],
-            ),
-          ),
-
-          // ── List ───────────────────────────────────────────────────
-          Expanded(
-            child: filtered.isEmpty
-                ? _buildEmpty(allItems)
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide = constraints.maxWidth > 600;
-                      if (isWide) {
-                        return RefreshIndicator(
-                          onRefresh: () async => _refresh(),
-                          child: GridView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              mainAxisExtent: 130,
-                            ),
-                            itemCount: filtered.length,
-                            itemBuilder: (_, i) => _LendingCard(
-                              lending: filtered[i],
-                              onTap: filtered[i].isSettled
-                                  ? null
-                                  : () => _showPayment(filtered[i]),
-                            ),
-                          ),
-                        );
-                      }
-                      return RefreshIndicator(
-                        onRefresh: () async => _refresh(),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                          itemCount: filtered.length,
-                          itemBuilder: (_, i) => _LendingCard(
-                            lending: filtered[i],
-                            onTap: filtered[i].isSettled
-                                ? null
-                                : () => _showPayment(filtered[i]),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -588,6 +611,7 @@ class _LendingScreenState extends ConsumerState<LendingScreen> {
       description: 'Track money you give or borrow with friends and family.',
       ctaLabel: 'Add Record',
       onCtaTap: () => _showAddEntry(allItems),
+      illustrationAsset: 'assets/illustrations/empty_lending.svg',
     );
   }
 }
@@ -680,12 +704,14 @@ class _LendingCard extends StatelessWidget {
       child: Semantics(
         button: true,
         label: '${lending.personName}, ${isLent ? "Lent" : "Borrowed"}, remaining ${AppFormat.currency(remaining)}',
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
             children: [
               Row(
                 children: [
@@ -710,6 +736,8 @@ class _LendingCard extends StatelessWidget {
                       children: [
                         Text(
                           TextFormatter.toSmartTitleCase(lending.personName),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
@@ -717,6 +745,8 @@ class _LendingCard extends StatelessWidget {
                         ),
                         Text(
                           isLent ? 'They owe you' : 'You owe them',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: color,
@@ -726,11 +756,14 @@ class _LendingCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
                         AppFormat.currency(remaining),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: color,
                           fontWeight: FontWeight.w700,
@@ -740,6 +773,8 @@ class _LendingCard extends StatelessWidget {
                       if (lending.paidAmount > 0)
                         Text(
                           'of ${AppFormat.currency(lending.originalAmount)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: cs.onSurfaceVariant,
@@ -826,7 +861,8 @@ class _LendingCard extends StatelessWidget {
         ),
       ),
     ),
-  );
+  ),
+);
 }
 }
 
@@ -856,6 +892,8 @@ class _SummaryTile extends StatelessWidget {
         children: [
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontSize: 11,
@@ -864,6 +902,8 @@ class _SummaryTile extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             AppFormat.currency(amount),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
@@ -1038,16 +1078,19 @@ class _DateField extends StatelessWidget {
                 label: 'Clear date',
                 child: Tooltip(
                   message: 'Clear date',
-                  child: GestureDetector(
-                    onTap: onClear,
-                    child: SizedBox(
-                      width: 48,
-                      height: 48,
-                      child: Center(
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 16,
-                          color: cs.onSurfaceVariant,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                    child: GestureDetector(
+                      onTap: onClear,
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Center(
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ),

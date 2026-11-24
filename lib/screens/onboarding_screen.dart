@@ -8,6 +8,7 @@ import 'package:spend_x/services/live_sms_service.dart';
 import 'package:spend_x/features/home/screens/home_screen.dart';
 import 'package:spend_x/screens/onboarding_sms_sync_screen.dart';
 import '../shared/widgets/app_page_route.dart';
+import '../shared/widgets/app_confirm_dialog.dart';
 import '../shared/widgets/glass/spendx_glass_surface.dart';
 import '../shared/widgets/glass/spendx_glass_button.dart';
 import '../theme/app_theme.dart';
@@ -169,6 +170,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _updateState(VoidCallback update) => setState(update);
 
+  Future<void> _confirmSkip() async {
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: 'Skip Setup?',
+      message:
+          'SpendX works best with your preferred currency and automated tracking enabled. You can always configure these in Settings later.',
+      confirmLabel: 'Skip Anyway',
+      isDangerous: true,
+    );
+    if (confirmed == true && mounted) {
+      _finishOnboarding();
+    }
+  }
+
   Future<void> _finishOnboarding() async {
     if (!_supportedCurrencies.contains(_selectedCurrency)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -239,7 +254,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   _buildStepIndicator(),
                   _currentPage < _totalPages - 1
                       ? TextButton(
-                          onPressed: _finishOnboarding,
+                          onPressed: _confirmSkip,
                           child: Text(
                             'Skip',
                             style: TextStyle(

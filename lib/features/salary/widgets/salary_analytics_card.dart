@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../salary_ledger/salary_ledger_notifier.dart';
+import '../../../theme/app_theme.dart';
 
 class SalaryAnalyticsCard extends ConsumerWidget {
   const SalaryAnalyticsCard({super.key});
@@ -23,14 +24,15 @@ class SalaryAnalyticsCard extends ConsumerWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          border: Border.all(color: context.borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Monthly Trend',
+            Text('Monthly Trend',
                 style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 24),
             SizedBox(
               height: 180,
@@ -56,8 +58,11 @@ class SalaryAnalyticsCard extends ConsumerWidget {
                           return Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(short,
-                                style: const TextStyle(
-                                    color: Colors.grey, fontSize: 10)),
+                                style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontSize: 10)),
                           );
                         },
                       ),
@@ -94,9 +99,10 @@ class SalaryAnalyticsCard extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Text('Paid vs Pending',
+            Text('Paid vs Pending',
                 style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 24),
             SizedBox(
               height: 140,
@@ -122,8 +128,11 @@ class SalaryAnalyticsCard extends ConsumerWidget {
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
                                 months[i].month.month.split('-').last,
-                                style: const TextStyle(
-                                    color: Colors.grey, fontSize: 10)),
+                                style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontSize: 10)),
                           );
                         },
                       ),
@@ -158,20 +167,20 @@ class SalaryAnalyticsCard extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: AppColors.danger.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        color: Colors.redAccent, size: 20),
+                    Icon(Icons.warning_amber_rounded,
+                        color: AppColors.danger, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '${report.delayedCount} delayed payment${report.delayedCount > 1 ? 's' : ''} '
                         'averaging ${report.avgDelay.toStringAsFixed(1)} days late.',
-                        style: const TextStyle(
-                            color: Colors.redAccent, fontSize: 12),
+                        style: TextStyle(
+                            color: AppColors.danger, fontSize: 12),
                       ),
                     ),
                   ],

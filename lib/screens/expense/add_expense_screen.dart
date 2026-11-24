@@ -276,17 +276,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     });
   }
 
-  bool get _isValid {
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-    if (_selectedType == 'transfer') {
-      return amount > 0 &&
-          _selectedPaymentMethodId != null &&
-          _destinationPaymentMethodId != null &&
-          _selectedPaymentMethodId != _destinationPaymentMethodId;
-    }
-    return amount > 0;
-  }
-
   bool get _isSpecialNonCategorizedType {
     if (widget.existingTransaction == null) return false;
     final t = widget.existingTransaction!.type;
@@ -322,6 +311,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   Future<void> _saveTransaction() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedType != 'transfer' &&
+        !_isSpecialNonCategorizedType &&
+        _selectedCategoryId == null) {
+      CustomSnackBar.show(
+        context,
+        message: 'Please select a category',
+        isError: true,
+      );
+      return;
+    }
     if (_amountController.text.isEmpty) {
       CustomSnackBar.show(
         context,
@@ -934,8 +933,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.black.withValues(alpha: 0.3)
-                            : Colors.white,
+                            ? Theme.of(context).colorScheme.surfaceContainerHigh
+                            : context.surfaceColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -967,8 +966,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.black.withValues(alpha: 0.3)
-                            : Colors.white,
+                            ? Theme.of(context).colorScheme.surfaceContainerHigh
+                            : context.surfaceColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1112,7 +1111,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       onFieldSubmitted: (_) => _notesFocusNode.requestFocus(),
                       amountColor: headerColor,
                       validator: (value) {
-                        final amount = double.tryParse((value ?? '').trim());
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter an amount';
+                        }
+                        final amount = double.tryParse(value.trim());
                         if (amount == null || !amount.isFinite || amount <= 0) {
                           return 'Enter an amount greater than zero';
                         }
@@ -1271,21 +1273,58 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               ],
                             ),
                             const SizedBox(height: 10),
-                            AppCategoryPicker(
-                              availableCategories: _availableCategories,
-                              selectedCategoryId: _selectedCategoryId,
-                              activeColor: headerColor,
-                              onCategorySelected: (id) => setState(() {
-                                _selectedCategoryId = id;
-                                _didExplicitCategorySelection = true;
-                              }),
+                            FormField<String>(
+                              initialValue: _selectedCategoryId,
+                              validator: (val) {
+                                if (!_isSpecialNonCategorizedType &&
+                                    _selectedType != 'transfer') {
+                                  if (_selectedCategoryId == null ||
+                                      _selectedCategoryId!.isEmpty) {
+                                    return 'Please select a category';
+                                  }
+                                }
+                                return null;
+                              },
+                              builder: (fieldState) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    AppCategoryPicker(
+                                      availableCategories: _availableCategories,
+                                      selectedCategoryId: _selectedCategoryId,
+                                      activeColor: headerColor,
+                                      onCategorySelected: (id) {
+                                        setState(() {
+                                          _selectedCategoryId = id;
+                                          _didExplicitCategorySelection = true;
+                                        });
+                                        fieldState.didChange(id);
+                                      },
+                                    ),
+                                    if (fieldState.hasError)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 6,
+                                          left: 4,
+                                        ),
+                                        child: Text(
+                                          fieldState.errorText!,
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.error,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
                             ),
                             Container(
                               margin: const EdgeInsets.symmetric(vertical: 16),
                               height: 0.5,
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Colors.black.withValues(alpha: 0.06),
+                              color: context.borderColor,
                             ),
                           ],
 
@@ -1388,15 +1427,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _notesFocusNode.unfocus(),
                       label: _selectedType == 'transfer'
-                          ? 'Transfer Note (Optional)'
-                          : 'Merchant / Payee Notes (Optional)',
+                          ? 'Transfer Note'
+                          : 'Merchant / Payee Notes',
                       prefix: Icon(
                         _selectedType == 'transfer'
                             ? Icons.swap_horiz_rounded
                             : Icons.notes_rounded,
                       ),
                       validator: (val) {
-                        if (val != null && val.trim().length > 500) {
+                        if (val == null || val.trim().isEmpty) {
+                          return _selectedType == 'transfer'
+                              ? 'Please enter a transfer note'
+                              : 'Please enter a description or payee';
+                        }
+                        if (val.trim().length > 500) {
                           return 'Note must be 500 characters or less';
                         }
                         return null;
@@ -1410,7 +1454,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
               SpendXGlassButton(
                 variant: SpendXGlassButtonVariant.primary,
-                onPressed: _isValid ? _saveTransaction : null,
+                onPressed: _saveTransaction,
                 child: Text(
                   widget.existingTransaction != null
                       ? 'Update Activity'

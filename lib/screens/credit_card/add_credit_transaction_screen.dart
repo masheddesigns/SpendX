@@ -64,11 +64,6 @@ class _AddCreditTransactionScreenState
     super.dispose();
   }
 
-  bool get _isValid {
-    final amount = double.tryParse(_amountController.text) ?? 0.0;
-    return amount > 0;
-  }
-
   Future<void> _saveTransaction() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final amount = double.tryParse(_amountController.text) ?? 0.0;
@@ -118,6 +113,7 @@ class _AddCreditTransactionScreenState
       body: SafeArea(
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.m),
             child: Column(
@@ -131,7 +127,10 @@ class _AddCreditTransactionScreenState
                   controller: _amountController,
                   amountColor: Theme.of(context).colorScheme.primary,
                   validator: (val) {
-                    final amount = double.tryParse((val ?? '').trim());
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter an amount';
+                    }
+                    final amount = double.tryParse(val.trim());
                     if (amount == null || !amount.isFinite || amount <= 0) {
                       return 'Enter an amount greater than zero';
                     }
@@ -197,7 +196,10 @@ class _AddCreditTransactionScreenState
                   labelText: 'e.g. Amazon, Starbucks',
                   prefixIcon: Icons.storefront_rounded,
                   validator: (val) {
-                    if (val != null && val.trim().length > 100) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter a merchant or description';
+                    }
+                    if (val.trim().length > 100) {
                       return 'Merchant must be 100 characters or less';
                     }
                     return null;
@@ -237,7 +239,7 @@ class _AddCreditTransactionScreenState
               flex: 2,
               child: PrimaryButton(
                 label: 'Save Purchase',
-                onPressed: _isValid ? _saveTransaction : null,
+                onPressed: _saveTransaction,
               ),
             ),
           ],

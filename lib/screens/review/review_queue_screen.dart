@@ -16,6 +16,7 @@ import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_button.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
+import '../../theme/app_theme.dart';
 
 class ReviewQueueScreen extends ConsumerStatefulWidget {
   const ReviewQueueScreen({super.key});
@@ -118,125 +119,148 @@ class _ReviewQueueScreenState extends ConsumerState<ReviewQueueScreen> {
           ),
         ],
       ),
-      body: queueAsync.when(
-        loading: () => const SkeletonLoader.transactions(),
-        error: (error, _) => ErrorStateWidget(
-          error: error,
-          onRetry: () => ref.invalidate(reviewQueueProvider),
-        ),
-        data: (items) {
-          if (items.isEmpty) {
-            return const EmptyStateWidget(
-              icon: Icons.check_circle_outline_rounded,
-              title: 'All clear!',
-              description: 'No transactions to review.',
-            );
-          }
-
-          // Detect smart batch suggestions: same merchant appearing 2+ times
-          final smartSuggestion = _detectSmartGroup(items);
-
-          return Column(
-            children: [
-              if (!_isSelectionMode)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: SpendXGlassSurface(
-                    level: SpendXGlassLevel.base,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 16,
-                            color: cs.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${items.length} transaction${items.length == 1 ? '' : 's'} need your review. '
-                              'Long-press to select multiple.',
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 12,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              if (smartSuggestion != null && !_isSelectionMode)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                  child: SpendXGlassSurface(
-                    level: SpendXGlassLevel.elevated,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Icon(Icons.auto_awesome, size: 18, color: cs.primary),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '${smartSuggestion.count} similar ${smartSuggestion.merchant} transactions found',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _selected.addAll(smartSuggestion.ids);
-                              });
-                            },
-                            child: const Text(
-                              'Select all',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: RefreshIndicator(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final content = queueAsync.when(
+            loading: () => const SkeletonLoader.transactions(),
+            error: (error, _) => ErrorStateWidget(
+              error: error,
+              onRetry: () => ref.invalidate(reviewQueueProvider),
+            ),
+            data: (items) {
+              if (items.isEmpty) {
+                return RefreshIndicator(
                   onRefresh: () async => ref.invalidate(reviewQueueProvider),
-                  child: ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      16,
-                      16,
-                      hasItems && !_isSelectionMode ? 110 : 24,
+                  child: const SingleChildScrollView(
+                    physics: AlwaysScrollableScrollPhysics(),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 60),
+                      child: EmptyStateWidget(
+                        icon: Icons.check_circle_outline_rounded,
+                        title: 'All clear!',
+                        description: 'No transactions to review.',
+                      ),
                     ),
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return _ReviewCard(
-                        item: item,
-                        isSelected: _selected.contains(item.id),
-                        isSelectionMode: _isSelectionMode,
-                        onSelect: () => _toggleSelect(item.id),
-                      );
-                    },
                   ),
-                ),
+                );
+              }
+
+              // Detect smart batch suggestions: same merchant appearing 2+ times
+              final smartSuggestion = _detectSmartGroup(items);
+
+              return Column(
+                children: [
+                  if (!_isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: SpendXGlassSurface(
+                        level: SpendXGlassLevel.base,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: cs.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${items.length} transaction${items.length == 1 ? '' : 's'} need your review. '
+                                  'Long-press to select multiple.',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 12,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (smartSuggestion != null && !_isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                      child: SpendXGlassSurface(
+                        level: SpendXGlassLevel.elevated,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Icon(Icons.auto_awesome, size: 18, color: cs.primary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '${smartSuggestion.count} similar ${smartSuggestion.merchant} transactions found',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.onSurface,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _selected.addAll(smartSuggestion.ids);
+                                  });
+                                },
+                                child: const Text(
+                                  'Select all',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () async => ref.invalidate(reviewQueueProvider),
+                      child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          16,
+                          16,
+                          hasItems && !_isSelectionMode ? 110 : 24,
+                        ),
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return _ReviewCard(
+                            item: item,
+                            isSelected: _selected.contains(item.id),
+                            isSelectionMode: _isSelectionMode,
+                            onSelect: () => _toggleSelect(item.id),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 768 : double.infinity,
               ),
-            ],
+              child: content,
+            ),
           );
         },
       ),
@@ -464,7 +488,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
     final parsed = item.parsed;
     final cs = Theme.of(context).colorScheme;
     final isExpense = !parsed.isCredit;
-    final amountColor = isExpense ? cs.error : Colors.green;
+    final amountColor = isExpense ? cs.error : AppColors.success;
 
     final confidencePct = (item.confidence * 100).round();
     final (confLabel, confColor) = _confidenceInfo(item.confidence, cs);
@@ -480,13 +504,15 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
         button: widget.isSelectionMode,
         selected: widget.isSelected,
         label: 'Review transaction: ${parsed.merchant ?? "Transaction"}, ${parsed.amount}',
-        child: InkWell(
-          onTap: widget.isSelectionMode ? widget.onSelect : null,
-          onLongPress: widget.onSelect,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: InkWell(
+            onTap: widget.isSelectionMode ? widget.onSelect : null,
+            onLongPress: widget.onSelect,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (widget.isSelectionMode)
@@ -520,7 +546,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   onTap: () =>
                       setState(() => _showWhyDetected = !_showWhyDetected),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
@@ -530,10 +556,10 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                         ),
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.1),
+                          color: AppColors.warning.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Colors.amber.withValues(alpha: 0.3),
+                            color: AppColors.warning.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
@@ -542,14 +568,14 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                       const Icon(
                         Icons.help_outline,
                         size: 13,
-                        color: Colors.amber,
+                        color: AppColors.warning,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         reasonLabel,
                         style: const TextStyle(
                           fontSize: 11,
-                          color: Colors.amber,
+                          color: AppColors.warning,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -559,7 +585,7 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                             ? Icons.expand_less
                             : Icons.expand_more,
                         size: 14,
-                        color: Colors.amber,
+                        color: AppColors.warning,
                       ),
                     ],
                   ),
@@ -626,6 +652,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
                   Expanded(
                     child: Text(
                       '${isExpense ? "-" : "+"} ${AppFormat.currency(parsed.amount)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: amountColor,
                         fontWeight: FontWeight.w700,
@@ -826,7 +854,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
         ),
       ),
     ),
-  );
+  ),
+);
 }
 
   Future<void> _rejectWithReason(String reason) async {
@@ -884,6 +913,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
           Expanded(
             child: Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
             ),
           ),
@@ -893,8 +924,8 @@ class _ReviewCardState extends ConsumerState<_ReviewCard> {
   }
 
   (String, Color) _confidenceInfo(double conf, ColorScheme cs) {
-    if (conf >= 0.70) return ('High', Colors.green);
-    if (conf >= 0.50) return ('Medium', Colors.orange);
+    if (conf >= 0.70) return ('High', AppColors.success);
+    if (conf >= 0.50) return ('Medium', AppColors.warning);
     return ('Low', cs.error);
   }
 

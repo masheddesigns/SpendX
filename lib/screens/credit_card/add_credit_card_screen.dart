@@ -242,16 +242,6 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
     }
   }
 
-  bool get _isValid {
-    if (_nameCtrl.text.trim().isEmpty) return false;
-    if (_bankCtrl.text.trim().isEmpty) return false;
-    if (_last4Ctrl.text.trim().length != 4) return false;
-    final limit = double.tryParse(_limitCtrl.text.trim());
-    if (limit == null || limit < 0) return false;
-    if (widget.existingCard == null && limit <= 0) return false;
-    return true;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -319,11 +309,19 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                         _label('Last 4 Digits'),
                         TextFormField(
                           controller: _last4Ctrl,
+                          autovalidateMode: AutovalidateMode.onUserInteraction,
                           decoration: _dec('XXXX'),
                           keyboardType: TextInputType.number,
                           maxLength: 4,
-                          validator: (v) =>
-                              (v == null || v.length != 4) ? '4 digits' : null,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Enter last 4 digits';
+                            }
+                            if (v.trim().length != 4) {
+                              return 'Must be 4 digits';
+                            }
+                            return null;
+                          },
                         ),
                       ],
                     );
@@ -412,11 +410,11 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                     ),
                   ],
                   validator: (value) {
-                    final amount = double.tryParse((value ?? '').trim());
-                    if (amount == null || !amount.isFinite || amount < 0) {
-                      return 'Enter a valid credit limit';
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter a credit limit';
                     }
-                    if (widget.existingCard == null && amount == 0) {
+                    final amount = double.tryParse(value.trim());
+                    if (amount == null || !amount.isFinite || amount <= 0) {
                       return 'Credit limit must be greater than zero';
                     }
                     return null;
@@ -505,6 +503,10 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                           ),
                           DropdownButtonFormField<int>(
                             initialValue: _billingDay,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            validator: (v) =>
+                                v == null ? 'Select billing date' : null,
                             dropdownColor: Theme.of(
                               context,
                             ).colorScheme.surfaceContainerHigh,
@@ -547,6 +549,10 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                           ),
                           DropdownButtonFormField<int>(
                             initialValue: _dueDay,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            validator: (v) =>
+                                v == null ? 'Select due date' : null,
                             dropdownColor: Theme.of(
                               context,
                             ).colorScheme.surfaceContainerHigh,
@@ -597,19 +603,24 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                       label: 'Card color ${c['label']}',
                       child: Tooltip(
                         message: 'Select ${c['label']}',
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () =>
-                              setState(() => _selectedColor = c['color']!),
-                          child: Container(
-                            width: 48,
-                            height: 48,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minWidth: 48,
+                            minHeight: 48,
+                          ),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () =>
+                                setState(() => _selectedColor = c['color']!),
+                            child: Container(
+                              width: 48,
+                              height: 48,
                             decoration: BoxDecoration(
                               color: _hexColor(c['color']!),
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: isSelected
-                                    ? Colors.white
+                                    ? Theme.of(context).colorScheme.primary
                                     : Colors.transparent,
                                 width: 2.5,
                               ),
@@ -634,7 +645,8 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                           ),
                         ),
                       ),
-                    );
+                    ),
+                  );
                   }).toList(),
                 ),
               ],
@@ -670,7 +682,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                 flex: 2,
                 child: PrimaryButton(
                   label: 'Save Card',
-                  onPressed: _isValid ? _save : null,
+                  onPressed: _save,
                 ),
               ),
             ],

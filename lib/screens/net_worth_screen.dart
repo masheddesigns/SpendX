@@ -269,181 +269,210 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         ],
       ),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshData,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              // ─── Liquid Glass Solvency Hero ───
-              SliverToBoxAdapter(child: _buildNetWorthHero()),
-
-              // ─── Investments Guiding Banner ───
-              SliverToBoxAdapter(child: _buildInvestmentsGuidanceCard(context)),
-
-              // ─── Liquid Cash & Bank Accounts ───
-              SliverToBoxAdapter(
-                child: _buildSectionHeader(
-                  'Liquid Accounts & Cash',
-                  totalLiquid,
-                  AppTheme.semanticIncome,
-                  isAsset: true,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
                 ),
-              ),
+                child: RefreshIndicator(
+                  onRefresh: _refreshData,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      // ─── Liquid Glass Solvency Hero ───
+                      SliverToBoxAdapter(child: _buildNetWorthHero()),
 
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _buildAccountTile(liquidAccounts[i]),
-                  childCount: liquidAccounts.length,
-                ),
-              ),
-
-              if (liquidAccounts.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      'No liquid accounts added yet. Tap + to add bank or cash.',
-                      style: TextStyle(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? AppTheme.darkTextMuted
-                            : AppTheme.lightTextMuted,
-                        fontSize: 13,
+                      // ─── Investments Guiding Banner ───
+                      SliverToBoxAdapter(
+                        child: _buildInvestmentsGuidanceCard(context),
                       ),
-                    ),
-                  ),
-                ),
 
-              // ─── Investments & Wealth Portfolio ───
-              SliverToBoxAdapter(
-                child: _buildSectionHeader(
-                  'Investments & Portfolio',
-                  totalInvestments,
-                  Theme.of(context).colorScheme.primary,
-                  isAsset: true,
-                ),
-              ),
-
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _buildAccountTile(investmentAccounts[i]),
-                  childCount: investmentAccounts.length,
-                ),
-              ),
-
-              if (investmentAccounts.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      'No investment accounts tracked. Tap "+ Mutual Funds" or "+ Stocks" above to track your portfolio value.',
-                      style: TextStyle(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? AppTheme.darkTextMuted
-                            : AppTheme.lightTextMuted,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-
-              // ─── Liabilities Section ───
-              SliverToBoxAdapter(
-                child: _buildSectionHeader(
-                  'Liabilities & Debt',
-                  totalLiabilities,
-                  AppTheme.semanticExpense,
-                  isAsset: false,
-                ),
-              ),
-
-              // Credit card outstanding
-              if (cards.where((c) => c.outstanding > 0).isNotEmpty)
-                SliverList(
-                  delegate: SliverChildBuilderDelegate((ctx, i) {
-                    final activeCards = cards
-                        .where((c) => c.outstanding > 0)
-                        .toList();
-                    return _buildCcLiabilityTile(activeCards[i]);
-                  }, childCount: cards.where((c) => c.outstanding > 0).length),
-                ),
-
-              // Borrowed lendings
-              if (lendings.where((l) => l.type == 'borrowed').isNotEmpty)
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) {
-                      final loan = lendings
-                          .where((l) => l.type == 'borrowed')
-                          .toList()[i];
-                      return _buildLendingLiabilityTile(loan);
-                    },
-                    childCount: lendings
-                        .where((l) => l.type == 'borrowed')
-                        .length,
-                  ),
-                ),
-
-              // Bank Loans
-              if (loans.isNotEmpty)
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _buildActualLoanTile(loans[i]),
-                    childCount: loans.length,
-                  ),
-                ),
-
-              if (totalLiabilities == 0)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.semanticIncome.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppTheme.semanticIncome.withValues(alpha: 0.2),
-                          width: 0.75,
+                      // ─── Liquid Cash & Bank Accounts ───
+                      SliverToBoxAdapter(
+                        child: _buildSectionHeader(
+                          'Liquid Accounts & Cash',
+                          totalLiquid,
+                          AppTheme.semanticIncome,
+                          isAsset: true,
                         ),
                       ),
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 16,
-                            color: AppTheme.semanticIncome,
-                          ),
-                          SizedBox(width: 8),
-                          Expanded(
+
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (ctx, i) => _buildAccountTile(liquidAccounts[i]),
+                          childCount: liquidAccounts.length,
+                        ),
+                      ),
+
+                      if (liquidAccounts.isEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             child: Text(
-                              '100% Debt-Free! Zero active liabilities 🎉',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              'No liquid accounts added yet. Tap + to add bank or cash.',
                               style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.semanticIncome,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                                fontSize: 13,
                               ),
                             ),
                           ),
-                        ],
+                        ),
+
+                      // ─── Investments & Wealth Portfolio ───
+                      SliverToBoxAdapter(
+                        child: _buildSectionHeader(
+                          'Investments & Portfolio',
+                          totalInvestments,
+                          Theme.of(context).colorScheme.primary,
+                          isAsset: true,
+                        ),
                       ),
-                    ),
+
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (ctx, i) => _buildAccountTile(investmentAccounts[i]),
+                          childCount: investmentAccounts.length,
+                        ),
+                      ),
+
+                      if (investmentAccounts.isEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              'No investment accounts tracked. Tap "+ Mutual Funds" or "+ Stocks" above to track your portfolio value.',
+                              style: TextStyle(
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? AppTheme.darkTextMuted
+                                    : AppTheme.lightTextMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // ─── Liabilities Section ───
+                      SliverToBoxAdapter(
+                        child: _buildSectionHeader(
+                          'Liabilities & Debt',
+                          totalLiabilities,
+                          AppTheme.semanticExpense,
+                          isAsset: false,
+                        ),
+                      ),
+
+                      // Credit card outstanding
+                      if (cards.where((c) => c.outstanding > 0).isNotEmpty)
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (ctx, i) {
+                              final activeCards = cards
+                                  .where((c) => c.outstanding > 0)
+                                  .toList();
+                              return _buildCcLiabilityTile(activeCards[i]);
+                            },
+                            childCount: cards
+                                .where((c) => c.outstanding > 0)
+                                .length,
+                          ),
+                        ),
+
+                      // Borrowed lendings
+                      if (lendings
+                          .where((l) => l.type == 'borrowed')
+                          .isNotEmpty)
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (ctx, i) {
+                              final loan = lendings
+                                  .where((l) => l.type == 'borrowed')
+                                  .toList()[i];
+                              return _buildLendingLiabilityTile(loan);
+                            },
+                            childCount: lendings
+                                .where((l) => l.type == 'borrowed')
+                                .length,
+                          ),
+                        ),
+
+                      // Bank Loans
+                      if (loans.isNotEmpty)
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (ctx, i) => _buildActualLoanTile(loans[i]),
+                            childCount: loans.length,
+                          ),
+                        ),
+
+                      if (totalLiabilities == 0)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppTheme.semanticIncome.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppTheme.semanticIncome.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                  width: 0.75,
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    size: 16,
+                                    color: AppTheme.semanticIncome,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '100% Debt-Free! Zero active liabilities 🎉',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.semanticIncome,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                    ],
                   ),
                 ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 80)),
-            ],
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -856,8 +885,10 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         gradient: LinearGradient(
           colors: isDark
               ? [
-                  const Color(0xFF1E1B4B).withValues(alpha: 0.6),
-                  const Color(0xFF0F172A).withValues(alpha: 0.8),
+                  Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.6),
+                  Theme.of(context).colorScheme.surfaceContainer,
                 ]
               : [
                   Theme.of(context).colorScheme.primaryContainer,
@@ -984,7 +1015,9 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
           onTap: () async {
             final res = await Navigator.push(
               context,
-              AppPageRoute(builder: (_) => AddBankAccountScreen(initialType: type)),
+              AppPageRoute(
+                builder: (_) => AddBankAccountScreen(initialType: type),
+              ),
             );
             if (res == true) {
               _refreshData();
@@ -997,7 +1030,10 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.3),
+                  width: 0.8,
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1109,102 +1145,111 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         child: Semantics(
           button: true,
           label: '${a.name}, balance ${AppFormat.currency(a.balance)}',
-          child: InkWell(
-            onTap: () {
-              if (isInvestment) {
-                _showUpdateAssetValuationSheet(a);
-              } else {
-                Navigator.push(
-                  context,
-                  AppPageRoute(builder: (_) => AccountDetailScreen(account: a)),
-                );
-              }
-            },
-            onLongPress: () => _showAccountMenu(a),
-            borderRadius: BorderRadius.circular(AppRadius.m),
-            child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: tileColor.withValues(alpha: isDark ? 0.20 : 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(iconData, color: tileColor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: context.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            child: InkWell(
+              onTap: () {
+                if (isInvestment) {
+                  _showUpdateAssetValuationSheet(a);
+                } else {
+                  Navigator.push(
+                    context,
+                    AppPageRoute(
+                      builder: (_) => AccountDetailScreen(account: a),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$bankName • ${TextFormatter.toSmartTitleCase(a.accountType)}',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: context.textMuted,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
+                  );
+                }
+              },
+              onLongPress: () => _showAccountMenu(a),
+              borderRadius: BorderRadius.circular(AppRadius.m),
+              child: Row(
                 children: [
-                  Text(
-                    a.balance < 0
-                        ? 'Overdrawn: ${AppFormat.currency(a.balance.abs())}'
-                        : AppFormat.currency(a.balance),
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                      color: a.balance < 0
-                          ? Theme.of(context).colorScheme.tertiary
-                          : (context.textPrimary),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: tileColor.withValues(alpha: isDark ? 0.20 : 0.12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    child: Icon(iconData, color: tileColor, size: 20),
                   ),
-                  if (isInvestment) ...[
-                    const SizedBox(height: 3),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.edit_outlined, size: 10.5, color: tileColor),
-                        const SizedBox(width: 3),
                         Text(
-                          'Update',
+                          displayName,
                           style: TextStyle(
-                            fontSize: 10.5,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: tileColor,
+                            color: context.textPrimary,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$bankName • ${TextFormatter.toSmartTitleCase(a.accountType)}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: context.textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        a.balance < 0
+                            ? 'Overdrawn: ${AppFormat.currency(a.balance.abs())}'
+                            : AppFormat.currency(a.balance),
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: a.balance < 0
+                              ? Theme.of(context).colorScheme.tertiary
+                              : (context.textPrimary),
+                        ),
+                      ),
+                      if (isInvestment) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.edit_outlined,
+                              size: 10.5,
+                              color: tileColor,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Update',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: tileColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildCcLiabilityTile(CreditCard c) {
     if (c.outstanding <= 0) return const SizedBox.shrink();
@@ -1222,90 +1267,95 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
         padding: const EdgeInsets.all(14),
         child: Semantics(
           button: true,
-          label: '$cardName, outstanding ${AppFormat.currency(c.usedAmount)}, Tap to pay bill',
-          child: InkWell(
-          onTap: () async {
-            final res = await Navigator.push(
-              context,
-              AppPageRoute(
-                builder: (_) => const AddExpenseScreen(initialType: 'transfer'),
-              ),
-            );
-            if (res == true) _refreshData();
-          },
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppTheme.semanticExpense.withValues(
-                    alpha: isDark ? 0.20 : 0.12,
+          label:
+              '$cardName, outstanding ${AppFormat.currency(c.usedAmount)}, Tap to pay bill',
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            child: InkWell(
+              onTap: () async {
+                final res = await Navigator.push(
+                  context,
+                  AppPageRoute(
+                    builder: (_) =>
+                        const AddExpenseScreen(initialType: 'transfer'),
                   ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.credit_card_rounded,
-                  color: AppTheme.semanticExpense,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cardName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: context.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${c.bank} • ••${c.last4}',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: context.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                );
+                if (res == true) _refreshData();
+              },
+              child: Row(
                 children: [
-                  Text(
-                    '−${AppFormat.currency(c.usedAmount)}',
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: [FontFeature.tabularFigures()],
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppTheme.semanticExpense.withValues(
+                        alpha: isDark ? 0.20 : 0.12,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.credit_card_rounded,
                       color: AppTheme.semanticExpense,
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Tap to pay bill',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cardName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: context.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${c.bank} • ••${c.last4}',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: context.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '−${AppFormat.currency(c.usedAmount)}',
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                          color: AppTheme.semanticExpense,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Tap to pay bill',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildLendingLiabilityTile(Lending l) {
     final remaining = l.originalAmount - l.paidAmount;
@@ -1374,7 +1424,7 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
   }
 
   void _showUpdateAssetValuationSheet(BankAccount a) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final valuationFormKey = GlobalKey<FormState>();
     final ctrl = TextEditingController(
       text: a.balance == a.balance.roundToDouble()
           ? a.balance.toStringAsFixed(0)
@@ -1435,243 +1485,271 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.shadow.withValues(alpha: 0.25),
                       blurRadius: 20,
                       offset: const Offset(0, -4),
                     ),
                   ],
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white24 : Colors.black12,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
+                child: Form(
+                  key: valuationFormKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
                           decoration: BoxDecoration(
-                            color: assetColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(assetIcon, color: assetColor, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                resolveAccountDisplayName(a.name),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${TextFormatter.toSmartTitleCase(a.accountType)} • Current: ${AppFormat.currency(initialBalance)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.textMuted,
-                                ),
-                              ),
-                            ],
+                            color: context.onSurfaceOverlay(
+                              lightOpacity: 0.12,
+                              darkOpacity: 0.24,
+                            ),
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.more_vert_rounded),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _showAccountMenu(a);
-                          },
-                          tooltip: 'More options',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'UPDATED PORTFOLIO VALUATION',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.1,
-                        color: context.textMuted,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: ctrl,
-                      autofocus: true,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      decoration: InputDecoration(
-                        prefixText: '₹ ',
-                        prefixStyle: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: assetColor,
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHigh,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                      ),
-                      onChanged: (_) => setSheetState(() {}),
-                    ),
-                    if (isDiffNonZero) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
-                          Icon(
-                            isPositive
-                                ? Icons.trending_up_rounded
-                                : Icons.trending_down_rounded,
-                            size: 16,
-                            color: isPositive
-                                ? AppTheme.semanticIncome
-                                : AppTheme.semanticExpense,
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: assetColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(assetIcon, color: assetColor, size: 22),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${isPositive ? '+' : '-'}${AppFormat.currency(diff.abs())} change from previous',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  resolveAccountDisplayName(a.name),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${TextFormatter.toSmartTitleCase(a.accountType)} • Current: ${AppFormat.currency(initialBalance)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: context.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.more_vert_rounded),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _showAccountMenu(a);
+                            },
+                            tooltip: 'More options',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'UPDATED PORTFOLIO VALUATION',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.1,
+                          color: context.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: ctrl,
+                        autofocus: true,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'Please enter a valuation';
+                          }
+                          final parsed = double.tryParse(val.trim());
+                          if (parsed == null ||
+                              !parsed.isFinite ||
+                              parsed < 0) {
+                            return 'Valuation must be a valid amount of zero or more';
+                          }
+                          return null;
+                        },
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        decoration: InputDecoration(
+                          prefixText: '₹ ',
+                          prefixStyle: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: assetColor,
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHigh,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      if (isDiffNonZero) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(
+                              isPositive
+                                  ? Icons.trending_up_rounded
+                                  : Icons.trending_down_rounded,
+                              size: 16,
                               color: isPositive
                                   ? AppTheme.semanticIncome
                                   : AppTheme.semanticExpense,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              '${isPositive ? '+' : '-'}${AppFormat.currency(diff.abs())} change from previous',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isPositive
+                                    ? AppTheme.semanticIncome
+                                    : AppTheme.semanticExpense,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Text(
+                        'Quick Adjustments',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: context.textMuted,
+                        ),
                       ),
-                    ],
-                    const SizedBox(height: 16),
-                    Text(
-                      'Quick Adjustments',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: context.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final delta in [
-                          5000.0,
-                          10000.0,
-                          25000.0,
-                          50000.0,
-                          100000.0,
-                        ])
-                          Semantics(
-                            button: true,
-                            label: 'Add ${delta >= 1000 ? "+₹${(delta / 1000).toStringAsFixed(0)}k" : "+₹$delta"}',
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                              child: InkWell(
-                                onTap: () {
-                                  final curr =
-                                      double.tryParse(ctrl.text.trim()) ??
-                                      initialBalance;
-                                  final next = curr + delta;
-                                  ctrl.text = next == next.roundToDouble()
-                                      ? next.toStringAsFixed(0)
-                                      : next.toStringAsFixed(2);
-                                  setSheetState(() {});
-                                },
-                                borderRadius: BorderRadius.circular(16),
-                                child: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Text(
-                                      '+₹${(delta / 1000).toStringAsFixed(0)}k',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.onPrimaryContainer,
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final delta in [
+                            5000.0,
+                            10000.0,
+                            25000.0,
+                            50000.0,
+                            100000.0,
+                          ])
+                            Semantics(
+                              button: true,
+                              label:
+                                  'Add ${delta >= 1000 ? "+₹${(delta / 1000).toStringAsFixed(0)}k" : "+₹$delta"}',
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                  minHeight: 48,
+                                ),
+                                child: InkWell(
+                                  onTap: () {
+                                    final curr =
+                                        double.tryParse(ctrl.text.trim()) ??
+                                        initialBalance;
+                                    final next = curr + delta;
+                                    ctrl.text = next == next.roundToDouble()
+                                        ? next.toStringAsFixed(0)
+                                        : next.toStringAsFixed(2);
+                                    setSheetState(() {});
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(
+                                        '+₹${(delta / 1000).toStringAsFixed(0)}k',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    SpendXGlassButton(
-                      variant: SpendXGlassButtonVariant.primary,
-                      onPressed: () async {
-                        final parsed = double.tryParse(ctrl.text.trim());
-                        if (parsed == null || parsed < 0) return;
-                        Navigator.pop(ctx);
-                        await ref
-                            .read(accountRepoProvider)
-                            .updateBalance(a.id, parsed);
-                        await ref.read(accountsProvider.notifier).refresh();
-                        _refreshData();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Updated ${a.name} valuation to ${AppFormat.currency(parsed)}',
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      SpendXGlassButton(
+                        variant: SpendXGlassButtonVariant.primary,
+                        onPressed: () async {
+                          if (!(valuationFormKey.currentState?.validate() ??
+                              false)) {
+                            return;
+                          }
+                          final parsed = double.tryParse(ctrl.text.trim());
+                          if (parsed == null || parsed < 0) return;
+                          Navigator.pop(ctx);
+                          await ref
+                              .read(accountRepoProvider)
+                              .updateBalance(a.id, parsed);
+                          await ref.read(accountsProvider.notifier).refresh();
+                          _refreshData();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Updated ${a.name} valuation to ${AppFormat.currency(parsed)}',
+                                ),
+                                behavior: SnackBarBehavior.floating,
                               ),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Update Valuation'),
-                    ),
-                  ],
+                            );
+                          }
+                        },
+                        child: const Text('Update Valuation'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -1784,6 +1862,8 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               children: [
                 Text(
                   l.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
@@ -1792,6 +1872,8 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
                 ),
                 Text(
                   l.bank,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 12,
@@ -1801,8 +1883,11 @@ class _NetWorthScreenState extends ConsumerState<NetWorthScreen> {
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             '−${AppFormat.currency(remaining)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Theme.of(context).colorScheme.tertiary,
               fontWeight: FontWeight.w600,

@@ -104,12 +104,12 @@ class MoreScreen extends ConsumerWidget {
                     _buildDivider(isDark),
                     _MoreGlassRow(
                       icon: Icons.rate_review_rounded,
-                      iconColor: Colors.orange,
+                      iconColor: AppColors.warning,
                       title: 'Review Queue',
                       subtitle:
                           '$reviewCount transaction${reviewCount == 1 ? '' : 's'} awaiting confirmation',
                       badgeCount: reviewCount,
-                      badgeColor: Colors.orange,
+                      badgeColor: AppColors.warning,
                       isDark: isDark,
                       onTap: () => _push(context, const ReviewQueueScreen()),
                     ),
@@ -229,7 +229,7 @@ class MoreScreen extends ConsumerWidget {
                   _buildDivider(isDark),
                   _MoreGlassRow(
                     icon: Icons.chat_bubble_outline_rounded,
-                    iconColor: Colors.teal,
+                    iconColor: AppColors.transfer,
                     title: 'Feedback & Support',
                     subtitle: 'Share feedback, report issues, or rate the app',
                     isDark: isDark,
@@ -262,9 +262,7 @@ class MoreScreen extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.only(left: 64, right: 16),
       height: 0.5,
-      color: isDark
-          ? Colors.white.withValues(alpha: 0.08)
-          : Colors.black.withValues(alpha: 0.06),
+      color: isDark ? AppTheme.darkBorder : AppTheme.lightBorder,
     );
   }
 
@@ -307,9 +305,10 @@ class _MoreGlassRow extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         child: InkWell(
           onTap: onTap,
-          splashColor: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.black.withValues(alpha: 0.03),
+          splashColor: context.onSurfaceOverlay(
+            lightOpacity: 0.03,
+            darkOpacity: 0.05,
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             child: Row(

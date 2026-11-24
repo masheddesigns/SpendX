@@ -11,7 +11,8 @@ import '../../shared/widgets/undo_snackbar_listener.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_dialog.dart';
-import '../../shared/widgets/glass/spendx_states.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/loading_state_widget.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_confirm_dialog.dart';
 
@@ -57,25 +58,13 @@ class _BudgetManagementScreenState
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) {
-          bool isValid() {
-            final limit = double.tryParse(amountController.text.trim()) ?? 0.0;
-            if (limit <= 0) {
-              return false;
-            }
-            if (existing == null && selectedCategoryId == null) {
-              return false;
-            }
-            return true;
-          }
-
           return SpendXGlassDialog(
             title: existing == null ? 'New Budget' : 'Edit Budget',
             primaryLabel: 'Save',
-            primaryEnabled: isValid(),
             secondaryLabel: 'Cancel',
             onSecondary: () => Navigator.pop(dialogContext),
             onPrimary: () async {
-              if (!(formKey.currentState?.validate() ?? false) || !isValid()) {
+              if (!(formKey.currentState?.validate() ?? false)) {
                 return;
               }
               final limit = double.tryParse(amountController.text.trim());
@@ -106,6 +95,7 @@ class _BudgetManagementScreenState
                   if (existing == null)
                     DropdownButtonFormField<String>(
                       initialValue: selectedCategoryId,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
                       decoration: InputDecoration(
                         labelText: 'Category',
                         filled: true,
@@ -126,7 +116,11 @@ class _BudgetManagementScreenState
                           .map(
                             (category) => DropdownMenuItem<String>(
                               value: category.id,
-                              child: Text(category.name),
+                              child: Text(
+                                category.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -137,6 +131,7 @@ class _BudgetManagementScreenState
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: amountController,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
@@ -159,7 +154,10 @@ class _BudgetManagementScreenState
                       ),
                     ),
                     validator: (value) {
-                      final limit = double.tryParse((value ?? '').trim());
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Enter a monthly limit';
+                      }
+                      final limit = double.tryParse(value.trim());
                       if (limit == null || !limit.isFinite || limit <= 0) {
                         return 'Enter a monthly limit greater than zero';
                       }
@@ -243,150 +241,213 @@ class _BudgetManagementScreenState
             : () => _showAddBudgetDialog(expenseCategories, budgets),
       ),
       body: SafeArea(
-        child: isLoading
-            ? const SpendXLoadingState()
-            : budgets.isEmpty
-            ? const SpendXEmptyState(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'No budgets set yet',
-                subtitle: 'Tap + to set a monthly limit per category.',
-                illustrationAsset: 'assets/illustrations/empty_budgets.svg',
-              )
-            : RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(budgetsProvider);
-                  ref.invalidate(categoriesProvider);
-                  await Future.wait([
-                    ref.read(budgetsProvider.future),
-                    ref.read(categoriesProvider.future),
-                  ]);
-                },
-                child: ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  itemCount: budgets.length,
-                  itemBuilder: (context, index) {
-                    final item = budgets[index];
-                    final progress = (item.spent / item.budget.limit).clamp(
-                      0.0,
-                      1.0,
-                    );
-                    final categoryColor = _hexToColor(item.category.color);
-                    final progressColor = progress < 0.7
-                        ? Theme.of(context).colorScheme.primary
-                        : progress < 0.9
-                        ? Colors.orange
-                        : Theme.of(context).colorScheme.error;
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: SpendXGlassSurface(
-                        level: SpendXGlassLevel.base,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: categoryColor.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                    child: Icon(
-                                      Icons.category,
-                                      color: categoryColor,
-                                      size: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      item.category.name,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleSmall,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Edit',
-                                    icon: Icon(
-                                      Icons.edit_outlined,
-                                      size: 18,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                                    onPressed: () => _showAddBudgetDialog(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
+                ),
+                child: isLoading
+                    ? const LoadingStateWidget(message: 'Loading budgets...')
+                    : budgets.isEmpty
+                    ? RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(budgetsProvider);
+                          ref.invalidate(categoriesProvider);
+                          await Future.wait([
+                            ref.read(budgetsProvider.future),
+                            ref.read(categoriesProvider.future),
+                          ]);
+                        },
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 40,
+                              horizontal: 16,
+                            ),
+                            child: EmptyStateWidget(
+                              icon: Icons.account_balance_wallet_outlined,
+                              title: 'No budgets set yet',
+                              description:
+                                  'Tap + to set a monthly limit per category.',
+                              illustrationAsset:
+                                  'assets/illustrations/empty_budgets.svg',
+                              ctaLabel: expenseCategories.isEmpty
+                                  ? null
+                                  : 'Add Budget',
+                              onCtaTap: expenseCategories.isEmpty
+                                  ? null
+                                  : () => _showAddBudgetDialog(
                                       expenseCategories,
                                       budgets,
-                                      item,
                                     ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Delete',
-                                    icon: Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Theme.of(context).colorScheme.error
-                                          .withValues(alpha: 0.7),
-                                    ),
-                                    onPressed: () => _deleteBudget(item),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: LinearProgressIndicator(
-                                  value: progress,
-                                  minHeight: 8,
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.4),
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    progressColor,
+                            ),
+                          ),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(budgetsProvider);
+                          ref.invalidate(categoriesProvider);
+                          await Future.wait([
+                            ref.read(budgetsProvider.future),
+                            ref.read(categoriesProvider.future),
+                          ]);
+                        },
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: budgets.length,
+                          itemBuilder: (context, index) {
+                            final item = budgets[index];
+                            final progress = (item.spent / item.budget.limit)
+                                .clamp(0.0, 1.0);
+                            final categoryColor = _hexToColor(
+                              item.category.color,
+                            );
+                            final progressColor = progress < 0.7
+                                ? Theme.of(context).colorScheme.primary
+                                : progress < 0.9
+                                ? Colors.orange
+                                : Theme.of(context).colorScheme.error;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: SpendXGlassSurface(
+                                level: SpendXGlassLevel.base,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 18,
+                                            backgroundColor: categoryColor
+                                                .withValues(alpha: 0.2),
+                                            child: Icon(
+                                              Icons.category,
+                                              color: categoryColor,
+                                              size: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              item.category.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleSmall,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'Edit',
+                                            icon: Icon(
+                                              Icons.edit_outlined,
+                                              size: 18,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                            ),
+                                            onPressed: () =>
+                                                _showAddBudgetDialog(
+                                                  expenseCategories,
+                                                  budgets,
+                                                  item,
+                                                ),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'Delete',
+                                            icon: Icon(
+                                              Icons.delete_outline,
+                                              size: 18,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .error
+                                                  .withValues(alpha: 0.7),
+                                            ),
+                                            onPressed: () =>
+                                                _deleteBudget(item),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: LinearProgressIndicator(
+                                          value: progress,
+                                          minHeight: 8,
+                                          backgroundColor: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest
+                                              .withValues(alpha: 0.4),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                progressColor,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              'Spent: ${AppFormat.currency(item.spent)}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTextStyles.labelMedium
+                                                  .copyWith(
+                                                    color: progressColor,
+                                                    fontFeatures: const [
+                                                      FontFeature
+                                                          .tabularFigures(),
+                                                    ],
+                                                  ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              'Limit: ${AppFormat.currency(item.budget.limit)}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.end,
+                                              style: AppTextStyles.labelMedium
+                                                  .copyWith(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurfaceVariant,
+                                                    fontFeatures: const [
+                                                      FontFeature
+                                                          .tabularFigures(),
+                                                    ],
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Spent: ${AppFormat.currency(item.spent)}',
-                                    style: AppTextStyles.labelMedium.copyWith(
-                                      color: progressColor,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    'Limit: ${AppFormat.currency(item.budget.limit)}',
-                                    style: AppTextStyles.labelMedium.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ),
-                    );
-                  },
-                ),
               ),
+            );
+          },
+        ),
       ),
     );
   }

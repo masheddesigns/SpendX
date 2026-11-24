@@ -8,6 +8,8 @@ import '../../models/loan_installment.dart';
 import '../../models/bank_account.dart';
 import '../../domain/loans/loan_service.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_dialog.dart';
 import 'add_loan_screen.dart';
@@ -277,59 +279,74 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
           ),
         ],
       ),
-      body: installmentsAsync.when(
-        loading: () => const SpendXLoadingState(count: 3, itemHeight: 90),
-        error: (_, _) => SpendXErrorState(
-          message: 'Unable to load loan installment details. Please try again.',
-          onRetry: () => ref.refresh(loanInstallmentsProvider(widget.loan.id)),
-        ),
-        data: (installments) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Overview Card
-              SpendXGlassSurface(
-                level: SpendXGlassLevel.elevated,
-                borderRadius: BorderRadius.circular(20),
-                padding: const EdgeInsets.all(20),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final content = installmentsAsync.when(
+            loading: () => const SpendXLoadingState(count: 3, itemHeight: 90),
+            error: (err, _) => ErrorStateWidget(
+              message: 'Unable to load loan installment details. Please try again.',
+              onRetry: () => ref.refresh(loanInstallmentsProvider(widget.loan.id)),
+            ),
+            data: (installments) => RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(loansProvider);
+                ref.invalidate(loanInstallmentsProvider(widget.loan.id));
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      AppFormat.currency(remaining),
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        letterSpacing: -0.6,
-                        color: cs.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Remaining Balance',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildInfoItem(
-                          'Principal',
-                          AppFormat.currency(loan.principalAmount),
-                        ),
-                        _buildInfoItem(
-                          'Paid',
-                          AppFormat.currency(loan.paidAmount),
-                        ),
-                        _buildInfoItem(
-                          'EMI',
-                          AppFormat.currency(loan.monthlyInstallment),
-                        ),
-                      ],
-                    ),
+                    // Overview Card
+                    SpendXGlassSurface(
+                      level: SpendXGlassLevel.elevated,
+                      borderRadius: BorderRadius.circular(20),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Text(
+                            AppFormat.currency(remaining),
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                              letterSpacing: -0.6,
+                              color: cs.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Remaining Balance',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              Expanded(
+                                child: _buildInfoItem(
+                                  'Principal',
+                                  AppFormat.currency(loan.principalAmount),
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildInfoItem(
+                                  'Paid',
+                                  AppFormat.currency(loan.paidAmount),
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildInfoItem(
+                                  'EMI',
+                                  AppFormat.currency(loan.monthlyInstallment),
+                                ),
+                              ),
+                            ],
+                          ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -421,11 +438,10 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
               const SizedBox(height: 14),
 
               if (installments.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text('No installments generated yet.'),
-                  ),
+                const EmptyStateWidget(
+                  icon: Icons.calendar_today_outlined,
+                  title: 'No installments yet',
+                  description: 'No installments generated yet for this loan.',
                 )
               else
                 ListView.builder(
@@ -463,6 +479,8 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                                 children: [
                                   Text(
                                     'Month ${i + 1}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
@@ -473,6 +491,8 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                                     DateFormat(
                                       'MMM dd, yyyy',
                                     ).format(inst.dueDate),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondaryOf(context),
@@ -554,6 +574,18 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
         ),
       ),
     );
+    if (isTablet) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 768),
+          child: content,
+        ),
+      );
+    }
+    return content;
+  },
+),
+);
   }
 
   Widget _buildInfoItem(String label, String value) {

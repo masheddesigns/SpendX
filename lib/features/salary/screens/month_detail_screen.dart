@@ -11,10 +11,10 @@ import '../../../models/transaction.dart';
 import '../../../features/accounts/providers/account_providers.dart';
 import '../../../features/categories/providers/category_providers.dart';
 import '../../../features/transactions/providers/transaction_providers.dart';
+import '../../../shared/widgets/empty_state_widget.dart';
 import '../../salary_ledger/salary_ledger_models.dart';
 import '../../salary_ledger/salary_ledger_notifier.dart';
-
-import 'package:spend_x/theme/app_spacing.dart';
+import '../../../theme/app_theme.dart';
 /// Detail screen for a single salary month — shows full breakdown + payment list.
 class MonthDetailScreen extends ConsumerWidget {
   final String monthId;
@@ -30,13 +30,18 @@ class MonthDetailScreen extends ConsumerWidget {
 
     if (monthView == null) {
       return Scaffold(
-        
         appBar: AppBar(
-            title: Text('Month Detail'),
+            title: const Text('Month Detail'),
             backgroundColor: Colors.transparent),
-        body: const Center(
-            child: Text('Month not found',
-                style: TextStyle(color: Colors.grey))),
+        body: Center(
+          child: EmptyStateWidget(
+            icon: Icons.calendar_today_outlined,
+            title: 'Month Not Found',
+            description: 'The requested salary month could not be located.',
+            ctaLabel: 'Go Back',
+            onCtaTap: () => Navigator.of(context).maybePop(),
+          ),
+        ),
       );
     }
 
@@ -63,18 +68,28 @@ class MonthDetailScreen extends ConsumerWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(monthName, style: const TextStyle(fontSize: 17)),
-            Text('for ${monthDate != null ? DateFormat('MMMM').format(monthDate) : m.month.month} work',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.normal)),
+            Text(
+              monthName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 17),
+            ),
+            Text(
+              'for ${monthDate != null ? DateFormat('MMMM').format(monthDate) : m.month.month} work',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+              ),
+            ),
           ],
         ),
         backgroundColor: Colors.transparent,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Colors.greenAccent),
+            icon: Icon(Icons.add_circle_outline, color: AppColors.success),
             tooltip: 'Add Payment',
             onPressed: () => _showAddPayment(context, ref, m),
           ),
@@ -103,17 +118,18 @@ class MonthDetailScreen extends ConsumerWidget {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: Text('Delete Month?'),
+                    title: const Text('Delete Month?'),
                     content: const Text(
                         'This will delete this month and all its payments.'),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(ctx, false),
-                          child: Text('Cancel')),
+                          child: const Text('Cancel')),
                       TextButton(
                           onPressed: () => Navigator.pop(ctx, true),
                           child: Text('Delete',
-                              style: TextStyle(color: Colors.red))),
+                              style: TextStyle(
+                                  color: Theme.of(ctx).colorScheme.error))),
                     ],
                   ),
                 );
@@ -125,7 +141,7 @@ class MonthDetailScreen extends ConsumerWidget {
                 }
               }
             },
-            itemBuilder: (_) => [
+            itemBuilder: (ctx) => [
               const PopupMenuItem(
                   value: 'edit_expected',
                   child: Text('Edit Expected Amount')),
@@ -134,198 +150,262 @@ class MonthDetailScreen extends ConsumerWidget {
                   child: Text(m.month.isOnHold
                       ? 'Release Hold'
                       : 'Put On Hold')),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: 'delete',
                   child: Text('Delete Month',
-                      style: TextStyle(color: Colors.red))),
+                      style: TextStyle(
+                          color: Theme.of(ctx).colorScheme.error))),
             ],
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // ── Status Banner ──────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: _statusBg(context, m.status),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15)),
-            ),
-            child: Column(
-              children: [
-                Text(m.status.label,
-                    style: TextStyle(
-                        color: _statusColor(m.status),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Text(AppFormat.currency(m.totalPaid),
-                    style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface)),
-                const SizedBox(height: 4),
-                Text(
-                    'of ${AppFormat.currency(m.month.expectedAmount)} expected',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 16),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-                    valueColor:
-                        AlwaysStoppedAnimation(_statusColor(m.status)),
-                    minHeight: 8,
-                  ),
-                ),
-                if (firstPaidDate != null || m.delayDays > 0) ...[
-                  const SizedBox(height: 12),
-                  if (firstPaidDate != null)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          m.delayDays > 0
-                              ? Icons.warning_amber_rounded
-                              : Icons.check_circle_outline_rounded,
-                          color: m.delayDays > 0
-                              ? Colors.orangeAccent
-                              : Colors.greenAccent,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          m.delayDays > 0
-                              ? 'Paid on ${DateFormat('dd MMM').format(firstPaidDate)} (${m.delayDays}d late)'
-                              : 'Paid on ${DateFormat('dd MMM').format(firstPaidDate)} (on time)',
-                          style: TextStyle(
-                            color: m.delayDays > 0
-                                ? Colors.orangeAccent
-                                : Colors.greenAccent,
-                            fontSize: 13,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 768 : double.infinity,
+              ),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await ref.read(salaryLedgerProvider.notifier).refresh();
+                },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    // ── Status Banner ──────────────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: _statusBg(context, m.status),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .outline
+                                .withValues(alpha: 0.15)),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(m.status.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: _statusColor(context, m.status),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          Text(AppFormat.currency(m.totalPaid),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.onSurface)),
+                          const SizedBox(height: 4),
+                          Text(
+                              'of ${AppFormat.currency(m.month.expectedAmount)} expected',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant)),
+                          const SizedBox(height: 16),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .outline
+                                  .withValues(alpha: 0.15),
+                              valueColor: AlwaysStoppedAnimation(
+                                  _statusColor(context, m.status)),
+                              minHeight: 8,
+                            ),
                           ),
+                          if (firstPaidDate != null || m.delayDays > 0) ...[
+                            const SizedBox(height: 12),
+                            if (firstPaidDate != null)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    m.delayDays > 0
+                                        ? Icons.warning_amber_rounded
+                                        : Icons.check_circle_outline_rounded,
+                                    color: m.delayDays > 0
+                                        ? AppColors.warning
+                                        : AppColors.success,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      m.delayDays > 0
+                                          ? 'Paid on ${DateFormat('dd MMM').format(firstPaidDate)} (${m.delayDays}d late)'
+                                          : 'Paid on ${DateFormat('dd MMM').format(firstPaidDate)} (on time)',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: m.delayDays > 0
+                                            ? AppColors.warning
+                                            : AppColors.success,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else if (m.delayDays > 0)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.warning_amber_rounded,
+                                      color: AppColors.danger, size: 16),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text('${m.delayDays} days overdue',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            color: AppColors.danger,
+                                            fontSize: 13)),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // ── On Hold Banner ──────────────────────────────
+                    if (m.month.isOnHold) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppColors.warning.withValues(alpha: 0.4)),
                         ),
-                      ],
-                    )
-                  else if (m.delayDays > 0)
+                        child: Row(
+                          children: [
+                            Icon(Icons.pause_circle_filled,
+                                color: AppColors.warning, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text('This month is on hold',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: AppColors.warning, fontSize: 13)),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                await ref
+                                    .read(salaryLedgerProvider.notifier)
+                                    .removeMonthHold(monthId);
+                              },
+                              child: Text('Release',
+                                  style: TextStyle(color: AppColors.warning)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+
+                    // ── KPI Row ────────────────────────────────────
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            color: Colors.redAccent, size: 16),
-                        const SizedBox(width: 6),
-                        Text('${m.delayDays} days overdue',
-                            style: const TextStyle(
-                                color: Colors.redAccent, fontSize: 13)),
+                        Expanded(
+                            child: _kpi(context, 'Salary',
+                                AppFormat.currency(m.salaryPaid), AppColors.success)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: _kpi(context, 'Bonus',
+                                AppFormat.currency(m.bonusTotal), AppColors.primary)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                            child: _kpi(context, 'Remaining',
+                                AppFormat.currency(m.remaining), AppColors.warning)),
                       ],
                     ),
-                ],
-              ],
-            ),
-          ),
-          // ── On Hold Banner ──────────────────────────────
-          if (m.month.isOnHold) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                    const SizedBox(height: 16),
+
+                    // ── Due Date Info ──────────────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.event_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                                'Due: ${DateFormat('dd MMM yyyy').format(m.month.dueDate)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                    fontSize: 14)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── Payments List ──────────────────────────────
+                    Text('Payments (${m.payments.length})',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
+                    const SizedBox(height: 12),
+
+                    if (m.payments.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.section),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).colorScheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const EmptyStateWidget(
+                          icon: Icons.payments_outlined,
+                          title: 'No Payments Recorded',
+                          description:
+                              'Record salary installments or bonuses for this month.',
+                        ),
+                      )
+                    else
+                      ...m.payments.map((p) => _PaymentTile(
+                            payment: p,
+                            onDelete: () async {
+                              await ref
+                                  .read(salaryLedgerProvider.notifier)
+                                  .deletePayment(p.id);
+                            },
+                          )),
+
+                    const SizedBox(height: 48),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.pause_circle_filled, color: Colors.amber, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text('This month is on hold',
-                        style: TextStyle(color: Colors.amber.shade200, fontSize: 13)),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      await ref.read(salaryLedgerProvider.notifier).removeMonthHold(monthId);
-                    },
-                    child: const Text('Release', style: TextStyle(color: Colors.amber)),
-                  ),
-                ],
-              ),
             ),
-          ],
-          const SizedBox(height: 16),
-
-          // ── KPI Row ────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                  child: _kpi(context,
-                      'Salary', AppFormat.currency(m.salaryPaid), Colors.greenAccent)),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: _kpi(context,
-                      'Bonus', AppFormat.currency(m.bonusTotal), Colors.purpleAccent)),
-              const SizedBox(width: 8),
-              Expanded(
-                  child: _kpi(context,
-                      'Remaining', AppFormat.currency(m.remaining), Colors.orangeAccent)),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // ── Due Date Info ──────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.event_rounded,
-                    color: Colors.blueAccent, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                    'Due: ${DateFormat('dd MMM yyyy').format(m.month.dueDate)}',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ── Payments List ──────────────────────────────
-          Text('Payments (${m.payments.length})',
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16)),
-          const SizedBox(height: 12),
-
-          if (m.payments.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.section),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text('No payments recorded',
-                    style: TextStyle(color: Colors.grey.shade500)),
-              ),
-            )
-          else
-            ...m.payments.map((p) => _PaymentTile(
-                  payment: p,
-                  onDelete: () async {
-                    await ref
-                        .read(salaryLedgerProvider.notifier)
-                        .deletePayment(p.id);
-                  },
-                )),
-
-          const SizedBox(height: 48),
-        ],
+          );
+        },
       ),
     );
   }
@@ -341,9 +421,15 @@ class MonthDetailScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 11)),
           const SizedBox(height: 4),
           Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: color, fontSize: 15, fontWeight: FontWeight.bold)),
         ],
@@ -362,12 +448,12 @@ class MonthDetailScreen extends ConsumerWidget {
     };
   }
 
-  Color _statusColor(SalaryStatus s) => switch (s) {
-        SalaryStatus.paid => Colors.greenAccent,
-        SalaryStatus.partial => Colors.orangeAccent,
-        SalaryStatus.pending => Colors.grey.shade500,
-        SalaryStatus.onHold => Colors.amber,
-        SalaryStatus.overdue => Colors.red,
+  Color _statusColor(BuildContext context, SalaryStatus s) => switch (s) {
+        SalaryStatus.paid => AppColors.success,
+        SalaryStatus.partial => AppColors.warning,
+        SalaryStatus.pending => Theme.of(context).colorScheme.onSurfaceVariant,
+        SalaryStatus.onHold => AppColors.warning,
+        SalaryStatus.overdue => AppColors.danger,
       };
 }
 
@@ -387,9 +473,9 @@ class _PaymentTile extends StatelessWidget {
       PaymentType.salary => Icons.payment_rounded,
     };
     final typeColor = switch (payment.type) {
-      PaymentType.bonus => Colors.purpleAccent,
-      PaymentType.adjustment => Colors.blueAccent,
-      PaymentType.salary => Colors.greenAccent,
+      PaymentType.bonus => AppColors.primary,
+      PaymentType.adjustment => Theme.of(context).colorScheme.primary,
+      PaymentType.salary => AppColors.success,
     };
 
     return Dismissible(
@@ -398,28 +484,30 @@ class _PaymentTile extends StatelessWidget {
       background: Container(
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: Colors.red.shade800,
+          color: Theme.of(context).colorScheme.error,
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_outline, color: Colors.white),
+        child: Icon(Icons.delete_outline,
+            color: Theme.of(context).colorScheme.onError),
       ),
       confirmDismiss: (_) async {
         return await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: Text('Delete Payment?'),
+                title: const Text('Delete Payment?'),
                 content: Text(
                     'Remove ${AppFormat.currency(payment.amount)} ${payment.type.name} payment?'),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: Text('Cancel')),
+                      child: const Text('Cancel')),
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, true),
                       child: Text('Delete',
-                          style: TextStyle(color: Colors.red))),
+                          style: TextStyle(
+                              color: Theme.of(ctx).colorScheme.error))),
                 ],
               ),
             ) ??
@@ -451,6 +539,8 @@ class _PaymentTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(payment.type.name.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: typeColor,
                           fontSize: 11,
@@ -459,19 +549,26 @@ class _PaymentTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                       DateFormat('dd MMM yyyy').format(payment.paidDate),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                   if (payment.note != null && payment.note!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(payment.note!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 11)),
                     ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Text(AppFormat.currency(payment.amount),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 16,
@@ -717,14 +814,18 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.calendar_today_rounded,
-                                  color: Colors.blueAccent, size: 18),
+                              Icon(Icons.calendar_today_rounded,
+                                  color: Theme.of(context).colorScheme.primary, size: 18),
                               const SizedBox(width: 10),
-                              Text(
-                                  'Paid on: ${DateFormat('dd MMM yyyy').format(_paidDate)}',
-                                  style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onSurface, fontSize: 15)),
-                              const Spacer(),
+                              Expanded(
+                                child: Text(
+                                    'Paid on: ${DateFormat('dd MMM yyyy').format(_paidDate)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        color: Theme.of(context).colorScheme.onSurface, fontSize: 15)),
+                              ),
+                              const SizedBox(width: 8),
                               Icon(Icons.edit_rounded,
                                   color: Theme.of(context).colorScheme.onSurfaceVariant, size: 16),
                             ],
@@ -760,15 +861,19 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
                             style: TextStyle(
                                 color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
                             items: [
-                              const DropdownMenuItem<String?>(
+                              DropdownMenuItem<String?>(
                                 value: null,
                                 child: Text('No account',
                                     style: TextStyle(
-                                        color: Colors.grey)),
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
                               ),
                               ...accounts.map((a) => DropdownMenuItem(
                                     value: a.id,
-                                    child: Text(a.name),
+                                    child: Text(
+                                      a.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   )),
                             ],
                             onChanged: (v) =>
@@ -786,7 +891,7 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
                     style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Note (optional)',
-                      hintStyle: TextStyle(color: Colors.grey.shade600),
+                      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       filled: true,
                       fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
@@ -803,11 +908,11 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
                     child: FilledButton(
                       onPressed: _parsed > 0 ? _submit : null,
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: Text('Add Payment',
+                      child: const Text('Add Payment',
                           style: TextStyle(
                               fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
@@ -822,15 +927,16 @@ class _AddPaymentSheetState extends ConsumerState<_AddPaymentSheet> {
   }
 
   Widget _quickChip(String label, double value, VoidCallback onTap) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ActionChip(
         label: Text('$label (\u20b9${value.toStringAsFixed(0)})',
-            style: const TextStyle(color: Colors.blueAccent, fontSize: 12)),
-        backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
+            style: TextStyle(color: primaryColor, fontSize: 12)),
+        backgroundColor: primaryColor.withValues(alpha: 0.1),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Colors.blueAccent)),
+            side: BorderSide(color: primaryColor)),
         onPressed: onTap,
       ),
     );
@@ -857,12 +963,12 @@ void _showEditExpectedDialog(
         controller: controller,
         autofocus: true,
         keyboardType: TextInputType.number,
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: Theme.of(ctx).colorScheme.onSurface),
         decoration: InputDecoration(
           labelText: 'Expected Salary',
           labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           prefixText: '\u20b9 ',
-          prefixStyle: const TextStyle(color: Colors.white),
+          prefixStyle: TextStyle(color: Theme.of(ctx).colorScheme.onSurface),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           border: OutlineInputBorder(
@@ -873,9 +979,10 @@ void _showEditExpectedDialog(
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel')),
+            child: const Text('Cancel')),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: Colors.blueAccent),
+          style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.primary),
           onPressed: () {
             final amount = double.tryParse(controller.text);
             if (amount != null && amount > 0) {

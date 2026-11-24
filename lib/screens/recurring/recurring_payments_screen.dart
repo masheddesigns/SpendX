@@ -7,6 +7,8 @@ import '../../models/recurring_template.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/app_amount_field.dart';
 import '../../shared/widgets/app_text_field.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/loading_state_widget.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
@@ -14,7 +16,6 @@ import '../../utils/app_format.dart';
 import '../../widgets/common/spendx_fab.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
-import '../../shared/widgets/glass/spendx_states.dart';
 import '../../shared/widgets/app_confirm_dialog.dart';
 
 class RecurringPaymentsScreen extends ConsumerStatefulWidget {
@@ -63,6 +64,7 @@ class _RecurringPaymentsScreenState
             ),
             content: Form(
               key: dialogFormKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -73,7 +75,7 @@ class _RecurringPaymentsScreenState
                       label: 'Name',
                       validator: (val) {
                         if (val == null || val.trim().isEmpty) {
-                          return 'Enter a name';
+                          return 'Please enter a name';
                         }
                         return null;
                       },
@@ -116,7 +118,10 @@ class _RecurringPaymentsScreenState
                     AppAmountField(
                       controller: amountController,
                       validator: (val) {
-                        final amount = double.tryParse((val ?? '').trim());
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Please enter an amount';
+                        }
+                        final amount = double.tryParse(val.trim());
                         if (amount == null || !amount.isFinite || amount <= 0) {
                           return 'Enter an amount greater than zero';
                         }
@@ -343,16 +348,42 @@ class _RecurringPaymentsScreenState
         label: 'Add Recurring',
         onPressed: () => _showAddDialog(categoriesMap),
       ),
-      body: isLoading
-          ? const Center(child: SpendXLoadingState(count: 4, itemHeight: 72))
-          : templates.isEmpty
-          ? const SpendXEmptyState(
-              icon: Icons.repeat_rounded,
-              title: 'No recurring payments',
-              subtitle:
-                  'Tap the button below to add rent, subscriptions, salary etc.',
-            )
-          : RefreshIndicator(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final Widget content;
+
+          if (isLoading) {
+            content = const LoadingStateWidget(
+              message: 'Loading recurring payments...',
+            );
+          } else if (templates.isEmpty) {
+            content = RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(recurringProvider);
+                ref.invalidate(categoriesProvider);
+                await Future.wait([
+                  ref.read(recurringProvider.future),
+                  ref.read(categoriesProvider.future),
+                ]);
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 60),
+                  child: EmptyStateWidget(
+                    icon: Icons.repeat_rounded,
+                    title: 'No recurring payments',
+                    description:
+                        'Tap the button below to add rent, subscriptions, salary etc.',
+                    ctaLabel: 'Add Recurring',
+                    onCtaTap: () => _showAddDialog(categoriesMap),
+                  ),
+                ),
+              ),
+            );
+          } else {
+            content = RefreshIndicator(
               onRefresh: () async {
                 ref.invalidate(recurringProvider);
                 ref.invalidate(categoriesProvider);
@@ -408,6 +439,8 @@ class _RecurringPaymentsScreenState
                               children: [
                                 Text(
                                   template.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14.5,
@@ -417,6 +450,8 @@ class _RecurringPaymentsScreenState
                                 const SizedBox(height: 2),
                                 Text(
                                   '${_frequencyLabel(template.frequency)}${category != null ? ' • ${category.name}' : ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: AppColors.textSecondaryOf(context),
@@ -425,11 +460,14 @@ class _RecurringPaymentsScreenState
                               ],
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
                                 '${isExpense ? '-' : '+'}${AppFormat.currency(template.amount.abs())}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
@@ -474,7 +512,19 @@ class _RecurringPaymentsScreenState
                   );
                 },
               ),
+            );
+          }
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 768 : double.infinity,
+              ),
+              child: content,
             ),
+          );
+        },
+      ),
     );
   }
 }
@@ -495,22 +545,30 @@ class _TypeSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: selected ? color : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: selected ? cs.onError : cs.onSurfaceVariant,
+    return Semantics(
+      label: '$label transaction type',
+      button: true,
+      selected: selected,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: selected ? color : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: selected ? cs.onError : cs.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       ),

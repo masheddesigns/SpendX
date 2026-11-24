@@ -118,9 +118,11 @@ class SpendXTransactionTile extends StatelessWidget {
       button: onTap != null,
       enabled: onTap != null,
       label: semanticLabel,
-      child: Material(
-        color: Colors.transparent,
-      child: InkWell(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
         onTap: onTap,
         splashColor: isDark
             ? Colors.white.withValues(alpha: 0.05)
@@ -395,6 +397,7 @@ class SpendXTransactionTile extends StatelessWidget {
             ),
         ],
       ),
+    ),
     ),
     ),
   );

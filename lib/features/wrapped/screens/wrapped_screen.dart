@@ -5,6 +5,7 @@ import '../../../services/haptic_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 import '../models/wrapped_summary.dart';
+import '../../../shared/widgets/empty_state_widget.dart';
 import '../../../shared/widgets/error_state_widget.dart';
 import '../../../shared/widgets/skeleton_loader.dart';
 import '../providers/wrapped_providers.dart';
@@ -128,10 +129,14 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
         ),
         data: (summary) {
           if (summary == null) {
-            return const Center(
-              child: Text(
-                'No data for this period',
-                style: TextStyle(color: Colors.grey),
+            return Center(
+              child: EmptyStateWidget(
+                icon: Icons.auto_awesome_outlined,
+                title: 'No Data for This Period',
+                description:
+                    'Record transactions in this period to unlock your Wrapped story.',
+                ctaLabel: 'Close',
+                onCtaTap: () => Navigator.pop(context),
               ),
             );
           }
@@ -147,147 +152,171 @@ class _WrappedScreenState extends ConsumerState<WrappedScreen>
             _VerdictSlide(summary: summary),
           ];
 
-          return SafeArea(
-            child: Stack(
-              children: [
-                // ── PageView ─────────────────────────────
-                PageView(
-                  controller: _ctrl,
-                  onPageChanged: (i) {
-                    HapticService.instance.selection();
-                    setState(() => _page = i);
-                    _restartTimer();
-                  },
-                  children: pages,
-                ),
-
-                // ── Tap zones: left(0-40%) | dead(40-60%) | right(60-100%) ──
-                // Long-press pauses timer, release resumes
-                Positioned.fill(
-                  top: 60,
-                  bottom: 80,
-                  child: GestureDetector(
-                    onLongPressStart: (_) => _pauseTimer(),
-                    onLongPressEnd: (_) => _resumeTimer(),
-                    child: Row(
-                      children: [
-                        // Left zone: 40% → previous
-                        Flexible(
-                          flex: 40,
-                          child: Semantics(
-                            button: true,
-                            label: 'Previous story',
-                            child: GestureDetector(
-                              onTap: _goPrev,
-                              behavior: HitTestBehavior.translucent,
-                              child: const SizedBox.expand(),
-                            ),
-                          ),
-                        ),
-                        // Dead zone: 20% center → no action (prevents accidental taps)
-                        const Flexible(flex: 20, child: SizedBox.expand()),
-                        // Right zone: 40% → next
-                        Flexible(
-                          flex: 40,
-                          child: Semantics(
-                            button: true,
-                            label: 'Next story',
-                            child: GestureDetector(
-                              onTap: _goNext,
-                              behavior: HitTestBehavior.translucent,
-                              child: const SizedBox.expand(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final isTablet = constraints.maxWidth > 768;
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: isTablet ? 600 : double.infinity,
                   ),
-                ),
+                  child: SafeArea(
+                    child: Stack(
+                      children: [
+                        // ── PageView ─────────────────────────────
+                        PageView(
+                          controller: _ctrl,
+                          onPageChanged: (i) {
+                            HapticService.instance.selection();
+                            setState(() => _page = i);
+                            _restartTimer();
+                          },
+                          children: pages,
+                        ),
 
-                // ── Progress bars with timer fill ─────────
-                Positioned(
-                  top: 12,
-                  left: 16,
-                  right: 16,
-                  child: AnimatedBuilder(
-                    animation: _timerCtrl,
-                    builder: (_, _) => Row(
-                      children: List.generate(_totalPages, (i) {
-                        double fill;
-                        if (i < _page) {
-                          fill = 1.0; // completed
-                        } else if (i == _page) {
-                          fill = _timerCtrl.value; // current — animating
-                        } else {
-                          fill = 0.0; // upcoming
-                        }
-                        return Expanded(
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: Colors.white24,
-                              borderRadius: BorderRadius.circular(2),
+                        // ── Tap zones: left(0-40%) | dead(40-60%) | right(60-100%) ──
+                        // Long-press pauses timer, release resumes
+                        Positioned.fill(
+                          top: 60,
+                          bottom: 80,
+                          child: GestureDetector(
+                            onLongPressStart: (_) => _pauseTimer(),
+                            onLongPressEnd: (_) => _resumeTimer(),
+                            child: Row(
+                              children: [
+                                // Left zone: 40% → previous
+                                Flexible(
+                                  flex: 40,
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'Previous story',
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
+                                      ),
+                                      child: GestureDetector(
+                                        onTap: _goPrev,
+                                        behavior: HitTestBehavior.translucent,
+                                        child: const SizedBox.expand(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Dead zone: 20% center → no action (prevents accidental taps)
+                                const Flexible(flex: 20, child: SizedBox.expand()),
+                                // Right zone: 40% → next
+                                Flexible(
+                                  flex: 40,
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'Next story',
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
+                                      ),
+                                      child: GestureDetector(
+                                        onTap: _goNext,
+                                        behavior: HitTestBehavior.translucent,
+                                        child: const SizedBox.expand(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            alignment: Alignment.centerLeft,
-                            child: FractionallySizedBox(
-                              widthFactor: fill,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+
+                        // ── Progress bars with timer fill ─────────
+                        Positioned(
+                          top: 12,
+                          left: 16,
+                          right: 16,
+                          child: AnimatedBuilder(
+                            animation: _timerCtrl,
+                            builder: (_, _) => Row(
+                              children: List.generate(_totalPages, (i) {
+                                double fill;
+                                if (i < _page) {
+                                  fill = 1.0; // completed
+                                } else if (i == _page) {
+                                  fill = _timerCtrl.value; // current — animating
+                                } else {
+                                  fill = 0.0; // upcoming
+                                }
+                                return Expanded(
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white24,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                    alignment: Alignment.centerLeft,
+                                    child: FractionallySizedBox(
+                                      widthFactor: fill,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(2),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ),
+
+                        // ── Close button ─────────────────────────
+                        Positioned(
+                          top: 24,
+                          right: 12,
+                          child: IconButton(
+                            tooltip: 'Close',
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white54,
+                              size: 22,
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+
+                        // ── Done button (last page only) ─────────
+                        if (_page == _totalPages - 1)
+                          Positioned(
+                            bottom: 32,
+                            left: 48,
+                            right: 48,
+                            child: FilledButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                'Done',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
                             ),
                           ),
-                        );
-                      }),
+                      ],
                     ),
                   ),
                 ),
-
-                // ── Close button ─────────────────────────
-                Positioned(
-                  top: 24,
-                  right: 12,
-                  child: IconButton(
-                    tooltip: 'Close',
-                    icon: const Icon(
-                      Icons.close,
-                      color: Colors.white54,
-                      size: 22,
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
-
-                // ── Done button (last page only) ─────────
-                if (_page == _totalPages - 1)
-                  Positioned(
-                    bottom: 32,
-                    left: 48,
-                    right: 48,
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
@@ -350,6 +379,8 @@ class _IdentitySlide extends StatelessWidget {
             curve: Curves.easeOutExpo,
             builder: (_, v, _) => Text(
               AppFormat.currency(v),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 44,
@@ -362,16 +393,20 @@ class _IdentitySlide extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _MiniStat(
-                'Spent',
-                AppFormat.currency(summary.totalExpense),
-                Colors.redAccent,
+              Flexible(
+                child: _MiniStat(
+                  'Spent',
+                  AppFormat.currency(summary.totalExpense),
+                  AppColors.danger,
+                ),
               ),
-              const SizedBox(width: 40),
-              _MiniStat(
-                'Saved',
-                AppFormat.currency(net.abs()),
-                isPositive ? Colors.greenAccent : Colors.redAccent,
+              const SizedBox(width: 32),
+              Flexible(
+                child: _MiniStat(
+                  'Saved',
+                  AppFormat.currency(net.abs()),
+                  isPositive ? AppColors.success : AppColors.danger,
+                ),
               ),
             ],
           ),
@@ -382,7 +417,7 @@ class _IdentitySlide extends StatelessWidget {
                   ? 'Better than last period'
                   : 'Higher spending than before',
               style: TextStyle(
-                color: isPositive ? Colors.greenAccent : Colors.orangeAccent,
+                color: isPositive ? AppColors.success : AppColors.warning,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -446,6 +481,8 @@ class _PersonalitySlide extends StatelessWidget {
                     width: 90,
                     child: Text(
                       c.categoryName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
@@ -466,9 +503,11 @@ class _PersonalitySlide extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   SizedBox(
-                    width: 36,
+                    width: 42,
                     child: Text(
                       '${c.percentage.toStringAsFixed(0)}%',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: color,
                         fontSize: 13,
@@ -485,6 +524,8 @@ class _PersonalitySlide extends StatelessWidget {
           if (cats.isNotEmpty)
             Text(
               _quip(cats.first.categoryName),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: CinematicTheme.textSecondary,
                 fontSize: 13,
@@ -557,13 +598,15 @@ class _ComparisonSlide extends StatelessWidget {
           Icon(
             savedMore ? Icons.trending_down_rounded : Icons.trending_up_rounded,
             size: 56,
-            color: savedMore ? Colors.greenAccent : Colors.orangeAccent,
+            color: savedMore ? AppColors.success : AppColors.warning,
           ),
           const SizedBox(height: 28),
           Text(
             savedMore
                 ? 'You spent ${AppFormat.currency(diff)} less'
                 : 'You spent ${AppFormat.currency(diff)} more',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -579,8 +622,10 @@ class _ComparisonSlide extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             '${change > 0 ? "+" : ""}${change.toStringAsFixed(0)}%',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: savedMore ? Colors.greenAccent : Colors.orangeAccent,
+              color: savedMore ? AppColors.success : AppColors.warning,
               fontSize: 32,
               fontWeight: FontWeight.w800,
             ),
@@ -611,10 +656,10 @@ class _VerdictSlide extends StatelessWidget {
   const _VerdictSlide({required this.summary});
 
   (String, String, Color) _verdict(double rate) {
-    if (rate >= 30) return ('DISCIPLINED', '\u{1F4AA}', Colors.greenAccent);
-    if (rate >= 15) return ('STABLE', '\u{1F44D}', Colors.blueAccent);
-    if (rate >= 0) return ('IMPROVING', '\u{1F4C8}', Colors.orangeAccent);
-    return ('IMPULSIVE', '\u{1F62C}', Colors.redAccent);
+    if (rate >= 30) return ('DISCIPLINED', '\u{1F4AA}', AppColors.success);
+    if (rate >= 15) return ('STABLE', '\u{1F44D}', AppTheme.primaryBlue);
+    if (rate >= 0) return ('IMPROVING', '\u{1F4C8}', AppColors.warning);
+    return ('IMPULSIVE', '\u{1F62C}', AppColors.danger);
   }
 
   String _tip(WrappedSummary s) {
@@ -641,6 +686,8 @@ class _VerdictSlide extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
               fontSize: 34,
@@ -663,6 +710,8 @@ class _VerdictSlide extends StatelessWidget {
                 Expanded(
                   child: Text(
                     _tip(summary),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: CinematicTheme.textSecondary,
                       fontSize: 12,
@@ -696,11 +745,15 @@ class _MiniStat extends StatelessWidget {
       children: [
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(color: CinematicTheme.textMuted, fontSize: 11),
         ),
         const SizedBox(height: 4),
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: color,
             fontSize: 17,
@@ -734,18 +787,25 @@ class _Insight extends StatelessWidget {
           Expanded(
             child: Text(
               title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: CinematicTheme.textSecondary,
                 fontSize: 13,
               ),
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],

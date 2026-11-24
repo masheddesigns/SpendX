@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../features/home/screens/home_screen.dart';
+import '../screens/ai_chat_screen.dart';
 import '../screens/bank/account_list_screen.dart';
+import '../screens/credit_card_screen.dart';
 import '../screens/expense/add_expense_screen.dart';
 import '../screens/goals/goals_screen.dart';
 import '../screens/home/transactions_screen.dart';
+import '../screens/lending/lending_screen.dart';
+import '../screens/loans/loans_screen.dart';
+import '../screens/notifications_inbox_screen.dart';
 import '../screens/reports_screen.dart';
+import '../screens/settings/app_settings_screen.dart';
+import '../screens/settings/backup_hub_screen.dart';
 
 /// Named routes and URI normalization for SpendX app links.
 class AppRouteTable {
@@ -17,6 +24,14 @@ class AppRouteTable {
   static const goals = '/goals';
   static const reports = '/reports';
   static const addExpense = '/add-expense';
+  static const creditCards = '/credit-cards';
+  static const cards = '/cards';
+  static const loans = '/loans';
+  static const lending = '/lending';
+  static const settings = '/settings';
+  static const aiChat = '/ai-chat';
+  static const notifications = '/notifications';
+  static const backup = '/backup';
 
   static Map<String, WidgetBuilder> get routes => {
     home: (_) => const HomeScreen(),
@@ -27,6 +42,14 @@ class AppRouteTable {
     goals: (_) => const GoalsScreen(),
     reports: (_) => const ReportsScreen(),
     addExpense: (_) => const AddExpenseScreen(),
+    creditCards: (_) => const CreditCardScreen(),
+    cards: (_) => const CreditCardScreen(),
+    loans: (_) => const LoansScreen(),
+    lending: (_) => const LendingScreen(),
+    settings: (_) => const AppSettingsScreen(),
+    aiChat: (_) => const AiChatScreen(),
+    notifications: (_) => const NotificationsInboxScreen(),
+    backup: (_) => const BackupHubScreen(),
   };
 
   /// Maps `spendx://transactions` and `spendx:///transactions` to `/transactions`.

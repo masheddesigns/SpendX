@@ -15,6 +15,7 @@ import '../../shared/widgets/app_page_route.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/widgets/app_confirm_dialog.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_dialog.dart';
@@ -248,19 +249,22 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(goalLogsProvider(_goal.id));
-          ref.invalidate(goalInsightsProvider);
-          await Future.wait([
-            ref.read(goalLogsProvider(_goal.id).future),
-            ref.read(goalInsightsProvider.future),
-          ]);
-        },
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
-          children: [
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final content = RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(goalLogsProvider(_goal.id));
+              ref.invalidate(goalInsightsProvider);
+              await Future.wait([
+                ref.read(goalLogsProvider(_goal.id).future),
+                ref.read(goalInsightsProvider.future),
+              ]);
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+              children: [
             // ── Edge State Banners ─────────────────────────────────────
             if (progress.isCompleted)
               const _Banner(
@@ -522,13 +526,10 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                       level: SpendXGlassLevel.base,
                       borderRadius: BorderRadius.circular(16),
                       padding: const EdgeInsets.all(AppSpacing.section),
-                      child: Center(
-                        child: Text(
-                          'No entries yet. Tap the button above to log progress.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textMutedOf(context)),
-                          textAlign: TextAlign.center,
-                        ),
+                      child: const EmptyStateWidget(
+                        icon: Icons.flag_outlined,
+                        title: 'No entries yet',
+                        description: 'Tap the button above to log progress.',
                       ),
                     );
                   }
@@ -607,8 +608,19 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
             ),
           ],
         ),
-      ),
-    );
+      );
+      if (isTablet) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 768),
+            child: content,
+          ),
+        );
+      }
+      return content;
+    },
+  ),
+);
   }
 }
 
@@ -634,9 +646,13 @@ class _Banner extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
-          Text(
-            text,
-            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -667,6 +683,8 @@ class _MetricTile extends StatelessWidget {
         children: [
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
@@ -677,6 +695,8 @@ class _MetricTile extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: AppColors.textSecondaryOf(context),
               fontSize: 11,
@@ -743,14 +763,21 @@ class _TrendChart extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${logs.length} entries',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                Expanded(
+                  child: Text(
+                    '${logs.length} entries',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   'Target: ${AppFormat.currency(target)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -908,13 +935,18 @@ class _RelatedTransactions extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Transaction History',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   '${related.length} txns \u2022 ${AppFormat.currency(totalAmount)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -1059,12 +1091,16 @@ class _LogTile extends StatelessWidget {
       ),
       title: Text(
         AppFormat.currency(log.amount),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
         log.note != null
             ? '${AppFormat.date(log.createdAt)} \u2022 ${log.note}'
             : AppFormat.date(log.createdAt),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: Theme.of(
           context,
         ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),

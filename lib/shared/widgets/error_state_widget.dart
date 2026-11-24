@@ -4,11 +4,12 @@ import 'glass/spendx_states.dart';
 class ErrorStateWidget extends StatelessWidget {
   const ErrorStateWidget({
     super.key,
-    required this.error,
+    Object? error,
+    String? message,
     this.onRetry,
     this.icon = Icons.error_outline_rounded,
     this.title = 'Something went wrong',
-  });
+  }) : error = error ?? message ?? 'Something went wrong';
 
   final Object error;
   final VoidCallback? onRetry;

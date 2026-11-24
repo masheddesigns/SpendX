@@ -6,6 +6,7 @@ import '../../models/emi_installment.dart';
 import '../../theme/app_spacing.dart';
 import '../../utils/app_format.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
+import '../../shared/widgets/empty_state_widget.dart';
 import '../../shared/widgets/error_state_widget.dart';
 import '../../shared/widgets/skeleton_loader.dart';
 import '../../shared/widgets/undo_snackbar_listener.dart';
@@ -38,38 +39,66 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: installmentsAsync.when(
-          loading: () => const SkeletonLoader.transactions(),
-          error: (error, _) => ErrorStateWidget(
-            error: error,
-            onRetry: () =>
-                ref.invalidate(emiInstallmentsProvider(widget.emi.id)),
-          ),
-          data: (installments) => Column(
-            children: [
-              _buildSummaryCard(),
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => ref
-                      .read(emiInstallmentsProvider(widget.emi.id).notifier)
-                      .refresh(),
-                  child: ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    itemCount: installments.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(height: AppSpacing.sm),
-                    itemBuilder: (context, index) {
-                      return _buildInstallmentTile(
-                        installments[index],
-                        index + 1,
-                      );
-                    },
-                  ),
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            final content = installmentsAsync.when(
+              loading: () => const SkeletonLoader.transactions(),
+              error: (error, _) => ErrorStateWidget(
+                error: error,
+                onRetry: () =>
+                    ref.invalidate(emiInstallmentsProvider(widget.emi.id)),
               ),
-            ],
-          ),
+              data: (installments) => Column(
+                children: [
+                  _buildSummaryCard(),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () => ref
+                          .read(emiInstallmentsProvider(widget.emi.id).notifier)
+                          .refresh(),
+                      child: installments.isEmpty
+                          ? SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.xxl,
+                                ),
+                                child: EmptyStateWidget(
+                                  icon: Icons.calendar_today_outlined,
+                                  title: 'No Installments',
+                                  description:
+                                      'No installments found for this EMI plan.',
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              itemCount: installments.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: AppSpacing.sm),
+                              itemBuilder: (context, index) {
+                                return _buildInstallmentTile(
+                                  installments[index],
+                                  index + 1,
+                                );
+                              },
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
+                ),
+                child: content,
+              ),
+            );
+          },
         ),
       ),
     );
@@ -94,25 +123,32 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Total EMI Value',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 12,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total EMI Value',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                  Text(
-                    AppFormat.currency(totalAmount),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                    Text(
+                      AppFormat.currency(totalAmount),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: AppSpacing.sm),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -124,6 +160,8 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
                 ),
                 child: Text(
                   '${widget.emi.interestRate}% p.a.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onPrimaryContainer,
                     fontWeight: FontWeight.bold,
@@ -136,17 +174,23 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetric(
-                'Principal',
-                AppFormat.currency(widget.emi.principalAmount),
+              Expanded(
+                child: _buildMetric(
+                  'Principal',
+                  AppFormat.currency(widget.emi.principalAmount),
+                ),
               ),
-              _buildMetric(
-                'Interest',
-                AppFormat.currency(widget.emi.interestAmount),
+              Expanded(
+                child: _buildMetric(
+                  'Interest',
+                  AppFormat.currency(widget.emi.interestAmount),
+                ),
               ),
-              _buildMetric(
-                'Fees',
-                AppFormat.currency(widget.emi.processingFee),
+              Expanded(
+                child: _buildMetric(
+                  'Fees',
+                  AppFormat.currency(widget.emi.processingFee),
+                ),
               ),
             ],
           ),
@@ -154,12 +198,18 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${widget.emi.paidMonths} of ${widget.emi.tenureMonths} Paid',
-                style: const TextStyle(fontSize: 12),
+              Expanded(
+                child: Text(
+                  '${widget.emi.paidMonths} of ${widget.emi.tenureMonths} Paid',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
               Text(
                 '${(progress * 100).toStringAsFixed(0)}%',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -192,6 +242,8 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
       children: [
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 11,
@@ -200,6 +252,8 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
         const SizedBox(height: 2),
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
       ],
@@ -235,10 +289,15 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
       statusIcon = Icons.radio_button_unchecked;
     }
 
-    return InkWell(
-      onTap: () => _showInstallmentActions(inst, index),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
+    return Semantics(
+      label: 'Installment ${index + 1}, ${AppFormat.currency(inst.amount)}, $statusLabel',
+      button: true,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: InkWell(
+          onTap: () => _showInstallmentActions(inst, index),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: cs.surfaceContainer,
@@ -270,6 +329,8 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
                 children: [
                   Text(
                     'Installment #$index  •  ${AppFormat.currency(inst.amount)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -280,6 +341,8 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
                   const SizedBox(height: 3),
                   Text(
                     'Due: ${DateFormat('MMM dd, yyyy').format(inst.dueDate)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                   if (inst.principal > 0 || inst.interest > 0) ...[
@@ -319,7 +382,9 @@ class _CreditEmiDetailScreenState extends ConsumerState<CreditEmiDetailScreen> {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _miniChip(String label, Color color) {

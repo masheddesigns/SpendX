@@ -137,119 +137,134 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
 
     return SpendXScaffold(
       appBar: const SpendXAppBar(title: 'Credit Cards'),
-      body: cardsAsync.when(
-        loading: () => const SkeletonLoader.transactions(),
-        error: (err, _) => ErrorStateWidget(
-          error: err,
-          onRetry: () => ref.invalidate(creditCardsProvider),
-        ),
-        data: (cards) {
-          if (cards.isEmpty) {
-            return EmptyStateWidget(
-              icon: Icons.credit_card_off_rounded,
-              title: 'No credit cards yet',
-              description:
-                  'Add your credit cards to track outstandings, EMIs, and spending intelligence.',
-              ctaLabel: 'Add Credit Card',
-              onCtaTap: _navigateToAddCard,
-            );
-          }
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final content = cardsAsync.when(
+            loading: () => const SkeletonLoader.transactions(),
+            error: (err, _) => ErrorStateWidget(
+              error: err,
+              onRetry: () => ref.invalidate(creditCardsProvider),
+            ),
+            data: (cards) {
+              if (cards.isEmpty) {
+                return EmptyStateWidget(
+                  icon: Icons.credit_card_off_rounded,
+                  title: 'No credit cards yet',
+                  description:
+                      'Add your credit cards to track outstandings, EMIs, and spending intelligence.',
+                  ctaLabel: 'Add Credit Card',
+                  onCtaTap: _navigateToAddCard,
+                  illustrationAsset: 'assets/illustrations/empty_cards.svg',
+                );
+              }
 
-          if (!_initializedCardSelection && widget.initialCardId != null) {
-            final targetIndex = cards.indexWhere(
-              (c) => c.id == widget.initialCardId,
-            );
-            if (targetIndex != -1) {
-              _selectedCardIndex = targetIndex;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollToCard(targetIndex);
-              });
-            }
-            _initializedCardSelection = true;
-          }
+              if (!_initializedCardSelection && widget.initialCardId != null) {
+                final targetIndex = cards.indexWhere(
+                  (c) => c.id == widget.initialCardId,
+                );
+                if (targetIndex != -1) {
+                  _selectedCardIndex = targetIndex;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _scrollToCard(targetIndex);
+                  });
+                }
+                _initializedCardSelection = true;
+              }
 
-          if (_selectedCardIndex >= cards.length) {
-            _selectedCardIndex = 0;
-          }
+              if (_selectedCardIndex >= cards.length) {
+                _selectedCardIndex = 0;
+              }
 
-          final selectedCard = cards[_selectedCardIndex];
-          final outstandingAsync = ref.watch(
-            creditOutstandingProvider(selectedCard.id),
-          );
-          final stmtSummaryAsync = ref.watch(
-            creditStatementSummaryProvider(selectedCard.id),
-          );
-          final recentTxnsAsync = ref.watch(
-            creditRecentTransactionsProvider(selectedCard.id),
-          );
-          final activeEmisAsync = ref.watch(
-            creditActiveEmisProvider(selectedCard.id),
-          );
-          final intelligenceAsync = ref.watch(
-            creditIntelligenceProvider(selectedCard),
-          );
+              final selectedCard = cards[_selectedCardIndex];
+              final outstandingAsync = ref.watch(
+                creditOutstandingProvider(selectedCard.id),
+              );
+              final stmtSummaryAsync = ref.watch(
+                creditStatementSummaryProvider(selectedCard.id),
+              );
+              final recentTxnsAsync = ref.watch(
+                creditRecentTransactionsProvider(selectedCard.id),
+              );
+              final activeEmisAsync = ref.watch(
+                creditActiveEmisProvider(selectedCard.id),
+              );
+              final intelligenceAsync = ref.watch(
+                creditIntelligenceProvider(selectedCard),
+              );
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              _invalidateAll();
-            },
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildCardSelector(cards),
-                        AppSpacing.sectionSpacer,
-                        outstandingAsync.when(
-                          data: (outstanding) => _buildSummaryCard(
-                            selectedCard,
-                            outstanding,
-                            intelligenceAsync.valueOrNull,
-                            stmtSummaryAsync.valueOrNull,
-                          ),
-                          loading: () => const SkeletonLoader.summary(),
-                          error: (_, _) => _InlineLoadError(
-                            onRetry: () => ref.invalidate(
-                              creditOutstandingProvider(selectedCard.id),
+              return RefreshIndicator(
+                onRefresh: () async {
+                  _invalidateAll();
+                },
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppSpacing.listHorizontalPadding),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildCardSelector(cards),
+                            AppSpacing.sectionSpacer,
+                            outstandingAsync.when(
+                              data: (outstanding) => _buildSummaryCard(
+                                selectedCard,
+                                outstanding,
+                                intelligenceAsync.valueOrNull,
+                                stmtSummaryAsync.valueOrNull,
+                              ),
+                              loading: () => const SkeletonLoader.summary(),
+                              error: (_, _) => _InlineLoadError(
+                                onRetry: () => ref.invalidate(
+                                  creditOutstandingProvider(selectedCard.id),
+                                ),
+                              ),
                             ),
-                          ),
+                            AppSpacing.sectionSpacer,
+                            _buildActionGrid(selectedCard),
+                            AppSpacing.sectionSpacer,
+                            _buildIntelligenceSection(
+                              intelligenceAsync.valueOrNull,
+                            ),
+                            AppSpacing.sectionSpacer,
+                            _buildEMIsSection(activeEmisAsync.valueOrNull ?? []),
+                            AppSpacing.sectionSpacer,
+                            _buildRecentTransactionsHeader(selectedCard),
+                          ],
                         ),
-                        AppSpacing.sectionSpacer,
-                        _buildActionGrid(selectedCard),
-                        AppSpacing.sectionSpacer,
-                        _buildIntelligenceSection(
-                          intelligenceAsync.valueOrNull,
-                        ),
-                        AppSpacing.sectionSpacer,
-                        _buildEMIsSection(activeEmisAsync.valueOrNull ?? []),
-                        AppSpacing.sectionSpacer,
-                        _buildRecentTransactionsHeader(selectedCard),
-                      ],
-                    ),
-                  ),
-                ),
-                recentTxnsAsync.when(
-                  data: (txns) =>
-                      _buildRecentTransactionsList(txns, selectedCard),
-                  loading: () => const SliverToBoxAdapter(
-                    child: SkeletonLoader.transactions(),
-                  ),
-                  error: (_, _) => SliverToBoxAdapter(
-                    child: _InlineLoadError(
-                      onRetry: () => ref.invalidate(
-                        creditRecentTransactionsProvider(selectedCard.id),
                       ),
                     ),
-                  ),
+                    recentTxnsAsync.when(
+                      data: (txns) =>
+                          _buildRecentTransactionsList(txns, selectedCard),
+                      loading: () => const SliverToBoxAdapter(
+                        child: SkeletonLoader.transactions(),
+                      ),
+                      error: (_, _) => SliverToBoxAdapter(
+                        child: _InlineLoadError(
+                          onRetry: () => ref.invalidate(
+                            creditRecentTransactionsProvider(selectedCard.id),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
+                  ],
                 ),
-                const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
-              ],
-            ),
+              );
+            },
           );
+          if (isTablet) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 768),
+                child: content,
+              ),
+            );
+          }
+          return content;
         },
       ),
       floatingActionButton: cardsAsync.valueOrNull?.isEmpty ?? true
@@ -307,7 +322,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                 border: isSelected
                     ? null
                     : Border.all(
-                        color: Colors.white.withValues(alpha: 0.1),
+                        color: context.borderColor,
                         width: 1,
                       ),
                 boxShadow: isSelected
@@ -333,7 +348,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                         card.bank,
                         style: TextStyle(
                           color: isSelected
-                              ? Colors.white70
+                              ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7)
                               : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -342,7 +357,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                       Icon(
                         Icons.credit_card_rounded,
                         color: isSelected
-                            ? Colors.white70
+                            ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7)
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ],
@@ -350,9 +365,11 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   const SizedBox(height: 8),
                   Text(
                     card.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: isSelected
-                          ? Colors.white
+                          ? Theme.of(context).colorScheme.onPrimary
                           : Theme.of(context).colorScheme.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -366,7 +383,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                         '•••• •••• •••• ${card.last4}',
                         style: TextStyle(
                           color: isSelected
-                              ? Colors.white.withValues(alpha: 0.8)
+                              ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8)
                               : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 14,
                           letterSpacing: 1.2,
@@ -376,9 +393,9 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                       if (isSelected)
                         IconButton(
                           tooltip: 'Edit',
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.edit_rounded,
-                            color: Colors.white70,
+                            color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7),
                             size: 18,
                           ),
                           onPressed: () => _navigateToEditCard(card),
@@ -438,38 +455,45 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    outstanding < -0.05
-                        ? 'Credit Balance'
-                        : 'Current Outstanding',
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      outstanding < -0.05
+                          ? 'Credit Balance'
+                          : 'Current Outstanding',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    outstanding < -0.05
-                        ? '+${AppFormat.currency(outstanding.abs())}'
-                        : AppFormat.currency(
-                            outstanding.clamp(0.0, double.infinity),
-                          ),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: outstanding > 0.05
-                          ? cs.error
-                          : (outstanding < -0.05
-                                ? Theme.of(context).colorScheme.secondary
-                                : cs.onSurface),
+                    const SizedBox(height: 4),
+                    Text(
+                      outstanding < -0.05
+                          ? '+${AppFormat.currency(outstanding.abs())}'
+                          : AppFormat.currency(
+                              outstanding.clamp(0.0, double.infinity),
+                            ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: outstanding > 0.05
+                            ? cs.error
+                            : (outstanding < -0.05
+                                  ? Theme.of(context).colorScheme.secondary
+                                  : cs.onSurface),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -497,9 +521,8 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFF59E0B,
-                            ).withValues(alpha: 0.12),
+                            color: Theme.of(context).colorScheme.tertiary
+                                .withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -573,15 +596,19 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                       color: Theme.of(context).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Set your credit limit to track usage',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.tertiary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        'Set your credit limit to track usage',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.tertiary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 16,
@@ -888,7 +915,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
         _buildIntelChip(
           'Unbilled: ${AppFormat.currency(intel.unbilledAmount)}',
           Icons.history_rounded,
-          Colors.orange,
+          AppColors.warning,
         ),
       );
     }
@@ -1090,10 +1117,12 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
   ) {
     if (txns.isEmpty) {
       return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Text('No transactions yet'),
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: EmptyStateWidget(
+            icon: Icons.receipt_long_outlined,
+            title: 'No transactions yet',
+            description: 'Transactions on this card will appear here.',
           ),
         ),
       );
@@ -1170,31 +1199,37 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           },
           leading: CircleAvatar(
             backgroundColor: isPaymentOrCredit
-                ? Colors.green.withValues(alpha: 0.1)
+                ? AppColors.success.withValues(alpha: 0.1)
                 : Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
             child: Icon(
               isPaymentOrCredit
                   ? Icons.arrow_downward_rounded
                   : Icons.shopping_cart_outlined,
               color: isPaymentOrCredit
-                  ? Colors.green
+                  ? AppColors.success
                   : Theme.of(context).colorScheme.error,
               size: 20,
             ),
           ),
           title: Text(
             displayTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           subtitle: Text(
             DateFormat('dd MMM, hh:mm a').format(tx.date.toLocal()),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           trailing: Text(
             '${isPaymentOrCredit ? "+" : "-"}$displayAmount',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: isPaymentOrCredit
-                  ? Colors.green
+                  ? AppColors.success
                   : Theme.of(context).colorScheme.onSurface,
             ),
           ),

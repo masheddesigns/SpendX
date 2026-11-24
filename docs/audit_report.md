@@ -143,7 +143,7 @@ SpendX has gone from a **broken quality state** to a **production-ready** state 
 **Strengths:** Zero analyze issues, 99.9% test pass rate, green CI, SQLCipher encryption, user-configurable AI key, canonical double-entry accounting, comprehensive UI remediation.
 
 **Remaining (non-blocking):**
-- 2 pre-existing test-isolation failures (backup staging `spendx_snapshot.db` not found)
+- 1 pre-existing test-isolation failure (backup staging `spendx_snapshot.db` not found)
 - Accessibility: ~100+ Semantics needed, 48px touch targets
 - Theme migration: 188 hardcoded colors remaining
 - Form validation: ~40 more validators

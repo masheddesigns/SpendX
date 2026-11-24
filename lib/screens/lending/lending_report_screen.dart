@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../models/lending.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../utils/app_format.dart';
-import '../../shared/widgets/glass/spendx_states.dart';
-import 'package:intl/intl.dart';
+import '../../shared/widgets/empty_state_widget.dart';
+import '../../shared/widgets/loading_state_widget.dart';
+import '../../theme/app_theme.dart';
 
 class LendingReportScreen extends ConsumerStatefulWidget {
   const LendingReportScreen({super.key});
@@ -58,9 +60,33 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: lendingState.isLoadingActive && lendingState.isLoadingSettled
-            ? const SpendXLoadingState(count: 3, itemHeight: 90)
-            : RefreshIndicator(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 768;
+            final Widget content;
+
+            if (lendingState.isLoadingActive && lendingState.isLoadingSettled) {
+              content = const LoadingStateWidget(
+                message: 'Loading lending reports...',
+              );
+            } else if (allLendings.isEmpty) {
+              content = RefreshIndicator(
+                onRefresh: () => ref.read(lendingProvider.notifier).refresh(),
+                child: const SingleChildScrollView(
+                  physics: AlwaysScrollableScrollPhysics(),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 60),
+                    child: EmptyStateWidget(
+                      icon: Icons.bar_chart_rounded,
+                      title: 'No Lending Activity',
+                      description:
+                          'Reports will appear after you record money lent or borrowed.',
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              content = RefreshIndicator(
                 onRefresh: () => ref.read(lendingProvider.notifier).refresh(),
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -71,10 +97,10 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
                       _buildSummaryCards(allLendings),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Top People I Lent To'),
-                      _buildPersonList(sortedLent, Colors.green),
+                      _buildPersonList(sortedLent, AppColors.success),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Top People I Borrowed From'),
-                      _buildPersonList(sortedBorrowed, Colors.orange),
+                      _buildPersonList(sortedBorrowed, AppColors.warning),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Monthly Activity'),
                       _buildMonthlyActivity(monthlyTrend),
@@ -82,7 +108,19 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
                     ],
                   ),
                 ),
+              );
+            }
+
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isTablet ? 768 : double.infinity,
+                ),
+                child: content,
               ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -101,7 +139,7 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
           child: _summaryCard(
             'Total Lent',
             AppFormat.currency(totalLent),
-            Colors.green,
+            AppColors.success,
           ),
         ),
         const SizedBox(width: 12),
@@ -109,7 +147,7 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
           child: _summaryCard(
             'Total Borrowed',
             AppFormat.currency(totalBorrowed),
-            Colors.orange,
+            AppColors.warning,
           ),
         ),
       ],
@@ -127,10 +165,17 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.textMuted, fontSize: 12),
+          ),
           const SizedBox(height: 8),
           Text(
             val,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
               fontSize: 18,
@@ -147,10 +192,12 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: context.textPrimary,
         ),
       ),
     );
@@ -158,9 +205,9 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
 
   Widget _buildPersonList(Map<String, double> map, Color color) {
     if (map.isEmpty) {
-      return const Text(
+      return Text(
         'No data available',
-        style: TextStyle(color: Colors.grey),
+        style: TextStyle(color: context.textMuted),
       );
     }
     return Column(
@@ -175,15 +222,22 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                e.key,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  e.key,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 AppFormat.currency(e.value),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: color, fontWeight: FontWeight.w600),
               ),
             ],
@@ -195,9 +249,9 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
 
   Widget _buildMonthlyActivity(Map<String, double> monthlyTrend) {
     if (monthlyTrend.isEmpty) {
-      return const Text(
+      return Text(
         'No activity yet',
-        style: TextStyle(color: Colors.grey),
+        style: TextStyle(color: context.textMuted),
       );
     }
     final sortedKeys = monthlyTrend.keys.toList()
@@ -213,11 +267,18 @@ class _LendingReportScreenState extends ConsumerState<LendingReportScreen> {
         final isPositive = val >= 0;
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(key, style: const TextStyle(color: Colors.white)),
+          title: Text(
+            key,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.textPrimary),
+          ),
           trailing: Text(
             '${isPositive ? '+' : ''}${AppFormat.currency(val)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: isPositive ? Colors.green : Colors.red,
+              color: isPositive ? AppColors.success : AppColors.danger,
               fontWeight: FontWeight.w600,
             ),
           ),

@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/health/health_score_provider.dart';
 import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/skeleton_loader.dart';
-
-import 'package:spend_x/theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 
 /// Detail screen for financial health — uses the SAME provider as Insights card.
 class FinancialHealthScreen extends ConsumerWidget {
@@ -32,83 +31,106 @@ class FinancialHealthScreen extends ConsumerWidget {
             final color = _scoreColor(context, score.score);
             final bd = score.breakdown;
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.section),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Score Circle ────────────────────────────
-                  Center(
-                    child: Column(
-                      children: [
-                        _ScoreRing(score: score.score, color: color),
-                        const SizedBox(height: 16),
-                        Text(
-                          score.level,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                          ),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final isTablet = constraints.maxWidth > 768;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isTablet ? 768 : double.infinity,
+                    ),
+                    child: RefreshIndicator(
+                      onRefresh: () =>
+                          ref.refresh(financialHealthScoreProvider.future),
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(AppSpacing.section),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── Score Circle ────────────────────────────
+                            Center(
+                              child: Column(
+                                children: [
+                                  _ScoreRing(score: score.score, color: color),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    score.level,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Your financial discipline score',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 40),
+
+                            // ── Breakdown ───────────────────────────────
+                            _sectionLabel(context, 'SCORE BREAKDOWN'),
+                            const SizedBox(height: 20),
+                            _MetricBar(
+                              label: 'Savings',
+                              score: bd.savingsScore,
+                              max: 30,
+                              color: AppColors.success,
+                            ),
+                            _MetricBar(
+                              label: 'Debt Management',
+                              score: bd.debtScore,
+                              max: 25,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            _MetricBar(
+                              label: 'Stability',
+                              score: bd.stabilityScore,
+                              max: 20,
+                              color: AppColors.warning,
+                            ),
+                            _MetricBar(
+                              label: 'Liquidity',
+                              score: bd.liquidityScore,
+                              max: 15,
+                              color: AppColors.transfer,
+                            ),
+                            _MetricBar(
+                              label: 'Credit Usage',
+                              score: bd.utilizationScore,
+                              max: 10,
+                              color: AppColors.primary,
+                            ),
+
+                            // ── Insights ────────────────────────────────
+                            if (score.insights.isNotEmpty) ...[
+                              const SizedBox(height: 32),
+                              _sectionLabel(context, 'INSIGHTS'),
+                              const SizedBox(height: 12),
+                              ...score.insights.map(
+                                (i) => _InsightTile(insight: i),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Your financial discipline score',
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 40),
-
-                  // ── Breakdown ───────────────────────────────
-                  _sectionLabel(context, 'SCORE BREAKDOWN'),
-                  const SizedBox(height: 20),
-                  _MetricBar(
-                    label: 'Savings',
-                    score: bd.savingsScore,
-                    max: 30,
-                    color: Colors.green,
-                  ),
-                  _MetricBar(
-                    label: 'Debt Management',
-                    score: bd.debtScore,
-                    max: 25,
-                    color: Colors.blue,
-                  ),
-                  _MetricBar(
-                    label: 'Stability',
-                    score: bd.stabilityScore,
-                    max: 20,
-                    color: Colors.orange,
-                  ),
-                  _MetricBar(
-                    label: 'Liquidity',
-                    score: bd.liquidityScore,
-                    max: 15,
-                    color: Colors.teal,
-                  ),
-                  _MetricBar(
-                    label: 'Credit Usage',
-                    score: bd.utilizationScore,
-                    max: 10,
-                    color: Colors.purple,
-                  ),
-
-                  // ── Insights ────────────────────────────────
-                  if (score.insights.isNotEmpty) ...[
-                    const SizedBox(height: 32),
-                    _sectionLabel(context, 'INSIGHTS'),
-                    const SizedBox(height: 12),
-                    ...score.insights.map((i) => _InsightTile(insight: i)),
-                  ],
-                ],
-              ),
+                );
+              },
             );
           },
         ),
@@ -119,6 +141,8 @@ class FinancialHealthScreen extends ConsumerWidget {
   Widget _sectionLabel(BuildContext context, String text) {
     return Text(
       text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: Theme.of(context).colorScheme.onSurfaceVariant,
         fontSize: 12,
@@ -132,7 +156,7 @@ class FinancialHealthScreen extends ConsumerWidget {
     if (score >= 80) return Theme.of(context).colorScheme.secondary;
     if (score >= 60) return Theme.of(context).colorScheme.primary;
     if (score >= 40) return Theme.of(context).colorScheme.tertiary;
-    return Colors.redAccent;
+    return Theme.of(context).colorScheme.error;
   }
 }
 
@@ -224,6 +248,7 @@ class _MetricBar extends StatelessWidget {
               Text(
                 '$score / $max',
                 maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w600,

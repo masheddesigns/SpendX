@@ -117,10 +117,10 @@ class HomeReviewIndicator extends ConsumerWidget {
                   ),
                   child: Text(
                     '$reviewCount',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onTertiary,
                     ),
                   ),
                 ),

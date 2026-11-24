@@ -25,63 +25,77 @@ class GoalsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Goals')),
-      body: goalsAsync.when(
-        loading: () => const SkeletonLoader.transactions(),
-        error: (err, _) => ErrorStateWidget(
-          error: err,
-          onRetry: () => ref.invalidate(activeGoalsProvider),
-        ),
-        data: (goals) {
-          if (goals.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () async => ref.invalidate(goalsProvider),
-              child: ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: 1,
-                itemBuilder: (context, _) =>
-                    SizedBox(height: 320, child: _buildEmptyState(context)),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isTablet = constraints.maxWidth > 768;
+          final content = goalsAsync.when(
+            loading: () => const SkeletonLoader.transactions(),
+            error: (err, _) => ErrorStateWidget(
+              error: err,
+              onRetry: () => ref.invalidate(activeGoalsProvider),
+            ),
+            data: (goals) {
+              if (goals.isEmpty) {
+                return RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(goalsProvider),
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: 1,
+                    itemBuilder: (context, _) =>
+                        SizedBox(height: 320, child: _buildEmptyState(context)),
+                  ),
+                );
+              }
+
+              final nudges = nudgesAsync.valueOrNull ?? [];
+
+              return RefreshIndicator(
+                onRefresh: () async {
+                  ref.invalidate(goalsProvider);
+                  ref.invalidate(goalInsightsProvider);
+                },
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: goals.length + (nudges.isNotEmpty ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (nudges.isNotEmpty && index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _NudgesBanner(nudges: nudges),
+                      );
+                    }
+                    final goalIndex = index - (nudges.isNotEmpty ? 1 : 0);
+                    final goal = goals[goalIndex];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: GoalCard(
+                        goal: goal,
+                        progress: ref.watch(goalProgressProvider(goal)),
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            AppPageRoute(
+                              builder: (_) => GoalDetailScreen(goal: goal),
+                            ),
+                          );
+                          if (result == true) ref.invalidate(goalsProvider);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+          if (isTablet) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 768),
+                child: content,
               ),
             );
           }
-
-          final nudges = nudgesAsync.valueOrNull ?? [];
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(goalsProvider);
-              ref.invalidate(goalInsightsProvider);
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: goals.length + (nudges.isNotEmpty ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (nudges.isNotEmpty && index == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _NudgesBanner(nudges: nudges),
-                  );
-                }
-                final goalIndex = index - (nudges.isNotEmpty ? 1 : 0);
-                final goal = goals[goalIndex];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: GoalCard(
-                    goal: goal,
-                    progress: ref.watch(goalProgressProvider(goal)),
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        AppPageRoute(
-                          builder: (_) => GoalDetailScreen(goal: goal),
-                        ),
-                      );
-                      if (result == true) ref.invalidate(goalsProvider);
-                    },
-                  ),
-                );
-              },
-            ),
-          );
+          return content;
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -211,13 +225,18 @@ class GoalCard extends StatelessWidget {
                           : progress.isOverBudget
                           ? 'Over budget by ${AppFormat.currency((progress.currentSpent ?? 0) - goal.targetAmount)}'
                           : '${AppFormat.currency(progress.remaining)} left',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     '${progress.daysLeft} days left',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
@@ -238,15 +257,19 @@ class GoalCard extends StatelessWidget {
                           : Theme.of(context).colorScheme.tertiary,
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      goal.type == GoalType.spendingLimit
-                          ? '${AppFormat.currency(progress.requiredDaily)}/day available'
-                          : '${AppFormat.currency(progress.requiredDaily)}/day needed',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: progress.isBehindSchedule
-                            ? cs.error
-                            : Theme.of(context).colorScheme.tertiary,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        goal.type == GoalType.spendingLimit
+                            ? '${AppFormat.currency(progress.requiredDaily)}/day available'
+                            : '${AppFormat.currency(progress.requiredDaily)}/day needed',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: progress.isBehindSchedule
+                              ? cs.error
+                              : Theme.of(context).colorScheme.tertiary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],

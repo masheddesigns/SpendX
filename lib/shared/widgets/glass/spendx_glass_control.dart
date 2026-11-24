@@ -46,7 +46,10 @@ class SpendXGlassSegmentedControl<T> extends StatelessWidget {
                   }
                 },
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
@@ -115,13 +118,15 @@ class SpendXGlassChip extends StatelessWidget {
       button: true,
       selected: isSelected,
       label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: SpendXGlassSurface(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: SpendXGlassSurface(
           height: 48,
           blur: AppTheme.glassControlBlur,
           color: isSelected
@@ -172,6 +177,7 @@ class SpendXGlassChip extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

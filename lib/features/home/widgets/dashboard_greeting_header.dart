@@ -6,6 +6,7 @@ import '../../../data/providers.dart';
 import '../../../screens/net_worth_screen.dart';
 import '../../../services/settings_service.dart';
 import '../../../shared/widgets/app_page_route.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 
 /// Clean Atmospheric Greeting Header.
@@ -101,7 +102,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isDark
-                                ? Colors.white.withValues(alpha: 0.08)
+                                ? context.borderColor
                                 : Theme.of(context).colorScheme.primary,
                             width: 0.8,
                           ),

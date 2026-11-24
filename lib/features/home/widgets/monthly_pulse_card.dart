@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/providers.dart';
 import '../../../screens/reports_screen.dart';
 import '../../../shared/widgets/app_page_route.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 
 /// Monthly Cashflow: Clean, connected income vs expense relationship.
@@ -56,17 +57,15 @@ class MonthlyPulseCard extends ConsumerWidget {
           ),
           border: Border.all(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
+                ? context.borderColor
                 : Theme.of(context).colorScheme.outline,
             width: 0.9,
           ),
           boxShadow: [
             BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.25)
-                  : Theme.of(
-                      context,
-                    ).colorScheme.shadow.withValues(alpha: 0.08),
+              color: Theme.of(
+                context,
+              ).colorScheme.shadow.withValues(alpha: isDark ? 0.25 : 0.08),
               blurRadius: 14,
               offset: const Offset(0, 4),
             ),

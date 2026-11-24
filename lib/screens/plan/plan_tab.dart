@@ -54,294 +54,343 @@ class PlanTab extends ConsumerWidget {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    Widget content = RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(financialTimelineProvider);
-        ref.invalidate(activeGoalsProvider);
-        ref.invalidate(smartBudgetProvider);
-        ref.invalidate(forecastProvider);
-        ref.invalidate(smartNudgesProvider);
-        ref.invalidate(saveSuggestionProvider);
-      },
-      color: AppTheme.primaryBlue,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          // ── Subtitle / Horizon Orientation ────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Theme.of(context).colorScheme.primary,
+    Widget content = LayoutBuilder(
+      builder: (context, constraints) {
+        final isTablet = constraints.maxWidth > 768;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isTablet ? 768 : double.infinity,
+            ),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(financialTimelineProvider);
+                ref.invalidate(activeGoalsProvider);
+                ref.invalidate(smartBudgetProvider);
+                ref.invalidate(forecastProvider);
+                ref.invalidate(smartNudgesProvider);
+                ref.invalidate(saveSuggestionProvider);
+              },
+              color: AppTheme.primaryBlue,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // ── Subtitle / Horizon Orientation ────────────────
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Your financial outlook',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Your financial outlook',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+
+                  // ── Section 1: Unified Financial Horizon Card ──────
+                  timelineAsync.when(
+                    data: (timeline) {
+                      final forecast = forecastAsync.valueOrNull;
+                      final nudges = nudgesAsync.valueOrNull ?? const [];
+                      final saveSug = saveSugAsync.valueOrNull;
+                      return SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          child: _FinancialHorizonCard(
+                            identity: timeline.identity,
+                            score: timeline.moneyScore,
+                            forecast: forecast,
+                            nudges: nudges,
+                            saveSuggestion: saveSug,
+                            topInsightText: timeline.topInsight?.title,
+                            isDark: isDark,
+                            onActionTap: () {
+                              final reviewCount =
+                                  ref
+                                      .read(reviewQueueCountProvider)
+                                      .valueOrNull ??
+                                  0;
+                              if (reviewCount > 0) {
+                                Navigator.push(
+                                  context,
+                                  AppPageRoute(
+                                    builder: (_) => const ReviewQueueScreen(),
+                                  ),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  AppPageRoute(
+                                    builder: (_) => const TransactionListScreen(
+                                      isFullScreen: true,
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    loading: () => const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: SpendXLoadingState(count: 1, itemHeight: 140),
+                      ),
+                    ),
+                    error: (error, _) => SliverToBoxAdapter(
+                      child: ErrorStateWidget(
+                        error: error,
+                        onRetry: () =>
+                            ref.invalidate(financialTimelineProvider),
+                      ),
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+                  // ── Section 2: Budget Horizons (Pacing & Consumption)
+                  budgetsAsync.when(
+                    data: (budgets) {
+                      return SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SpendXSectionHeader(
+                              title: 'Budget Horizons',
+                              count: budgets.isNotEmpty ? budgets.length : null,
+                              actionLabel: 'Manage',
+                              onAction: () => Navigator.push(
+                                context,
+                                AppPageRoute(
+                                  builder: (_) =>
+                                      const BudgetManagementScreen(),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: budgets.isEmpty
+                                  ? _EmptyBudgetCard(
+                                      context: context,
+                                      isDark: isDark,
+                                    )
+                                  : _BudgetHorizonsList(
+                                      budgets: budgets,
+                                      isDark: isDark,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    loading: () => const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: SpendXLoadingState(count: 2, itemHeight: 64),
+                      ),
+                    ),
+                    error: (error, _) => SliverToBoxAdapter(
+                      child: ErrorStateWidget(
+                        error: error,
+                        onRetry: () => ref.invalidate(smartBudgetProvider),
+                      ),
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+                  // ── Section 3: Savings Landmarks (Goal Waypoint Journeys)
+                  goalsAsync.when(
+                    data: (goals) {
+                      return SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SpendXSectionHeader(
+                              title: 'Savings Landmarks',
+                              count: goals.isNotEmpty ? goals.length : null,
+                              actionLabel: goals.isNotEmpty ? 'View All' : null,
+                              onAction: () => Navigator.push(
+                                context,
+                                AppPageRoute(
+                                  builder: (_) => const GoalsScreen(),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: goals.isEmpty
+                                  ? _EmptyGoalsCard(
+                                      context: context,
+                                      isDark: isDark,
+                                    )
+                                  : _GoalsLandmarkList(
+                                      goals: goals,
+                                      isDark: isDark,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    loading: () => const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: SpendXLoadingState(count: 2, itemHeight: 64),
+                      ),
+                    ),
+                    error: (error, _) => SliverToBoxAdapter(
+                      child: ErrorStateWidget(
+                        error: error,
+                        onRetry: () => ref.invalidate(activeGoalsProvider),
+                      ),
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 14)),
+
+                  // ── Section 4: Foundations & Commitments ───────────
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SpendXSectionHeader(
+                          title: 'Foundations & Commitments',
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainer,
+                              border: Border.all(
+                                color: context.borderColor,
+                                width: 0.9,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isDark
+                                      ? Theme.of(context).colorScheme.shadow
+                                          .withValues(alpha: 0.25)
+                                      : Theme.of(context).colorScheme.shadow
+                                          .withValues(alpha: 0.03),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                _FoundationsRowTile(
+                                  icon: Icons.repeat_rounded,
+                                  iconColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                  title: 'Subscriptions & Bills',
+                                  subtitle:
+                                      'Manage upcoming recurring charges and bills',
+                                  isDark: isDark,
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    AppPageRoute(
+                                      builder: (_) =>
+                                          const RecurringPaymentsScreen(),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Divider(
+                                    height: 1,
+                                    thickness: 0.5,
+                                    color: context.borderColor,
+                                  ),
+                                ),
+                                _FoundationsRowTile(
+                                  icon: Icons.payments_rounded,
+                                  iconColor: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary,
+                                  title: 'Salary & Paycheck Structure',
+                                  subtitle:
+                                      'Employer details, salary schedule, and deductions',
+                                  isDark: isDark,
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    AppPageRoute(
+                                      builder: (_) => const SalaryScreen(),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Clearance tuned to floating glass navigation height + safe-area inset
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height:
+                          (MediaQuery.paddingOf(context).bottom > 0
+                              ? MediaQuery.paddingOf(context).bottom + 72.0
+                              : 80.0) +
+                          16.0,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-
-          // ── Section 1: Unified Financial Horizon Card ──────
-          timelineAsync.when(
-            data: (timeline) {
-              final forecast = forecastAsync.valueOrNull;
-              final nudges = nudgesAsync.valueOrNull ?? const [];
-              final saveSug = saveSugAsync.valueOrNull;
-              return SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  child: _FinancialHorizonCard(
-                    identity: timeline.identity,
-                    score: timeline.moneyScore,
-                    forecast: forecast,
-                    nudges: nudges,
-                    saveSuggestion: saveSug,
-                    topInsightText: timeline.topInsight?.title,
-                    isDark: isDark,
-                    onActionTap: () {
-                      final reviewCount =
-                          ref.read(reviewQueueCountProvider).valueOrNull ?? 0;
-                      if (reviewCount > 0) {
-                        Navigator.push(
-                          context,
-                          AppPageRoute(
-                            builder: (_) => const ReviewQueueScreen(),
-                          ),
-                        );
-                      } else {
-                        Navigator.push(
-                          context,
-                          AppPageRoute(
-                            builder: (_) =>
-                                const TransactionListScreen(isFullScreen: true),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
-              );
-            },
-            loading: () => const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SpendXLoadingState(count: 1, itemHeight: 140),
-              ),
-            ),
-            error: (error, _) => SliverToBoxAdapter(
-              child: ErrorStateWidget(
-                error: error,
-                onRetry: () => ref.invalidate(financialTimelineProvider),
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-          // ── Section 2: Budget Horizons (Pacing & Consumption)
-          budgetsAsync.when(
-            data: (budgets) {
-              return SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SpendXSectionHeader(
-                      title: 'Budget Horizons',
-                      count: budgets.isNotEmpty ? budgets.length : null,
-                      actionLabel: 'Manage',
-                      onAction: () => Navigator.push(
-                        context,
-                        AppPageRoute(
-                          builder: (_) => const BudgetManagementScreen(),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: budgets.isEmpty
-                          ? _EmptyBudgetCard(context: context, isDark: isDark)
-                          : _BudgetHorizonsList(
-                              budgets: budgets,
-                              isDark: isDark,
-                            ),
-                    ),
-                  ],
-                ),
-              );
-            },
-            loading: () => const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SpendXLoadingState(count: 2, itemHeight: 64),
-              ),
-            ),
-            error: (error, _) => SliverToBoxAdapter(
-              child: ErrorStateWidget(
-                error: error,
-                onRetry: () => ref.invalidate(smartBudgetProvider),
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-          // ── Section 3: Savings Landmarks (Goal Waypoint Journeys)
-          goalsAsync.when(
-            data: (goals) {
-              return SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SpendXSectionHeader(
-                      title: 'Savings Landmarks',
-                      count: goals.isNotEmpty ? goals.length : null,
-                      actionLabel: goals.isNotEmpty ? 'View All' : null,
-                      onAction: () => Navigator.push(
-                        context,
-                        AppPageRoute(builder: (_) => const GoalsScreen()),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: goals.isEmpty
-                          ? _EmptyGoalsCard(context: context, isDark: isDark)
-                          : _GoalsLandmarkList(goals: goals, isDark: isDark),
-                    ),
-                  ],
-                ),
-              );
-            },
-            loading: () => const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SpendXLoadingState(count: 2, itemHeight: 64),
-              ),
-            ),
-            error: (error, _) => SliverToBoxAdapter(
-              child: ErrorStateWidget(
-                error: error,
-                onRetry: () => ref.invalidate(activeGoalsProvider),
-              ),
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 14)),
-
-          // ── Section 4: Foundations & Commitments ───────────
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SpendXSectionHeader(title: 'Foundations & Commitments'),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Theme.of(context).colorScheme.outline,
-                        width: 0.9,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark
-                              ? Colors.black.withValues(alpha: 0.25)
-                              : Theme.of(
-                                  context,
-                                ).colorScheme.shadow.withValues(alpha: 0.03),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _FoundationsRowTile(
-                          icon: Icons.repeat_rounded,
-                          iconColor: Theme.of(context).colorScheme.primary,
-                          title: 'Subscriptions & Bills',
-                          subtitle:
-                              'Manage upcoming recurring charges and bills',
-                          isDark: isDark,
-                          onTap: () => Navigator.push(
-                            context,
-                            AppPageRoute(
-                              builder: (_) => const RecurringPaymentsScreen(),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Divider(
-                            height: 1,
-                            thickness: 0.5,
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.06)
-                                : Theme.of(context).colorScheme.outline,
-                          ),
-                        ),
-                        _FoundationsRowTile(
-                          icon: Icons.payments_rounded,
-                          iconColor: Theme.of(context).colorScheme.secondary,
-                          title: 'Salary & Paycheck Structure',
-                          subtitle:
-                              'Employer details, salary schedule, and deductions',
-                          isDark: isDark,
-                          onTap: () => Navigator.push(
-                            context,
-                            AppPageRoute(builder: (_) => const SalaryScreen()),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Clearance tuned to floating glass navigation height + safe-area inset
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height:
-                  (MediaQuery.paddingOf(context).bottom > 0
-                      ? MediaQuery.paddingOf(context).bottom + 72.0
-                      : 80.0) +
-                  16.0,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (!embedded) {
@@ -575,15 +624,13 @@ class _FinancialHorizonCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.25)
+                ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                 : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.03),
             blurRadius: 16,
             offset: const Offset(0, 4),
@@ -735,14 +782,10 @@ class _FinancialHorizonCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.03)
-                    : Theme.of(context).colorScheme.surfaceContainer,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Theme.of(context).colorScheme.outline,
+                  color: context.borderColor,
                   width: 0.7,
                 ),
               ),
@@ -757,9 +800,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                   Container(
                     width: 0.5,
                     height: 24,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Theme.of(context).colorScheme.outline,
+                    color: context.borderColor,
                   ),
                   _ForecastMetric(
                     label: 'EST. OUTFLOW',
@@ -770,9 +811,7 @@ class _FinancialHorizonCard extends StatelessWidget {
                   Container(
                     width: 0.5,
                     height: 24,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Theme.of(context).colorScheme.outline,
+                    color: context.borderColor,
                   ),
                   _ForecastMetric(
                     label: forecast!.predictedSavings >= 0
@@ -977,15 +1016,13 @@ class _BudgetHorizonsList extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.25)
+                ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                 : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.03),
             blurRadius: 14,
             offset: const Offset(0, 4),
@@ -1005,9 +1042,7 @@ class _BudgetHorizonsList extends StatelessWidget {
                   child: Divider(
                     height: 1,
                     thickness: 0.5,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : Theme.of(context).colorScheme.outline,
+                    color: context.borderColor,
                   ),
                 ),
             ],
@@ -1050,14 +1085,19 @@ class _BudgetHorizonRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                budget.categoryName,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
+              Expanded(
+                child: Text(
+                  budget.categoryName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 7,
@@ -1069,6 +1109,8 @@ class _BudgetHorizonRow extends StatelessWidget {
                 ),
                 child: Text(
                   statusText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -1094,21 +1136,31 @@ class _BudgetHorizonRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Spent ${AppFormat.currency(budget.spent)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              Expanded(
+                child: Text(
+                  'Spent ${AppFormat.currency(budget.spent)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
-              Text(
-                'Limit ${AppFormat.currency(budget.limit)}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Limit ${AppFormat.currency(budget.limit)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ],
@@ -1133,9 +1185,7 @@ class _EmptyBudgetCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.8,
         ),
       ),
@@ -1188,14 +1238,14 @@ class _EmptyBudgetCard extends StatelessWidget {
                     color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(100),
                   ),
-                  child: const Center(
+                  child: Center(
                     widthFactor: 1,
                     child: Text(
                       '+ Set Budget Horizon',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     ),
                   ),
@@ -1228,15 +1278,13 @@ class _GoalsLandmarkList extends ConsumerWidget {
         borderRadius: BorderRadius.circular(24),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.9,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.25)
+                ? Theme.of(context).colorScheme.shadow.withValues(alpha: 0.25)
                 : Theme.of(context).colorScheme.shadow.withValues(alpha: 0.03),
             blurRadius: 14,
             offset: const Offset(0, 4),
@@ -1266,9 +1314,7 @@ class _GoalsLandmarkList extends ConsumerWidget {
                   child: Divider(
                     height: 1,
                     thickness: 0.5,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : Theme.of(context).colorScheme.outline,
+                    color: context.borderColor,
                   ),
                 ),
             ],
@@ -1371,21 +1417,31 @@ class _GoalLandmarkRow extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Saved ${AppFormat.currency(goal.targetAmount * progress.progressPct.clamp(0.0, 1.0))}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  Expanded(
+                    child: Text(
+                      'Saved ${AppFormat.currency(goal.targetAmount * progress.progressPct.clamp(0.0, 1.0))}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
-                  Text(
-                    'Target ${AppFormat.currency(goal.targetAmount)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Target ${AppFormat.currency(goal.targetAmount)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 ],
@@ -1413,9 +1469,7 @@ class _EmptyGoalsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         color: Theme.of(context).colorScheme.surfaceContainer,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Theme.of(context).colorScheme.outline,
+          color: context.borderColor,
           width: 0.8,
         ),
       ),
@@ -1468,14 +1522,14 @@ class _EmptyGoalsCard extends StatelessWidget {
                     color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(100),
                   ),
-                  child: const Center(
+                  child: Center(
                     widthFactor: 1,
                     child: Text(
                       '+ Set First Milestone',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     ),
                   ),
@@ -1524,9 +1578,7 @@ class _MilestoneTrack extends StatelessWidget {
                 height: 4,
                 width: w,
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Theme.of(context).colorScheme.outlineVariant,
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1579,9 +1631,9 @@ class _MilestoneTrack extends StatelessWidget {
                     child: Container(
                       width: 4,
                       height: 4,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surface,
                       ),
                     ),
                   ),
@@ -1649,6 +1701,8 @@ class _FoundationsRowTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
@@ -1658,6 +1712,8 @@ class _FoundationsRowTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11.5,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,

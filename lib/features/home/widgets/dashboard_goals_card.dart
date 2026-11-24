@@ -111,6 +111,8 @@ class DashboardGoalsCard extends ConsumerWidget {
                           children: [
                             Text(
                               'All Milestones',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
@@ -270,6 +272,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
 
                 // Mindful Milestone badge
                 Container(
@@ -287,6 +290,8 @@ class DashboardGoalsCard extends ConsumerWidget {
                   ),
                   child: Text(
                     statusLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,

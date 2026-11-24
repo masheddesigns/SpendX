@@ -5,6 +5,7 @@ import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/financial_health_screen.dart';
 import '../../../services/haptic_service.dart';
 import '../../../shared/widgets/app_page_route.dart';
+import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
 import '../../transactions/providers/transaction_providers.dart';
 
@@ -142,7 +143,7 @@ class QuickActionsRow extends ConsumerWidget {
             button: true,
             label: 'Your rhythm and financial health',
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
@@ -232,9 +233,7 @@ class QuickActionsRow extends ConsumerWidget {
             Container(
               height: 1.2,
               margin: const EdgeInsets.only(top: 9, left: 24, right: 24),
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : Theme.of(context).colorScheme.outline,
+              color: context.borderColor,
             ),
 
             // 5 Rolling Rhythm Nodes
@@ -356,8 +355,12 @@ class _RhythmNode extends StatelessWidget {
           ],
         ),
         child: day.isCompleted
-            ? const Center(
-                child: Icon(Icons.check, size: 10, color: Colors.white),
+            ? Center(
+                child: Icon(
+                  Icons.check,
+                  size: 10,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
               )
             : null,
       );
@@ -378,8 +381,12 @@ class _RhythmNode extends StatelessWidget {
             ),
           ],
         ),
-        child: const Center(
-          child: Icon(Icons.check_rounded, size: 10, color: Colors.white),
+        child: Center(
+          child: Icon(
+            Icons.check_rounded,
+            size: 10,
+            color: Theme.of(context).colorScheme.onSecondary,
+          ),
         ),
       );
     } else {
@@ -570,12 +577,14 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
     return Semantics(
       button: true,
       label: 'Log activity',
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: AnimatedScale(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTap: widget.onTap,
+          child: AnimatedScale(
           scale: _pressed ? 0.96 : 1.0,
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
@@ -624,8 +633,9 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _QuickChip extends StatefulWidget {

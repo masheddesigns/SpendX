@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/providers.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/app_format.dart';
 import '../../../widgets/category_icon_picker.dart';
 
@@ -44,17 +45,15 @@ class CategorySpendingCard extends ConsumerWidget {
           ),
           border: Border.all(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
+                ? context.borderColor
                 : Theme.of(context).colorScheme.outline,
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.30)
-                  : Theme.of(
-                      context,
-                    ).colorScheme.shadow.withValues(alpha: 0.08),
+              color: Theme.of(
+                context,
+              ).colorScheme.shadow.withValues(alpha: isDark ? 0.30 : 0.08),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -67,27 +66,37 @@ class CategorySpendingCard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.pie_chart_outline_rounded,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'TOP CATEGORIES',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.0,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.pie_chart_outline_rounded,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'TOP CATEGORIES',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.0,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   'Top ${topEntries.length} sectors',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -184,6 +193,8 @@ class CategorySpendingCard extends ConsumerWidget {
                             const SizedBox(height: 2),
                             Text(
                               '$percentText of outlays',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -195,10 +206,13 @@ class CategorySpendingCard extends ConsumerWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
 
                       // Amount
                       Text(
                         AppFormat.currency(amount),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,

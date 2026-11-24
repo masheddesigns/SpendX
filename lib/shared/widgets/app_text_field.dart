@@ -23,6 +23,7 @@ class AppTextField extends StatelessWidget {
   final VoidCallback? onTap;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onFieldSubmitted;
+  final AutovalidateMode? autovalidateMode;
 
   const AppTextField({
     super.key,
@@ -48,6 +49,7 @@ class AppTextField extends StatelessWidget {
     this.onTap,
     this.textInputAction,
     this.onFieldSubmitted,
+    this.autovalidateMode = AutovalidateMode.onUserInteraction,
   }) : label = label ?? labelText ?? '',
        hint = hint ?? hintText;
 
@@ -82,6 +84,7 @@ class AppTextField extends StatelessWidget {
           focusNode: focusNode,
           onChanged: onChanged,
           validator: validator,
+          autovalidateMode: autovalidateMode,
           inputFormatters: inputFormatters,
           maxLines: maxLines,
           autofocus: autofocus,
