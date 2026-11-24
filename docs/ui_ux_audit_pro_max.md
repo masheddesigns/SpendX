@@ -1,7 +1,7 @@
 # SpendX — UI/UX Audit (ui-ux-pro-max guided) — Re-audit (final)
 
-**Date:** 2026-11-24 (final re-audit pass)  
-**Method:** Static code analysis of `lib/` (399 Dart files) cross-referenced with the `ui-ux-pro-max` skill (Flutter stack, Personal Finance Tracker product profile). Metrics recomputed from the current tree (commit 0fcd460).  
+**Date:** 2026-11-24 (re-audit after orphaned-screen cleanup)  
+**Method:** Static code analysis of `lib/` (399 Dart files) cross-referenced with the `ui-ux-pro-max` skill (Flutter stack, Personal Finance Tracker product profile). Metrics recomputed from the current tree (commit bb97255, orphaned-screen cleanup).  
 **Verification:** `flutter analyze lib` = 0 issues; debug build succeeds; `test/accessibility_semantics_test.dart` passes; manifest JSON valid.  
 **Companion docs:** `docs/ui_ux_audit.md`, `docs/ui_ux_todo.md`, `docs/accessibility_audit.md`.
 
@@ -30,14 +30,14 @@ SpendX is a mature, local-first personal finance Flutter app with a strong desig
 
 | # | Category | Priority | Score | Key evidence |
 |---|----------|----------|-------|--------------|
-| 1 | Accessibility | CRITICAL | **9.5/10** | 121 `Semantics`, 65 tooltip props, 190× 48dp targets, 49 validators, 24 `FocusNode`, 15 `textInputAction`, 37 `autovalidateMode`, CI a11y test passing, desktop shortcuts |
+| 1 | Accessibility | CRITICAL | **9.5/10** | 121 `Semantics`, 65 tooltip props, 188× 48dp targets, 47 validators, 24 `FocusNode`, 15 `textInputAction`, 37 `autovalidateMode`, CI a11y test passing, desktop shortcuts |
 | 2 | Touch & Interaction | CRITICAL | **9.0/10** | 48dp enforcement via `AppTapScale`/`PrimaryButton`/theme, haptics, 43 `RefreshIndicator`, loading/empty/error states, reduced-motion awareness (shimmer gated) |
 | 3 | Performance | HIGH | **9.0/10** | 27 `ListView.builder`/`separated`, deferred DB init, no runtime Google Fonts, 0 `MediaQuery.of(context)` (fully migrated), 0 stray `print(` in features |
 | 4 | Style Selection | HIGH | **8.0/10** | Consistent glass surfaces, `AppRadius`/`AppShadows`/`AppSpacing`, semantic financial colors; 1028 inline `TextStyle` debt, 199 `Color(0x)`/523 `Colors.` (many intentional) |
-| 5 | Layout & Responsive | HIGH | **9.0/10** | 267 `TextOverflow`, 271 `maxLines`, 331 `Expanded`+66 `Flexible`, 47 `LayoutBuilder`, tablet grids >550/600dp, verified 320/800dp @1.3 text scale |
+| 5 | Layout & Responsive | HIGH | **9.0/10** | 266 `TextOverflow`, 269 `maxLines`, 327 `Expanded`+65 `Flexible`, 45 `LayoutBuilder`, tablet grids >550/600dp, verified 320/800dp @1.3 text scale |
 | 6 | Typography & Color | MEDIUM | **8.5/10** | Base 12–14, tabular figures, adaptive tokens; sub-10pt text eliminated (floor 10–10.5pt); muted-on-surface contrast review pending |
 | 7 | Animation | MEDIUM | **9.0/10** | Centralized `AppMotion` tokens, `context.motionDuration` (18 sites), shimmer/ambient loops gated, reduced-motion checks in 32+ places |
-| 8 | Forms & Feedback | MEDIUM | **9.0/10** | 49 validators, 37 `autovalidateMode`, Form wrappers migrated (account transfer, manage company, lending), inline errors, 28/13/26 state widgets |
+| 8 | Forms & Feedback | MEDIUM | **9.0/10** | 47 validators, 37 `autovalidateMode`, Form wrappers migrated (account transfer, manage company, lending), inline errors, 28/13/26 state widgets |
 | 9 | Navigation Patterns | HIGH | **8.5/10** | 5-tab bottom nav (≤5), `AppRouteTable` + `onGenerateRoute`, Android deep links verified, `PopScope` back, desktop keyboard shortcuts (Ctrl/Cmd+N, F); iOS/go_router pending |
 | 10 | Charts & Data | LOW | **8.0/10** | `fl_chart` with legends (`_ChartLegendDot`) and `BarTouchTooltipData`; color-only risk to review with real data |
 
@@ -91,7 +91,7 @@ Gaps: many hardcoded 180/200/220ms remain but centralized tokens available.
 
 ### Priority 8 — Forms & Feedback (MEDIUM) — 9.0/10
 
-Strengths: 49 validators, 37 `autovalidateMode`, required/domain-specific checks (Add Loan, Pay Credit Card, category/tag/budget/goal); Form wrappers migrated (account transfer dialog, manage company, lending); inline error placement; 28/13/26 state widgets.
+Strengths: 47 validators, 37 `autovalidateMode`, required/domain-specific checks (Add Loan, Pay Credit Card, category/tag/budget/goal); Form wrappers migrated (account transfer dialog, manage company, lending); inline error placement; 28/13/26 state widgets.
 
 Gaps: top-of-form focusable error summary (skill) not implemented; route-by-route retry coverage partial.
 
@@ -128,20 +128,20 @@ Gaps: chart/category color combos not reviewed with populated data in both theme
 |---|---:|
 | `Semantics` | 121 |
 | `tooltip:` props | 65 |
-| Touch-target 48dp constraints | 190 (94+96) |
+| Touch-target 48dp constraints | 188 (93+95) |
 | `minimumSize` | 10 |
-| `validator:` | 49 |
+| `validator:` | 47 |
 | `autovalidateMode` | 37 |
-| `TextOverflow` | 267 |
-| `maxLines` | 271 |
-| `Expanded`/`Flexible` | 331/66 |
-| `LayoutBuilder` | 47 |
-| `RefreshIndicator` | 43 |
-| `EmptyStateWidget` | 28 |
-| `LoadingStateWidget` | 13 |
-| `ErrorStateWidget` | 26 |
+| `TextOverflow` | 266 |
+| `maxLines` | 269 |
+| `Expanded`/`Flexible` | 327/65 |
+| `LayoutBuilder` | 45 |
+| `RefreshIndicator` | 42 |
+| `EmptyStateWidget` | 27 |
+| `LoadingStateWidget` | 11 |
+| `ErrorStateWidget` | 25 |
 | `Color(0x)` literals | 199 |
-| `Colors.` usage | 523 |
+| `Colors.` usage | 510 |
 | `SafeArea` | 56 |
 | `disableAnimations` (direct) | 32 |
 | `motionDuration` (reduced-motion-aware) | 18 (15 files) |
@@ -151,8 +151,8 @@ Gaps: chart/category color combos not reviewed with populated data in both theme
 | `ListView.builder`/`separated` | 27 |
 | Non-builder `ListView` | 19 |
 | `Image.asset` | 0 |
-| Inline `TextStyle(` | 1028 |
-| `AppTextStyles.` | 65 |
+| Inline `TextStyle(` | 1014 |
+| `AppTextStyles.` | 64 |
 | `MediaQuery.of(context)` | 0 (fully migrated) |
 | `print(` in features | 0 (fully migrated) |
 | Emoji in UI strings | ~3 (decorative) |

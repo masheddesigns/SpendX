@@ -14,7 +14,7 @@ import '../shared/widgets/error_state_widget.dart';
 import '../shared/widgets/undo_snackbar_listener.dart';
 import '../utils/app_format.dart';
 import 'credit_card/add_credit_card_screen.dart';
-import 'credit_card/add_credit_transaction_screen.dart';
+import 'expense/add_expense_screen.dart';
 import 'credit_card/pay_credit_card_screen.dart';
 import 'credit_card/credit_emi_detail_screen.dart';
 import 'credit_history_screen.dart';
@@ -1272,7 +1272,10 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
     Navigator.push(
       context,
       AppPageRoute(
-        builder: (context) => AddCreditTransactionScreen(card: card),
+        builder: (context) => AddExpenseScreen(
+          initialType: 'expense',
+          initialPaymentSourceId: card.id,
+        ),
       ),
     ).then((result) {
       if (result == true) _invalidateAll();

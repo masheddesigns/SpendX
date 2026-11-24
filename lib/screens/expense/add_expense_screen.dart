@@ -50,6 +50,7 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
   final String initialType; // 'expense' or 'income'
   final Transaction? existingTransaction;
   final String? initialCategoryId;
+  final String? initialPaymentSourceId;
   final Map<String, String?>? prefillData; // Data from Gemini AI
 
   const AddExpenseScreen({
@@ -57,6 +58,7 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
     this.initialType = 'expense',
     this.existingTransaction,
     this.initialCategoryId,
+    this.initialPaymentSourceId,
     this.prefillData,
   });
 
@@ -94,6 +96,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       );
     });
     _selectedCategoryId = widget.initialCategoryId;
+    _selectedPaymentMethodId = widget.initialPaymentSourceId;
     if (widget.existingTransaction != null) {
       final txn = widget.existingTransaction!;
       _selectedType = (txn.type == 'credit_card_purchase')

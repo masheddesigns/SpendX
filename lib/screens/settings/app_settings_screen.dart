@@ -10,7 +10,7 @@ import '../../widgets/spendx_app_bar.dart';
 import 'category_management_screen.dart';
 import 'currency_selection_screen.dart';
 import 'data_management_screen.dart';
-import 'database_tools_screen.dart';
+import 'backup_hub_screen.dart';
 import 'notification_settings_screen.dart';
 import '../../features/salary/screens/manage_company_screen.dart';
 import 'budget_management_screen.dart';
@@ -129,13 +129,13 @@ class AppSettingsScreen extends StatelessWidget {
               ),
             ),
             _SettingsTile(
-              icon: Icons.storage_outlined,
+              icon: Icons.cloud_sync_outlined,
               iconColor: Theme.of(context).colorScheme.secondary,
-              title: 'Database Tools',
-              subtitle: 'Import, export, backup',
+              title: 'Backup & Data Export',
+              subtitle: 'Cloud sync, encrypted backups, CSV/JSON export',
               onTap: () => Navigator.push(
                 context,
-                AppPageRoute(builder: (_) => const DatabaseToolsScreen()),
+                AppPageRoute(builder: (_) => const BackupHubScreen()),
               ),
             ),
             _SettingsTile(

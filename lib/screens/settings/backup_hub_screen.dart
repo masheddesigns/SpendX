@@ -1,10 +1,15 @@
 // ignore_for_file: use_build_context_synchronously
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/haptic_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/settings_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/backup_service.dart';
+import '../../services/export_service.dart';
+import '../../services/import_service.dart';
 import '../../services/sync_engine.dart';
 import '../../widgets/custom_dialog.dart';
 import '../../services/drive_service.dart';
@@ -277,6 +282,11 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
               ),
               const SizedBox(height: 12),
               _buildCloudSyncSection(),
+              const SizedBox(height: 24),
+              _buildLocalBackupSection(),
+              const SizedBox(height: 24),
+              _buildDataExportSection(),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -1081,6 +1091,223 @@ class _BackupHubScreenState extends State<BackupHubScreen> {
       color: Theme.of(
         context,
       ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+    );
+  }
+
+  Future<void> _runAction(Future<void> Function() action, String label) async {
+    if (_isOperationInProgress) return;
+    setState(() => _isOperationInProgress = true);
+    try {
+      await action();
+      if (mounted) CustomSnackBar.show(context, message: '$label complete');
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: '$label failed: $e',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isOperationInProgress = false);
+    }
+  }
+
+  Future<void> _exportLocalBackup() async {
+    if (_isOperationInProgress) return;
+    setState(() => _isOperationInProgress = true);
+    try {
+      final path = await ExportService.instance.exportFullBackup();
+      if (mounted) {
+        if (path != null) {
+          CustomSnackBar.show(context, message: 'Export Backup complete');
+        } else {
+          CustomSnackBar.show(context, message: 'Export canceled');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: 'Export Backup failed: $e',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isOperationInProgress = false);
+    }
+  }
+
+  Future<void> _importLocalBackup() async {
+    if (_isOperationInProgress) return;
+    setState(() => _isOperationInProgress = true);
+
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['spendx', 'json'],
+      );
+
+      if (files.isNotEmpty && files.first.path != null) {
+        final file = File(files.first.path!);
+        final container = mounted ? ProviderScope.containerOf(context) : null;
+        final success = await ImportService.instance.importFromFile(
+          file,
+          container: container,
+        );
+        if (mounted) {
+          if (success) {
+            CustomSnackBar.show(context, message: 'Import complete');
+          } else {
+            CustomSnackBar.show(
+              context,
+              message: 'Import failed: invalid file',
+              isError: true,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: 'Import error: $e',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isOperationInProgress = false);
+    }
+  }
+
+  Widget _buildLocalBackupSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'LOCAL BACKUP & RESTORE',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+            color: colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.backup_rounded,
+          color: colorScheme.primary,
+          title: 'Export Full Backup',
+          subtitle: 'Save a complete encrypted SpendX backup (.spendx)',
+          onTap: () {
+            if (!_isOperationInProgress) _exportLocalBackup();
+          },
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.restore_rounded,
+          color: colorScheme.secondary,
+          title: 'Import Full Backup',
+          subtitle: 'Restore from a .spendx or JSON backup file',
+          onTap: () {
+            if (!_isOperationInProgress) _importLocalBackup();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDataExportSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'EXPORT DATA',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+            color: colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.table_chart_outlined,
+          color: colorScheme.primary,
+          title: 'Export Transactions CSV',
+          subtitle: 'Share transactions as a spreadsheet',
+          onTap: () {
+            if (!_isOperationInProgress) {
+              _runAction(
+                ExportService.instance.exportTransactionsToCsv,
+                'Export CSV',
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.data_object_rounded,
+          color: Colors.amber.shade700,
+          title: 'Export Transactions JSON',
+          subtitle: 'Share transactions as a JSON file',
+          onTap: () {
+            if (!_isOperationInProgress) {
+              _runAction(
+                ExportService.instance.exportTransactionsToJson,
+                'Export JSON',
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.account_balance_wallet_outlined,
+          color: colorScheme.primary,
+          title: 'Export Salary Report CSV',
+          subtitle: 'All salary payments as CSV',
+          onTap: () {
+            if (!_isOperationInProgress) {
+              _runAction(
+                ExportService.instance.exportSalaryReportToCsv,
+                'Export Salary CSV',
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.picture_as_pdf_outlined,
+          color: Colors.red.shade600,
+          title: 'Export Salary Report PDF',
+          subtitle: 'Salary intelligence report as PDF',
+          onTap: () {
+            if (!_isOperationInProgress) {
+              _runAction(
+                ExportService.instance.exportSalaryReportToPdf,
+                'Export Salary PDF',
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 12),
+        SettingsTile(
+          icon: Icons.notifications_outlined,
+          color: colorScheme.tertiary,
+          title: 'Export Reminders CSV',
+          subtitle: 'All due reminders as CSV',
+          onTap: () {
+            if (!_isOperationInProgress) {
+              _runAction(
+                ExportService.instance.exportReminderReportToCsv,
+                'Export Reminders',
+              );
+            }
+          },
+        ),
+      ],
     );
   }
 }
