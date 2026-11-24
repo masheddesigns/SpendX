@@ -16,8 +16,8 @@ SpendX has gone from a **broken quality state** to a **production-ready** state 
 | `flutter test` passed | 1,286 | **1,867** | ✅ |
 | `flutter test` failed | 583 | **1** (pre-existing isolation) | ✅ |
 | CI (6 files) | Red (16 failures) | **235/235 green** | ✅ |
-| Hardcoded `Color(0x)` | 1,218 | 389 (-68%) | 🟡 |
-| `Semantics` widgets | 2 | 41 (+39) | 🟡 |
+| Hardcoded `Color(0x)` | 1,218 | 188 (-84%) | 🟡 |
+| `Semantics` widgets | 2 | 44 (+42) | 🟡 |
 | Form `validator:` | 6 | 24 (+18) | 🟡 |
 | `TextOverflow` | 66 | 120 (+54) | 🟡 |
 | `Expanded` | 278 | 299 (+21) | 🟡 |
@@ -127,8 +127,8 @@ SpendX has gone from a **broken quality state** to a **production-ready** state 
 | `flutter analyze lib/` | 219 issues | **0 issues** (20 info) | ✅ |
 | `flutter test` | 1,286/1,869 | **1,866/1,868** (2 pre-existing isolation) | ✅ |
 | CI (6 files) | Red | **235/235 green** | ✅ |
-| Hardcoded `Color(0x)` | 1,218 | 389 (-68%) | 🟡 |
-| `Semantics` widgets | 2 | 41 (+39) | 🟡 |
+| Hardcoded `Color(0x)` | 1,218 | 188 (-84%) | 🟡 |
+| `Semantics` widgets | 2 | 44 (+42) | 🟡 |
 | Form `validator:` | 6 | 24 (+18) | 🟡 |
 | `TextOverflow` | 66 | 120 (+54) | 🟡 |
 | `Expanded` | 278 | 299 (+21) | 🟡 |
@@ -145,9 +145,9 @@ SpendX has gone from a **broken quality state** to a **production-ready** state 
 **Remaining (non-blocking):**
 - 2 pre-existing test-isolation failures (backup staging `spendx_snapshot.db` not found)
 - Accessibility: ~100+ Semantics needed, 48px touch targets
-- Theme migration: 389 hardcoded colors remaining
+- Theme migration: 188 hardcoded colors remaining
 - Form validation: ~40 more validators
 - Responsive breakpoints (LayoutBuilder: 7)
-- Touch target enforcement (minimumSize: 10)
+- Touch target enforcement (minimumSize: 11)
 
 *Audit based on static code analysis of `lib/` at latest commit. No runtime/visual inspection performed.*
