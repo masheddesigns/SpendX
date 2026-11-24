@@ -36,9 +36,9 @@ extension _OnboardingWelcomeStep on _OnboardingScreenState {
                   tag: 'app_logo',
                   child: SvgPicture.asset(
                     'assets/logo.svg',
+                    semanticsLabel: 'SpendX logo',
                     width: 52,
                     height: 52,
-                    semanticsLabel: 'SpendX logo',
                   ),
                 ),
               ),

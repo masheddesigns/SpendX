@@ -60,9 +60,9 @@ class AboutScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                           child: SvgPicture.asset(
                             'assets/logo.svg',
+                            semanticsLabel: 'SpendX logo',
                             width: 80,
                             height: 80,
-                            semanticsLabel: 'SpendX logo',
                           ),
                         ),
                       ),

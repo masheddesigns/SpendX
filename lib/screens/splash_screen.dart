@@ -448,9 +448,9 @@ class _SplashScreenState extends State<SplashScreen>
                             borderRadius: BorderRadius.circular(24),
                             child: SvgPicture.asset(
                               'assets/logo.svg',
+                              semanticsLabel: 'SpendX logo',
                               width: 104,
                               height: 104,
-                              semanticsLabel: 'SpendX logo',
                             ),
                           ),
                         ),
