@@ -54,15 +54,18 @@ class SpendXGlassNavigation extends StatelessWidget {
         16,
         bottomInset > 0 ? bottomInset + 6 : 14,
       ),
-      child: SpendXGlassSurface(
-        level: SpendXGlassLevel.floating,
-        height: navigationHeight,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: List.generate(items.length, (index) {
-            final item = items[index];
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: SpendXGlassSurface(
+            level: SpendXGlassLevel.floating,
+            height: navigationHeight,
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(items.length, (index) {
+                final item = items[index];
             final isSelected = selectedIndex == index;
             return Expanded(
               child: _GlassNavItem(
@@ -79,7 +82,9 @@ class SpendXGlassNavigation extends StatelessWidget {
           }),
         ),
       ),
-    );
+    ),
+    ),
+  );
   }
 }
 

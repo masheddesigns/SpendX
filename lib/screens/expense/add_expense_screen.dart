@@ -600,8 +600,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact =
-              constraints.maxWidth < 520 ||
-              MediaQuery.textScalerOf(context).scale(1) > 1.1;
+              constraints.maxWidth < 260 ||
+              MediaQuery.textScalerOf(context).scale(1) > 1.6;
           return Row(
             children: [
               _buildTypeOption(

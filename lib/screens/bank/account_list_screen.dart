@@ -1333,7 +1333,7 @@ class _NetPositionHorizonCard extends ConsumerWidget {
                       AppFormat.currency(liabilities.abs()),
                       Theme.of(context).colorScheme.error,
                     );
-                    if (constraints.maxWidth < 300) {
+                    if (constraints.maxWidth < 240) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [

@@ -409,7 +409,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
                       ],
                     );
 
-                    if (constraints.maxWidth < 360) {
+                    if (constraints.maxWidth < 260) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [

@@ -135,10 +135,8 @@ class SpendXTransactionTile extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 360;
-
+            child: Builder(
+              builder: (context) {
                 Widget amountAndBadges() => Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
@@ -157,9 +155,7 @@ class SpendXTransactionTile extends StatelessWidget {
                       SpendXFinancialAmount(
                         amount: transaction.amount,
                         semanticType: semanticType,
-                        size: compact
-                            ? FinancialAmountSize.compact
-                            : FinancialAmountSize.standard,
+                        size: FinancialAmountSize.standard,
                         showSign: !isTransfer && !isCcPayment,
                       ),
                     ],
@@ -366,22 +362,13 @@ class SpendXTransactionTile extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (compact) ...[
-                        const SizedBox(height: 4),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: amountAndBadges(),
-                        ),
-                      ],
                     ],
                   ),
                 ),
 
                 // Amount & Badges
-                if (!compact) ...[
-                  const SizedBox(width: 8),
-                  amountAndBadges(),
-                ],
+                const SizedBox(width: 8),
+                amountAndBadges(),
               ],
             );
               },

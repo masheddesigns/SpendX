@@ -152,7 +152,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                 ],
               ),
-        body: IndexedStack(index: _currentIndex, children: _tabs),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: IndexedStack(index: _currentIndex, children: _tabs),
+          ),
+        ),
         // Each tab exposes its own primary action. A persistent transaction
         // FAB covered balances and ledger values across all tabs.
         bottomNavigationBar: SpendXGlassNavigation(

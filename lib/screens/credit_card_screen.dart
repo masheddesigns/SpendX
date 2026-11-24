@@ -562,7 +562,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
                   'Available: ${AppFormat.currency(card.creditLimit - outstanding)}',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 );
-                if (constraints.maxWidth < 340) {
+                if (constraints.maxWidth < 260) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -847,7 +847,7 @@ class _CreditCardScreenState extends ConsumerState<CreditCardScreen> {
           Theme.of(context).colorScheme.secondary,
           () => _navigateToPayments(card),
         );
-        if (constraints.maxWidth < 340) {
+        if (constraints.maxWidth < 260) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

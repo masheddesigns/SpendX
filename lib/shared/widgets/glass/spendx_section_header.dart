@@ -88,31 +88,11 @@ class SpendXSectionHeader extends StatelessWidget {
 
     return Padding(
       padding: padding,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact =
-              constraints.maxWidth < 480 ||
-              MediaQuery.textScalerOf(context).scale(1) > 1.1;
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                sectionTitle,
-                if (trailingWidget != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: trailingWidget,
-                  ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: sectionTitle),
-              ?trailingWidget,
-            ],
-          );
-        },
+      child: Row(
+        children: [
+          Expanded(child: sectionTitle),
+          ?trailingWidget,
+        ],
       ),
     );
   }
