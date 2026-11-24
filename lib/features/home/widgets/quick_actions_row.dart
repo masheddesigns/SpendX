@@ -4,8 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../screens/expense/add_expense_screen.dart';
 import '../../../screens/financial_health_screen.dart';
 import '../../../services/haptic_service.dart';
-import '../../../services/sound_effects_service.dart';
-import '../../../shared/widgets/playful/playful_page_route.dart';
+import '../../../shared/widgets/playful/spendx_playful.dart';
 import '../../../theme/app_theme.dart';
 import '../../streak/streak_provider.dart';
 import '../../transactions/providers/transaction_providers.dart';
@@ -100,37 +99,40 @@ class QuickActionsRow extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Column(
         children: [
-          // ── Prominent Tactile Action: "[ + Log activity ]" ──
+          // ── Prominent 3D Tactile Action: "[ + Log activity ]" ──
           _HeroLogButton(onTap: () => _openScreen(context, 'expense')),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
-          // ── Fast-path Direct Chips: Spent, Received, Moved ──
+          // ── Fast-path 3D Tactile Chips: Spent, Received, Moved ──
           Row(
             children: [
               Expanded(
                 child: _QuickChip(
                   label: 'Spent',
                   iconData: Icons.arrow_outward_rounded,
-                  accentColor: Theme.of(context).colorScheme.error,
+                  accentColor: PlayfulTokens.sunsetCoral,
+                  lipColor: PlayfulTokens.sunsetCoralLip,
                   onTap: () => _openScreen(context, 'expense'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _QuickChip(
                   label: 'Received',
                   iconData: Icons.arrow_downward_rounded,
-                  accentColor: Theme.of(context).colorScheme.secondary,
+                  accentColor: PlayfulTokens.neoMint,
+                  lipColor: PlayfulTokens.neoMintLip,
                   onTap: () => _openScreen(context, 'income'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _QuickChip(
                   label: 'Moved',
                   iconData: Icons.swap_horiz_rounded,
-                  accentColor: Theme.of(context).colorScheme.primary,
+                  accentColor: PlayfulTokens.cyberCyan,
+                  lipColor: PlayfulTokens.cyberCyanLip,
                   onTap: () => _openScreen(context, 'transfer', ref: ref),
                 ),
               ),
@@ -557,97 +559,49 @@ class _RhythmTokenPainter extends CustomPainter {
   }
 }
 
-class _HeroLogButton extends StatefulWidget {
+class _HeroLogButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _HeroLogButton({required this.onTap});
 
   @override
-  State<_HeroLogButton> createState() => _HeroLogButtonState();
-}
-
-class _HeroLogButtonState extends State<_HeroLogButton> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final bg = colorScheme.primary;
-    final fg = colorScheme.onPrimary;
-
-    return Semantics(
-      button: true,
-      label: 'Log activity',
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        child: GestureDetector(
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTap: widget.onTap,
-          child: AnimatedScale(
-          scale: _pressed ? 0.96 : 1.0,
-          duration: context.motionDuration(const Duration(milliseconds: 140)),
-          curve: Curves.easeOutCubic,
-          child: Container(
-            height: 48,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: colorScheme.shadow.withValues(alpha: 0.25),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onPrimary.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.add_rounded,
-                    size: 16,
-                    color: colorScheme.onPrimary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Log activity',
-                  style: AppTextStyles.button.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                    color: fg,
-                  ),
-                ),
-              ],
+    return SpendXPlayfulButton(
+      onPressed: onTap,
+      variant: PlayfulButtonVariant.primary,
+      height: 52,
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.add_rounded, size: 22, color: Colors.white),
+          SizedBox(width: 8),
+          Text(
+            'Log Activity',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: Colors.white,
             ),
           ),
-        ),
+        ],
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _QuickChip extends StatefulWidget {
   final String label;
   final IconData iconData;
   final Color accentColor;
+  final Color lipColor;
   final VoidCallback onTap;
 
   const _QuickChip({
     required this.label,
     required this.iconData,
     required this.accentColor,
+    required this.lipColor,
     required this.onTap,
   });
 
@@ -655,79 +609,147 @@ class _QuickChip extends StatefulWidget {
   State<_QuickChip> createState() => _QuickChipState();
 }
 
-class _QuickChipState extends State<_QuickChip> {
-  bool _pressed = false;
+class _QuickChipState extends State<_QuickChip>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  bool _isDown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: PlayfulTokens.durationPress,
+      reverseDuration: PlayfulTokens.durationBounce,
+    );
+    _anim = CurvedAnimation(
+      parent: _ctrl,
+      curve: PlayfulTokens.curveSquish,
+      reverseCurve: PlayfulTokens.curveBounce,
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails _) {
+    _isDown = true;
+    _ctrl.forward();
+    SoundEffectsService.instance.pop();
+  }
+
+  void _handleTapUp(TapUpDetails _) {
+    if (!_isDown) return;
+    _isDown = false;
+    _ctrl.reverse();
+    widget.onTap();
+  }
+
+  void _handleTapCancel() {
+    if (!_isDown) return;
+    _isDown = false;
+    _ctrl.reverse();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final bg = colorScheme.surface;
-    final border = colorScheme.outline;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Semantics(
       button: true,
       label: widget.label,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        child: GestureDetector(
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTap: widget.onTap,
-          child: Center(
-            child: AnimatedScale(
-              scale: _pressed ? 0.94 : 1.0,
-              duration: context.motionDuration(const Duration(milliseconds: 140)),
-              curve: Curves.easeOutCubic,
-              child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: border, width: 0.9),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.12),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+      child: GestureDetector(
+        onTapDown: _handleTapDown,
+        onTapUp: _handleTapUp,
+        onTapCancel: _handleTapCancel,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _anim,
+          builder: (context, _) {
+            final double depression = _anim.value * 2.5;
+            final double scale = 1.0 - (_anim.value * 0.03);
+
+            return Transform.scale(
+              scale: scale,
+              child: SizedBox(
+                height: 44,
+                child: Stack(
+                  alignment: Alignment.topCenter,
                   children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: widget.accentColor.withValues(
-                          alpha: 0.16,
+                    // Bottom 3D Lip
+                    Positioned(
+                      top: 3.5,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: widget.lipColor,
+                          borderRadius: BorderRadius.circular(PlayfulTokens.radiusPill),
                         ),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        widget.iconData,
-                        size: 12,
-                        color: widget.accentColor,
                       ),
                     ),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        widget.label,
-                        style: AppTextStyles.chip.copyWith(
-                          letterSpacing: -0.2,
-                          color: colorScheme.onSurface,
+
+                    // Top Surface
+                    Positioned(
+                      top: depression,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? widget.accentColor.withValues(alpha: 0.18)
+                              : widget.accentColor.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(PlayfulTokens.radiusPill),
+                          border: Border.all(
+                            color: widget.accentColor.withValues(alpha: 0.45),
+                            width: 1.2,
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                color: widget.accentColor.withValues(alpha: 0.22),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                widget.iconData,
+                                size: 13,
+                                color: widget.accentColor,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                widget.label,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.2,
+                                  color: isDark ? Colors.white : widget.accentColor,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

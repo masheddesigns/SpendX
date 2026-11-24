@@ -122,71 +122,70 @@ class _GlassNavItem extends StatelessWidget {
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          child: AnimatedContainer(
+          child: AnimatedScale(
+            scale: isSelected ? 1.05 : 0.95,
             duration: reduceMotion
                 ? Duration.zero
-                : const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.full),
-              gradient: isSelected
-                  ? LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: isDark
-                          ? const [Color(0x406558E8), Color(0x255245CC)]
-                          : const [Color(0x1F6558E8), Color(0x106558E8)],
-                    )
-                  : null,
-              border: isSelected
-                  ? Border.all(
-                      color: isDark
-                          ? const Color(0x608B82F6)
-                          : const Color(0x356558E8),
-                      width: 1,
-                    )
-                  : null,
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: activeColor.withValues(
-                          alpha: isDark ? 0.35 : 0.18,
+                : const Duration(milliseconds: 260),
+            curve: Curves.easeOutBack,
+            child: AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.full),
+                gradient: isSelected
+                    ? LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: isDark
+                            ? const [Color(0xFF6558E8), Color(0xFF4C3FC7)]
+                            : const [Color(0xFF6558E8), Color(0xFF5245CC)],
+                      )
+                    : null,
+                border: isSelected
+                    ? Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        width: 1,
+                      )
+                    : null,
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: activeColor.withValues(alpha: 0.5),
+                          blurRadius: 12,
+                          spreadRadius: -1,
+                          offset: const Offset(0, 3),
                         ),
-                        blurRadius: 10,
-                        spreadRadius: -1,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isSelected ? (item.activeIcon ?? item.icon) : item.icon,
-                  size: 21,
-                  color: isSelected
-                      ? (isDark ? const Color(0xFF8B82F6) : activeColor)
-                      : inactiveColor,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  compact ? (item.compactLabel ?? item.label) : item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected
-                        ? (isDark ? Colors.white : activeColor)
-                        : inactiveColor,
-                    letterSpacing: -0.1,
+                      ]
+                    : null,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isSelected ? (item.activeIcon ?? item.icon) : item.icon,
+                    size: 20,
+                    color: isSelected ? Colors.white : inactiveColor,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    compact ? (item.compactLabel ?? item.label) : item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                      color: isSelected ? Colors.white : inactiveColor,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
