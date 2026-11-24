@@ -100,11 +100,22 @@
 
 ---
 
-## 5. Quick Wins (1 hour each)
-- [ ] `grep -rn "IconButton(" lib` → add `tooltip:` to each
-- [ ] `grep -rn "GestureDetector(\|InkWell(" lib` → wrap in `ConstrainedBox(minWidth: 48, minHeight: 48)`
-- [ ] `grep -rn "SvgPicture.asset\|Image.asset" lib` → add `excludeFromSemantics: true` to decorative ones
-- [ ] `grep -rn "AnimationController" lib` → add disableAnimations check
+## 5. Quick Wins — Status
+- [x] `IconButton` tooltips — all 63 IconButtons already have `tooltip:` ✅
+- [x] `AppTapScale` widget — enforces 48px min + Semantics + reduced motion (used in 13 places) ✅
+- [x] `MediaQuery.disableAnimations` — already in `AppPageRoute` and `AppTapScale` ✅
+- [x] Decorative images — all 9 SvgPicture usages already have Semantics labels ✅
+- [ ] Wrap remaining 96 `GestureDetector`/`InkWell` in `AppTapScale` or add `Semantics` + min size
+- [ ] Add `Semantics` to ~294 interactive widgets (ListTile trailing, card taps, etc.)
+- [ ] Add `FocusNode` management to forms
+- [ ] Add keyboard `Shortcuts`/`Actions` for web/desktop
+
+### What's already good
+- Standard buttons (ElevatedButton, TextButton, OutlinedButton, IconButton) all have 48px min via theme
+- AppTapScale provides 48px + Semantics + reduced motion (ready to adopt)
+- Decorative images all have Semantics labels
+- Page transitions respect reduced motion
+- 41 Semantics widgets exist (mostly on illustrations and key buttons)
 
 ---
 
