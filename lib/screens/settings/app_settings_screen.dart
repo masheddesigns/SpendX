@@ -12,7 +12,7 @@ import 'currency_selection_screen.dart';
 import 'data_management_screen.dart';
 import 'database_tools_screen.dart';
 import 'notification_settings_screen.dart';
-import 'income_salary_screen.dart';
+import '../../features/salary/screens/manage_company_screen.dart';
 import 'budget_management_screen.dart';
 import 'tag_management_screen.dart';
 import 'feature_toggles_screen.dart';
@@ -170,7 +170,7 @@ class AppSettingsScreen extends StatelessWidget {
               subtitle: 'Companies, pay cycles, salary',
               onTap: () => Navigator.push(
                 context,
-                AppPageRoute(builder: (_) => const IncomeSalaryScreen()),
+                AppPageRoute(builder: (_) => const ManageCompanyScreen()),
               ),
             ),
             _SettingsTile(
