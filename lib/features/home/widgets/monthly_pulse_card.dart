@@ -103,8 +103,7 @@ class MonthlyPulseCard extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           'MONTHLY CASHFLOW',
-                          style: TextStyle(
-                            fontSize: 11.5,
+                          style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.9,
                             color: Theme.of(
@@ -119,8 +118,7 @@ class MonthlyPulseCard extends ConsumerWidget {
                       children: [
                         Text(
                           'Reports',
-                          style: TextStyle(
-                            fontSize: 11.5,
+                          style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w700,
                             color: Theme.of(context).colorScheme.primary,
                           ),
@@ -179,8 +177,7 @@ class MonthlyPulseCard extends ConsumerWidget {
                                     const SizedBox(width: 4),
                                     Text(
                                       'Income',
-                                      style: TextStyle(
-                                        fontSize: 11,
+                                      style: AppTextStyles.caption.copyWith(
                                         fontWeight: FontWeight.w700,
                                         color: Theme.of(
                                           context,
@@ -192,16 +189,13 @@ class MonthlyPulseCard extends ConsumerWidget {
                                 const SizedBox(height: 5),
                                 Text(
                                   AppFormat.currency(income),
-                                  style: TextStyle(
+                                  style: AppTextStyles.numericData.copyWith(
                                     fontSize: isWide ? 17 : 15,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: -0.4,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.onSecondaryContainer,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -265,8 +259,7 @@ class MonthlyPulseCard extends ConsumerWidget {
                                     const SizedBox(width: 4),
                                     Text(
                                       'Expenses',
-                                      style: TextStyle(
-                                        fontSize: 11,
+                                      style: AppTextStyles.caption.copyWith(
                                         fontWeight: FontWeight.w700,
                                         color: Theme.of(context).colorScheme.error,
                                       ),
@@ -276,16 +269,13 @@ class MonthlyPulseCard extends ConsumerWidget {
                                 const SizedBox(height: 5),
                                 Text(
                                   AppFormat.currency(expense),
-                                  style: TextStyle(
+                                  style: AppTextStyles.numericData.copyWith(
                                     fontSize: isWide ? 17 : 15,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: -0.4,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.onErrorContainer,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),

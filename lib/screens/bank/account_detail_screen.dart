@@ -716,7 +716,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: context.motionDuration(const Duration(milliseconds: 180)),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected

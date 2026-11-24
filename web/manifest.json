@@ -1,11 +1,11 @@
 {
-    "name": "spend_x",
-    "short_name": "spend_x",
+    "name": "SpendX",
+    "short_name": "SpendX",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0D0F17",
+    "theme_color": "#6558E8",
+    "description": "Your money, local-first. Secure, subscription-free personal finance.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

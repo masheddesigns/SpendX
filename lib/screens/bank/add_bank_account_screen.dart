@@ -416,7 +416,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
                               child: Center(
                                 widthFactor: 1,
                                 child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
+                                  duration: context.motionDuration(const Duration(milliseconds: 180)),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 14,
                                     vertical: 8,

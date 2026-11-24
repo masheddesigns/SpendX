@@ -77,8 +77,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
                           'BUDGETS',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
+                          style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.0,
                             color: Theme.of(
@@ -115,8 +114,7 @@ class DashboardBudgetsCard extends ConsumerWidget {
                               'Horizons',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11.5,
+                              style: AppTextStyles.caption.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: Theme.of(context).colorScheme.primary,
                               ),

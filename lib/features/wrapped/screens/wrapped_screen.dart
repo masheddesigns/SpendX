@@ -375,7 +375,7 @@ class _IdentitySlide extends StatelessWidget {
           const SizedBox(height: 8),
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0, end: summary.totalIncome),
-            duration: const Duration(milliseconds: 1500),
+            duration: context.motionDuration(const Duration(milliseconds: 1500)),
             curve: Curves.easeOutExpo,
             builder: (_, v, _) => Text(
               AppFormat.currency(v),

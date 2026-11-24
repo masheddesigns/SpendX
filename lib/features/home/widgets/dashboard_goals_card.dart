@@ -77,8 +77,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                           'SAVINGS GOALS',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
+                          style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.0,
                             color: Theme.of(
@@ -113,8 +112,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                               'All Milestones',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11.5,
+                              style: AppTextStyles.caption.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: Theme.of(context).colorScheme.primary,
                               ),
@@ -234,10 +232,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                     ),
                     Text(
                       percentText,
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: AppTextStyles.badge.copyWith(fontSize: 10.5),
                     ),
                   ],
                 ),
@@ -252,8 +247,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                         goal.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13.5,
+                        style: AppTextStyles.sectionHeading.copyWith(
                           fontWeight: FontWeight.w700,
                           color: Theme.of(context).colorScheme.onSurface,
                         ),
@@ -263,9 +257,7 @@ class DashboardGoalsCard extends ConsumerWidget {
                         'Saved: ${AppFormat.currency(saved)} of ${AppFormat.currency(target)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
+                        style: AppTextStyles.caption.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),

@@ -90,10 +90,10 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
     // Smooth reveal
     return AnimatedOpacity(
       opacity: _ready ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 200),
+      duration: context.motionDuration(const Duration(milliseconds: 200)),
       child: AnimatedSlide(
         offset: _ready ? Offset.zero : const Offset(0, 0.05),
-        duration: const Duration(milliseconds: 250),
+        duration: context.motionDuration(const Duration(milliseconds: 250)),
         curve: Curves.easeOutCubic,
         child: Container(
           padding: const EdgeInsets.all(18),

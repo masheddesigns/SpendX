@@ -289,7 +289,7 @@ class _GoalDetailScreenState extends ConsumerState<GoalDetailScreen> {
                   Center(
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(begin: 0, end: pct),
-                      duration: const Duration(milliseconds: 800),
+                      duration: context.motionDuration(const Duration(milliseconds: 800)),
                       curve: Curves.easeOutCubic,
                       builder: (context, value, _) => SizedBox(
                         width: 140,

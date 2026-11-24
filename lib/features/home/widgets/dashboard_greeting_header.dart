@@ -63,8 +63,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                           dateStr.toUpperCase(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
+                          style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.9,
                             color: Theme.of(
@@ -118,8 +117,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
                             const SizedBox(width: 4),
                             Text(
                               'Net · ${AppFormat.compact(netWorth)}',
-                              style: TextStyle(
-                                fontSize: 11.5,
+                              style: AppTextStyles.caption.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: Theme.of(context).colorScheme.primary,
                                 letterSpacing: -0.2,
@@ -139,8 +137,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
             // Expressive, Human Greeting
             Text(
               displayName.isNotEmpty ? '$greeting, $displayName' : greeting,
-              style: TextStyle(
-                fontSize: 27,
+              style: AppTextStyles.largeAmount.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.7,
                 color: Theme.of(context).colorScheme.onSurface,

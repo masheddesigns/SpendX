@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../services/settings_service.dart';
 
 export 'app_spacing.dart';
+export 'app_motion.dart';
 
 class AppRadius {
   static const double xs = 4.0;
@@ -120,6 +121,31 @@ class AppTextStyles {
     fontWeight: FontWeight.w600,
     letterSpacing: -0.2,
     fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  static const TextStyle titleXLarge = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.4,
+  );
+
+  static const TextStyle amountMedium = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.3,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  static const TextStyle chip = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.0,
+  );
+
+  static const TextStyle badge = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.2,
   );
 
   // Compatibility aliases

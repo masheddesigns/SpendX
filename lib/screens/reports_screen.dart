@@ -291,7 +291,7 @@ class _PillButton extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: context.motionDuration(const Duration(milliseconds: 200)),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
               color: isSelected ? activeBg : inactiveBg,

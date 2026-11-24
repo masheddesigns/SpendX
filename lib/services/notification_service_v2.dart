@@ -23,6 +23,7 @@ import '../features/salary/screens/salary_screen.dart';
 import '../screens/loans/loans_screen.dart';
 import '../screens/credit_card_screen.dart';
 import '../screens/lending/lending_screen.dart';
+import '../theme/app_theme.dart';
 import '../screens/loans/loan_detail_screen.dart';
 import '../screens/notifications_inbox_screen.dart';
 import '../screens/bank/account_list_screen.dart';
@@ -35,7 +36,6 @@ import '../features/review_queue/providers/review_providers.dart';
 import '../models/loan.dart';
 import '../screens/transaction_detail_screen.dart';
 
-import 'package:spend_x/theme/app_spacing.dart';
 class NotificationServiceV2 {
   static final NotificationServiceV2 _instance = NotificationServiceV2._();
   factory NotificationServiceV2() => _instance;
@@ -1325,7 +1325,7 @@ class _ReminderAlertDialog extends StatelessWidget {
     };
 
     return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 400),
+      duration: context.motionDuration(const Duration(milliseconds: 400)),
       curve: Curves.easeOutBack,
       tween: Tween(begin: 0.0, end: 1.0),
       builder: (context, value, child) {

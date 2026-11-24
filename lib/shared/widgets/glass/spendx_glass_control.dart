@@ -51,7 +51,7 @@ class SpendXGlassSegmentedControl<T> extends StatelessWidget {
                     minHeight: 48,
                   ),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                    duration: context.motionDuration(const Duration(milliseconds: 200)),
                     curve: Curves.easeOutCubic,
                     decoration: BoxDecoration(
                       color: isSelected

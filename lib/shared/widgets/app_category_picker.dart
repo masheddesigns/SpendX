@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/category_meta.dart';
 import '../../models/category.dart';
+import '../../theme/app_theme.dart';
 
 class AppCategoryPicker extends StatelessWidget {
   const AppCategoryPicker({
@@ -41,7 +42,7 @@ class AppCategoryPicker extends StatelessWidget {
               child: Center(
                 widthFactor: 1,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: context.motionDuration(const Duration(milliseconds: 180)),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     color: selected

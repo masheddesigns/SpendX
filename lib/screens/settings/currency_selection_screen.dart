@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/settings_service.dart';
+import '../../theme/app_theme.dart';
 
 class CurrencySelectionScreen extends StatelessWidget {
   const CurrencySelectionScreen({super.key});
@@ -63,7 +64,7 @@ class CurrencySelectionScreen extends StatelessWidget {
                 final isSelected = currentCurrency == currency['symbol'] || currentCurrency == currency['code'];
                 
                 return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration: context.motionDuration(const Duration(milliseconds: 200)),
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     color: isSelected

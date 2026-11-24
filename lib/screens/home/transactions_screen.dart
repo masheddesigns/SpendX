@@ -714,7 +714,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
             widthFactor: 1,
             heightFactor: 1,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+              duration: context.motionDuration(const Duration(milliseconds: 180)),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected
@@ -772,7 +772,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
           behavior: HitTestBehavior.opaque,
           child: Center(
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+              duration: context.motionDuration(const Duration(milliseconds: 180)),
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
               decoration: BoxDecoration(
                 color: isSelected

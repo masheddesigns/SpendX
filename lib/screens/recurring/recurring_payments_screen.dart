@@ -554,7 +554,7 @@ class _TypeSegment extends StatelessWidget {
         child: GestureDetector(
           onTap: onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+            duration: context.motionDuration(const Duration(milliseconds: 150)),
             constraints: const BoxConstraints(minHeight: 48),
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(

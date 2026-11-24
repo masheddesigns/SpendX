@@ -1,6 +1,7 @@
 import '../core/logging/app_logger.dart';
 import '../core/database/database_service.dart';
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import 'settings/feature_toggles_screen.dart';
 import '../shared/widgets/app_page_route.dart';
 import '../shared/widgets/loading_state_widget.dart';
@@ -324,12 +325,16 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      if (_scrollCtrl.hasClients && mounted) {
+        if (context.reduceMotion) {
+          _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+        } else {
+          _scrollCtrl.animateTo(
+            _scrollCtrl.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
       }
     });
   }
@@ -758,7 +763,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           children: [
             for (int i = 0; i < 3; i++) ...[
               AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
+                duration: context.motionDuration(const Duration(milliseconds: 300)),
                 width: 6,
                 height: 6,
                 decoration: BoxDecoration(

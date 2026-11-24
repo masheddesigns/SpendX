@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:provider/provider.dart' as provider_pkg;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -134,6 +135,14 @@ Future<void> _deferredInitialization() async {
   }
 }
 
+class QuickAddIntent extends Intent {
+  const QuickAddIntent();
+}
+
+class SearchTransactionsIntent extends Intent {
+  const SearchTransactionsIntent();
+}
+
 class MyApp extends riverpod.ConsumerStatefulWidget {
   const MyApp({super.key});
 
@@ -200,7 +209,44 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: settings.themeMode,
-      builder: (context, child) => child ?? const SizedBox.shrink(),
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+        return Shortcuts(
+          shortcuts: <ShortcutActivator, Intent>{
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyN):
+                const QuickAddIntent(),
+            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyN):
+                const QuickAddIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
+                const SearchTransactionsIntent(),
+            LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
+                const SearchTransactionsIntent(),
+          },
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              QuickAddIntent: CallbackAction<QuickAddIntent>(
+                onInvoke: (intent) {
+                  if (settings.isOnboardingComplete) {
+                    MyApp.navigatorKey.currentState
+                        ?.pushNamed(AppRouteTable.addExpense);
+                  }
+                  return null;
+                },
+              ),
+              SearchTransactionsIntent: CallbackAction<SearchTransactionsIntent>(
+                onInvoke: (intent) {
+                  if (settings.isOnboardingComplete) {
+                    MyApp.navigatorKey.currentState
+                        ?.pushNamed(AppRouteTable.transactions);
+                  }
+                  return null;
+                },
+              ),
+            },
+            child: content,
+          ),
+        );
+      },
     );
   }
 }

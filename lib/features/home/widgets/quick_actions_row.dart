@@ -420,8 +420,8 @@ class _RhythmNode extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   weekdayLabel,
-                  style: TextStyle(
-                    fontSize: day.isToday ? 8.5 : 8.0,
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: day.isToday ? 10.5 : 10.0,
                     fontWeight: day.isToday ? FontWeight.w800 : FontWeight.w600,
                     letterSpacing: 0.5,
                     color: day.isToday
@@ -586,7 +586,7 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
           onTap: widget.onTap,
           child: AnimatedScale(
           scale: _pressed ? 0.96 : 1.0,
-          duration: const Duration(milliseconds: 140),
+          duration: context.motionDuration(const Duration(milliseconds: 140)),
           curve: Curves.easeOutCubic,
           child: Container(
             height: 48,
@@ -621,8 +621,7 @@ class _HeroLogButtonState extends State<_HeroLogButton> {
                 const SizedBox(width: 8),
                 Text(
                   'Log activity',
-                  style: TextStyle(
-                    fontSize: 14,
+                  style: AppTextStyles.button.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.2,
                     color: fg,
@@ -677,7 +676,7 @@ class _QuickChipState extends State<_QuickChip> {
           child: Center(
             child: AnimatedScale(
               scale: _pressed ? 0.94 : 1.0,
-              duration: const Duration(milliseconds: 140),
+              duration: context.motionDuration(const Duration(milliseconds: 140)),
               curve: Curves.easeOutCubic,
               child: Container(
                 height: 40,
@@ -716,9 +715,7 @@ class _QuickChipState extends State<_QuickChip> {
                     Flexible(
                       child: Text(
                         widget.label,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
+                        style: AppTextStyles.chip.copyWith(
                           letterSpacing: -0.2,
                           color: colorScheme.onSurface,
                         ),
