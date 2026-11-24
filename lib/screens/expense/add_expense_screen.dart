@@ -32,6 +32,7 @@ import '../../shared/widgets/app_payment_method_picker.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_dialog.dart';
 import '../../shared/widgets/custom_snackbar.dart';
+import '../../shared/widgets/app_form_error_summary.dart';
 import '../../utils/text_formatter.dart';
 import '../../services/gemini_service.dart';
 import '../../widgets/receipt_scan_overlay.dart';
@@ -65,6 +66,8 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  List<String> _formErrors = [];
   late String _selectedType;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -221,6 +224,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _amountController.dispose();
     _notesController.dispose();
     _amountFocusNode.dispose();
@@ -310,56 +314,43 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String get _normalizedType => _selectedType.trim().toLowerCase();
 
   Future<void> _saveTransaction() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final errors = <String>[];
+    final double amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    if (_amountController.text.trim().isEmpty) {
+      errors.add('Please enter an amount');
+    } else if (amount <= 0) {
+      errors.add('Amount must be greater than zero');
+    }
+
     if (_selectedType != 'transfer' &&
         !_isSpecialNonCategorizedType &&
         _selectedCategoryId == null) {
-      CustomSnackBar.show(
-        context,
-        message: 'Please select a category',
-        isError: true,
-      );
-      return;
-    }
-    if (_amountController.text.isEmpty) {
-      CustomSnackBar.show(
-        context,
-        message: 'Please enter an amount',
-        isError: true,
-      );
-      return;
-    }
-
-    final double amount = double.tryParse(_amountController.text) ?? 0.0;
-
-    if (amount <= 0) {
-      CustomSnackBar.show(
-        context,
-        message: 'Amount must be greater than zero',
-        isError: true,
-      );
-      return;
+      errors.add('Please select a category');
     }
 
     if (_selectedType == 'transfer') {
       if (_selectedPaymentMethodId == null ||
           _destinationPaymentMethodId == null) {
-        CustomSnackBar.show(
-          context,
-          message: 'Please select both source and destination accounts',
-          isError: true,
-        );
-        return;
+        errors.add('Please select both source and destination accounts');
+      } else if (_selectedPaymentMethodId == _destinationPaymentMethodId) {
+        errors.add('Source and destination cannot be the same account');
       }
-      if (_selectedPaymentMethodId == _destinationPaymentMethodId) {
-        CustomSnackBar.show(
-          context,
-          message: 'Source and destination cannot be the same account',
-          isError: true,
-        );
-        return;
-      }
+    }
 
+    setState(() => _formErrors = errors);
+
+    if (!(_formKey.currentState?.validate() ?? false) || errors.isNotEmpty) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0.0,
+          duration: AppMotion.normal,
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return;
+    }
+
+    if (_selectedType == 'transfer') {
       final destMethod = _availablePaymentMethods
           .where((m) => m.id == _destinationPaymentMethodId)
           .firstOrNull;
@@ -1092,6 +1083,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         child: Form(
           key: _formKey,
@@ -1099,6 +1091,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              AppFormErrorSummary(
+                errors: _formErrors,
+                onDismiss: () => setState(() => _formErrors = []),
+              ),
               // ── Section 1: Type & Amount Card ────────────
               SpendXGlassSurface(
                 level: SpendXGlassLevel.elevated,

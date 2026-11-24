@@ -10,6 +10,7 @@ import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_section_header.dart';
+import '../../shared/widgets/app_form_error_summary.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart';
 import '../../utils/text_formatter.dart';
 import '../../utils/app_format.dart';
@@ -31,6 +32,8 @@ class AddCreditCardScreen extends ConsumerStatefulWidget {
 
 class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  List<String> _formErrors = [];
   late TextEditingController _nameCtrl;
   late TextEditingController _bankCtrl;
   late TextEditingController _last4Ctrl;
@@ -82,6 +85,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameCtrl.dispose();
     _bankCtrl.dispose();
     _last4Ctrl.dispose();
@@ -97,11 +101,37 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    final errors = <String>[];
+    if (_nameCtrl.text.trim().isEmpty) {
+      errors.add('Card name is required');
+    }
+    if (_bankCtrl.text.trim().isEmpty) {
+      errors.add('Bank name is required');
+    }
+    final last4 = _last4Ctrl.text.trim();
+    if (last4.isNotEmpty && last4.length != 4) {
+      errors.add('Last 4 digits must be exactly 4 digits');
+    }
+    final limitVal = double.tryParse(_limitCtrl.text.trim()) ?? 0.0;
+    if (_limitCtrl.text.trim().isEmpty || limitVal <= 0) {
+      errors.add('Credit limit must be greater than zero');
+    }
+
+    setState(() => _formErrors = errors);
+
+    if (!_formKey.currentState!.validate() || errors.isNotEmpty) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0.0,
+          duration: AppMotion.normal,
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return;
+    }
 
     final outstanding = double.tryParse(_outstandingCtrl.text.trim()) ?? 0.0;
     final lastStatement = double.tryParse(_lastBillCtrl.text.trim()) ?? 0.0;
-    final limitVal = double.tryParse(_limitCtrl.text.trim()) ?? 0.0;
 
     final card = CreditCard(
       id: widget.existingCard?.id,
@@ -264,6 +294,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          controller: _scrollController,
           padding: const EdgeInsets.all(AppSpacing.m),
           child: Form(
             key: _formKey,
@@ -271,6 +302,10 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                AppFormErrorSummary(
+                  errors: _formErrors,
+                  onDismiss: () => setState(() => _formErrors = []),
+                ),
                 // Card Preview
                 _buildCardPreview(),
                 const SizedBox(height: 28),
