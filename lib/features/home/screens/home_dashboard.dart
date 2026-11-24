@@ -144,7 +144,10 @@ class _HomeDashboardState extends ConsumerState<HomeDashboard> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           // ── Mindful Atmospheric Header ───────────────────
-          const SliverToBoxAdapter(child: DashboardGreetingHeader()),
+          const SliverSafeArea(
+            bottom: false,
+            sliver: SliverToBoxAdapter(child: DashboardGreetingHeader()),
+          ),
 
           // ── Mindful Alert Section (Ingestion attention & financial alerts) ──
           const SliverToBoxAdapter(child: HomeAlertsSection()),

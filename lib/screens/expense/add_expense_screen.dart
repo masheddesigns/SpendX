@@ -764,7 +764,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        _movementPresetChip('🏧 ATM Withdrawal', () {
+        _movementPresetChip(Icons.local_atm_rounded, 'ATM Withdrawal', () {
           final cash = _availablePaymentMethods
               .where(
                 (m) =>
@@ -785,7 +785,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             });
           }
         }, isDark),
-        _movementPresetChip('💳 Card Bill', () {
+        _movementPresetChip(Icons.credit_card_rounded, 'Card Bill', () {
           final card = _availablePaymentMethods
               .where((m) => m.type == 'credit_card')
               .firstOrNull;
@@ -802,7 +802,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             });
           }
         }, isDark),
-        _movementPresetChip('🏦 Bank Transfer', () {
+        _movementPresetChip(Icons.account_balance_rounded, 'Bank Transfer', () {
           final banks = _availablePaymentMethods
               .where((m) => m.type == 'bank' && m.id != 'acc_cash_default')
               .toList();
@@ -816,7 +816,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             });
           }
         }, isDark),
-        _movementPresetChip('💵 Cash Deposit', () {
+        _movementPresetChip(Icons.payments_rounded, 'Cash Deposit', () {
           final cash = _availablePaymentMethods
               .where(
                 (m) =>
@@ -841,7 +841,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     );
   }
 
-  Widget _movementPresetChip(String label, VoidCallback onTap, bool isDark) {
+  Widget _movementPresetChip(
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+    bool isDark,
+  ) {
     return Semantics(
       button: true,
       label: 'Preset $label',
@@ -867,13 +872,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   width: 0.75,
                 ),
               ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

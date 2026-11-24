@@ -47,7 +47,7 @@ class _OnboardingStepIndicator extends StatelessWidget {
             final selected = currentPage == index;
             final decoration = BoxDecoration(
               color: selected
-                  ? AppTheme.primaryBlue
+                  ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.outline,
               borderRadius: BorderRadius.circular(3),
             );
@@ -294,7 +294,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     _currentPage == 0
                         ? 'Get Started'
                         : (_currentPage == _totalPages - 1
-                              ? 'Finish & Launch 🚀'
+                              ? 'Finish & Launch'
                               : 'Continue'),
                     style: const TextStyle(
                       fontSize: 16,

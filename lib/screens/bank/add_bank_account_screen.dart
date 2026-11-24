@@ -10,6 +10,8 @@ import '../../utils/text_formatter.dart';
 import '../credit_card/add_credit_card_screen.dart';
 import '../../shared/widgets/app_page_route.dart';
 import '../../shared/widgets/app_confirm_dialog.dart';
+import '../../shared/widgets/app_form_error_summary.dart';
+import '../../theme/app_theme.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_button.dart';
@@ -26,6 +28,8 @@ class AddBankAccountScreen extends ConsumerStatefulWidget {
 
 class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  List<String> _formErrors = [];
   late TextEditingController _nameCtrl;
   late TextEditingController _bankCtrl;
   late TextEditingController _balanceCtrl;
@@ -67,6 +71,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _nameCtrl.dispose();
     _bankCtrl.dispose();
     _balanceCtrl.dispose();
@@ -77,7 +82,29 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    final isValid = _formKey.currentState?.validate() ?? false;
+    final errors = <String>[];
+    if (_nameCtrl.text.trim().isEmpty) errors.add('Account name is required');
+    final bal = double.tryParse(_balanceCtrl.text.trim());
+    if (bal == null) errors.add('Valid starting balance is required');
+
+    if (!isValid || errors.isNotEmpty) {
+      setState(() => _formErrors = errors);
+      if (_scrollController.hasClients) {
+        if (MediaQuery.disableAnimationsOf(context)) {
+          _scrollController.jumpTo(0);
+        } else {
+          _scrollController.animateTo(
+            0,
+            duration: AppMotion.normal,
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
+      return;
+    }
+
+    setState(() => _formErrors = []);
     final bankText = _bankCtrl.text.trim().isEmpty && _isInvestment
         ? _nameCtrl.text.trim()
         : _bankCtrl.text.trim();
@@ -273,6 +300,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
               ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         child: Form(
           key: _formKey,
@@ -280,6 +308,10 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              AppFormErrorSummary(
+                errors: _formErrors,
+                onDismiss: () => setState(() => _formErrors = []),
+              ),
               // ── Details Card ──────────────────────────────
               SpendXGlassSurface(
                 level: SpendXGlassLevel.base,

@@ -16,6 +16,7 @@ import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/app_amount_field.dart';
 import '../../shared/widgets/app_category_picker.dart';
 import '../../shared/widgets/app_section_header.dart';
+import '../../shared/widgets/app_form_error_summary.dart';
 import '../../features/liabilities/providers/liabilities_providers.dart'
     show liabilitiesSummaryProvider;
 import '../../utils/text_formatter.dart';
@@ -31,6 +32,7 @@ class AddLoanScreen extends ConsumerStatefulWidget {
 
 class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
   final _nameController = TextEditingController();
   final _bankController = TextEditingController();
   final _amountController = TextEditingController();
@@ -39,11 +41,25 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
   final _installmentController = TextEditingController();
   final _dueDayController = TextEditingController(text: '10');
 
+  List<String> _formErrors = [];
   DateTime _startDate = DateTime.now();
   String? _selectedCategoryId;
   List<Category> _categories = [];
   bool _isLoading = false;
   LoanType _selectedType = LoanType.reducing;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _nameController.dispose();
+    _bankController.dispose();
+    _amountController.dispose();
+    _interestController.dispose();
+    _tenureController.dispose();
+    _installmentController.dispose();
+    _dueDayController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -104,9 +120,41 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
   }
 
   Future<void> _saveLoan() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final isValid = _formKey.currentState?.validate() ?? false;
+    final errors = <String>[];
+    if (_nameController.text.trim().isEmpty) errors.add('Loan name is required');
+    if (_bankController.text.trim().isEmpty) errors.add('Bank / Lender is required');
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) errors.add('Valid principal amount is required');
+    final rate = double.tryParse(_interestController.text);
+    if (rate == null || rate < 0) errors.add('Valid interest rate is required');
+    final tenure = int.tryParse(_tenureController.text);
+    if (tenure == null || tenure < 1 || tenure > 600) errors.add('Tenure must be between 1 and 600 months');
+    final emi = double.tryParse(_installmentController.text);
+    if (emi == null || emi <= 0) errors.add('Valid monthly EMI is required');
+    final dueDay = int.tryParse(_dueDayController.text);
+    if (dueDay == null || dueDay < 1 || dueDay > 31) errors.add('Due day must be between 1 and 31');
 
-    setState(() => _isLoading = true);
+    if (!isValid || errors.isNotEmpty) {
+      setState(() => _formErrors = errors);
+      if (_scrollController.hasClients) {
+        if (MediaQuery.disableAnimationsOf(context)) {
+          _scrollController.jumpTo(0);
+        } else {
+          _scrollController.animateTo(
+            0,
+            duration: AppMotion.normal,
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
+      return;
+    }
+
+    setState(() {
+      _formErrors = [];
+      _isLoading = true;
+    });
     try {
       final loanId = widget.loan?.id ?? const Uuid().v4();
       final amount = double.parse(_amountController.text);
@@ -164,12 +212,18 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
         title: widget.loan != null ? 'Edit Loan' : 'Add Bank Loan',
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(AppSpacing.m),
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              AppFormErrorSummary(
+                errors: _formErrors,
+                onDismiss: () => setState(() => _formErrors = []),
+              ),
               AppTextField(
                 controller: _nameController,
                 labelText: 'Loan Name (e.g. Car Loan)',

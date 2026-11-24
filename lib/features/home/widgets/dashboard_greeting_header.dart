@@ -33,11 +33,9 @@ class DashboardGreetingHeader extends ConsumerWidget {
       }
     }
 
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-        child: Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Top Row: Date & Minimal Net Worth Anchor
@@ -145,8 +143,7 @@ class DashboardGreetingHeader extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   String _getGreeting(int hour) {

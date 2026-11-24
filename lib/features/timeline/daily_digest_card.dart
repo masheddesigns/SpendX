@@ -130,7 +130,11 @@ class _DailyDigestCardState extends ConsumerState<DailyDigestCard> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('🔥', style: TextStyle(fontSize: 12)),
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 14,
+                            color: AppTheme.semanticWarning,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '$_streak',

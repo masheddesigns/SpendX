@@ -6,6 +6,8 @@ import '../../features/categories/providers/category_providers.dart';
 import '../../features/goals/goal_providers.dart';
 import '../../models/goal.dart';
 import '../../shared/widgets/primary_button.dart';
+import '../../shared/widgets/app_form_error_summary.dart';
+import '../../theme/app_theme.dart';
 
 class AddGoalScreen extends ConsumerStatefulWidget {
   final Goal? existing;
@@ -18,11 +20,13 @@ class AddGoalScreen extends ConsumerStatefulWidget {
 
 class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
   GoalType _type = GoalType.savings;
+  final _scrollController = ScrollController();
   final _titleCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final FocusNode _titleFocus = FocusNode();
   final FocusNode _amountFocus = FocusNode();
   final _formKey = GlobalKey<FormState>();
+  List<String> _formErrors = [];
   int _durationDays = 30;
   String? _selectedCategoryId;
 
@@ -43,6 +47,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _titleCtrl.dispose();
     _amountCtrl.dispose();
     _titleFocus.dispose();
@@ -55,19 +60,35 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
     return double.tryParse(raw);
   }
 
-  bool get _isValid {
-    if (_titleCtrl.text.trim().isEmpty) return false;
-    final amount = _parsedAmount;
-    if (amount == null || amount <= 0) return false;
-    if (_type == GoalType.spendingLimit && _selectedCategoryId == null) {
-      return false;
-    }
-    return true;
-  }
-
   Future<void> _save() async {
-    debugPrint('🎯 _save called, isValid: $_isValid');
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final isValid = _formKey.currentState?.validate() ?? false;
+    final errors = <String>[];
+    if (_titleCtrl.text.trim().isEmpty) errors.add('Goal title is required');
+    final amount = _parsedAmount;
+    if (amount == null || amount <= 0) {
+      errors.add('Target amount must be greater than zero');
+    }
+    if (_type == GoalType.spendingLimit && _selectedCategoryId == null) {
+      errors.add('Select a category for spending limit');
+    }
+
+    if (!isValid || errors.isNotEmpty) {
+      setState(() => _formErrors = errors);
+      if (_scrollController.hasClients) {
+        if (MediaQuery.disableAnimationsOf(context)) {
+          _scrollController.jumpTo(0);
+        } else {
+          _scrollController.animateTo(
+            0,
+            duration: AppMotion.normal,
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
+      return;
+    }
+
+    setState(() => _formErrors = []);
 
     try {
       if (_isEditing) {
@@ -125,6 +146,7 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
       appBar: AppBar(title: Text(_isEditing ? 'Edit Goal' : 'Create Goal')),
       body: SafeArea(
         child: SingleChildScrollView(
+          controller: _scrollController,
           padding: const EdgeInsets.all(16),
           child: Form(
             key: _formKey,
@@ -132,6 +154,10 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                AppFormErrorSummary(
+                  errors: _formErrors,
+                  onDismiss: () => setState(() => _formErrors = []),
+                ),
                 // ── Goal Type ──────────────────────────────────────────
                 Text(
                   'What is your goal?',

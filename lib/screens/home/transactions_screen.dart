@@ -473,7 +473,8 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                               ),
                               const SizedBox(width: 6),
                               _buildSubFilterChip(
-                                label: '💳 Card Repayments',
+                                label: 'Card Repayments',
+                                icon: Icons.credit_card_rounded,
                                 isSelected: _movedSubFilter == 'repayment',
                                 onTap: () => setState(
                                   () => _movedSubFilter = 'repayment',
@@ -485,7 +486,8 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                               ),
                               const SizedBox(width: 6),
                               _buildSubFilterChip(
-                                label: '🏦 Self-Transfers',
+                                label: 'Self-Transfers',
+                                icon: Icons.sync_alt_rounded,
                                 isSelected: _movedSubFilter == 'self',
                                 onTap: () =>
                                     setState(() => _movedSubFilter = 'self'),
@@ -496,7 +498,8 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                               ),
                               const SizedBox(width: 6),
                               _buildSubFilterChip(
-                                label: '📈 Deposits & Investments',
+                                label: 'Deposits & Investments',
+                                icon: Icons.trending_up_rounded,
                                 isSelected: _movedSubFilter == 'deposits',
                                 onTap: () => setState(
                                   () => _movedSubFilter = 'deposits',
@@ -754,6 +757,7 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
     required VoidCallback onTap,
     required bool isDark,
     Color? activeColor,
+    IconData? icon,
   }) {
     final cs = Theme.of(context).colorScheme;
     final effectiveActiveBg = activeColor != null
@@ -792,15 +796,30 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   width: isSelected ? 1.0 : 0.6,
                 ),
               ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? effectiveActiveText
-                      : (Theme.of(context).colorScheme.onSurfaceVariant),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(
+                      icon,
+                      size: 13,
+                      color: isSelected
+                          ? effectiveActiveText
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected
+                          ? effectiveActiveText
+                          : (Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
