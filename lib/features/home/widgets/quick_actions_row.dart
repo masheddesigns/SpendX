@@ -685,7 +685,7 @@ class _QuickChipState extends State<_QuickChip>
                       bottom: 0,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: widget.lipColor,
+                          color: widget.lipColor.withValues(alpha: isDark ? 0.35 : 0.25),
                           borderRadius: BorderRadius.circular(PlayfulTokens.radiusPill),
                         ),
                       ),
@@ -700,14 +700,19 @@ class _QuickChipState extends State<_QuickChip>
                         height: 40,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         decoration: BoxDecoration(
-                          color: isDark
-                              ? widget.accentColor.withValues(alpha: 0.18)
-                              : widget.accentColor.withValues(alpha: 0.14),
+                          color: isDark ? const Color(0xFF1E2230) : Colors.white,
                           borderRadius: BorderRadius.circular(PlayfulTokens.radiusPill),
                           border: Border.all(
-                            color: widget.accentColor.withValues(alpha: 0.45),
+                            color: widget.accentColor.withValues(alpha: isDark ? 0.40 : 0.35),
                             width: 1.2,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: widget.accentColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -716,7 +721,7 @@ class _QuickChipState extends State<_QuickChip>
                               width: 22,
                               height: 22,
                               decoration: BoxDecoration(
-                                color: widget.accentColor.withValues(alpha: 0.22),
+                                color: widget.accentColor.withValues(alpha: isDark ? 0.22 : 0.12),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
@@ -730,10 +735,10 @@ class _QuickChipState extends State<_QuickChip>
                               child: Text(
                                 widget.label,
                                 style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
                                   letterSpacing: -0.2,
-                                  color: isDark ? Colors.white : widget.accentColor,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
