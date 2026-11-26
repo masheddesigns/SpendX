@@ -4,10 +4,12 @@ import '../data/core/app_database.dart';
 import '../data/core/tables.dart';
 import '../data/repositories/account_repo.dart';
 import '../data/repositories/credit_repo.dart';
+import '../data/repositories/transaction_repo.dart';
 import '../features/merchant_rules/data/merchant_rule_repo.dart';
 import '../models/bank_account.dart';
 import '../models/credit_card.dart';
 import '../core/logging/app_logger.dart';
+import 'cross_channel_deduplication_service.dart';
 
 /// Intelligent Anti-Collision & Financial Entity Consolidation Service.
 ///
@@ -24,9 +26,9 @@ class EntityConsolidationService {
 
   /// Runs the full self-healing entity consolidation pass.
   /// Returns the number of consolidated / merged entities.
-  Future<int> consolidate() async {
+  Future<int> consolidate([Database? targetDb]) async {
     int mergedCount = 0;
-    final db = await _db;
+    final db = targetDb ?? await _db;
 
     AppLogger.i('[EntityConsolidation] Starting financial entity consolidation...');
 
@@ -81,6 +83,13 @@ class EntityConsolidationService {
         mergedCount += await _repairDatesMerchantsAndBalances(db);
       } catch (e, stack) {
         AppLogger.e('[EntityConsolidation] Error in _repairDatesMerchantsAndBalances: $e', e, stack);
+      }
+
+      // 8. Deduplicate and merge cross-channel duplicate transactions (SMS, Push Notifications, Emails)
+      try {
+        mergedCount += await _deduplicateCrossChannelTransactions(db);
+      } catch (e, stack) {
+        AppLogger.e('[EntityConsolidation] Error in _deduplicateCrossChannelTransactions: $e', e, stack);
       }
 
       AppLogger.i('[EntityConsolidation] Completed consolidation. Resolved $mergedCount entities.');
@@ -828,5 +837,209 @@ class EntityConsolidationService {
     if (lower.contains('boi') || lower.contains('bankofindia')) return 'boi';
     if (lower.contains('union')) return 'union';
     return lower;
+  }
+
+  /// Discovers and merges cross-channel duplicate transactions (SMS, Push Notification, Email).
+  ///
+  /// When a user spends via UPI or Card, they frequently receive an SMS, a push notification,
+  /// and an email alert for the same transaction. This method consolidates any unmerged duplicates
+  /// into a single canonical transaction, links all source evidence, and voids redundant postings.
+  Future<int> _deduplicateCrossChannelTransactions(Database db) async {
+    int merged = 0;
+    final txRepo = TransactionRepo(executor: db);
+
+    // 1. Query active, posted, non-reversed economic events
+    final events = await db.rawQuery('''
+      SELECT ev.id, ev.event_type, ev.description, ev.timestamp,
+             p.amount_minor_units, p.account_id,
+             e.id as evidence_id, e.source_type, e.source_record_id, e.external_reference, e.sender_address
+      FROM ${TablesV24.economicEvents} ev
+      JOIN ${TablesV24.postings} p ON p.economic_event_id = ev.id AND p.direction = 'debit'
+      LEFT JOIN ${TablesV24.evidence} e ON e.economic_event_id = ev.id
+      WHERE ev.lifecycle_status = 'posted'
+        AND ev.reversal_of_event_id IS NULL
+        AND NOT (ev.description LIKE 'REVERSAL:%')
+      ORDER BY ev.timestamp DESC
+    ''');
+
+    if (events.length <= 1) return 0;
+
+    // Group events by amount_minor_units and event_type
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final row in events) {
+      final amount = row['amount_minor_units'];
+      final type = row['event_type'];
+      if (amount == null || type == null) continue;
+      final key = '${type}_$amount';
+      groups.putIfAbsent(key, () => []).add(row);
+    }
+
+    final mergedEventIds = <String>{};
+
+    for (final entry in groups.entries) {
+      final group = entry.value;
+      if (group.length <= 1) continue;
+
+      // Deduplicate events in this amount group
+      for (int i = 0; i < group.length; i++) {
+        final evA = group[i];
+        final idA = evA['id'] as String;
+        if (mergedEventIds.contains(idA)) continue;
+
+        for (int j = i + 1; j < group.length; j++) {
+          final evB = group[j];
+          final idB = evB['id'] as String;
+          if (mergedEventIds.contains(idB)) continue;
+
+          final refA = evA['external_reference'] as String?;
+          final refB = evB['external_reference'] as String?;
+
+          final timeA = DateTime.tryParse(evA['timestamp'] as String? ?? '');
+          final timeB = DateTime.tryParse(evB['timestamp'] as String? ?? '');
+
+          bool isDuplicate = false;
+
+          // Criterion 1: Matching external reference (UTR / RRN)
+          if (refA != null && refB != null && refA.isNotEmpty && refB.isNotEmpty) {
+            final normA = CrossChannelDeduplicationService.normalizeReference(refA);
+            final normB = CrossChannelDeduplicationService.normalizeReference(refB);
+            if (normA == normB) {
+              isDuplicate = true;
+            }
+          }
+
+          // Criterion 2: Temporal correlation window + cross-channel origin + matching merchant/account
+          if (!isDuplicate && timeA != null && timeB != null) {
+            final diffSec = (timeA.difference(timeB).inSeconds).abs();
+            final srcA = evA['source_record_id'] as String? ?? '';
+            final srcB = evB['source_record_id'] as String? ?? '';
+
+            final chanA = CrossChannelDeduplicationService.channelForSourceId(srcA);
+            final chanB = CrossChannelDeduplicationService.channelForSourceId(srcB);
+
+            final isCrossChannel = chanA != chanB;
+
+            // Correlation window: 30 minutes for general cross-channel, 24 hours for bank SMS vs email/notification
+            final isWithinWindow = isCrossChannel ? diffSec <= 86400 : diffSec <= 1800;
+
+            if (isWithinWindow) {
+              final descA = (evA['description'] as String? ?? '').toLowerCase();
+              final descB = (evB['description'] as String? ?? '').toLowerCase();
+              final senderA = (evA['sender_address'] as String? ?? '').toLowerCase();
+              final senderB = (evB['sender_address'] as String? ?? '').toLowerCase();
+
+              // Check merchant similarity
+              final keywords = [
+                'swiggy', 'zomato', 'uber', 'ola', 'amazon', 'flipkart', 'blinkit',
+                'zepto', 'instamart', 'irctc', 'netflix', 'spotify', 'apple', 'google',
+                'phonepe', 'paytm', 'cred', 'starbucks', 'mcdonald', 'dominos', 'policybazaar'
+              ];
+
+              bool merchantMatches = false;
+              for (final kw in keywords) {
+                final hasA = descA.contains(kw) || senderA.contains(kw);
+                final hasB = descB.contains(kw) || senderB.contains(kw);
+                if (hasA && hasB) {
+                  merchantMatches = true;
+                  break;
+                }
+              }
+
+              // Also check exact description match if not generic
+              if (!merchantMatches && descA.isNotEmpty && descB.isNotEmpty &&
+                  descA != 'expense' && descA != 'uncategorized' &&
+                  descB != 'expense' && descB != 'uncategorized') {
+                if (descA == descB || descA.contains(descB) || descB.contains(descA)) {
+                  merchantMatches = true;
+                }
+              }
+
+              final accA = evA['account_id'] as String?;
+              final accB = evB['account_id'] as String?;
+              final sameAccount = accA != null && accB != null && accA == accB;
+
+              if (merchantMatches || (isCrossChannel && sameAccount && diffSec <= 3600)) {
+                isDuplicate = true;
+              }
+            }
+          }
+
+          if (isDuplicate) {
+            // Determine canonical vs duplicate:
+            // Prefer the event with concrete user account (not sys_...)
+            final accA = evA['account_id'] as String? ?? '';
+            final accB = evB['account_id'] as String? ?? '';
+            final hasConcreteA = accA.isNotEmpty && !accA.startsWith('sys_');
+            final hasConcreteB = accB.isNotEmpty && !accB.startsWith('sys_');
+
+            final Map<String, dynamic> canonical;
+            final Map<String, dynamic> duplicate;
+
+            if (hasConcreteA && !hasConcreteB) {
+              canonical = evA;
+              duplicate = evB;
+            } else if (!hasConcreteA && hasConcreteB) {
+              canonical = evB;
+              duplicate = evA;
+            } else {
+              // Prefer cleaner description
+              final descA = evA['description'] as String? ?? '';
+              final descB = evB['description'] as String? ?? '';
+              if (descB.length > descA.length && !descA.toLowerCase().contains('swiggy') && descB.toLowerCase().contains('swiggy')) {
+                canonical = evB;
+                duplicate = evA;
+              } else {
+                canonical = evA;
+                duplicate = evB;
+              }
+            }
+
+            final canonicalId = canonical['id'] as String;
+            final duplicateId = duplicate['id'] as String;
+
+            AppLogger.i(
+              '[EntityConsolidation] Merging cross-channel duplicate transaction $duplicateId into canonical $canonicalId',
+            );
+
+            // 1. Move evidence from duplicate to canonical
+            await db.update(
+              TablesV24.evidence,
+              {'economic_event_id': canonicalId},
+              where: 'economic_event_id = ?',
+              whereArgs: [duplicateId],
+            );
+
+            // 2. Enrich canonical description if duplicate had a more informative merchant
+            final canDesc = (canonical['description'] as String? ?? '').trim();
+            final dupDesc = (duplicate['description'] as String? ?? '').trim();
+            if ((canDesc.isEmpty || canDesc == 'Expense' || canDesc == 'Uncategorized') &&
+                dupDesc.isNotEmpty && dupDesc != 'Expense') {
+              await db.update(
+                TablesV24.economicEvents,
+                {'description': dupDesc, 'updated_at': DateTime.now().toUtc().toIso8601String()},
+                where: 'id = ?',
+                whereArgs: [canonicalId],
+              );
+            }
+
+            // 3. Void / delete duplicate transaction via TransactionRepo (creates balanced double-entry reversal)
+            await txRepo.delete(duplicateId);
+
+            // Mark duplicate event deleted so it is excluded from active posted queries
+            await db.update(
+              TablesV24.economicEvents,
+              {'lifecycle_status': 'deleted', 'updated_at': DateTime.now().toUtc().toIso8601String()},
+              where: 'id = ?',
+              whereArgs: [duplicateId],
+            );
+
+            mergedEventIds.add(duplicateId);
+            merged++;
+          }
+        }
+      }
+    }
+
+    return merged;
   }
 }

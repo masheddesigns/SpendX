@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import '../../../models/company.dart';
 import '../../salary_ledger/salary_ledger_notifier.dart';
 import '../../../shared/widgets/app_page_route.dart';
+import '../../../shared/widgets/empty_state_widget.dart';
 import '../../../shared/widgets/error_state_widget.dart';
 import '../../../shared/widgets/skeleton_loader.dart';
+import '../../../widgets/form/spendx_sticky_bottom_bar.dart';
 
 class ManageCompanyScreen extends ConsumerWidget {
   const ManageCompanyScreen({super.key});
@@ -21,11 +23,17 @@ class ManageCompanyScreen extends ConsumerWidget {
         title: Text('Manage Companies'),
         backgroundColor: Colors.transparent,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(context, ref),
-        backgroundColor: Colors.blueAccent,
-        icon: const Icon(Icons.add),
-        label: Text('Add Company'),
+      floatingActionButton: async.maybeWhen(
+        data: (state) => state.companies.isEmpty
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => _openEditor(context, ref),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Company'),
+              ),
+        orElse: () => null,
       ),
       body: async.when(
         loading: () => const SkeletonLoader.transactions(),
@@ -38,33 +46,27 @@ class ManageCompanyScreen extends ConsumerWidget {
           final selectedId = state.selectedCompanyId;
 
           if (companies.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.apartment_outlined,
-                    size: 56,
-                    color: Colors.grey.shade600,
+            return RefreshIndicator(
+              onRefresh: () =>
+                  ref.read(salaryLedgerProvider.notifier).refresh(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 40,
+                ),
+                child: Center(
+                  child: EmptyStateWidget(
+                    icon: Icons.apartment_rounded,
+                    title: 'No companies yet',
+                    description:
+                        'Add your employer or income source to start salary tracking',
+                    illustrationAsset:
+                        'assets/illustrations/empty_finances.svg',
+                    ctaLabel: 'Add Company',
+                    onCtaTap: () => _openEditor(context, ref),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No companies yet',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Add your employer to start salary tracking',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+                ),
               ),
             );
           }
@@ -86,7 +88,7 @@ class ManageCompanyScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isSelected
-                          ? Colors.blueAccent.withValues(alpha: 0.5)
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
                           : Theme.of(
                               context,
                             ).colorScheme.outline.withValues(alpha: 0.15),
@@ -103,13 +105,13 @@ class ManageCompanyScreen extends ConsumerWidget {
                     leading: CircleAvatar(
                       radius: 20,
                       backgroundColor: isSelected
-                          ? Colors.blueAccent.withValues(alpha: 0.15)
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                           : Theme.of(context).colorScheme.surfaceContainer,
                       child: Icon(
                         Icons.apartment_rounded,
                         color: isSelected
-                            ? Colors.blueAccent
-                            : Colors.grey.shade400,
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                         size: 20,
                       ),
                     ),
@@ -133,13 +135,13 @@ class ManageCompanyScreen extends ConsumerWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.blueAccent.withValues(alpha: 0.15),
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               'Active',
                               style: TextStyle(
-                                color: Colors.blueAccent,
+                                color: Theme.of(context).colorScheme.primary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -330,13 +332,14 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
         top: 16,
         bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
       ),
-      child: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Center(
               child: Container(
                 width: 40,
@@ -461,19 +464,21 @@ class _UpdateSalarySheetState extends ConsumerState<_UpdateSalarySheet> {
             child: FilledButton(
               onPressed: _parsed > 0 ? _submit : null,
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: Text(
+              child: const Text(
                 'Apply Salary Change',
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16),
               ),
             ),
           ),
         ],
       ),
+    ),
     ),
     );
   }
@@ -571,7 +576,7 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
         backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
@@ -605,12 +610,14 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                         ),
                         selected: sel,
                         onSelected: (_) => setState(() => _empType = t),
-                        selectedColor: Colors.blueAccent,
+                        selectedColor: Theme.of(context).colorScheme.primary,
                         backgroundColor: Theme.of(
                           context,
                         ).colorScheme.surfaceContainerHighest,
                         labelStyle: TextStyle(
-                          color: sel ? Colors.white : Colors.grey.shade400,
+                          color: sel
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                         shape: RoundedRectangleBorder(
@@ -618,8 +625,10 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                         ),
                         side: BorderSide(
                           color: sel
-                              ? Colors.blueAccent
-                              : Colors.white.withValues(alpha: 0.1),
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.outline.withValues(alpha: 0.2),
                         ),
                       ),
                     );
@@ -807,29 +816,15 @@ class _CompanyEditorScreenState extends ConsumerState<_CompanyEditorScreen> {
                   ),
                 ),
               ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    isEditing ? 'Save Changes' : 'Add Company',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
+      bottomNavigationBar: SpendXStickyBottomBar.singleAction(
+        primaryLabel: isEditing ? 'Save Changes' : 'Add Company',
+        onPrimaryPressed: _save,
+      ),
     );
   }
 }

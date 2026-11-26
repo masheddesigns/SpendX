@@ -201,6 +201,7 @@ class _CompanyDashboard extends ConsumerWidget {
                               icon: Icons.filter_alt_off_outlined,
                               title: 'No matching months',
                               description: 'No months match this filter',
+                              illustrationAsset: null,
                             ),
                           ),
                         )
@@ -1432,14 +1433,18 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.85;
+
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
         top: 16,
-        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+        bottom: viewInsets.bottom + 16,
       ),
-      child: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1463,7 +1468,13 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
             // ── Employment Type ────────────────────────────
             SingleChildScrollView(
@@ -1721,29 +1732,34 @@ class _SetupCompanySheetState extends ConsumerState<_SetupCompanySheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: _isValid ? _submit : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: Text(
-                  _isFreelance
-                      ? 'Create Income Source'
-                      : 'Create & Generate Months',
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
           ],
         ),
       ),
-    );
-  }
+    ),
+    const SizedBox(height: 16),
+    SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: FilledButton(
+        onPressed: _isValid ? _submit : null,
+        style: FilledButton.styleFrom(
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: Text(
+          _isFreelance
+              ? 'Create Income Source'
+              : 'Create & Generate Months',
+          style: const TextStyle(fontSize: 16),
+        ),
+      ),
+    ),
+  ],
+),
+),
+);
+}
 }

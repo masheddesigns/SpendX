@@ -14,6 +14,7 @@ import 'services/share_intent_service.dart';
 import 'services/live_sms_service.dart';
 import 'services/notification_service_v2.dart';
 import 'services/reminder_service.dart';
+import 'services/cross_channel_monitoring_service.dart';
 import 'data/core/app_database.dart';
 import 'data/core/tracked_database_task_queue.dart';
 import 'data/core/schema_validator.dart';
@@ -132,6 +133,14 @@ Future<void> _deferredInitialization() async {
     await LiveSmsService.instance.init();
   } catch (e, st) {
     AppLogger.e('LiveSmsService init failed', e, st);
+  }
+
+  // Continuous Cross-Channel Monitor — monitors SMS, Push Notifications,
+  // and Gmail emails, automatically merging duplicate records on a recurring cycle.
+  try {
+    await CrossChannelMonitoringService.instance.init();
+  } catch (e, st) {
+    AppLogger.e('CrossChannelMonitoringService init failed', e, st);
   }
 }
 

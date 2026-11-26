@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/categories/providers/category_providers.dart';
 import '../../features/goals/goal_providers.dart';
 import '../../models/goal.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/app_form_error_summary.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/form/spendx_sticky_bottom_bar.dart';
 
 class AddGoalScreen extends ConsumerStatefulWidget {
   final Goal? existing;
@@ -431,38 +431,11 @@ class _AddGoalScreenState extends ConsumerState<AddGoalScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    foregroundColor: cs.onSurfaceVariant,
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: PrimaryButton(
-                  label: _isEditing ? 'Save Changes' : 'Create Goal',
-                  onPressed: _save,
-                ),
-              ),
-            ],
-          ),
-        ),
+      bottomNavigationBar: SpendXStickyBottomBar.dualAction(
+        secondaryLabel: 'Cancel',
+        onSecondaryPressed: () => Navigator.pop(context),
+        primaryLabel: _isEditing ? 'Save Changes' : 'Create Goal',
+        onPrimaryPressed: _save,
       ),
     );
   }

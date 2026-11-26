@@ -5793,9 +5793,7 @@ class LiveSmsService with WidgetsBindingObserver {
 
     if (effectiveSourceRecordId != null) {
       final db = await AppDatabase.instance.database;
-      final channel = effectiveSourceRecordId.startsWith('SRC:ANDROID_NOTIF:')
-          ? SourceChannel.push
-          : SourceChannel.sms;
+      final channel = CrossChannelDeduplicationService.channelForSourceId(effectiveSourceRecordId);
       final candidateTx = result.transaction;
       if (candidateTx != null && result.eventType != SmsEventType.failed) {
         final parsed = messageDate != null
@@ -6098,9 +6096,12 @@ class LiveSmsService with WidgetsBindingObserver {
                 ? counterpartyAccountId
                 : null,
             notes: merchant ?? (parsed.isCredit ? 'Credit' : 'Expense'),
-            source: channel == SourceChannel.push
-                ? 'notification'
-                : (canonicalEventType == CanonicalEventType.cardPurchase ? 'credit_card_purchase' : 'sms'),
+            source: switch (channel) {
+              SourceChannel.push => 'notification',
+              SourceChannel.email => 'email',
+              SourceChannel.sms => (canonicalEventType == CanonicalEventType.cardPurchase ? 'credit_card_purchase' : 'sms'),
+              _ => 'manual',
+            },
             externalRef: parsed.refId,
             rawPayload: body,
           );
@@ -7518,6 +7519,7 @@ class LiveSmsService with WidgetsBindingObserver {
       final lowerRawText = parsed.rawText.toLowerCase();
       final isCandidateApp =
           parsed.rawText.startsWith('APP:') ||
+          lowerRawText.contains('com.google.android.gm') ||
           lowerRawText.contains('google pay') ||
           lowerRawText.contains('phonepe') ||
           lowerRawText.contains('paytm');
@@ -7541,9 +7543,9 @@ class LiveSmsService with WidgetsBindingObserver {
       final candidateType = parsed.isCredit ? 'income' : 'expense';
       for (final t in sameAmount) {
         final isExistingApp =
-            (t.externalRef != null && (t.externalRef!.contains('_app_') || t.externalRef!.startsWith('live_app'))) ||
-            (t.rawPayload != null && t.rawPayload!.startsWith('APP:')) ||
-            (t.source == 'notification' || t.source == 'app');
+            (t.externalRef != null && (t.externalRef!.contains('_app_') || t.externalRef!.startsWith('live_app') || t.externalRef!.startsWith('SRC:EMAIL:'))) ||
+            (t.rawPayload != null && (t.rawPayload!.startsWith('APP:') || t.rawPayload!.startsWith('SRC:EMAIL:'))) ||
+            (t.source == 'notification' || t.source == 'app' || t.source == 'email' || t.source == 'gmail');
 
         // Invariant 1: Account identity check
         // If candidate account is known and existing transaction account is known,

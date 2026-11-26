@@ -27,8 +27,7 @@ class EmptyStateWidget extends StatelessWidget {
       subtitle: description ?? '',
       actionLabel: ctaLabel,
       onAction: onCtaTap,
-      illustrationAsset:
-          illustrationAsset ?? 'assets/illustrations/empty_finances.svg',
+      illustrationAsset: illustrationAsset,
     );
   }
 }

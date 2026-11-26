@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/credit_card.dart';
 import '../../utils/app_format.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/app_amount_field.dart';
 import '../../shared/widgets/app_date_selector.dart';
 import '../../shared/widgets/app_section_header.dart';
@@ -17,6 +16,7 @@ import '../../features/transactions/providers/transaction_providers.dart'
     show paginatedTransactionsProvider;
 import '../../data/providers.dart' as app_data;
 import '../../services/data_change_bus.dart';
+import '../../widgets/form/spendx_sticky_bottom_bar.dart';
 
 class PayCreditCardScreen extends ConsumerStatefulWidget {
   final CreditCard card;
@@ -250,21 +250,11 @@ class _PayCreditCardScreenState extends ConsumerState<PayCreditCardScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        minimum: EdgeInsets.fromLTRB(
-          16,
-          12,
-          16,
-          16 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: PrimaryButton(
-          label: 'Confirm Payment',
-          icon: Icons.account_balance_wallet_rounded,
-          onPressed: _isProcessing ? null : _processPayment,
-          isLoading: _isProcessing,
-          tone: PrimaryButtonTone.primary,
-          expand: true,
-        ),
+      bottomNavigationBar: SpendXStickyBottomBar.singleAction(
+        primaryLabel: 'Confirm Payment',
+        primaryIcon: Icons.account_balance_wallet_rounded,
+        isPrimaryLoading: _isProcessing,
+        onPrimaryPressed: _isProcessing ? null : _processPayment,
       ),
     );
   }

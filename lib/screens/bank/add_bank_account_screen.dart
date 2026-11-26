@@ -14,7 +14,7 @@ import '../../shared/widgets/app_form_error_summary.dart';
 import '../../theme/app_theme.dart';
 import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
-import '../../shared/widgets/glass/spendx_glass_button.dart';
+import '../../widgets/form/spendx_sticky_bottom_bar.dart';
 
 class AddBankAccountScreen extends ConsumerStatefulWidget {
   final BankAccount? existing;
@@ -279,6 +279,7 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SpendXScaffold(
+      extendBody: false,
       appBar: SpendXAppBar(
         title: _title,
         actions: widget.existing == null
@@ -532,30 +533,11 @@ class _AddBankAccountScreenState extends ConsumerState<AddBankAccountScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: SpendXGlassButton(
-                  variant: SpendXGlassButtonVariant.tonal,
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: SpendXGlassButton(
-                  variant: SpendXGlassButtonVariant.primary,
-                  onPressed: _save,
-                  child: Text(_isInvestment ? 'Save Asset' : 'Save Account'),
-                ),
-              ),
-            ],
-          ),
-        ),
+      bottomNavigationBar: SpendXStickyBottomBar.dualAction(
+        secondaryLabel: 'Cancel',
+        onSecondaryPressed: () => Navigator.pop(context),
+        primaryLabel: _isInvestment ? 'Save Asset' : 'Save Account',
+        onPrimaryPressed: _save,
       ),
     );
   }

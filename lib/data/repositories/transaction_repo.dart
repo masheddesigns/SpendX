@@ -51,7 +51,6 @@ class TransactionRepo {
 
   Future<String> insert(Transaction txn) async {
     final database = await _db;
-    debugPrint('🧠 CANONICAL DB INSERT START: ${txn.id}');
 
     Future<String> executeInsert(DatabaseExecutor executor) async {
       await _validateRefundCeiling(executor, txn);

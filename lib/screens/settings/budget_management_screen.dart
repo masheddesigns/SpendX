@@ -233,13 +233,15 @@ class _BudgetManagementScreenState
     return SpendXScaffold(
       appBar: const SpendXAppBar(title: 'Budgets'),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Budget'),
-        onPressed: expenseCategories.isEmpty
-            ? null
-            : () => _showAddBudgetDialog(expenseCategories, budgets),
-      ),
+      floatingActionButton: (budgets.isEmpty || isLoading)
+          ? null
+          : FloatingActionButton.extended(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Budget'),
+              onPressed: expenseCategories.isEmpty
+                  ? null
+                  : () => _showAddBudgetDialog(expenseCategories, budgets),
+            ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

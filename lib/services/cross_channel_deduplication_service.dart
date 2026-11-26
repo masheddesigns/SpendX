@@ -17,6 +17,7 @@ import 'transaction_text_parser.dart';
 enum SourceChannel {
   sms,
   push,
+  email,
   other,
 }
 
@@ -169,6 +170,20 @@ class CrossChannelDeduplicationService {
     dynamic postTime,
   ) =>
       'SRC:ANDROID_NOTIF:$package:$id:${tag ?? ''}:$postTime';
+
+  /// Builds a deterministic Gmail/Email source identity.
+  static String buildEmailSourceId(dynamic messageId) => 'SRC:EMAIL:GMAIL:$messageId';
+
+  /// Resolves the source channel from a deterministic source identity string.
+  static SourceChannel channelForSourceId(String? sourceRecordId) {
+    if (sourceRecordId == null || sourceRecordId.isEmpty) return SourceChannel.other;
+    if (sourceRecordId.startsWith('SRC:ANDROID_NOTIF:')) return SourceChannel.push;
+    if (sourceRecordId.startsWith('SRC:EMAIL:')) return SourceChannel.email;
+    if (sourceRecordId.startsWith('SRC:TELEPHONY_') || sourceRecordId.startsWith('SRC:SMS:')) {
+      return SourceChannel.sms;
+    }
+    return SourceChannel.other;
+  }
 
   // ── Reference Extraction & Normalization ───────────────────────────────────
 
@@ -661,18 +676,28 @@ class CrossChannelDeduplicationService {
       for (final recent in recentCandidates) {
         final recentRef = recent['external_reference'] as String?;
         final recentSourceRecordId = recent['source_record_id'] as String? ?? '';
-        final isRecentSms = recentSourceRecordId.startsWith('SRC:TELEPHONY_SMS:') ||
+        final isRecentSms = recentSourceRecordId.startsWith('SRC:TELEPHONY_') ||
+            recentSourceRecordId.startsWith('SRC:SMS:') ||
             recent['source_type'] == 'sms';
         final isRecentPush = recentSourceRecordId.startsWith('SRC:ANDROID_NOTIF:') ||
             (recent['sender_address'] as String? ?? '').startsWith('APP:');
+        final isRecentEmail = recentSourceRecordId.startsWith('SRC:EMAIL:') ||
+            (recent['sender_address'] as String? ?? '').contains('com.google.android.gm');
 
         final isCandidateSms = candidate.sourceChannel == SourceChannel.sms ||
-            candidate.sourceRecordId.startsWith('SRC:TELEPHONY_SMS:');
+            candidate.sourceRecordId.startsWith('SRC:TELEPHONY_') ||
+            candidate.sourceRecordId.startsWith('SRC:SMS:');
         final isCandidatePush = candidate.sourceChannel == SourceChannel.push ||
             candidate.sourceRecordId.startsWith('SRC:ANDROID_NOTIF:');
+        final isCandidateEmail = candidate.sourceChannel == SourceChannel.email ||
+            candidate.sourceRecordId.startsWith('SRC:EMAIL:');
 
-        final isCrossChannel = (isCandidateSms && isRecentPush) || (isCandidatePush && isRecentSms);
-        final isSameChannel = (isCandidateSms && isRecentSms) || (isCandidatePush && isRecentPush);
+        final isCrossChannel = (isCandidateSms && (isRecentPush || isRecentEmail)) ||
+            (isCandidatePush && (isRecentSms || isRecentEmail)) ||
+            (isCandidateEmail && (isRecentSms || isRecentPush));
+        final isSameChannel = (isCandidateSms && isRecentSms) ||
+            (isCandidatePush && isRecentPush) ||
+            (isCandidateEmail && isRecentEmail);
 
         // Check reference state
         final candidateHasRef = normRef != null && normRef.isNotEmpty;
@@ -723,7 +748,7 @@ class CrossChannelDeduplicationService {
           await txn.insert(TablesV24.evidence, {
             'id': evidenceId,
             'economic_event_id': matchedEventId,
-            'source_type': candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'push',
+            'source_type': candidate.sourceChannel == SourceChannel.sms ? 'sms' : 'manual',
             'source_record_id': candidate.sourceRecordId,
             'extracted_amount_minor_units': candidate.amountMinorUnits,
             'extracted_timestamp': candidate.timestamp.toUtc().toIso8601String(),

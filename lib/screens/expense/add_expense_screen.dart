@@ -43,6 +43,7 @@ import '../../shared/widgets/glass/spendx_scaffold.dart';
 import '../../shared/widgets/glass/spendx_glass_surface.dart';
 import '../../shared/widgets/glass/spendx_glass_button.dart';
 import '../../shared/widgets/playful/spendx_playful.dart';
+import '../../widgets/form/spendx_sticky_bottom_bar.dart';
 import '../../theme/app_theme.dart' as modern_theme;
 import '../../widgets/form/add_category_sheet.dart';
 import '../../shared/widgets/app_page_route.dart';
@@ -71,6 +72,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _scrollController = ScrollController();
   List<String> _formErrors = [];
+  bool _isSaving = false;
   late String _selectedType;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -354,151 +356,158 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       return;
     }
 
-    if (_selectedType == 'transfer') {
-      final destMethod = _availablePaymentMethods
-          .where((m) => m.id == _destinationPaymentMethodId)
-          .firstOrNull;
-      final isDestCreditCard = destMethod?.type == 'credit_card';
+    setState(() => _isSaving = true);
+    try {
+      if (_selectedType == 'transfer') {
+        final destMethod = _availablePaymentMethods
+            .where((m) => m.id == _destinationPaymentMethodId)
+            .firstOrNull;
+        final isDestCreditCard = destMethod?.type == 'credit_card';
 
-      if (isDestCreditCard) {
-        await CreditCardService().processPayment(
-          cardId: _destinationPaymentMethodId!,
-          paymentAmount: amount,
-          date: _selectedDate,
-          accountId: _selectedPaymentMethodId,
-          note: _notesController.text.trim().isNotEmpty
-              ? _notesController.text.trim()
-              : 'Payment to ${destMethod?.name ?? "Credit Card"}',
-        );
-      } else {
-        final tx = Transaction(
-          id: widget.existingTransaction?.id,
-          type: 'transfer',
-          amount: amount,
-          accountId: _selectedPaymentMethodId!,
-          relatedEntityId: _destinationPaymentMethodId!,
-          date: _selectedDate,
-          notes: _notesController.text.trim().isNotEmpty
-              ? _notesController.text.trim()
-              : 'Internal Transfer',
-          userId: 'offline_user',
-          source: 'manual',
-        );
-        if (widget.existingTransaction != null) {
-          await ref.read(updateTransactionProvider)(
-            oldTransaction: widget.existingTransaction!,
-            newTransaction: tx,
+        if (isDestCreditCard) {
+          await CreditCardService().processPayment(
+            cardId: _destinationPaymentMethodId!,
+            paymentAmount: amount,
+            date: _selectedDate,
+            accountId: _selectedPaymentMethodId,
+            note: _notesController.text.trim().isNotEmpty
+                ? _notesController.text.trim()
+                : 'Payment to ${destMethod?.name ?? "Credit Card"}',
           );
         } else {
-          await ref
-              .read(financialTransactionServiceProvider)
-              .createTransfer(tx);
+          final tx = Transaction(
+            id: widget.existingTransaction?.id,
+            type: 'transfer',
+            amount: amount,
+            accountId: _selectedPaymentMethodId!,
+            relatedEntityId: _destinationPaymentMethodId!,
+            date: _selectedDate,
+            notes: _notesController.text.trim().isNotEmpty
+                ? _notesController.text.trim()
+                : 'Internal Transfer',
+            userId: 'offline_user',
+            source: 'manual',
+          );
+          if (widget.existingTransaction != null) {
+            await ref.read(updateTransactionProvider)(
+              oldTransaction: widget.existingTransaction!,
+              newTransaction: tx,
+            );
+          } else {
+            await ref
+                .read(financialTransactionServiceProvider)
+                .createTransfer(tx);
+          }
+        }
+
+        invalidateAllFinancialProviders(ref);
+        if (mounted) {
+          Navigator.pop(context, true);
+          CustomSnackBar.show(
+            context,
+            message: 'Transfer recorded successfully ✓',
+          );
+        }
+        return;
+      }
+
+      // Account is optional — transaction can exist without a linked account
+
+      final selectedMethod = _availablePaymentMethods
+          .where((m) => m.id == _selectedPaymentMethodId)
+          .firstOrNull;
+      final isCreditCard = selectedMethod?.type == 'credit_card';
+      String effectiveType;
+      if (widget.existingTransaction != null &&
+          (widget.existingTransaction!.type == 'credit_payment' ||
+              widget.existingTransaction!.type == 'credit_card_payment' ||
+              widget.existingTransaction!.type == 'transfer' ||
+              widget.existingTransaction!.type == 'loan_repayment' ||
+              widget.existingTransaction!.type == 'loan_disbursement' ||
+              widget.existingTransaction!.type == 'loan_payment')) {
+        effectiveType = widget.existingTransaction!.type;
+      } else {
+        effectiveType = (isCreditCard && _selectedType == 'expense')
+            ? 'credit_card_purchase'
+            : _selectedType;
+      }
+
+      final newTransaction = Transaction(
+        id: widget.existingTransaction?.id,
+        userId: widget.existingTransaction?.userId ?? 'offline_user',
+        type: effectiveType,
+        categoryId: _selectedCategoryId,
+        accountId: _selectedPaymentMethodId,
+        amount: amount,
+        date: _selectedDate,
+        notes: TextFormatter.normalizeName(_notesController.text),
+        tags: widget.existingTransaction?.tags ?? const [],
+        source: isCreditCard
+            ? 'credit_card_purchase'
+            : (widget.existingTransaction?.source ?? 'manual'),
+        relatedEntityId: widget.existingTransaction?.relatedEntityId,
+        location: widget.existingTransaction?.location,
+        createdAt: widget.existingTransaction?.createdAt,
+      );
+
+      if (widget.existingTransaction != null) {
+        await ref.read(updateTransactionProvider)(
+          oldTransaction: widget.existingTransaction!,
+          newTransaction: newTransaction,
+        );
+      } else {
+        await ref.read(addTransactionProvider)(newTransaction);
+      }
+
+      if (_selectedCategoryId != null &&
+          _notesController.text.trim().isNotEmpty) {
+        TrackedDatabaseTaskQueue.instance.runTracked(
+          'add_expense_learn_merchant_rule',
+          () => ref.read(learnMerchantRuleProvider)(
+            text: _notesController.text,
+            categoryId: _selectedCategoryId!,
+            accountId: _selectedPaymentMethodId,
+          ),
+        );
+        final cat = _availableCategories
+            .where((c) => c.id == _selectedCategoryId)
+            .firstOrNull;
+        if (cat != null) {
+          unawaited(
+            SmartCategoryClassifier.instance.learn(
+              rawText: _notesController.text,
+              merchant: _notesController.text,
+              category: cat.name,
+            ),
+          );
         }
       }
 
-      invalidateAllFinancialProviders(ref);
-      if (mounted) {
-        Navigator.pop(context, true);
-        CustomSnackBar.show(
-          context,
-          message: 'Transfer recorded successfully ✓',
-        );
-      }
-      return;
-    }
-
-    // Account is optional — transaction can exist without a linked account
-
-    final selectedMethod = _availablePaymentMethods
-        .where((m) => m.id == _selectedPaymentMethodId)
-        .firstOrNull;
-    final isCreditCard = selectedMethod?.type == 'credit_card';
-    String effectiveType;
-    if (widget.existingTransaction != null &&
-        (widget.existingTransaction!.type == 'credit_payment' ||
-            widget.existingTransaction!.type == 'credit_card_payment' ||
-            widget.existingTransaction!.type == 'transfer' ||
-            widget.existingTransaction!.type == 'loan_repayment' ||
-            widget.existingTransaction!.type == 'loan_disbursement' ||
-            widget.existingTransaction!.type == 'loan_payment')) {
-      effectiveType = widget.existingTransaction!.type;
-    } else {
-      effectiveType = (isCreditCard && _selectedType == 'expense')
-          ? 'credit_card_purchase'
-          : _selectedType;
-    }
-
-    final newTransaction = Transaction(
-      id: widget.existingTransaction?.id,
-      userId: widget.existingTransaction?.userId ?? 'offline_user',
-      type: effectiveType,
-      categoryId: _selectedCategoryId,
-      accountId: _selectedPaymentMethodId,
-      amount: amount,
-      date: _selectedDate,
-      notes: TextFormatter.normalizeName(_notesController.text),
-      tags: widget.existingTransaction?.tags ?? const [],
-      source: isCreditCard
-          ? 'credit_card_purchase'
-          : (widget.existingTransaction?.source ?? 'manual'),
-      relatedEntityId: widget.existingTransaction?.relatedEntityId,
-      location: widget.existingTransaction?.location,
-      createdAt: widget.existingTransaction?.createdAt,
-    );
-
-    if (widget.existingTransaction != null) {
-      await ref.read(updateTransactionProvider)(
-        oldTransaction: widget.existingTransaction!,
-        newTransaction: newTransaction,
-      );
-    } else {
-      await ref.read(addTransactionProvider)(newTransaction);
-    }
-
-    if (_selectedCategoryId != null &&
-        _notesController.text.trim().isNotEmpty) {
-      TrackedDatabaseTaskQueue.instance.runTracked(
-        'add_expense_learn_merchant_rule',
-        () => ref.read(learnMerchantRuleProvider)(
-          text: _notesController.text,
-          categoryId: _selectedCategoryId!,
-          accountId: _selectedPaymentMethodId,
+      unawaited(
+        SettingsService.instance.saveExpenseDefaults(
+          type: _normalizedType,
+          categoryId: _selectedCategoryId,
+          amount: amount,
+          paymentSourceId: _selectedPaymentMethodId,
+          paymentSourceType: _selectedPaymentTypeForStorage,
         ),
       );
-      final cat = _availableCategories
-          .where((c) => c.id == _selectedCategoryId)
-          .firstOrNull;
-      if (cat != null) {
-        unawaited(
-          SmartCategoryClassifier.instance.learn(
-            rawText: _notesController.text,
-            merchant: _notesController.text,
-            category: cat.name,
-          ),
+
+      if (mounted) {
+        CustomSnackBar.show(
+          context,
+          message: widget.existingTransaction != null
+              ? 'Activity updated successfully ✓'
+              : (_selectedType == 'income'
+                  ? 'Income recorded successfully ✓'
+                  : 'Expense recorded successfully ✓'),
         );
+        Navigator.pop(context, true);
       }
-    }
-
-    unawaited(
-      SettingsService.instance.saveExpenseDefaults(
-        type: _normalizedType,
-        categoryId: _selectedCategoryId,
-        amount: amount,
-        paymentSourceId: _selectedPaymentMethodId,
-        paymentSourceType: _selectedPaymentTypeForStorage,
-      ),
-    );
-
-    if (mounted) {
-      CustomSnackBar.show(
-        context,
-        message: widget.existingTransaction != null
-            ? 'Activity updated successfully ✓'
-            : (_selectedType == 'income'
-                ? 'Income recorded successfully ✓'
-                : 'Expense recorded successfully ✓'),
-      );
-      Navigator.pop(context, true);
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -1069,6 +1078,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               : modern_theme.AppTheme.semanticIncome);
 
     return SpendXScaffold(
+      extendBody: false,
       appBar: SpendXAppBar(
         title: _appBarTitle,
         actions: [
@@ -1470,27 +1480,24 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 ),
               ),
 
-              const SizedBox(height: 24),
-
-              SpendXPlayfulButton(
-                variant: _selectedType == 'income'
-                    ? PlayfulButtonVariant.income
-                    : (_selectedType == 'transfer'
-                        ? PlayfulButtonVariant.primary
-                        : PlayfulButtonVariant.expense),
-                height: 50,
-                onPressed: _saveTransaction,
-                child: Text(
-                  widget.existingTransaction != null
-                      ? 'Update Activity'
-                      : (_selectedType == 'transfer'
-                            ? 'Move Funds'
-                            : 'Save Activity'),
-                ),
-              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
+      ),
+      bottomNavigationBar: SpendXStickyBottomBar.singleAction(
+        primaryLabel: widget.existingTransaction != null
+            ? 'Update Activity'
+            : (_selectedType == 'transfer'
+                ? 'Move Funds'
+                : 'Save Activity'),
+        primaryVariant: _selectedType == 'income'
+            ? PlayfulButtonVariant.income
+            : (_selectedType == 'transfer'
+                ? PlayfulButtonVariant.primary
+                : PlayfulButtonVariant.expense),
+        isPrimaryLoading: _isSaving,
+        onPrimaryPressed: _isSaving ? null : _saveTransaction,
       ),
     );
   }

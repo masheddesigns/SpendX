@@ -10,7 +10,6 @@ import '../../models/loan.dart';
 import '../../data/providers.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/app_card.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/app_amount_field.dart';
@@ -21,6 +20,7 @@ import '../../features/liabilities/providers/liabilities_providers.dart'
     show liabilitiesSummaryProvider;
 import '../../utils/text_formatter.dart';
 import '../../shared/widgets/custom_snackbar.dart';
+import '../../widgets/form/spendx_sticky_bottom_bar.dart';
 
 class AddLoanScreen extends ConsumerStatefulWidget {
   final Loan? loan;
@@ -402,38 +402,12 @@ class _AddLoanScreenState extends ConsumerState<AddLoanScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.m),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.m),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.m),
-                    ),
-                    foregroundColor: Theme.of(
-                      context,
-                    ).colorScheme.onSurfaceVariant,
-                  ),
-                  child: Text('Cancel', style: AppTextStyles.titleSmall),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: PrimaryButton(
-                  label: 'Save Loan',
-                  onPressed: _isLoading ? null : _saveLoan,
-                  isLoading: _isLoading,
-                ),
-              ),
-            ],
-          ),
-        ),
+      bottomNavigationBar: SpendXStickyBottomBar.dualAction(
+        secondaryLabel: 'Cancel',
+        onSecondaryPressed: () => Navigator.pop(context),
+        primaryLabel: 'Save Loan',
+        isPrimaryLoading: _isLoading,
+        onPrimaryPressed: _isLoading ? null : _saveLoan,
       ),
     );
   }

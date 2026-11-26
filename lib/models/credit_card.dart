@@ -1,4 +1,44 @@
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+
+class CreditCardColors {
+  static const List<Map<String, String>> palette = [
+    {'color': '#6366F1', 'label': 'Indigo'},
+    {'color': '#8B5CF6', 'label': 'Purple'},
+    {'color': '#EC4899', 'label': 'Pink'},
+    {'color': '#EF4444', 'label': 'Red'},
+    {'color': '#F59E0B', 'label': 'Amber'},
+    {'color': '#10B981', 'label': 'Emerald'},
+    {'color': '#0EA5E9', 'label': 'Sky'},
+    {'color': '#1D4ED8', 'label': 'Blue'},
+  ];
+
+  static final math.Random _random = math.Random();
+
+  static String randomColor([int? seed]) {
+    final rand = seed != null ? math.Random(seed) : _random;
+    return palette[rand.nextInt(palette.length)]['color']!;
+  }
+
+  static String colorForCard(String cardIdOrName) {
+    final hash = cardIdOrName.hashCode.abs();
+    return palette[hash % palette.length]['color']!;
+  }
+
+  static Color parseHex(String? hex, [Color fallback = const Color(0xFF6366F1)]) {
+    if (hex == null || hex.isEmpty) return fallback;
+    try {
+      final clean = hex.replaceAll('#', '').trim();
+      if (clean.length == 6) {
+        return Color(int.parse('0xFF$clean'));
+      } else if (clean.length == 8) {
+        return Color(int.parse('0x$clean'));
+      }
+    } catch (_) {}
+    return fallback;
+  }
+}
 
 /// Represents a credit card tracked in SpendX
 class CreditCard {
@@ -26,11 +66,14 @@ class CreditCard {
     this.billingDay = 1,
     this.dueDay = 20,
     this.cardType = 'visa',
-    this.color = '#6366F1',
+    String? color,
     this.usedAmount = 0,
     this.lastStatementBalance = 0,
     DateTime? createdAt,
   }) : id = id ?? const Uuid().v4(),
+       color = (color != null && color.isNotEmpty)
+           ? color
+           : CreditCardColors.colorForCard(name + (id ?? '')),
        createdAt = createdAt ?? DateTime.now();
 
   double get availableLimit => limitAmount > 0
@@ -112,7 +155,12 @@ class CreditCard {
     billingDay: (map['billing_day'] as int?) ?? 1,
     dueDay: (map['due_day'] as int?) ?? 20,
     cardType: map['card_type'] as String? ?? 'visa',
-    color: map['color'] as String? ?? '#6366F1',
+    color: (map['color'] as String?)?.isNotEmpty == true
+        ? map['color'] as String
+        : CreditCardColors.colorForCard(
+            (map['name'] as String? ?? 'card') +
+                (map['id'] as String? ?? ''),
+          ),
     usedAmount: (map['used_amount'] as num?)?.toDouble() ?? 0.0,
     lastStatementBalance:
         (map['last_statement_balance'] as num?)?.toDouble() ?? 0.0,

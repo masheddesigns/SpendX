@@ -6,7 +6,6 @@ import '../../data/providers.dart' as app_data;
 import '../../features/accounts/providers/account_providers.dart';
 import '../../models/credit_card.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/spendx_app_bar.dart';
 import '../../shared/widgets/app_section_header.dart';
@@ -18,6 +17,7 @@ import '../bank/add_bank_account_screen.dart';
 import '../../data/repositories/reminder_repo.dart';
 import '../../models/reminder_model.dart';
 import '../../shared/widgets/app_page_route.dart';
+import '../../widgets/form/spendx_sticky_bottom_bar.dart';
 
 enum CreditCardFormAction { deleted }
 
@@ -45,16 +45,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
   String _cardType = 'visa';
   String _selectedColor = '#6366F1';
 
-  final List<Map<String, dynamic>> _cardColors = [
-    {'color': '#6366F1', 'label': 'Indigo'},
-    {'color': '#8B5CF6', 'label': 'Purple'},
-    {'color': '#EC4899', 'label': 'Pink'},
-    {'color': '#EF4444', 'label': 'Red'},
-    {'color': '#F59E0B', 'label': 'Amber'},
-    {'color': '#10B981', 'label': 'Emerald'},
-    {'color': '#0EA5E9', 'label': 'Sky'},
-    {'color': '#1D4ED8', 'label': 'Blue'},
-  ];
+  List<Map<String, String>> get _cardColors => CreditCardColors.palette;
 
   @override
   void initState() {
@@ -75,7 +66,7 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
     _billingDay = e?.billingDay ?? 1;
     _dueDay = e?.dueDay ?? 20;
     _cardType = e?.cardType ?? 'visa';
-    _selectedColor = e?.color ?? '#6366F1';
+    _selectedColor = e?.color ?? CreditCardColors.randomColor();
 
     _nameCtrl.addListener(() => setState(() {}));
     _bankCtrl.addListener(() => setState(() {}));
@@ -689,40 +680,11 @@ class _AddCreditCardScreenState extends ConsumerState<AddCreditCardScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    foregroundColor: Theme.of(
-                      context,
-                    ).colorScheme.onSurfaceVariant,
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: PrimaryButton(
-                  label: 'Save Card',
-                  onPressed: _save,
-                ),
-              ),
-            ],
-          ),
-        ),
+      bottomNavigationBar: SpendXStickyBottomBar.dualAction(
+        secondaryLabel: 'Cancel',
+        onSecondaryPressed: () => Navigator.pop(context),
+        primaryLabel: 'Save Card',
+        onPrimaryPressed: _save,
       ),
     );
   }
